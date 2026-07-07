@@ -32,6 +32,102 @@
 const clamp01 = (v) => Math.max(0, Math.min(1, v ?? 0));
 const priorityOf = (v) => v >= 0.85 ? 'critical' : v >= 0.65 ? 'high' : v >= 0.4 ? 'medium' : 'low';
 
+/** Task 1: caps `value` at `maxIntensity`, both already assumed 0-1. */
+function capIntensity(value, maxIntensity) { return Math.min(value, maxIntensity); }
+
+const INTENSITY_CAP_WARNING = 'Translation hint intensity was capped by maxIntensity safety limit.';
+const MAXINTENSITY_CAP_WARNING = 'Translation maxIntensity was capped by safetyLimit.';
+
+/**
+ * EPIC 2B-F Task 1/2/3: makes ONE {intensity, maxIntensity, safetyLimit?}
+ * hint internally consistent — never changes what the hint MEANS
+ * (direction/reason/sourceSignals untouched), only makes its numbers
+ * safe: intensity <= maxIntensity <= safetyLimit <= 1. Pushes a
+ * deduplicated warning + a specific developer note whenever a real cap
+ * happens (never invents a warning when nothing was actually capped).
+ */
+function normalizeHintSafety(hint, label, warnings, developerNotes) {
+  if (!hint || typeof hint !== 'object' || hint.intensity == null || hint.maxIntensity == null) return hint;
+
+  let maxIntensity = clamp01(hint.maxIntensity);
+  let intensity = clamp01(hint.intensity);
+
+  if (hint.safetyLimit != null) {
+    const safetyLimit = clamp01(hint.safetyLimit);
+    if (maxIntensity > safetyLimit) {
+      developerNotes.push(`${label} maxIntensity capped from ${maxIntensity.toFixed(2)} to ${safetyLimit.toFixed(2)} because safetyLimit reduced it.`);
+      if (!warnings.includes(MAXINTENSITY_CAP_WARNING)) warnings.push(MAXINTENSITY_CAP_WARNING);
+      maxIntensity = safetyLimit;
+    }
+  }
+  if (intensity > maxIntensity) {
+    developerNotes.push(`${label} intensity capped from ${intensity.toFixed(2)} to ${maxIntensity.toFixed(2)} because maxIntensity (safety-adjusted) limited it.`);
+    if (!warnings.includes(INTENSITY_CAP_WARNING)) warnings.push(INTENSITY_CAP_WARNING);
+    intensity = maxIntensity;
+  }
+
+  return { ...hint, intensity: +intensity.toFixed(3), maxIntensity: +maxIntensity.toFixed(3) };
+}
+
+/** Applies normalizeHintSafety to every named hint in an object, e.g. {highlights: {...}, shadowsContrast: {...}} or a flat single hint. */
+function normalizeHintGroup(groupName, group, warnings, developerNotes) {
+  if (!group || typeof group !== 'object') return group;
+  // A "flat" hint has its own intensity directly; a "grouped" hint nests sub-hints keyed by name.
+  if (group.intensity != null && group.maxIntensity != null) {
+    return normalizeHintSafety(group, groupName, warnings, developerNotes);
+  }
+  const out = {};
+  for (const [key, sub] of Object.entries(group)) {
+    out[key] = (sub && typeof sub === 'object' && sub.intensity != null && sub.maxIntensity != null)
+      ? normalizeHintSafety(sub, `${groupName}.${key}`, warnings, developerNotes)
+      : sub;
+  }
+  return out;
+}
+
+/** Task 1: same safety rules applied to a targetRangeHints entry (minIntensity/maxIntensity/safetyLimit shape, not intensity/maxIntensity). */
+function normalizeRangeHint(range, warnings, developerNotes) {
+  const label = `${range.tool ?? 'tool'}/${range.channel ?? 'channel'}`;
+  let minIntensity = clamp01(range.minIntensity);
+  let maxIntensity = clamp01(range.maxIntensity);
+  const safetyLimit = range.safetyLimit != null ? clamp01(range.safetyLimit) : null;
+
+  if (safetyLimit != null && maxIntensity > safetyLimit) {
+    developerNotes.push(`${label} maxIntensity capped from ${maxIntensity.toFixed(2)} to ${safetyLimit.toFixed(2)} because safetyLimit reduced it.`);
+    if (!warnings.includes(MAXINTENSITY_CAP_WARNING)) warnings.push(MAXINTENSITY_CAP_WARNING);
+    maxIntensity = safetyLimit;
+  }
+  if (minIntensity > maxIntensity) {
+    developerNotes.push(`${label} minIntensity capped from ${minIntensity.toFixed(2)} to ${maxIntensity.toFixed(2)} because it exceeded maxIntensity.`);
+    minIntensity = maxIntensity;
+  }
+
+  return {
+    ...range,
+    minIntensity: +minIntensity.toFixed(3), maxIntensity: +maxIntensity.toFixed(3),
+    safetyLimit: safetyLimit != null ? +safetyLimit.toFixed(3) : range.safetyLimit,
+    rangeType: 'abstract-intensity',
+  };
+}
+
+/** Task 2: runs safety normalization across the whole translation object, right before it's returned. Never alters direction/reason/sourceSignals/priority text — only makes the numeric fields internally consistent. */
+function normalizeTranslationSafety(t, warnings, developerNotes) {
+  const hintGroupNames = ['basicToneHints', 'toneCurveHints', 'whiteBalanceHints', 'hslHints', 'colorGradingHints', 'calibrationHints', 'presenceHints', 'detailHints'];
+  for (const name of hintGroupNames) {
+    if (t[name]) t[name] = normalizeHintGroup(name, t[name], warnings, developerNotes);
+  }
+  if (Array.isArray(t.targetRangeHints)) {
+    t.targetRangeHints = t.targetRangeHints.map(r => normalizeRangeHint(r, warnings, developerNotes));
+  }
+  if (t.toolPriorityMap) {
+    for (const [tool, entry] of Object.entries(t.toolPriorityMap)) {
+      if (entry && entry.intensity != null) entry.intensity = +clamp01(entry.intensity).toFixed(3);
+    }
+  }
+  return t;
+}
+
+
 /** Task 7 helper — one {priority, intensity, reason, source} tool entry. */
 function _toolPriority(intensity, reason, source) {
   return { priority: priorityOf(intensity), intensity: +clamp01(intensity).toFixed(3), reason, source };
@@ -301,7 +397,7 @@ export function buildLightroomTranslationV2(input = {}) {
   developerNotes.push('lightroomTranslationV2 is SHADOW-ONLY — it does not generate XMP and is not consumed by production Lightroom Mapping in this phase.');
   if (legacyMapping) developerNotes.push('legacyMapping was supplied for future shadow-compare purposes but is not diffed against this translation yet.');
 
-  return {
+  const result = {
     mode: 'shadow-translation',
     readiness, confidence,
     basicToneHints, toneCurveHints, whiteBalanceHints, hslHints,
@@ -321,4 +417,14 @@ export function buildLightroomTranslationV2(input = {}) {
     },
     photographerSummary, developerNotes, reasons,
   };
+
+  // EPIC 2B-F Task 1/2/3: final safety pass — guarantees intensity <=
+  // maxIntensity <= safetyLimit <= 1 across every hint group and
+  // targetRangeHints entry, right before returning. Runs LAST so it can
+  // never be bypassed by any earlier code path, and never changes what a
+  // hint MEANS (direction/reason/sourceSignals/priority untouched) — only
+  // makes its own numbers internally consistent. Warnings/developer notes
+  // are deduplicated (normalizeHintSafety/normalizeRangeHint only ever
+  // push the two fixed warning strings once each, via `includes` checks).
+  return normalizeTranslationSafety(result, result.translationWarnings, result.developerNotes);
 }
