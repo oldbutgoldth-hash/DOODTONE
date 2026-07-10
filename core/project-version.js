@@ -13,7 +13,7 @@ export const AI_WORKFLOW_VERSION = {
   label: 'AI Workflow v1.1.0 (EPIC 2E-A)',
   title: 'Lightroom Mapping V2 — Controlled Activation Gate',
   status: 'Legacy Active / V2 Gate Ready / Production Override Disabled',
-  statusLine: 'Shadow-only · Legacy Mapping Active · XMP Unchanged',
+  statusLine: 'Legacy Active · V2 Gate Ready · Override Disabled',
   upgradedSystems: [
     'Reference Color Intelligence',
     'Photographer Intent Intelligence',
