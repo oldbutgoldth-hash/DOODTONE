@@ -8,11 +8,11 @@
  * place that needs editing to bump the displayed version.
  */
 export const AI_WORKFLOW_VERSION = {
-  version: 'v1.0.0',
-  epic: 'EPIC 2B',
-  label: 'AI Workflow v1.0.0 (EPIC 2B)',
-  title: 'Lightroom Mapping V2 — Shadow Translation',
-  status: 'Shadow-only / Legacy Mapping Active',
+  version: 'v1.0.1',
+  epic: 'EPIC 2C',
+  label: 'AI Workflow v1.0.1 (EPIC 2C)',
+  title: 'Lightroom Mapping V2 — Safety Clamp',
+  status: 'Shadow-only / Safety Clamp Active / Legacy Mapping Active',
   statusLine: 'Shadow-only · Legacy Mapping Active · XMP Unchanged',
   upgradedSystems: [
     'Reference Color Intelligence',
@@ -22,6 +22,7 @@ export const AI_WORKFLOW_VERSION = {
     'Style Budget Intelligence',
     'Lightroom Mapping V2 Planner',
     'Budget-to-Lightroom Translation V2',
+    'Safety Clamp & Over-stack Protection V2',
     'Shadow-only Mapping Safety',
     'Legacy Mapping Still Active',
     'XMP Export Unchanged',

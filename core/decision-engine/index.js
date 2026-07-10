@@ -32,6 +32,7 @@ import { buildCaptureCapability, buildIntentCompatibility, buildCaptureBudgetHin
 import { buildStyleBudgetIntelligence } from './style-budget-model.js';
 import { buildLightroomMappingPlanV2 } from '../lightroom-mapping-engine/mapping-v2-planner.js';
 import { buildLightroomTranslationV2 } from '../lightroom-mapping-engine/mapping-v2-translator.js';
+import { buildLightroomSafetyClampV2 } from '../lightroom-mapping-engine/mapping-v2-safety-clamp.js';
 
 // ─── Scene strategy table ─────────────────────────────────────────────────────
 // Each strategy is a set of TRUST MULTIPLIERS (not the base ENGINE_PRIORITY
@@ -505,6 +506,32 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
   } catch (e) {
     finalStyleIntent.lightroomTranslationV2 = null;
     finalStyleIntent.lightroomTranslationV2Error = `Shadow translator failed safely (production unaffected): ${e.message}`;
+  }
+
+  // ── EPIC 2C: Safety Clamp & Over-stack Protection V2 (SHADOW-ONLY) ───────
+  // Reviews lightroomTranslationV2 and produces safety decisions (clamp
+  // profiles, tool caps, hard stops, over-stack analysis) for a FUTURE
+  // controlled activation — activationGate.canActivate is hard-coded
+  // false inside buildLightroomSafetyClampV2() itself, not just by
+  // omission here. Attached to finalStyleIntent (never read by
+  // mapStyleFingerprintToLightroom below), wrapped in try/catch as
+  // defense-in-depth, matching the exact pattern used for the planner
+  // (EPIC 2A) and translator (EPIC 2B) above.
+  try {
+    finalStyleIntent.lightroomSafetyClampV2 = buildLightroomSafetyClampV2({
+      finalStyleIntent, lightroomMappingPlanV2: finalStyleIntent.lightroomMappingPlanV2,
+      lightroomTranslationV2: finalStyleIntent.lightroomTranslationV2,
+      photographerIntent: finalStyleIntent.photographerIntent,
+      styleBudgetIntelligence: finalStyleIntent.styleBudgetIntelligence,
+      styleDNA: finalStyleIntent.photographerStyle?.top?.styleDNA,
+      styleDNAValidation: finalStyleIntent.photographerStyle?.top?.styleDNAValidation,
+      styleFeasibility: finalStyleIntent.styleFeasibilityEstimate,
+      captureCapability: finalStyleIntent.captureCapabilityEstimate,
+      referenceColorIntelligence, legacyMapping: null,
+    });
+  } catch (e) {
+    finalStyleIntent.lightroomSafetyClampV2 = null;
+    finalStyleIntent.lightroomSafetyClampV2Error = `Shadow safety clamp failed safely (production unaffected): ${e.message}`;
   }
 
   return {
