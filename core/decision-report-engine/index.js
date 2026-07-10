@@ -268,6 +268,17 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     }
   }
 
+  // EPIC 2D: Lightroom Mapping V2 Shadow Compare — narration only when
+  // the report actually exists (safe no-op otherwise).
+  const scr = fsi.lightroomShadowCompareReportV2;
+  if (scr) {
+    reasons.push(`Lightroom Mapping V2 Shadow Compare: ${scr.photographerSummary}`);
+    if (scr.divergenceAnalysis?.hasMajorDivergence) {
+      reasons.push(`[dev] Shadow compare divergence (${scr.divergenceAnalysis.severity}): ${scr.divergenceAnalysis.divergentAreas.join(', ')}. See lightroomMappingV2ShadowCompare for detail.`);
+    }
+    reasons.push(`[dev] ${scr.developerSummary}`);
+  }
+
   return {
     photographerStyleLabel: fsi.photographerStyleLabel ?? null,
     styleFamily: fsi.styleFamily ?? null,
@@ -359,6 +370,26 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
       noiseReliability: fsi.styleBudgetIntelligence.noiseReliability,
       risks: fsi.styleBudgetIntelligence.risks, warnings: fsi.styleBudgetIntelligence.warnings,
       note: 'Preliminary estimate — the authoritative version (with real capture capability data) is computed in Reference Transfer Report.',
+    } : null,
+    // EPIC 2D: Lightroom Mapping V2 Shadow Compare — a compact, readable
+    // section (not a raw JSON dump) summarising how V2's shadow-only
+    // planning/translation/safety chain compares against legacy mapping.
+    // Safe if the report is missing entirely (try/catch upstream may
+    // have set it to null) — this section simply becomes null too,
+    // never breaking the rest of the Decision Report.
+    lightroomMappingV2ShadowCompare: fsi.lightroomShadowCompareReportV2 ? {
+      readiness: fsi.lightroomShadowCompareReportV2.readiness,
+      confidence: fsi.lightroomShadowCompareReportV2.confidence,
+      overallAlignment: fsi.lightroomShadowCompareReportV2.alignmentScores?.overallAlignment ?? null,
+      safetyDelta: {
+        v2SaferThanLegacy: fsi.lightroomShadowCompareReportV2.safetyDelta?.v2SaferThanLegacy ?? null,
+        score: fsi.lightroomShadowCompareReportV2.safetyDelta?.score ?? null,
+      },
+      majorDivergences: fsi.lightroomShadowCompareReportV2.divergenceAnalysis?.divergentAreas ?? [],
+      activationReadinessLevel: fsi.lightroomShadowCompareReportV2.activationReadiness?.level ?? 'unknown',
+      canProceedToControlledActivation: fsi.lightroomShadowCompareReportV2.activationReadiness?.canProceedToControlledActivation ?? false,
+      photographerSummary: fsi.lightroomShadowCompareReportV2.photographerSummary,
+      developerSummary: fsi.lightroomShadowCompareReportV2.developerSummary,
     } : null,
     editingStrategy: strategy ?? null,
     styleBudget: budget ? { name: budget.name, adjustmentsMade: budgetAdjustments.length, details: budgetAdjustments } : null,

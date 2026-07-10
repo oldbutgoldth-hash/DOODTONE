@@ -33,6 +33,7 @@ import { buildStyleBudgetIntelligence } from './style-budget-model.js';
 import { buildLightroomMappingPlanV2 } from '../lightroom-mapping-engine/mapping-v2-planner.js';
 import { buildLightroomTranslationV2 } from '../lightroom-mapping-engine/mapping-v2-translator.js';
 import { buildLightroomSafetyClampV2 } from '../lightroom-mapping-engine/mapping-v2-safety-clamp.js';
+import { buildLightroomShadowCompareReportV2 } from '../lightroom-mapping-engine/mapping-v2-shadow-compare.js';
 
 // ─── Scene strategy table ─────────────────────────────────────────────────────
 // Each strategy is a set of TRUST MULTIPLIERS (not the base ENGINE_PRIORITY
@@ -532,6 +533,32 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
   } catch (e) {
     finalStyleIntent.lightroomSafetyClampV2 = null;
     finalStyleIntent.lightroomSafetyClampV2Error = `Shadow safety clamp failed safely (production unaffected): ${e.message}`;
+  }
+
+  // ── EPIC 2D: Shadow Compare Report V2 (SHADOW-COMPARE ONLY) ───────────────
+  // Compares legacy mapping (via the already-computed `styleBudget` local
+  // variable — read-only, never re-derived into new slider values) against
+  // the full V2 chain (plan/translation/safety) and produces a REPORT.
+  // Attached to finalStyleIntent, never read by mapStyleFingerprintToLightroom
+  // below, wrapped in try/catch as defense-in-depth — same pattern as
+  // EPIC 2A/2B/2C above.
+  try {
+    finalStyleIntent.lightroomShadowCompareReportV2 = buildLightroomShadowCompareReportV2({
+      finalStyleIntent, decision: { styleBudget },
+      lightroomMappingPlanV2: finalStyleIntent.lightroomMappingPlanV2,
+      lightroomTranslationV2: finalStyleIntent.lightroomTranslationV2,
+      lightroomSafetyClampV2: finalStyleIntent.lightroomSafetyClampV2,
+      photographerIntent: finalStyleIntent.photographerIntent,
+      styleBudgetIntelligence: finalStyleIntent.styleBudgetIntelligence,
+      styleDNA: finalStyleIntent.photographerStyle?.top?.styleDNA,
+      styleDNAValidation: finalStyleIntent.photographerStyle?.top?.styleDNAValidation,
+      styleFeasibility: finalStyleIntent.styleFeasibilityEstimate,
+      captureCapability: finalStyleIntent.captureCapabilityEstimate,
+      referenceColorIntelligence,
+    });
+  } catch (e) {
+    finalStyleIntent.lightroomShadowCompareReportV2 = null;
+    finalStyleIntent.lightroomShadowCompareReportV2Error = `Shadow compare failed safely (production unaffected): ${e.message}`;
   }
 
   return {

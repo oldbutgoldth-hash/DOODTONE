@@ -141,6 +141,20 @@ export function buildReferenceTransferReport(ctx) {
     recommendations2.push(`Note: ${styleBudgetIntelligence.noiseReliability.reason}`);
   }
 
+  // EPIC 2D: compact Shadow Compare V2 context — read-only, additive to
+  // recommendations only, does not touch the transfer algorithm itself.
+  const shadowCompare = dec?.finalStyleIntent?.lightroomShadowCompareReportV2 ?? null;
+  if (shadowCompare) {
+    const stance = shadowCompare.safetyDelta?.v2SaferThanLegacy ? 'safer/more cautious than' : 'broadly similar to';
+    recommendations2.push(`Shadow Compare V2: the experimental V2 mapping chain currently looks ${stance} the active legacy mapping (still shadow-only, not used for this export).`);
+    if (shadowCompare.divergenceAnalysis?.hasMajorDivergence) {
+      recommendations2.push(`[dev] Shadow Compare divergence (${shadowCompare.divergenceAnalysis.severity}): ${shadowCompare.divergenceAnalysis.divergentAreas.join(', ')}.`);
+    }
+    if (shadowCompare.activationReadiness?.blockers?.length) {
+      recommendations2.push(`[dev] Remaining activation blockers: ${shadowCompare.activationReadiness.blockers[0]}${shadowCompare.activationReadiness.blockers.length > 1 ? ` (+${shadowCompare.activationReadiness.blockers.length - 1} more)` : ''}.`);
+    }
+  }
+
   return {
     referenceConfidence, transferConfidence, complexity,
     lightroomReproduction, wbTransferRisk, recommendations: recommendations2,
@@ -152,6 +166,15 @@ export function buildReferenceTransferReport(ctx) {
     captureCapability, intentCompatibility, captureBudgetHints,
     // EPIC 1.7
     styleBudgetIntelligence,
+    // EPIC 2D: compact context only — the full report lives on finalStyleIntent.lightroomShadowCompareReportV2
+    shadowCompareContext: shadowCompare ? {
+      available: true,
+      stance: shadowCompare.safetyDelta?.v2SaferThanLegacy ? 'safer' : 'similar',
+      readiness: shadowCompare.readiness,
+      activationReadinessLevel: shadowCompare.activationReadiness?.level ?? 'unknown',
+      canProceedToControlledActivation: shadowCompare.activationReadiness?.canProceedToControlledActivation ?? false,
+      majorDivergences: shadowCompare.divergenceAnalysis?.divergentAreas ?? [],
+    } : { available: false },
   };
 }
 
