@@ -34,6 +34,7 @@ import { buildLightroomMappingPlanV2 } from '../lightroom-mapping-engine/mapping
 import { buildLightroomTranslationV2 } from '../lightroom-mapping-engine/mapping-v2-translator.js';
 import { buildLightroomSafetyClampV2 } from '../lightroom-mapping-engine/mapping-v2-safety-clamp.js';
 import { buildLightroomShadowCompareReportV2 } from '../lightroom-mapping-engine/mapping-v2-shadow-compare.js';
+import { buildLightroomControlledActivationV2 } from '../lightroom-mapping-engine/mapping-v2-activation-controller.js';
 
 // ─── Scene strategy table ─────────────────────────────────────────────────────
 // Each strategy is a set of TRUST MULTIPLIERS (not the base ENGINE_PRIORITY
@@ -559,6 +560,34 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
   } catch (e) {
     finalStyleIntent.lightroomShadowCompareReportV2 = null;
     finalStyleIntent.lightroomShadowCompareReportV2Error = `Shadow compare failed safely (production unaffected): ${e.message}`;
+  }
+
+  // ── EPIC 2E-A: Controlled Activation Gate ─────────────────────────────────
+  // Answers "is Mapping V2 allowed to influence production output?" — with
+  // no `flags` override passed here, this resolves to the safe defaults in
+  // mapping-v2-flags.js (enableControlledActivation=false,
+  // allowProductionOverride=false), guaranteeing canUseV2=false and
+  // selectedMappingSource="legacy" regardless of any upstream signal.
+  // Attached to finalStyleIntent, never read by mapStyleFingerprintToLightroom
+  // below, wrapped in try/catch as defense-in-depth — same pattern as
+  // EPIC 2A/2B/2C/2D above.
+  try {
+    finalStyleIntent.lightroomControlledActivationV2 = buildLightroomControlledActivationV2({
+      finalStyleIntent, decision: { styleBudget },
+      lightroomMappingPlanV2: finalStyleIntent.lightroomMappingPlanV2,
+      lightroomTranslationV2: finalStyleIntent.lightroomTranslationV2,
+      lightroomSafetyClampV2: finalStyleIntent.lightroomSafetyClampV2,
+      lightroomShadowCompareReportV2: finalStyleIntent.lightroomShadowCompareReportV2,
+      photographerIntent: finalStyleIntent.photographerIntent,
+      styleBudgetIntelligence: finalStyleIntent.styleBudgetIntelligence,
+      styleDNA: finalStyleIntent.photographerStyle?.top?.styleDNA,
+      styleFeasibility: finalStyleIntent.styleFeasibilityEstimate,
+      captureCapability: finalStyleIntent.captureCapabilityEstimate,
+      // No `flags` override — always resolves to the safe defaults.
+    });
+  } catch (e) {
+    finalStyleIntent.lightroomControlledActivationV2 = null;
+    finalStyleIntent.lightroomControlledActivationV2Error = `Controlled activation gate failed safely (production unaffected): ${e.message}`;
   }
 
   return {

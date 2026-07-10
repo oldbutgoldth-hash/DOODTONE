@@ -8,11 +8,11 @@
  * place that needs editing to bump the displayed version.
  */
 export const AI_WORKFLOW_VERSION = {
-  version: 'v1.0.2-f',
-  epic: 'EPIC 2D-F',
-  label: 'AI Workflow v1.0.2-f (EPIC 2D-F)',
-  title: 'Lightroom Mapping V2 — Shadow Compare Honesty Patch',
-  status: 'Shadow-only / Partial Compare Aware / Legacy Mapping Active',
+  version: 'v1.1.0',
+  epic: 'EPIC 2E-A',
+  label: 'AI Workflow v1.1.0 (EPIC 2E-A)',
+  title: 'Lightroom Mapping V2 — Controlled Activation Gate',
+  status: 'Legacy Active / V2 Gate Ready / Production Override Disabled',
   statusLine: 'Shadow-only · Legacy Mapping Active · XMP Unchanged',
   upgradedSystems: [
     'Reference Color Intelligence',
@@ -25,7 +25,8 @@ export const AI_WORKFLOW_VERSION = {
     'Safety Clamp & Over-stack Protection V2',
     'Shadow Compare Report V2',
     'Shadow Compare Honesty Patch',
-    'Shadow-only Mapping Safety',
+    'Controlled Activation Gate',
+    'Rollback-ready Legacy Fallback',
     'Legacy Mapping Still Active',
     'XMP Export Unchanged',
   ],

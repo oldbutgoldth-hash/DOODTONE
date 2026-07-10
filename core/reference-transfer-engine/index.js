@@ -161,6 +161,18 @@ export function buildReferenceTransferReport(ctx) {
     }
   }
 
+  // EPIC 2E-A: compact Controlled Activation context — read-only,
+  // additive to recommendations only, does not touch the transfer
+  // algorithm itself.
+  const controlledActivation = dec?.finalStyleIntent?.lightroomControlledActivationV2 ?? null;
+  if (controlledActivation) {
+    recommendations2.push(`Controlled Activation: Mapping V2 is ${controlledActivation.canUseV2 ? 'active' : 'not yet active'} — this export uses ${controlledActivation.selectedMappingSource === 'legacy' ? 'Legacy Mapping' : 'Mapping V2'}.`);
+    if (controlledActivation.blockers?.length) {
+      recommendations2.push(`[dev] Activation blockers: ${controlledActivation.blockers[0].blocker}${controlledActivation.blockers.length > 1 ? ` (+${controlledActivation.blockers.length - 1} more)` : ''}.`);
+    }
+    recommendations2.push(`[dev] Fallback: ${controlledActivation.fallbackStrategy?.selectedFallback ?? 'legacy Lightroom Mapping'} (useLegacyMapping=${controlledActivation.fallbackStrategy?.useLegacyMapping ?? true}).`);
+  }
+
   return {
     referenceConfidence, transferConfidence, complexity,
     lightroomReproduction, wbTransferRisk, recommendations: recommendations2,
@@ -181,6 +193,16 @@ export function buildReferenceTransferReport(ctx) {
       activationReadinessLevel: shadowCompare.activationReadiness?.level ?? 'unknown',
       canProceedToControlledActivation: shadowCompare.activationReadiness?.canProceedToControlledActivation ?? false,
       majorDivergences: shadowCompare.divergenceAnalysis?.divergentAreas ?? [],
+    } : { available: false },
+    // EPIC 2E-A: compact context only — the full gate lives on finalStyleIntent.lightroomControlledActivationV2
+    activationContext: controlledActivation ? {
+      available: true,
+      activationState: controlledActivation.activationState,
+      canUseV2: controlledActivation.canUseV2,
+      selectedMappingSource: controlledActivation.selectedMappingSource,
+      productionOutputStillLegacy: controlledActivation.selectedMappingSource === 'legacy',
+      majorBlockers: (controlledActivation.blockers ?? []).slice(0, 3).map(b => b.blocker),
+      fallbackAvailable: controlledActivation.fallbackStrategy?.useLegacyMapping ?? true,
     } : { available: false },
   };
 }

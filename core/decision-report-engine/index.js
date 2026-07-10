@@ -279,6 +279,14 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     reasons.push(`[dev] ${scr.developerSummary}`);
   }
 
+  // EPIC 2E-A: Lightroom Mapping V2 Controlled Activation — narration
+  // only when the gate object actually exists (safe no-op otherwise).
+  const act = fsi.lightroomControlledActivationV2;
+  if (act) {
+    reasons.push(`Lightroom Mapping V2 Controlled Activation: ${act.photographerSummary}`);
+    reasons.push(`[dev] ${act.developerSummary}`);
+  }
+
   return {
     photographerStyleLabel: fsi.photographerStyleLabel ?? null,
     styleFamily: fsi.styleFamily ?? null,
@@ -390,6 +398,22 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
       canProceedToControlledActivation: fsi.lightroomShadowCompareReportV2.activationReadiness?.canProceedToControlledActivation ?? false,
       photographerSummary: fsi.lightroomShadowCompareReportV2.photographerSummary,
       developerSummary: fsi.lightroomShadowCompareReportV2.developerSummary,
+    } : null,
+    // EPIC 2E-A: Lightroom Mapping V2 Controlled Activation — compact,
+    // readable section (not a raw JSON dump). Safe if the gate object is
+    // missing entirely (try/catch upstream may have set it to null).
+    lightroomMappingV2ControlledActivation: fsi.lightroomControlledActivationV2 ? {
+      activationState: fsi.lightroomControlledActivationV2.activationState,
+      selectedMappingSource: fsi.lightroomControlledActivationV2.selectedMappingSource,
+      canUseV2: fsi.lightroomControlledActivationV2.canUseV2,
+      failedGates: (fsi.lightroomControlledActivationV2.gateChecks ?? []).filter(g => g.required && !g.passed).map(g => g.name),
+      blockers: (fsi.lightroomControlledActivationV2.blockers ?? []).map(b => b.blocker),
+      rollbackPlan: {
+        available: fsi.lightroomControlledActivationV2.rollbackPlan?.available ?? false,
+        strategy: fsi.lightroomControlledActivationV2.rollbackPlan?.strategy ?? null,
+      },
+      photographerSummary: fsi.lightroomControlledActivationV2.photographerSummary,
+      developerSummary: fsi.lightroomControlledActivationV2.developerSummary,
     } : null,
     editingStrategy: strategy ?? null,
     styleBudget: budget ? { name: budget.name, adjustmentsMade: budgetAdjustments.length, details: budgetAdjustments } : null,
