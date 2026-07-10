@@ -145,8 +145,14 @@ export function buildReferenceTransferReport(ctx) {
   // recommendations only, does not touch the transfer algorithm itself.
   const shadowCompare = dec?.finalStyleIntent?.lightroomShadowCompareReportV2 ?? null;
   if (shadowCompare) {
-    const stance = shadowCompare.safetyDelta?.v2SaferThanLegacy ? 'safer/more cautious than' : 'broadly similar to';
-    recommendations2.push(`Shadow Compare V2: the experimental V2 mapping chain currently looks ${stance} the active legacy mapping (still shadow-only, not used for this export).`);
+    const status = shadowCompare.safetyDelta?.status ?? 'uncertain';
+    const legacyAvailable = shadowCompare.legacySummary?.available === true;
+    const stanceText = !legacyAvailable
+      ? 'appears more safety-aware, but direct legacy comparison is incomplete'
+      : status === 'safer-estimate' ? 'currently looks safer/more cautious than'
+      : status === 'riskier' ? 'currently carries unresolved risk compared to'
+      : 'appears broadly similar to, with safety not yet confidently proven either way, compared to';
+    recommendations2.push(`Shadow Compare V2: the experimental V2 mapping chain ${stanceText} the active legacy mapping (still shadow-only, not used for this export).`);
     if (shadowCompare.divergenceAnalysis?.hasMajorDivergence) {
       recommendations2.push(`[dev] Shadow Compare divergence (${shadowCompare.divergenceAnalysis.severity}): ${shadowCompare.divergenceAnalysis.divergentAreas.join(', ')}.`);
     }
@@ -169,7 +175,8 @@ export function buildReferenceTransferReport(ctx) {
     // EPIC 2D: compact context only — the full report lives on finalStyleIntent.lightroomShadowCompareReportV2
     shadowCompareContext: shadowCompare ? {
       available: true,
-      stance: shadowCompare.safetyDelta?.v2SaferThanLegacy ? 'safer' : 'similar',
+      status: shadowCompare.safetyDelta?.status ?? 'uncertain',
+      legacyComparisonAvailable: shadowCompare.legacySummary?.available === true,
       readiness: shadowCompare.readiness,
       activationReadinessLevel: shadowCompare.activationReadiness?.level ?? 'unknown',
       canProceedToControlledActivation: shadowCompare.activationReadiness?.canProceedToControlledActivation ?? false,

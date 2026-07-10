@@ -138,22 +138,34 @@ const LEGACY_DIRECTION_KEY = { tonal: 'tonalDirection', color: 'colorDirection',
 function _buildComparisonMatrix(legacySummary, translation, safety) {
   const matrix = {};
   const toolPriorityMap = translation?.toolPriorityMap ?? {};
+  const legacyAvailable = legacySummary?.available === true;
   for (const dim of MATRIX_DIMENSIONS) {
-    const legacyDirection = LEGACY_DIRECTION_KEY[dim] ? (legacySummary[LEGACY_DIRECTION_KEY[dim]] ?? 'unknown') : (dim === 'safety' ? legacySummary.riskLevel : 'unknown');
+    // EPIC 2D-F Patch 3: never invent a legacy direction when legacy
+    // output is unavailable — force "unknown" explicitly rather than
+    // relying on _buildLegacySummary's own fallback staying "unknown"
+    // forever (defensive: correct today, but shouldn't be an implicit
+    // assumption this function silently depends on).
+    const legacyDirection = !legacyAvailable ? 'unknown' : (LEGACY_DIRECTION_KEY[dim] ? (legacySummary[LEGACY_DIRECTION_KEY[dim]] ?? 'unknown') : (dim === 'safety' ? legacySummary.riskLevel : 'unknown'));
     const toolKey = TRANSLATION_TOOL_KEY[dim];
     const v2Entry = toolKey ? toolPriorityMap[toolKey] : null;
     const v2Direction = v2Entry ? _directionOf(v2Entry.intensity) : (dim === 'skin' ? 'conservative' : dim === 'safety' ? (safety?.globalSafetyScore != null ? _directionOf(1 - safety.globalSafetyScore) : 'unknown') : 'unknown');
     const clampProfile = toolKey && safety?.clampProfiles ? safety.clampProfiles[toolKey] : null;
     const v2Safety = clampProfile ? clampProfile.clampSeverity : (dim === 'safety' ? (safety?.overStackAnalysis?.severity ?? 'unknown') : 'none');
 
-    let alignment = 'unknown', divergence = 0.5;
-    if (legacyDirection !== 'unknown' && v2Direction !== 'unknown') {
+    let alignment = 'unknown', divergence = 0.5, recommendation;
+    if (!legacyAvailable) {
+      alignment = 'unknown'; divergence = 0.5;
+      recommendation = 'Needs legacy mapping output for full comparison.';
+    } else if (legacyDirection !== 'unknown' && v2Direction !== 'unknown') {
       if (legacyDirection === v2Direction) { alignment = 'aligned'; divergence = 0.1; }
       else if ((legacyDirection === 'balanced' || v2Direction === 'balanced')) { alignment = 'partially-aligned'; divergence = 0.4; }
       else { alignment = 'divergent'; divergence = 0.75; }
+      recommendation = alignment === 'divergent' ? `Review ${dim} direction before any future activation — legacy and V2 disagree.` : alignment === 'aligned' ? `${dim} direction is consistent between legacy and V2.` : 'Insufficient data to compare confidently.';
+    } else {
+      recommendation = 'Insufficient data to compare confidently.';
     }
-    const recommendation = alignment === 'divergent' ? `Review ${dim} direction before any future activation — legacy and V2 disagree.` : alignment === 'aligned' ? `${dim} direction is consistent between legacy and V2.` : 'Insufficient data to compare confidently.';
-    matrix[dim] = { legacyDirection, v2Direction, v2Safety, alignment, divergence: +divergence.toFixed(2), recommendation, reason: `Compared legacy "${legacyDirection}" against V2 "${v2Direction}" for ${dim}.` };
+    const reason = !legacyAvailable ? `Legacy mapping output unavailable — only V2's own "${v2Direction}" direction for ${dim} is known.` : `Compared legacy "${legacyDirection}" against V2 "${v2Direction}" for ${dim}.`;
+    matrix[dim] = { legacyDirection, v2Direction, v2Safety, alignment, divergence: +divergence.toFixed(2), recommendation, reason };
   }
   return matrix;
 }
@@ -204,49 +216,111 @@ function _buildDivergenceAnalysis(matrix, translation, safety, dnaNames) {
 }
 
 // ── Task 10: Safety Delta ───────────────────────────────────────────────────
-function _buildSafetyDelta(legacySummary, translation, safety) {
+function _buildSafetyDelta(legacySummary, translation, safetySummary, safety) {
   const safetyImprovements = [], remainingRisks = [], reasons = [];
-  if (safety?.channelProtectionsCount === undefined) { /* not built yet, ignore */ }
-  if (translation?.protectedChannels?.length) safetyImprovements.push('V2 explicitly protects skin/highlight/shadow channels that legacy mapping does not track individually.');
-  if (safety && safety.toolCapsCount > 0) safetyImprovements.push(`V2 applies ${safety.toolCapsCount} explicit tool-level safety cap(s) before any future activation.`);
-  if (translation?.toolSuppressionMap?.length) safetyImprovements.push('V2 suppresses specific risky tool/channel combinations that legacy mapping applies uniformly.');
-  if (safety?.overStackAnalysis && !safety.overStackAnalysis.hasRisk) safetyImprovements.push('V2 actively checks for and currently finds no over-stacking risk in the combined tool plan.');
-  if (legacySummary.riskLevel === 'high') safetyImprovements.push('Legacy mapping shows a "high" abstract risk level — V2 layers additional caution legacy mapping does not apply.');
+  const legacyAvailable = legacySummary?.available === true;
+  const overStackSeverity = safetySummary?.overStackSeverity ?? 'unknown';
+  const overStackRisky = overStackSeverity === 'high' || overStackSeverity === 'critical';
+  const hardStopsCount = safetySummary?.hardStopsCount ?? 0;
+  const globalSafetyScore = safetySummary?.globalSafetyScore;
+  const lowSafetyScore = globalSafetyScore != null && globalSafetyScore < 0.5;
+  const blockersCount = (safety?.activationGate?.blockers ?? []).length;
+  // Safety Clamp's own blockers[] always includes 2 static, phase-level
+  // entries ("shadow-only phase", "no real-image comparison yet") that
+  // are true regardless of input quality — only blockers BEYOND that
+  // baseline represent a genuine, input-specific risk signal worth
+  // factoring into a safety claim here.
+  const extraBlockersCount = Math.max(0, blockersCount - 2);
 
-  if (!safety) remainingRisks.push('No Safety Clamp data available — cannot yet estimate a meaningful safety delta.');
-  if (safety?.hardStopsCount > 0) remainingRisks.push(`${safety.hardStopsCount} hard stop(s) currently active in V2 — these represent real, unresolved risk, not an improvement.`);
+  if (translation?.protectedChannels?.length) safetyImprovements.push('V2 explicitly protects skin/highlight/shadow channels that legacy mapping does not track individually.');
+  if (safetySummary && safetySummary.toolCapsCount > 0) safetyImprovements.push(`V2 applies ${safetySummary.toolCapsCount} explicit tool-level safety cap(s) before any future activation.`);
+  if (translation?.toolSuppressionMap?.length) safetyImprovements.push('V2 suppresses specific risky tool/channel combinations that legacy mapping applies uniformly.');
+  if (safetySummary?.overStackSeverity === 'none') safetyImprovements.push('V2 actively checks for and currently finds no over-stacking risk in the combined tool plan.');
+  if (legacyAvailable && legacySummary.riskLevel === 'high') safetyImprovements.push('Legacy mapping shows a "high" abstract risk level — V2 layers additional caution legacy mapping does not apply.');
+
+  if (!safetySummary?.available) remainingRisks.push('No Safety Clamp data available — cannot yet estimate a meaningful safety delta.');
+  if (hardStopsCount > 0) remainingRisks.push(`${hardStopsCount} hard stop(s) currently active in V2 — these represent real, unresolved risk, not an improvement.`);
+  if (overStackRisky) remainingRisks.push(`Over-stack analysis severity is "${overStackSeverity}" — a real, unresolved risk signal.`);
+  if (lowSafetyScore) remainingRisks.push(`Global safety score (${globalSafetyScore}) is below the confidence threshold needed to claim V2 is safer.`);
+  if (extraBlockersCount > 0) remainingRisks.push(`${extraBlockersCount} additional activation-gate blocker(s) beyond the standard shadow-only phase gate are currently active.`);
   remainingRisks.push('V2 has not been validated against real shadow-compare data from actual edited photos.');
   remainingRisks.push('Confidence/safety weightings throughout the V2 chain are hand-reasoned, not tuned from measured outcomes.');
 
+  // EPIC 2D-F Patch 2: v2SaferThanLegacy is ONLY ever true when every one
+  // of these guards passes — legacy output must actually exist to compare
+  // against, safety must genuinely look clean, and there must be concrete
+  // improvements to point to. Any single failing guard forces `false`
+  // and an honest `status`, never an optimistic default.
+  let status, v2SaferThanLegacy, confidence;
+  if (!legacyAvailable) {
+    status = 'uncertain'; v2SaferThanLegacy = false;
+    reasons.push('Legacy mapping output is not available — there is nothing concrete to compare V2 against, so a "safer" claim cannot be made.');
+    confidence = 0.25;
+  } else if (hardStopsCount > 0) {
+    status = 'riskier'; v2SaferThanLegacy = false;
+    reasons.push(`${hardStopsCount} active hard stop(s) mean V2 currently carries real, unresolved risk — it cannot be called safer than legacy in this state.`);
+    confidence = 0.3;
+  } else if (overStackRisky) {
+    status = 'uncertain'; v2SaferThanLegacy = false;
+    reasons.push(`Over-stack severity "${overStackSeverity}" is a real risk signal that blocks a confident safety claim.`);
+    confidence = 0.35;
+  } else if (lowSafetyScore) {
+    status = 'uncertain'; v2SaferThanLegacy = false;
+    reasons.push(`Global safety score (${globalSafetyScore}) is too low to support a confident safety claim.`);
+    confidence = 0.35;
+  } else if (extraBlockersCount > 0) {
+    status = 'uncertain'; v2SaferThanLegacy = false;
+    reasons.push(`${extraBlockersCount} additional activation-gate blocker(s) beyond the standard shadow-only phase gate remain — a confident safety claim is premature.`);
+    confidence = 0.4;
+  } else if (safetyImprovements.length >= 2) {
+    status = 'safer-estimate'; v2SaferThanLegacy = true;
+    reasons.push(`${safetyImprovements.length} concrete safety improvement(s) identified with no active hard stops, high over-stack risk, or low safety score — a cautious "safer" estimate is supportable.`);
+    confidence = 0.6;
+  } else {
+    status = 'similar'; v2SaferThanLegacy = false;
+    reasons.push('No blocking risk signals found, but too few concrete improvements to confidently claim V2 is safer rather than merely similar.');
+    confidence = 0.45;
+  }
+
   const score = +clamp01(0.4 + safetyImprovements.length * 0.1 - remainingRisks.length * 0.05).toFixed(3);
-  const v2SaferThanLegacy = safetyImprovements.length > remainingRisks.length && (safety?.hardStopsCount ?? 0) === 0;
   reasons.push(`Safety delta estimated at ${score} from ${safetyImprovements.length} identified improvement(s) against ${remainingRisks.length} remaining risk(s)/caveat(s).`);
-  return { v2SaferThanLegacy, score, safetyImprovements, remainingRisks, reasons };
+  return { v2SaferThanLegacy, status, confidence: +clamp01(confidence).toFixed(3), score, safetyImprovements, remainingRisks, reasons };
 }
 
 // ── Task 11: Expected Improvement ───────────────────────────────────────────
-function _buildExpectedImprovement(divergenceAnalysis, safetyDelta, alignmentScores) {
-  const likelyBetterAreas = [...safetyDelta.safetyImprovements];
+function _buildExpectedImprovement(divergenceAnalysis, safetyDelta, alignmentScores, legacyAvailable) {
+  // EPIC 2D-F Patch 4: without legacy output, "better" is not directly
+  // comparable — phrase every improvement area as a hedge ("potentially
+  // better") rather than a flat assertion, and lower confidence
+  // accordingly.
+  const likelyBetterAreas = safetyDelta.safetyImprovements.map(s => legacyAvailable ? s : `Potentially better: ${s.charAt(0).toLowerCase()}${s.slice(1)}`);
   const likelySameAreas = [];
   const likelyRiskAreas = [...safetyDelta.remainingRisks];
   if (alignmentScores.overallAlignment > 0.7) likelySameAreas.push('Overall creative direction is largely consistent with legacy mapping.');
   if (divergenceAnalysis.hasMajorDivergence) likelyRiskAreas.push(`${divergenceAnalysis.divergentAreas.length} area(s) diverge from legacy mapping and need human review before any activation.`);
+  if (!legacyAvailable) likelyRiskAreas.push('No final legacy mapping output available for direct comparison.');
   likelyRiskAreas.push('No controlled activation stage (EPIC 2E) exists yet.');
 
-  const confidence = +clamp01(alignmentScores.overallAlignment * 0.5 + safetyDelta.score * 0.5).toFixed(3);
-  const reasons = [`Expected improvement estimate combines alignment (${alignmentScores.overallAlignment}) and safety delta (${safetyDelta.score}) — this is a forward-looking ESTIMATE, not a claim of final image quality improvement.`];
+  const confidence = +clamp01((alignmentScores.overallAlignment * 0.5 + safetyDelta.score * 0.5) * (legacyAvailable ? 1 : 0.6)).toFixed(3);
+  const reasons = [`Expected improvement estimate combines alignment (${alignmentScores.overallAlignment}) and safety delta (${safetyDelta.score}) — this is a forward-looking ESTIMATE, not a claim of final image quality improvement.${legacyAvailable ? '' : ' Confidence is further reduced because legacy mapping output was unavailable for direct comparison.'}`];
   return { likelyBetterAreas, likelySameAreas, likelyRiskAreas, confidence, reasons };
 }
 
 // ── Task 12: Activation Readiness ───────────────────────────────────────────
-function _buildActivationReadiness(safetySummary, divergenceAnalysis, missingCount) {
+function _buildActivationReadiness(safetySummary, divergenceAnalysis, missingCount, legacyAvailable) {
   const blockers = ['EPIC 2E (a real controlled-activation stage) has not been implemented yet — this is a hard blocker regardless of any other signal.'];
+  if (!legacyAvailable) blockers.push('Legacy mapping output is not available — comparison is partial, not a full head-to-head against production mapping.');
   if (safetySummary?.hardStopsCount > 0) blockers.push(`${safetySummary.hardStopsCount} hard stop(s) are currently active.`);
   if (divergenceAnalysis.severity === 'high' || divergenceAnalysis.severity === 'critical') blockers.push(`Divergence severity is "${divergenceAnalysis.severity}".`);
   if (missingCount >= 3) blockers.push(`${missingCount} of 5 core V2 inputs are missing or incomplete.`);
   if (!safetySummary?.available) blockers.push('Safety Clamp data is unavailable.');
 
+  // EPIC 2D-F Patch 1: with no legacy output to compare against, the
+  // ceiling is "needs-more-shadow-data" — never eligible-for-controlled-test
+  // or ready-for-shadow-review, both of which would imply a completed
+  // comparison that hasn't actually happened.
   const level = missingCount >= 3 || !safetySummary?.available ? 'not-ready'
+    : !legacyAvailable ? 'needs-more-shadow-data'
     : (safetySummary?.hardStopsCount > 0 || divergenceAnalysis.severity === 'high') ? 'needs-more-shadow-data'
     : divergenceAnalysis.severity === 'none' || divergenceAnalysis.severity === 'low' ? 'eligible-for-controlled-test'
     : 'ready-for-shadow-review';
@@ -299,30 +373,45 @@ export function buildLightroomShadowCompareReportV2(input = {}) {
   const safetySummary = _buildSafetySummary(safety, warnings);
 
   // Task 7-12
+  const legacyAvailable = legacySummary.available === true;
   const comparisonMatrix = _buildComparisonMatrix(legacySummary, translation, safety);
   const alignmentScores = _buildAlignmentScores(comparisonMatrix, feasibility);
   const divergenceAnalysis = _buildDivergenceAnalysis(comparisonMatrix, translation, safety, dnaNames);
-  const safetyDelta = _buildSafetyDelta(legacySummary, translation, safetySummary);
-  const expectedImprovement = _buildExpectedImprovement(divergenceAnalysis, safetyDelta, alignmentScores);
+  const safetyDelta = _buildSafetyDelta(legacySummary, translation, safetySummary, safety);
+  const expectedImprovement = _buildExpectedImprovement(divergenceAnalysis, safetyDelta, alignmentScores, legacyAvailable);
 
   const missingCount = [!plan, !translation, !safety, !budget, !feasibility].filter(Boolean).length;
-  const activationReadiness = _buildActivationReadiness(safetySummary, divergenceAnalysis, missingCount);
+  const activationReadiness = _buildActivationReadiness(safetySummary, divergenceAnalysis, missingCount, legacyAvailable);
 
-  const readiness = missingCount >= 3 ? 'not-ready' : missingCount >= 1 ? 'partial' : 'ready-for-shadow-compare';
+  // EPIC 2D-F Patch 1: readiness must not exceed "partial" when legacy
+  // output is unavailable — a shadow compare without a legacy baseline
+  // is inherently incomplete, never "ready-for-shadow-compare".
+  let readiness = missingCount >= 3 ? 'not-ready' : missingCount >= 1 ? 'partial' : 'ready-for-shadow-compare';
+  if (!legacyAvailable && readiness === 'ready-for-shadow-compare') readiness = 'partial';
   const confidence = +clamp01(
     alignmentScores.overallAlignment * 0.35 + safetyDelta.score * 0.35 +
     (translation?.confidence ?? 0.4) * 0.15 + (safety?.confidence ?? safety?.globalSafetyScore ?? 0.4) * 0.15
     - (missingCount >= 3 ? 0.2 : missingCount * 0.05)
   ).toFixed(3);
 
-  reasons.push(`Shadow compare readiness "${readiness}", overall alignment ${alignmentScores.overallAlignment}, safety delta ${safetyDelta.score}.`);
+  reasons.push(`Shadow compare readiness "${readiness}", overall alignment ${alignmentScores.overallAlignment}, safety delta ${safetyDelta.score} (status: ${safetyDelta.status}).`);
   if (divergenceAnalysis.hasMajorDivergence) reasons.push(`${divergenceAnalysis.divergentAreas.length} divergent area(s): ${divergenceAnalysis.divergentAreas.join(', ')}.`);
   if (missingCount > 0) warnings.push(`${missingCount} of 5 core V2 inputs (plan/translation/safety/budget/feasibility) missing or incomplete.`);
+  if (!legacyAvailable) warnings.push('Legacy mapping output is not available at this stage; Shadow Compare is partial.');
 
-  const photographerSummary = `V2 currently looks ${safetyDelta.v2SaferThanLegacy ? 'more cautious/safer' : 'broadly similar'} than the current mapping, ${divergenceAnalysis.hasMajorDivergence ? `with ${divergenceAnalysis.divergentAreas.length} area(s) worth reviewing` : 'with no major disagreements found'}. This is a shadow comparison only — your exported preset is unaffected.`;
+  // EPIC 2D-F Patch 5: photographer-facing language is cautious and
+  // reflects safetyDelta.status honestly — never asserts "safer" unless
+  // status is genuinely "safer-estimate".
+  const photographerSummary = !legacyAvailable
+    ? `Shadow Compare is partial because final legacy mapping output is not available at this stage. V2 shows ${safetyDelta.safetyImprovements.length ? 'stronger safety planning' : 'its planned safety measures'}, but it is not yet proven safer than the active mapping. This is a shadow comparison only — your exported preset is unaffected.`
+    : safetyDelta.status === 'safer-estimate'
+      ? `V2 currently looks more cautious/safer than the current mapping, ${divergenceAnalysis.hasMajorDivergence ? `with ${divergenceAnalysis.divergentAreas.length} area(s) worth reviewing` : 'with no major disagreements found'}. This is a shadow comparison only — your exported preset is unaffected.`
+      : `V2 appears ${safetyDelta.status === 'riskier' ? 'to carry unresolved risk right now' : 'broadly similar to legacy mapping, with safety not yet confidently proven either way'}, ${divergenceAnalysis.hasMajorDivergence ? `and ${divergenceAnalysis.divergentAreas.length} area(s) worth reviewing` : 'with no major disagreements found'}. This is a shadow comparison only — your exported preset is unaffected.`;
 
   developerSummaryLines.push('lightroomShadowCompareReportV2 is a REPORT ONLY — it never generates a Lightroom slider value, never touches XMP, and never activates V2 mapping.');
   developerSummaryLines.push(`activationReadiness.canProceedToControlledActivation is hard-coded false — EPIC 2E does not exist yet.`);
+  if (!legacyAvailable) developerSummaryLines.push('Comparison is based on V2 shadow objects and legacy budget context, not final legacy mapping output.');
+  developerSummaryLines.push(`legacySummary.available=${legacyAvailable}; safetyDelta.status=${safetyDelta.status}. Controlled activation remains blocked until real shadow comparison data is available.`);
   if (safetySummary?.canActivate !== false && safetySummary?.available) developerSummaryLines.push('[CRITICAL] Safety Clamp activationGate.canActivate was not false — investigate immediately.');
   const developerSummary = developerSummaryLines.join(' ');
 
