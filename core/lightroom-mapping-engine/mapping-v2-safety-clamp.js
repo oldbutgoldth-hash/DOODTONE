@@ -32,6 +32,22 @@ function _deepClone(obj) {
   try { return JSON.parse(JSON.stringify(obj)); } catch { return null; }
 }
 
+/**
+ * EPIC 2C-F Patch 1: styleDNA may arrive as a plain array (the normal
+ * case), or — from a caller that hasn't unwrapped it — as an object
+ * shaped like `{ elements: [...] }` or `{ items: [...] }`. Never throws;
+ * unknown shapes (including null/missing) return `[]` rather than
+ * letting `.map()`/`.some()` crash downstream. This is the ONLY place
+ * Safety Clamp reads styleDNA — every other reference in this file uses
+ * the normalized result.
+ */
+function normalizeStyleDNA(styleDNA) {
+  if (Array.isArray(styleDNA)) return styleDNA;
+  if (styleDNA && Array.isArray(styleDNA.elements)) return styleDNA.elements;
+  if (styleDNA && Array.isArray(styleDNA.items)) return styleDNA.items;
+  return [];
+}
+
 // ── Task 5: Clamp Profiles ──────────────────────────────────────────────────
 // One profile per major Lightroom tool category. `captureSignal` is the
 // single most relevant capture-capability dimension for that tool (e.g.
@@ -145,7 +161,7 @@ export function buildLightroomSafetyClampV2(input = {}) {
   const translation = lightroomTranslationV2 ?? finalStyleIntent?.lightroomTranslationV2 ?? null;
   const budget = styleBudgetIntelligence ?? finalStyleIntent?.styleBudgetIntelligence ?? null;
   const intentObj = photographerIntent ?? finalStyleIntent?.photographerIntent ?? null;
-  const dna = styleDNA ?? finalStyleIntent?.photographerStyle?.top?.styleDNA ?? [];
+  const dna = normalizeStyleDNA(styleDNA ?? finalStyleIntent?.photographerStyle?.top?.styleDNA);
   const dnaValidation = styleDNAValidation ?? finalStyleIntent?.photographerStyle?.top?.styleDNAValidation ?? null;
   const feasibility = styleFeasibility ?? finalStyleIntent?.styleFeasibilityEstimate ?? null;
   const capture = captureCapability ?? finalStyleIntent?.captureCapabilityEstimate ?? null;
@@ -256,10 +272,23 @@ export function buildLightroomSafetyClampV2(input = {}) {
   // ── Task 11: Safe Translation Preview (deep-cloned, never mutates original) ──
   const clonedTranslation = _deepClone(translation);
   let safeTargetRangeHints = null, safeToolPriorityMap = null;
+  const MIN_CAPPED_NOTE = 'safeTranslationPreview minIntensity was reduced to preserve min <= max after safety cap.';
   if (clonedTranslation) {
     safeTargetRangeHints = (clonedTranslation.targetRangeHints ?? []).map(r => {
       const cap = toolCaps.find(tc => tc.tool === r.tool && tc.channel === r.channel);
-      return cap ? { ...r, maxIntensity: cap.cappedIntensity, rangeType: 'abstract-intensity' } : r;
+      let maxIntensity = clamp01(cap ? cap.cappedIntensity : r.maxIntensity);
+      let minIntensity = clamp01(r.minIntensity ?? 0);
+      const safetyLimit = r.safetyLimit != null ? clamp01(r.safetyLimit) : null;
+      // EPIC 2C-F Patch 2: guarantee 0 <= minIntensity <= maxIntensity <=
+      // safetyLimit <= 1 for every safe range — a real capped maxIntensity
+      // (e.g. from a hard tool cap) could otherwise land below the
+      // range's original minIntensity, producing an inverted range.
+      if (safetyLimit != null && maxIntensity > safetyLimit) maxIntensity = safetyLimit;
+      if (minIntensity > maxIntensity) {
+        minIntensity = maxIntensity;
+        if (!developerNotes.includes(MIN_CAPPED_NOTE)) developerNotes.push(MIN_CAPPED_NOTE);
+      }
+      return { ...r, minIntensity: +minIntensity.toFixed(3), maxIntensity: +maxIntensity.toFixed(3), rangeType: 'abstract-intensity' };
     });
     safeToolPriorityMap = { ...clonedTranslation.toolPriorityMap };
     for (const [key, profile] of Object.entries(clampProfiles)) {
