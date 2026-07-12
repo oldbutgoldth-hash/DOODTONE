@@ -93,4 +93,27 @@ export const LIGHTROOM_MAPPING_V2_FLAGS = {
   minOverlayTestSafetyScore: 0.75,
   minOverlaySimulationConfidence: 0.6,
   minOverlaySimulationSafetyScore: 0.65,
+
+  // ── EPIC 2E-E: Controlled Overlay Preview Sandbox flags ─────────────────
+  // Answers "if we previewed the overlay safely, what abstract preset
+  // changes would be simulated?" — a separate, non-production preview
+  // object. Report/sandbox-object flags may default true (building an
+  // abstract preview object never touches production by itself); every
+  // flag that could let preview output reach real XMP, production
+  // output, or the legacy preset object defaults false.
+  enableControlledOverlayPreviewSandbox: true,   // safe to default on — building the sandbox object never touches production by itself
+  allowOverlayPreviewSandboxReport: true,        // report-only output is always safe
+  allowOverlayPreviewPresetObject: true,         // building an abstract, non-production preview object is always safe
+  allowOverlayPreviewXMPExport: false,           // exporting the preview as real XMP — never by default
+  allowOverlayPreviewProductionWrite: false,     // writing preview output to production — never by default
+  allowOverlayPreviewPresetMutation: false,      // mutating the legacy preset object — never, under any flag
+  requireControlledOverlayTestGateForPreview: true,
+  requireOverlaySimulationForPreview: true,
+  requireLegacySafetyOverlayForPreview: true,
+  requireSafetyClampForPreview: true,
+  requireNoHardStopsForPreview: true,
+  requireNoCriticalOverstackForPreview: true,
+  minPreviewSandboxConfidence: 0.68,
+  minPreviewSandboxSafetyScore: 0.7,
+  maxPreviewRiskLevel: 'medium',
 };

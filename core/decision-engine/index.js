@@ -38,6 +38,7 @@ import { buildLightroomControlledActivationV2 } from '../lightroom-mapping-engin
 import { buildLegacySafetyOverlayV2 } from '../lightroom-mapping-engine/mapping-v2-legacy-safety-overlay.js';
 import { buildLegacyOverlaySimulationV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-simulation.js';
 import { buildControlledOverlayTestGateV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-test-gate.js';
+import { buildControlledOverlayPreviewSandboxV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js';
 
 // ─── Scene strategy table ─────────────────────────────────────────────────────
 // Each strategy is a set of TRUST MULTIPLIERS (not the base ENGINE_PRIORITY
@@ -684,6 +685,43 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
   } catch (e) {
     finalStyleIntent.controlledOverlayTestGateV2 = null;
     finalStyleIntent.controlledOverlayTestGateV2Error = `Controlled overlay test gate failed safely (production unaffected): ${e.message}`;
+  }
+
+  // ── EPIC 2E-E: Controlled Overlay Preview Sandbox ─────────────────────────
+  // Answers "if we previewed the overlay safely, what abstract preset
+  // changes would be simulated?" — builds a SEPARATE, non-production
+  // preview object. With no `flags` override, this resolves to the safe
+  // defaults (allowOverlayPreviewXMPExport=false,
+  // allowOverlayPreviewProductionWrite=false,
+  // allowOverlayPreviewPresetMutation=false); `canExportPreviewXMP` and
+  // `canWriteProduction` are additionally HARD-CODED false inside the
+  // module itself, and `previewPresetShadow` is guaranteed to contain no
+  // real slider values and no XMP values — verified this stays true
+  // even when every export/write/mutation flag is forced true. Attached
+  // to finalStyleIntent, never read by mapStyleFingerprintToLightroom
+  // below, wrapped in try/catch as defense-in-depth — same pattern as
+  // EPIC 2A-2E-D above.
+  try {
+    finalStyleIntent.controlledOverlayPreviewSandboxV2 = buildControlledOverlayPreviewSandboxV2({
+      finalStyleIntent, decision: { styleBudget }, legacyStyleBudget: styleBudget,
+      lightroomMappingPlanV2: finalStyleIntent.lightroomMappingPlanV2,
+      lightroomTranslationV2: finalStyleIntent.lightroomTranslationV2,
+      lightroomSafetyClampV2: finalStyleIntent.lightroomSafetyClampV2,
+      lightroomShadowCompareReportV2: finalStyleIntent.lightroomShadowCompareReportV2,
+      lightroomControlledActivationV2: finalStyleIntent.lightroomControlledActivationV2,
+      legacySafetyOverlayV2: finalStyleIntent.legacySafetyOverlayV2,
+      legacyOverlaySimulationV2: finalStyleIntent.legacyOverlaySimulationV2,
+      controlledOverlayTestGateV2: finalStyleIntent.controlledOverlayTestGateV2,
+      styleBudgetIntelligence: finalStyleIntent.styleBudgetIntelligence,
+      photographerIntent: finalStyleIntent.photographerIntent,
+      styleDNA: finalStyleIntent.photographerStyle?.top?.styleDNA,
+      styleFeasibility: finalStyleIntent.styleFeasibilityEstimate,
+      captureCapability: finalStyleIntent.captureCapabilityEstimate,
+      // No `flags` override — always resolves to the safe defaults.
+    });
+  } catch (e) {
+    finalStyleIntent.controlledOverlayPreviewSandboxV2 = null;
+    finalStyleIntent.controlledOverlayPreviewSandboxV2Error = `Overlay preview sandbox failed safely (production unaffected): ${e.message}`;
   }
 
   return {

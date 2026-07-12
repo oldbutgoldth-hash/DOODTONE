@@ -317,6 +317,16 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     reasons.push(`[dev] ${gate.developerSummary}`);
   }
 
+  // EPIC 2E-E: Controlled Overlay Preview Sandbox narration (safe no-op if missing).
+  const sandbox = fsi.controlledOverlayPreviewSandboxV2;
+  if (sandbox) {
+    reasons.push(`Controlled Overlay Preview Sandbox V2: ${sandbox.photographerSummary}`);
+    if (sandbox.previewRiskDelta?.improved) {
+      reasons.push(`[dev] Preview risk delta: "${sandbox.previewRiskDelta.deltaLevel}" — ${sandbox.previewRiskDelta.improvedAreas.length} area(s) appear lower-risk in preview only; no production change occurred.`);
+    }
+    reasons.push(`[dev] ${sandbox.developerSummary}`);
+  }
+
   return {
     photographerStyleLabel: fsi.photographerStyleLabel ?? null,
     styleFamily: fsi.styleFamily ?? null,
@@ -496,6 +506,36 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
       },
       photographerSummary: fsi.controlledOverlayTestGateV2.photographerSummary,
       developerSummary: fsi.controlledOverlayTestGateV2.developerSummary,
+    } : null,
+    // EPIC 2E-E: Controlled Overlay Preview Sandbox V2 — compact,
+    // readable section (not a raw JSON dump). Safe if the sandbox
+    // object is missing.
+    controlledOverlayPreviewSandbox: fsi.controlledOverlayPreviewSandboxV2 ? {
+      sandboxState: fsi.controlledOverlayPreviewSandboxV2.sandboxState,
+      canCreatePreview: fsi.controlledOverlayPreviewSandboxV2.canCreatePreview,
+      canExportPreviewXMP: fsi.controlledOverlayPreviewSandboxV2.canExportPreviewXMP,
+      canWriteProduction: fsi.controlledOverlayPreviewSandboxV2.canWriteProduction,
+      selectedOutputSource: fsi.controlledOverlayPreviewSandboxV2.selectedOutputSource,
+      previewRisk: {
+        before: fsi.controlledOverlayPreviewSandboxV2.previewRiskBefore?.overallRisk ?? 'unknown',
+        after: fsi.controlledOverlayPreviewSandboxV2.previewRiskAfter?.overallRisk ?? 'unknown',
+        deltaLevel: fsi.controlledOverlayPreviewSandboxV2.previewRiskDelta?.deltaLevel ?? 'unknown',
+      },
+      previewProtections: (fsi.controlledOverlayPreviewSandboxV2.previewProtections ?? []).map(p => p.area),
+      previewSuppressions: (fsi.controlledOverlayPreviewSandboxV2.previewSuppressions ?? []).map(s => s.risk),
+      previewComparison: {
+        available: fsi.controlledOverlayPreviewSandboxV2.previewComparison?.available ?? false,
+        comparisonType: fsi.controlledOverlayPreviewSandboxV2.previewComparison?.comparisonType ?? 'unavailable',
+      },
+      keyBlockers: (fsi.controlledOverlayPreviewSandboxV2.blockers ?? []).slice(0, 4).map(b => b.blocker),
+      humanReviewNotes: (fsi.controlledOverlayPreviewSandboxV2.humanReviewNotes ?? []).map(n => n.note),
+      fallbackAvailable: fsi.controlledOverlayPreviewSandboxV2.fallbackStrategy?.useLegacyMapping ?? true,
+      rollbackPlan: {
+        available: fsi.controlledOverlayPreviewSandboxV2.rollbackPlan?.available ?? false,
+        strategy: fsi.controlledOverlayPreviewSandboxV2.rollbackPlan?.strategy ?? null,
+      },
+      photographerSummary: fsi.controlledOverlayPreviewSandboxV2.photographerSummary,
+      developerSummary: fsi.controlledOverlayPreviewSandboxV2.developerSummary,
     } : null,
     editingStrategy: strategy ?? null,
     styleBudget: budget ? { name: budget.name, adjustmentsMade: budgetAdjustments.length, details: budgetAdjustments } : null,

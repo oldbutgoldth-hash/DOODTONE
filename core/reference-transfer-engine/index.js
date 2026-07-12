@@ -212,6 +212,20 @@ export function buildReferenceTransferReport(ctx) {
     }
   }
 
+  // EPIC 2E-E: compact Controlled Overlay Preview Sandbox context —
+  // read-only, additive to recommendations only, does not touch the
+  // transfer algorithm itself.
+  const previewSandbox = dec?.finalStyleIntent?.controlledOverlayPreviewSandboxV2 ?? null;
+  if (previewSandbox) {
+    recommendations2.push(`Preview Sandbox: Legacy Mapping remains active — preview XMP export is ${previewSandbox.canExportPreviewXMP ? 'allowed' : 'disabled'} (state: ${previewSandbox.sandboxState}).`);
+    if ((previewSandbox.previewProtections ?? []).length) {
+      recommendations2.push(`[dev] Top preview protections: ${previewSandbox.previewProtections.slice(0, 3).map(p => p.area).join(', ')}${previewSandbox.previewProtections.length > 3 ? ', …' : ''}.`);
+    }
+    if ((previewSandbox.previewRiskDelta?.unresolvedRisks ?? []).length) {
+      recommendations2.push(`[dev] Unresolved preview risks: ${previewSandbox.previewRiskDelta.unresolvedRisks.slice(0, 3).join(', ')}${previewSandbox.previewRiskDelta.unresolvedRisks.length > 3 ? ', …' : ''}.`);
+    }
+  }
+
   return {
     referenceConfidence, transferConfidence, complexity,
     lightroomReproduction, wbTransferRisk, recommendations: recommendations2,
@@ -270,6 +284,14 @@ export function buildReferenceTransferReport(ctx) {
       canEnterControlledTest: testGate.canEnterControlledTest,
       humanReviewRequired: (testGate.humanReviewChecklist ?? []).some(c => c.required && c.status === 'pending'),
       topBlockers: (testGate.blockers ?? []).slice(0, 3).map(b => b.blocker),
+    } : { available: false },
+    // EPIC 2E-E: compact context only — the full sandbox lives on finalStyleIntent.controlledOverlayPreviewSandboxV2
+    previewSandboxContext: previewSandbox ? {
+      available: true,
+      sandboxState: previewSandbox.sandboxState,
+      previewXMPExportDisabled: !previewSandbox.canExportPreviewXMP,
+      topPreviewProtections: (previewSandbox.previewProtections ?? []).slice(0, 3).map(p => p.area),
+      unresolvedRisks: previewSandbox.previewRiskDelta?.unresolvedRisks ?? [],
     } : { available: false },
   };
 }
