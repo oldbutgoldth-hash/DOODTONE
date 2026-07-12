@@ -307,6 +307,16 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     reasons.push(`[dev] ${sim.developerSummary}`);
   }
 
+  // EPIC 2E-D: Controlled Overlay Test Gate narration (safe no-op if missing).
+  const gate = fsi.controlledOverlayTestGateV2;
+  if (gate) {
+    reasons.push(`Controlled Overlay Test Gate V2: ${gate.photographerSummary}`);
+    if (gate.blockers?.length) {
+      reasons.push(`[dev] Test gate blockers (${gate.blockers.length}): ${gate.blockers.slice(0, 2).map(b => b.blocker).join('; ')}${gate.blockers.length > 2 ? ', …' : ''}.`);
+    }
+    reasons.push(`[dev] ${gate.developerSummary}`);
+  }
+
   return {
     photographerStyleLabel: fsi.photographerStyleLabel ?? null,
     styleFamily: fsi.styleFamily ?? null,
@@ -464,6 +474,28 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
       blockers: (fsi.legacyOverlaySimulationV2.blockers ?? []).map(b => b.blocker),
       photographerSummary: fsi.legacyOverlaySimulationV2.photographerSummary,
       developerSummary: fsi.legacyOverlaySimulationV2.developerSummary,
+    } : null,
+    // EPIC 2E-D: Controlled Overlay Test Gate V2 — compact, readable
+    // section (not a raw JSON dump). Safe if the gate object is missing.
+    controlledOverlayTestGate: fsi.controlledOverlayTestGateV2 ? {
+      testState: fsi.controlledOverlayTestGateV2.testState,
+      canEnterControlledTest: fsi.controlledOverlayTestGateV2.canEnterControlledTest,
+      canPreviewOverlayPreset: fsi.controlledOverlayTestGateV2.canPreviewOverlayPreset,
+      canWriteProduction: fsi.controlledOverlayTestGateV2.canWriteProduction,
+      selectedOutputSource: fsi.controlledOverlayTestGateV2.selectedOutputSource,
+      keyBlockers: (fsi.controlledOverlayTestGateV2.blockers ?? []).slice(0, 4).map(b => b.blocker),
+      testEligibility: {
+        eligible: fsi.controlledOverlayTestGateV2.testEligibility?.eligible ?? false,
+        level: fsi.controlledOverlayTestGateV2.testEligibility?.level ?? 'unknown',
+      },
+      humanReviewChecklist: (fsi.controlledOverlayTestGateV2.humanReviewChecklist ?? []).map(c => `${c.item}: ${c.status}`),
+      fallbackAvailable: fsi.controlledOverlayTestGateV2.fallbackStrategy?.useLegacyMapping ?? true,
+      rollbackPlan: {
+        available: fsi.controlledOverlayTestGateV2.rollbackPlan?.available ?? false,
+        strategy: fsi.controlledOverlayTestGateV2.rollbackPlan?.strategy ?? null,
+      },
+      photographerSummary: fsi.controlledOverlayTestGateV2.photographerSummary,
+      developerSummary: fsi.controlledOverlayTestGateV2.developerSummary,
     } : null,
     editingStrategy: strategy ?? null,
     styleBudget: budget ? { name: budget.name, adjustmentsMade: budgetAdjustments.length, details: budgetAdjustments } : null,

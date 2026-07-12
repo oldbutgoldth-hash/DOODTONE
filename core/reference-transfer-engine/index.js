@@ -197,6 +197,21 @@ export function buildReferenceTransferReport(ctx) {
     }
   }
 
+  // EPIC 2E-D: compact Controlled Overlay Test Gate context — read-only,
+  // additive to recommendations only, does not touch the transfer
+  // algorithm itself.
+  const testGate = dec?.finalStyleIntent?.controlledOverlayTestGateV2 ?? null;
+  if (testGate) {
+    recommendations2.push(`Controlled Overlay Test Gate: Legacy Mapping remains active — controlled test is ${testGate.canEnterControlledTest ? 'allowed' : 'not allowed'} (state: ${testGate.testState}).`);
+    const humanReviewItem = (testGate.humanReviewChecklist ?? []).find(c => c.required);
+    if (humanReviewItem) {
+      recommendations2.push(`[dev] Human review status: ${humanReviewItem.status} (${(testGate.humanReviewChecklist ?? []).filter(c => c.status === 'pending').length} item(s) pending).`);
+    }
+    if (testGate.blockers?.length) {
+      recommendations2.push(`[dev] Test gate blockers: ${testGate.blockers[0].blocker}${testGate.blockers.length > 1 ? ` (+${testGate.blockers.length - 1} more)` : ''}.`);
+    }
+  }
+
   return {
     referenceConfidence, transferConfidence, complexity,
     lightroomReproduction, wbTransferRisk, recommendations: recommendations2,
@@ -247,6 +262,14 @@ export function buildReferenceTransferReport(ctx) {
       productionWriteDisabled: !simulation.canApplyToProduction,
       topSimulatedActions: (simulation.simulatedOverlayActions ?? []).slice(0, 3).map(a => `${a.action}: ${a.tool}`),
       unresolvedRisks: simulation.simulatedRiskAfter?.remainingRisks ?? [],
+    } : { available: false },
+    // EPIC 2E-D: compact context only — the full gate lives on finalStyleIntent.controlledOverlayTestGateV2
+    testGateContext: testGate ? {
+      available: true,
+      testState: testGate.testState,
+      canEnterControlledTest: testGate.canEnterControlledTest,
+      humanReviewRequired: (testGate.humanReviewChecklist ?? []).some(c => c.required && c.status === 'pending'),
+      topBlockers: (testGate.blockers ?? []).slice(0, 3).map(b => b.blocker),
     } : { available: false },
   };
 }

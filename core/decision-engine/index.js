@@ -37,6 +37,7 @@ import { buildLightroomShadowCompareReportV2 } from '../lightroom-mapping-engine
 import { buildLightroomControlledActivationV2 } from '../lightroom-mapping-engine/mapping-v2-activation-controller.js';
 import { buildLegacySafetyOverlayV2 } from '../lightroom-mapping-engine/mapping-v2-legacy-safety-overlay.js';
 import { buildLegacyOverlaySimulationV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-simulation.js';
+import { buildControlledOverlayTestGateV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-test-gate.js';
 
 // ─── Scene strategy table ─────────────────────────────────────────────────────
 // Each strategy is a set of TRUST MULTIPLIERS (not the base ENGINE_PRIORITY
@@ -651,6 +652,38 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
   } catch (e) {
     finalStyleIntent.legacyOverlaySimulationV2 = null;
     finalStyleIntent.legacyOverlaySimulationV2Error = `Overlay simulation failed safely (production unaffected): ${e.message}`;
+  }
+
+  // ── EPIC 2E-D: Controlled Overlay Test Gate ───────────────────────────────
+  // Answers "is the overlay simulation safe enough to enter a controlled
+  // TEST mode?" — NOT production activation. With no `flags` override,
+  // this resolves to the safe defaults (allowControlledOverlayTest=false,
+  // allowOverlayTestPresetPreview=false); `canWriteProduction` is
+  // additionally HARD-CODED false inside the module itself — verified
+  // this stays false even when every other flag is forced true. Attached
+  // to finalStyleIntent, never read by mapStyleFingerprintToLightroom
+  // below, wrapped in try/catch as defense-in-depth — same pattern as
+  // EPIC 2A-2E-C above.
+  try {
+    finalStyleIntent.controlledOverlayTestGateV2 = buildControlledOverlayTestGateV2({
+      finalStyleIntent, decision: { styleBudget }, legacyStyleBudget: styleBudget,
+      lightroomMappingPlanV2: finalStyleIntent.lightroomMappingPlanV2,
+      lightroomTranslationV2: finalStyleIntent.lightroomTranslationV2,
+      lightroomSafetyClampV2: finalStyleIntent.lightroomSafetyClampV2,
+      lightroomShadowCompareReportV2: finalStyleIntent.lightroomShadowCompareReportV2,
+      lightroomControlledActivationV2: finalStyleIntent.lightroomControlledActivationV2,
+      legacySafetyOverlayV2: finalStyleIntent.legacySafetyOverlayV2,
+      legacyOverlaySimulationV2: finalStyleIntent.legacyOverlaySimulationV2,
+      styleBudgetIntelligence: finalStyleIntent.styleBudgetIntelligence,
+      photographerIntent: finalStyleIntent.photographerIntent,
+      styleDNA: finalStyleIntent.photographerStyle?.top?.styleDNA,
+      styleFeasibility: finalStyleIntent.styleFeasibilityEstimate,
+      captureCapability: finalStyleIntent.captureCapabilityEstimate,
+      // No `flags` override — always resolves to the safe defaults.
+    });
+  } catch (e) {
+    finalStyleIntent.controlledOverlayTestGateV2 = null;
+    finalStyleIntent.controlledOverlayTestGateV2Error = `Controlled overlay test gate failed safely (production unaffected): ${e.message}`;
   }
 
   return {

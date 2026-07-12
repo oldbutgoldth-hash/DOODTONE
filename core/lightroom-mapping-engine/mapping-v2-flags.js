@@ -71,4 +71,26 @@ export const LIGHTROOM_MAPPING_V2_FLAGS = {
   requireControlledActivationGateForSimulation: true,
   minSimulationConfidence: 0.6,
   minSimulationSafetyScore: 0.65,
+
+  // ── EPIC 2E-D: Controlled Overlay Test Gate flags ───────────────────────
+  // Answers "is the overlay simulation safe enough to enter a controlled
+  // test mode?" — NOT production activation. Gate/report flags may
+  // default true (evaluating readiness is always safe); every flag that
+  // could let overlay output reach a preset preview or production write
+  // defaults false, same discipline as every other EPIC 2E flag set.
+  enableControlledOverlayTestGate: true,       // safe to default on — evaluating the gate never touches production by itself
+  allowControlledOverlayTest: false,           // whether a controlled test may actually run — never by default
+  allowOverlayTestPresetPreview: false,        // whether overlay output may be previewed as a preset — never by default
+  allowOverlayTestProductionWrite: false,      // whether a test may write production output — never by default, not even in a "test"
+  requireOverlaySimulationForTest: true,
+  requireLegacySafetyOverlayForTest: true,
+  requireSafetyClampForTest: true,
+  requireShadowCompareForTest: true,
+  requireHumanReviewForOverlayTest: true,      // a human sign-off gate that nothing in this codebase can satisfy automatically
+  requireNoHardStopsForOverlayTest: true,
+  requireNoCriticalOverstackForOverlayTest: true,
+  minOverlayTestConfidence: 0.72,
+  minOverlayTestSafetyScore: 0.75,
+  minOverlaySimulationConfidence: 0.6,
+  minOverlaySimulationSafetyScore: 0.65,
 };
