@@ -177,6 +177,12 @@
       if (list && Array.isArray(v.upgradedSystems)) {
         list.innerHTML = v.upgradedSystems.map(s => `<li>${s}</li>`).join('');
       }
+      // Sidebar (EPIC 2E-C-F) — compact "vX.Y.Z · <short title>", derived
+      // from the same v.title (splits off the "Lightroom Mapping V2 — "
+      // prefix automatically) so nothing here duplicates hardcoded
+      // version text; falls back to v.epic if title has no " — " split.
+      const shortTitle = v.title?.includes(' — ') ? v.title.split(' — ').pop() : v.epic;
+      set('aiWorkflowSidebarVersion', `${v.version} \u00B7 ${shortTitle}`);
     }).catch(() => { /* static fallback markup already in the HTML stands as-is */ });
   </script>
   <script type="module">
@@ -279,7 +285,7 @@
         </div>
         <div>
           <h2 style="font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--text);margin:0">AI Workflow</h2>
-          <p style="font-size:10.5px;color:var(--text-dim);margin:2px 0 0;font-family:var(--font-mono);letter-spacing:.04em">v1.0.0 &#183; Online</p>
+          <p id="aiWorkflowSidebarVersion" style="font-size:10.5px;color:var(--text-dim);margin:2px 0 0;font-family:var(--font-mono);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">v1.1.2 &#183; Overlay Simulation</p>
         </div>
       </div>
 
