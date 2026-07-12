@@ -345,6 +345,15 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
   // ── Rollback / Fallback ───────────────────────────────────────────────────
   const rollbackPlan = {
     available: true,
+    restoreSource: 'legacy',
+    productionMutationDetected: false,
+    steps: [
+      'Discard the isolated preview object.',
+      'Restore the selected output source to legacy.',
+      'Keep production Lightroom Mapping unchanged.',
+      'Keep the existing XMP export path unchanged.',
+    ],
+    // Backward-compatible fields from EPIC 2E-E/2E-E-F — kept as-is.
     strategy: 'preview-sandbox-no-production-write',
     triggerConditions: ['preview gate failure', 'hard stop', 'critical overstack', 'XMP validation failure', 'user disables preview flag', 'confidence below threshold', 'human review failed'],
     restoreTarget: 'legacy Lightroom Mapping',
@@ -361,8 +370,12 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
   const blockers = [];
   if (!flags.enableOverlayPreviewSandbox) blockers.push({ blocker: 'Preview sandbox is disabled.', severity: 'high', requiredFix: 'Set LIGHTROOM_MAPPING_V2_FLAGS.enableOverlayPreviewSandbox to true.', source: 'Feature Flags' });
   if (!flags.allowOverlayPreviewGeneration) blockers.push({ blocker: 'Overlay preview generation is disabled.', severity: 'critical', requiredFix: 'Set LIGHTROOM_MAPPING_V2_FLAGS.allowOverlayPreviewGeneration to true in a future, deliberate change.', source: 'Feature Flags' });
-  blockers.push({ blocker: 'Preview export is disabled by design in this EPIC.', severity: 'critical', requiredFix: 'A future, separate EPIC would need to introduce preview export capability — not in scope here.', source: 'Feature Flags' });
-  blockers.push({ blocker: 'Production write is disabled by design in this EPIC.', severity: 'critical', requiredFix: 'A future, separate EPIC would need to introduce production write capability — not in scope here.', source: 'Feature Flags' });
+  // EPIC 2E-E-G: preview export and production write being disabled are
+  // INTENTIONAL DESIGN CONSTRAINTS of this EPIC, not failures blocking
+  // preview generation — moved out of blockers[] into their own
+  // explicit, always-visible productionRestrictions[] array so a
+  // preview-ready state never reports itself as "blocked" by its own
+  // by-design safety rails.
   if (!testGateEligible) blockers.push({ blocker: 'Controlled Overlay Test Gate does not indicate controlled-test eligibility.', severity: 'high', requiredFix: 'Wait for the test gate to reach controlled-test eligibility before generating a preview.', source: 'Controlled Overlay Test Gate V2' });
   if (requireReview && !humanReviewComplete) blockers.push({ blocker: `Human review is ${humanReviewFailed ? 'failed' : 'incomplete'} (${requiredReviewItems.filter(c => c.status === 'pending').length} item(s) pending).`, severity: 'critical', requiredFix: 'Complete all required human review checklist items.', source: 'Human Review Process' });
   if (hardStopsCount > 0) blockers.push({ blocker: `Safety clamp contains ${hardStopsCount} hard stop(s).`, severity: 'critical', requiredFix: 'Resolve all active hard stops before trusting this preview.', source: 'Safety Clamp V2' });
@@ -377,6 +390,15 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
   if (hardStopsCount > 0) warnings.push(`${hardStopsCount} active hard stop(s) — preview includes a require-human-review action.`);
   if (requireReview && !humanReviewComplete) warnings.push('Human review is not complete — never assumed passed by default.');
 
+  // EPIC 2E-E-G: intentional, by-design safety rails — always visible
+  // and explicit, but never reported as a preview-generation blocker.
+  // A preview can be fully "preview-ready" while these still apply.
+  const productionRestrictions = [
+    { restriction: 'Preview export is disabled by design in this EPIC.', severity: 'info', reason: 'Export capability is out of scope for this EPIC — not a failure, an intentional constraint.', source: 'Feature Flags' },
+    { restriction: 'Production write is disabled by design in this EPIC.', severity: 'info', reason: 'Production write capability is out of scope for this EPIC — not a failure, an intentional constraint.', source: 'Feature Flags' },
+  ];
+  reasons.push('Preview export and production write are intentionally disabled by design in this EPIC — see productionRestrictions[], not blockers[].');
+
   const photographerSummary = canGeneratePreview
     ? 'Legacy Mapping is still active. A safe abstract preview of what V2 would protect or suppress is ready to review, but it does not change exported XMP.'
     : previewState === 'awaiting-human-review'
@@ -388,7 +410,7 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
     // ── Canonical fields (EPIC 2E-E-F) ──
     mode: 'controlled-overlay-preview-sandbox',
     previewState, canGeneratePreview, canExportPreview, canWriteProduction, selectedOutputSource,
-    previewGateChecks, blockers, warnings, reasons,
+    previewGateChecks, blockers, productionRestrictions, warnings, reasons,
     previewEligibility, previewPlan, simulatedPreviewPreset, previewRiskReview,
     humanReviewChecklist, safetyRequirements,
     rollbackPlan, fallbackStrategy,
