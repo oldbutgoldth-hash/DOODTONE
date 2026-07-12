@@ -22,7 +22,11 @@ export const LIGHTROOM_MAPPING_V2_FLAGS = {
   // ── Production-impacting flags — ALL default false ──────────────────────
   enableControlledActivation: false,   // master switch; false = V2 can never influence output
   allowProductionOverride: false,      // even if eligible, production must still be explicitly allowed
-  allowLegacySafetyOverlay: false,     // whether V2's safety layer may overlay (not replace) legacy output — unused while V2 is inactive
+  allowLegacySafetyOverlay: false,     // DEPRECATED/ALIAS: an early EPIC 2E-A placeholder, superseded by
+                                        // `enableLegacySafetyOverlay` (added in EPIC 2E-B) as the canonical
+                                        // flag. Confirmed unused anywhere in this codebase (grep-verified) —
+                                        // kept only so nothing that might reference it by name breaks. Do not
+                                        // add new logic that reads this key; read `enableLegacySafetyOverlay` instead.
 
   // ── Requirement flags — default to the SAFEST (most demanding) setting ──
   requireShadowCompare: true,          // a Shadow Compare Report must exist before V2 is even considered
@@ -51,4 +55,20 @@ export const LIGHTROOM_MAPPING_V2_FLAGS = {
   requireNoCriticalOverstackForOverlay: true,// critical over-stack blocks a production clamp
   minOverlaySafetyScore: 0.72,
   minOverlayConfidence: 0.68,
+
+  // ── EPIC 2E-C: Overlay Preview / Controlled Overlay Simulation flags ───
+  // The simulation answers "if the overlay WERE allowed to act, what
+  // would it recommend?" — a pure report/preview layer. Report-only
+  // flags default TRUE because report output can never touch XMP or
+  // mutate the legacy preset; production-impacting flags still default
+  // false, same discipline as every other EPIC 2E flag set.
+  enableLegacyOverlaySimulation: true,        // safe to default on — simulation never touches production by itself
+  allowOverlaySimulationReport: true,         // report-only output is always safe
+  allowOverlaySimulationProductionWrite: false, // simulation must never write production output
+  allowOverlaySimulationPresetMutation: false,  // simulation must never mutate the legacy preset object
+  requireLegacyOverlayForSimulation: true,
+  requireSafetyClampForSimulation: true,
+  requireControlledActivationGateForSimulation: true,
+  minSimulationConfidence: 0.6,
+  minSimulationSafetyScore: 0.65,
 };

@@ -187,6 +187,16 @@ export function buildReferenceTransferReport(ctx) {
     }
   }
 
+  // EPIC 2E-C: compact Overlay Simulation context — read-only, additive
+  // to recommendations only, does not touch the transfer algorithm.
+  const simulation = dec?.finalStyleIntent?.legacyOverlaySimulationV2 ?? null;
+  if (simulation) {
+    recommendations2.push(`Overlay Simulation: Legacy Mapping remains active — production write is disabled, so simulation is preview-only (${simulation.simulatedOverlayActions?.length ?? 0} simulated action(s)).`);
+    if ((simulation.simulatedRiskAfter?.remainingRisks ?? []).length) {
+      recommendations2.push(`[dev] Unresolved simulated risks: ${simulation.simulatedRiskAfter.remainingRisks.slice(0, 3).join(', ')}${simulation.simulatedRiskAfter.remainingRisks.length > 3 ? ', …' : ''}.`);
+    }
+  }
+
   return {
     referenceConfidence, transferConfidence, complexity,
     lightroomReproduction, wbTransferRisk, recommendations: recommendations2,
@@ -228,6 +238,15 @@ export function buildReferenceTransferReport(ctx) {
       legacyRiskLevel: overlay.legacyRiskReview?.riskLevel ?? 'unknown',
       protectedAreas: (overlay.protectedAreas ?? []).map(a => a.area),
       fallbackAvailable: overlay.fallbackStrategy?.useLegacyMapping ?? true,
+    } : { available: false },
+    // EPIC 2E-C: compact context only — the full simulation lives on finalStyleIntent.legacyOverlaySimulationV2
+    simulationContext: simulation ? {
+      available: true,
+      simulationState: simulation.simulationState,
+      canApplyToProduction: simulation.canApplyToProduction,
+      productionWriteDisabled: !simulation.canApplyToProduction,
+      topSimulatedActions: (simulation.simulatedOverlayActions ?? []).slice(0, 3).map(a => `${a.action}: ${a.tool}`),
+      unresolvedRisks: simulation.simulatedRiskAfter?.remainingRisks ?? [],
     } : { available: false },
   };
 }

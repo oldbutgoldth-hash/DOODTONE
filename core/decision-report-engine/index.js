@@ -297,6 +297,16 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     reasons.push(`[dev] ${ov.developerSummary}`);
   }
 
+  // EPIC 2E-C: Overlay Simulation V2 narration (safe no-op if missing).
+  const sim = fsi.legacyOverlaySimulationV2;
+  if (sim) {
+    reasons.push(`Overlay Simulation V2: ${sim.photographerSummary}`);
+    if (sim.simulatedRiskDelta?.improved) {
+      reasons.push(`[dev] Simulated risk delta: "${sim.simulatedRiskDelta.deltaLevel}" — ${sim.simulatedRiskDelta.improvedAreas.length} improved area(s) in simulation only, no production change occurred.`);
+    }
+    reasons.push(`[dev] ${sim.developerSummary}`);
+  }
+
   return {
     photographerStyleLabel: fsi.photographerStyleLabel ?? null,
     styleFamily: fsi.styleFamily ?? null,
@@ -440,6 +450,20 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
       },
       photographerSummary: fsi.legacySafetyOverlayV2.photographerSummary,
       developerSummary: fsi.legacySafetyOverlayV2.developerSummary,
+    } : null,
+    // EPIC 2E-C: Overlay Simulation V2 — compact, readable section (not
+    // a raw JSON dump). Safe if the simulation object is missing.
+    overlaySimulation: fsi.legacyOverlaySimulationV2 ? {
+      simulationState: fsi.legacyOverlaySimulationV2.simulationState,
+      canApplyToProduction: fsi.legacyOverlaySimulationV2.canApplyToProduction,
+      selectedOutputSource: fsi.legacyOverlaySimulationV2.selectedOutputSource,
+      simulatedActions: (fsi.legacyOverlaySimulationV2.simulatedOverlayActions ?? []).map(a => `${a.action}: ${a.tool}/${a.channel}`),
+      riskBefore: fsi.legacyOverlaySimulationV2.simulatedRiskBefore?.overallRisk ?? 'unknown',
+      riskAfter: fsi.legacyOverlaySimulationV2.simulatedRiskAfter?.overallRisk ?? 'unknown',
+      confidence: fsi.legacyOverlaySimulationV2.confidence,
+      blockers: (fsi.legacyOverlaySimulationV2.blockers ?? []).map(b => b.blocker),
+      photographerSummary: fsi.legacyOverlaySimulationV2.photographerSummary,
+      developerSummary: fsi.legacyOverlaySimulationV2.developerSummary,
     } : null,
     editingStrategy: strategy ?? null,
     styleBudget: budget ? { name: budget.name, adjustmentsMade: budgetAdjustments.length, details: budgetAdjustments } : null,

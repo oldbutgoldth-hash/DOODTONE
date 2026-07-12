@@ -36,6 +36,7 @@ import { buildLightroomSafetyClampV2 } from '../lightroom-mapping-engine/mapping
 import { buildLightroomShadowCompareReportV2 } from '../lightroom-mapping-engine/mapping-v2-shadow-compare.js';
 import { buildLightroomControlledActivationV2 } from '../lightroom-mapping-engine/mapping-v2-activation-controller.js';
 import { buildLegacySafetyOverlayV2 } from '../lightroom-mapping-engine/mapping-v2-legacy-safety-overlay.js';
+import { buildLegacyOverlaySimulationV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-simulation.js';
 
 // ─── Scene strategy table ─────────────────────────────────────────────────────
 // Each strategy is a set of TRUST MULTIPLIERS (not the base ENGINE_PRIORITY
@@ -618,6 +619,38 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
   } catch (e) {
     finalStyleIntent.legacySafetyOverlayV2 = null;
     finalStyleIntent.legacySafetyOverlayV2Error = `Legacy safety overlay failed safely (production unaffected): ${e.message}`;
+  }
+
+  // ── EPIC 2E-C: Overlay Preview / Controlled Overlay Simulation ───────────
+  // Answers "if the overlay WERE allowed to act, what would it recommend?"
+  // — a pure report/preview layer. With no `flags` override, this
+  // resolves to the safe defaults (allowOverlaySimulationProductionWrite=
+  // false, allowOverlaySimulationPresetMutation=false); more importantly,
+  // `canApplyToProduction` and `selectedOutputSource` are HARD-CODED
+  // inside the module itself, not just gated by flags — verified this
+  // stays false/legacy even when flags are forced true. Attached to
+  // finalStyleIntent, never read by mapStyleFingerprintToLightroom below,
+  // wrapped in try/catch as defense-in-depth — same pattern as
+  // EPIC 2A-2E-B above.
+  try {
+    finalStyleIntent.legacyOverlaySimulationV2 = buildLegacyOverlaySimulationV2({
+      finalStyleIntent, decision: { styleBudget }, legacyStyleBudget: styleBudget,
+      lightroomMappingPlanV2: finalStyleIntent.lightroomMappingPlanV2,
+      lightroomTranslationV2: finalStyleIntent.lightroomTranslationV2,
+      lightroomSafetyClampV2: finalStyleIntent.lightroomSafetyClampV2,
+      lightroomShadowCompareReportV2: finalStyleIntent.lightroomShadowCompareReportV2,
+      lightroomControlledActivationV2: finalStyleIntent.lightroomControlledActivationV2,
+      legacySafetyOverlayV2: finalStyleIntent.legacySafetyOverlayV2,
+      styleBudgetIntelligence: finalStyleIntent.styleBudgetIntelligence,
+      photographerIntent: finalStyleIntent.photographerIntent,
+      styleDNA: finalStyleIntent.photographerStyle?.top?.styleDNA,
+      styleFeasibility: finalStyleIntent.styleFeasibilityEstimate,
+      captureCapability: finalStyleIntent.captureCapabilityEstimate,
+      // No `flags` override — always resolves to the safe defaults.
+    });
+  } catch (e) {
+    finalStyleIntent.legacyOverlaySimulationV2 = null;
+    finalStyleIntent.legacyOverlaySimulationV2Error = `Overlay simulation failed safely (production unaffected): ${e.message}`;
   }
 
   return {
