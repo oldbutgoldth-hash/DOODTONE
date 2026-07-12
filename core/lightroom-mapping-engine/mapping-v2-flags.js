@@ -36,4 +36,19 @@ export const LIGHTROOM_MAPPING_V2_FLAGS = {
   minShadowAlignment: 0.65,
   minActivationConfidence: 0.72,
   maxAllowedOverStackSeverity: 'medium',
+
+  // ── EPIC 2E-B: Legacy Safety Overlay flags ──────────────────────────────
+  // The overlay lets V2's safety intelligence advise/guardrail the ACTIVE
+  // legacy mapping without replacing it. Production-impacting flags default
+  // false; the one warnings-only flag defaults true because report-only
+  // output can never touch XMP. Default state = overlay produces advice
+  // only, never a production clamp.
+  enableLegacySafetyOverlay: false,          // master switch for the overlay layer
+  allowLegacyOverlayProductionClamp: false,  // whether the overlay may actually clamp production output (never, by default)
+  allowLegacyOverlayWarningsOnly: true,      // report-only advice is always safe — cannot touch XMP
+  requireActivationGateForOverlay: true,     // overlay needs the activation gate to exist and have selected legacy
+  requireNoHardStopsForOverlay: true,        // any hard stop blocks a production clamp
+  requireNoCriticalOverstackForOverlay: true,// critical over-stack blocks a production clamp
+  minOverlaySafetyScore: 0.72,
+  minOverlayConfidence: 0.68,
 };

@@ -287,6 +287,16 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     reasons.push(`[dev] ${act.developerSummary}`);
   }
 
+  // EPIC 2E-B: Legacy Safety Overlay narration (safe no-op if missing).
+  const ov = fsi.legacySafetyOverlayV2;
+  if (ov) {
+    reasons.push(`Legacy Safety Overlay V2: ${ov.photographerSummary}`);
+    if (ov.legacyRiskReview?.riskLevel && ov.legacyRiskReview.riskLevel !== 'none' && ov.legacyRiskReview.riskLevel !== 'unknown') {
+      reasons.push(`[dev] Overlay legacy risk level "${ov.legacyRiskReview.riskLevel}" — ${ov.overlayRecommendations.length} report-only recommendation(s). See legacySafetyOverlay for detail.`);
+    }
+    reasons.push(`[dev] ${ov.developerSummary}`);
+  }
+
   return {
     photographerStyleLabel: fsi.photographerStyleLabel ?? null,
     styleFamily: fsi.styleFamily ?? null,
@@ -414,6 +424,22 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
       },
       photographerSummary: fsi.lightroomControlledActivationV2.photographerSummary,
       developerSummary: fsi.lightroomControlledActivationV2.developerSummary,
+    } : null,
+    // EPIC 2E-B: Legacy Safety Overlay V2 — compact, readable section
+    // (not a raw JSON dump). Safe if the overlay object is missing.
+    legacySafetyOverlay: fsi.legacySafetyOverlayV2 ? {
+      overlayState: fsi.legacySafetyOverlayV2.overlayState,
+      canApplyOverlay: fsi.legacySafetyOverlayV2.canApplyOverlay,
+      selectedOutputSource: fsi.legacySafetyOverlayV2.selectedOutputSource,
+      legacyRiskLevel: fsi.legacySafetyOverlayV2.legacyRiskReview?.riskLevel ?? 'unknown',
+      overlayRecommendations: (fsi.legacySafetyOverlayV2.overlayRecommendations ?? []).map(r => `${r.area}: ${r.recommendation} (${r.productionImpact})`),
+      blockers: (fsi.legacySafetyOverlayV2.blockers ?? []).map(b => b.blocker),
+      rollbackPlan: {
+        available: fsi.legacySafetyOverlayV2.rollbackPlan?.available ?? false,
+        strategy: fsi.legacySafetyOverlayV2.rollbackPlan?.strategy ?? null,
+      },
+      photographerSummary: fsi.legacySafetyOverlayV2.photographerSummary,
+      developerSummary: fsi.legacySafetyOverlayV2.developerSummary,
     } : null,
     editingStrategy: strategy ?? null,
     styleBudget: budget ? { name: budget.name, adjustmentsMade: budgetAdjustments.length, details: budgetAdjustments } : null,

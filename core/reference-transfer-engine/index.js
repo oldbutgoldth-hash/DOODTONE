@@ -173,6 +173,20 @@ export function buildReferenceTransferReport(ctx) {
     recommendations2.push(`[dev] Fallback: ${controlledActivation.fallbackStrategy?.selectedFallback ?? 'legacy Lightroom Mapping'} (useLegacyMapping=${controlledActivation.fallbackStrategy?.useLegacyMapping ?? true}).`);
   }
 
+  // EPIC 2E-B: compact Legacy Safety Overlay context — read-only,
+  // additive to recommendations only, does not touch the transfer
+  // algorithm itself.
+  const overlay = dec?.finalStyleIntent?.legacySafetyOverlayV2 ?? null;
+  if (overlay) {
+    recommendations2.push(`Legacy Safety Overlay: Legacy Mapping is still active${overlay.canApplyOverlay ? '' : ' and the overlay is advice-only'} — it is ${overlay.canApplyOverlay ? 'eligible to guardrail output' : 'not changing exported XMP'}.`);
+    if ((overlay.protectedAreas ?? []).length) {
+      recommendations2.push(`[dev] Overlay protects: ${overlay.protectedAreas.slice(0, 4).map(a => a.area).join(', ')}${overlay.protectedAreas.length > 4 ? ', …' : ''}.`);
+    }
+    if (overlay.blockers?.length) {
+      recommendations2.push(`[dev] Overlay blockers: ${overlay.blockers[0].blocker}${overlay.blockers.length > 1 ? ` (+${overlay.blockers.length - 1} more)` : ''}.`);
+    }
+  }
+
   return {
     referenceConfidence, transferConfidence, complexity,
     lightroomReproduction, wbTransferRisk, recommendations: recommendations2,
@@ -203,6 +217,17 @@ export function buildReferenceTransferReport(ctx) {
       productionOutputStillLegacy: controlledActivation.selectedMappingSource === 'legacy',
       majorBlockers: (controlledActivation.blockers ?? []).slice(0, 3).map(b => b.blocker),
       fallbackAvailable: controlledActivation.fallbackStrategy?.useLegacyMapping ?? true,
+    } : { available: false },
+    // EPIC 2E-B: compact overlay context — the full overlay lives on finalStyleIntent.legacySafetyOverlayV2
+    overlayContext: overlay ? {
+      available: true,
+      overlayState: overlay.overlayState,
+      canApplyOverlay: overlay.canApplyOverlay,
+      selectedOutputSource: overlay.selectedOutputSource,
+      productionOutputStillLegacy: overlay.selectedOutputSource === 'legacy',
+      legacyRiskLevel: overlay.legacyRiskReview?.riskLevel ?? 'unknown',
+      protectedAreas: (overlay.protectedAreas ?? []).map(a => a.area),
+      fallbackAvailable: overlay.fallbackStrategy?.useLegacyMapping ?? true,
     } : { available: false },
   };
 }
