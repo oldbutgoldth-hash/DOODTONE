@@ -113,7 +113,20 @@ export const LIGHTROOM_MAPPING_V2_FLAGS = {
   requireSafetyClampForPreview: true,
   requireNoHardStopsForPreview: true,
   requireNoCriticalOverstackForPreview: true,
-  minPreviewSandboxConfidence: 0.68,
-  minPreviewSandboxSafetyScore: 0.7,
+  minPreviewSandboxConfidence: 0.68,   // DEPRECATED alias — superseded by minOverlayPreviewConfidence
+  minPreviewSandboxSafetyScore: 0.7,   // DEPRECATED alias — superseded by minOverlayPreviewSafetyScore
   maxPreviewRiskLevel: 'medium',
+
+  // ── EPIC 2E-E-F: Preview Sandbox Contract and Gate Consistency Patch ────
+  // Canonical flag names for the preview sandbox. New logic in
+  // mapping-v2-overlay-preview-sandbox.js reads THESE first; the
+  // EPIC 2E-E names above remain as deprecated aliases only (confirmed
+  // unused by any other file via grep) — do not add new logic that
+  // reads the deprecated names.
+  enableOverlayPreviewSandbox: true,          // canonical — same safe-to-default-on rationale as its EPIC 2E-E predecessor
+  allowOverlayPreviewGeneration: false,       // canonical — whether a real preview object may actually be generated (never by default)
+  allowOverlayPreviewExport: false,           // canonical — whether the preview may be exported at all (never by default, and hard-coded false regardless in this EPIC)
+  requireHumanReviewForPreview: true,         // canonical — a structured, honestly-tracked human review checklist gates preview generation
+  minOverlayPreviewConfidence: 0.72,
+  minOverlayPreviewSafetyScore: 0.75,
 };

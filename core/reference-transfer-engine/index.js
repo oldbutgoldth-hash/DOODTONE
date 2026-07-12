@@ -212,17 +212,19 @@ export function buildReferenceTransferReport(ctx) {
     }
   }
 
-  // EPIC 2E-E: compact Controlled Overlay Preview Sandbox context —
-  // read-only, additive to recommendations only, does not touch the
-  // transfer algorithm itself.
+  // EPIC 2E-E-F: compact Controlled Overlay Preview Sandbox context using
+  // CANONICAL field names — read-only, additive to recommendations only,
+  // does not touch the transfer algorithm itself.
   const previewSandbox = dec?.finalStyleIntent?.controlledOverlayPreviewSandboxV2 ?? null;
   if (previewSandbox) {
-    recommendations2.push(`Preview Sandbox: Legacy Mapping remains active — preview XMP export is ${previewSandbox.canExportPreviewXMP ? 'allowed' : 'disabled'} (state: ${previewSandbox.sandboxState}).`);
-    if ((previewSandbox.previewProtections ?? []).length) {
-      recommendations2.push(`[dev] Top preview protections: ${previewSandbox.previewProtections.slice(0, 3).map(p => p.area).join(', ')}${previewSandbox.previewProtections.length > 3 ? ', …' : ''}.`);
+    recommendations2.push(`Preview Sandbox: Legacy Mapping remains active — preview export is ${previewSandbox.canExportPreview ? 'allowed' : 'disabled'} (state: ${previewSandbox.previewState}).`);
+    const protectedAreas = previewSandbox.previewPlan?.protectedAreas ?? [];
+    if (protectedAreas.length) {
+      recommendations2.push(`[dev] Top preview protections: ${protectedAreas.slice(0, 3).join(', ')}${protectedAreas.length > 3 ? ', …' : ''}.`);
     }
-    if ((previewSandbox.previewRiskDelta?.unresolvedRisks ?? []).length) {
-      recommendations2.push(`[dev] Unresolved preview risks: ${previewSandbox.previewRiskDelta.unresolvedRisks.slice(0, 3).join(', ')}${previewSandbox.previewRiskDelta.unresolvedRisks.length > 3 ? ', …' : ''}.`);
+    const unresolvedRisks = previewSandbox.previewPlan?.actions?.filter(a => a.action === 'require-human-review').map(a => a.target) ?? [];
+    if (unresolvedRisks.length) {
+      recommendations2.push(`[dev] Unresolved preview risks: ${unresolvedRisks.slice(0, 3).join(', ')}${unresolvedRisks.length > 3 ? ', …' : ''}.`);
     }
   }
 
@@ -288,10 +290,10 @@ export function buildReferenceTransferReport(ctx) {
     // EPIC 2E-E: compact context only — the full sandbox lives on finalStyleIntent.controlledOverlayPreviewSandboxV2
     previewSandboxContext: previewSandbox ? {
       available: true,
-      sandboxState: previewSandbox.sandboxState,
-      previewXMPExportDisabled: !previewSandbox.canExportPreviewXMP,
-      topPreviewProtections: (previewSandbox.previewProtections ?? []).slice(0, 3).map(p => p.area),
-      unresolvedRisks: previewSandbox.previewRiskDelta?.unresolvedRisks ?? [],
+      previewState: previewSandbox.previewState,
+      previewExportDisabled: !previewSandbox.canExportPreview,
+      topPreviewProtections: (previewSandbox.previewPlan?.protectedAreas ?? []).slice(0, 3),
+      unresolvedRisks: previewSandbox.previewPlan?.actions?.filter(a => a.action === 'require-human-review').map(a => a.target) ?? [],
     } : { available: false },
   };
 }

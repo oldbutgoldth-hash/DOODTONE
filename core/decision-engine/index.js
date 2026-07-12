@@ -687,18 +687,21 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
     finalStyleIntent.controlledOverlayTestGateV2Error = `Controlled overlay test gate failed safely (production unaffected): ${e.message}`;
   }
 
-  // ── EPIC 2E-E: Controlled Overlay Preview Sandbox ─────────────────────────
+  // ── EPIC 2E-E, patched EPIC 2E-E-F: Controlled Overlay Preview Sandbox ────
   // Answers "if we previewed the overlay safely, what abstract preset
   // changes would be simulated?" — builds a SEPARATE, non-production
   // preview object. With no `flags` override, this resolves to the safe
-  // defaults (allowOverlayPreviewXMPExport=false,
+  // defaults (allowOverlayPreviewExport=false,
   // allowOverlayPreviewProductionWrite=false,
-  // allowOverlayPreviewPresetMutation=false); `canExportPreviewXMP` and
+  // allowOverlayPreviewPresetMutation=false); `canExportPreview` and
   // `canWriteProduction` are additionally HARD-CODED false inside the
-  // module itself, and `previewPresetShadow` is guaranteed to contain no
-  // real slider values and no XMP values — verified this stays true
-  // even when every export/write/mutation flag is forced true. Attached
-  // to finalStyleIntent, never read by mapStyleFingerprintToLightroom
+  // module itself, and `simulatedPreviewPreset` is guaranteed to contain
+  // no real slider values and no XMP values — verified this stays true
+  // even when every export/write/mutation flag is forced true.
+  // `canGeneratePreview` now requires ALL required gates (including a
+  // genuine test-gate eligibility check and a complete human review),
+  // not just "some V2 data exists" (EPIC 2E-E-F's core eligibility fix).
+  // Attached to finalStyleIntent, never read by mapStyleFingerprintToLightroom
   // below, wrapped in try/catch as defense-in-depth — same pattern as
   // EPIC 2A-2E-D above.
   try {

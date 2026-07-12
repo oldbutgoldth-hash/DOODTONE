@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * CONTROLLED OVERLAY PREVIEW SANDBOX V2 (EPIC 2E-E)
+ * CONTROLLED OVERLAY PREVIEW SANDBOX V2 (EPIC 2E-E, patched EPIC 2E-E-F)
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Answers: "If we previewed the overlay safely, what abstract preset
@@ -9,25 +9,39 @@
  * SEPARATE, non-production preview object — legacy mapping remains the
  * driver and the actual exported preset.
  *
+ * EPIC 2E-E-F rewrote this module's public contract and eligibility
+ * logic. Canonical fields (see the return statement) replace the
+ * EPIC 2E-E shape; the old field names remain as backward-compatible
+ * aliases pointing at the same values so nothing that already reads
+ * them breaks, but all NEW logic here — and all integrations — read the
+ * canonical names first.
+ *
  * HARD GUARANTEES (never derived from any flag or input combination):
- * - `canExportPreviewXMP` is always `false`
+ * - `canExportPreview` (and its alias `canExportPreviewXMP`) is always `false`
  * - `canWriteProduction` is always `false`
  * - `selectedOutputSource` is always `"legacy"`
- * - `previewPresetShadow.containsRealSliderValues` is always `false`
- * - `previewPresetShadow.containsXMPValues` is always `false`
- * - the original `legacyPreset`/`legacyMapping` object is NEVER mutated —
- *   every legacy value is only read and copied into new plain objects
- *   (verified via a before/after JSON snapshot test)
+ * - `simulatedPreviewPreset.containsRealSliderValues` is always `false`
+ * - `simulatedPreviewPreset.containsXMPValues` is always `false`
+ * - the original `legacyPreset`/`legacyMapping`/`legacyOverlaySimulationV2`/
+ *   `lightroomSafetyClampV2`/`controlledOverlayTestGateV2` objects are NEVER
+ *   mutated — every value is only read and copied into new plain objects
+ *   (verified via before/after JSON snapshot tests)
+ * - `simulatedPreviewPreset` is always a NEW object, never the same
+ *   reference as `legacyPreset`
  *
- * `canCreatePreview` is the one flag-driven output — it can be `true`
- * when the safe report/sandbox-object flags are enabled and required
- * data exists, because building an abstract preview object never
- * touches production by itself.
+ * `canGeneratePreview` (canonical; `canCreatePreview` alias) is the one
+ * genuinely flag-and-gate-driven output — EPIC 2E-E-F's core fix is that
+ * it now requires ALL of: sandbox enabled, generation flag explicitly
+ * allowed, the Controlled Overlay Test Gate existing AND indicating
+ * controlled-test eligibility, Overlay Simulation/Legacy Safety
+ * Overlay/Safety Clamp all existing, no hard stops, no critical
+ * over-stack, sufficient confidence AND safety score, AND a complete
+ * human review — never just "simulation or overlay exists".
  *
  * GATE-ONLY: not called from anywhere in the production pipeline.
  * `core/lightroom-mapping-engine/index.js`'s `mapStyleFingerprintToLightroom()`
- * does not import this file and does not read
- * `controlledOverlayPreviewSandboxV2`.
+ * does not import this file. Nothing here calls preset-engine or
+ * xmp-validator, and this object never feeds XMP export.
  *
  * Every input is OPTIONAL; every access below is null-safe.
  */
@@ -38,12 +52,17 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v ?? 0));
 const RISK_RANK = { none: 0, low: 1, medium: 2, high: 3, critical: 4, unknown: 0 };
 const maxRisk = (...vals) => vals.reduce((a, b) => RISK_RANK[b] > RISK_RANK[a] ? b : a, 'none');
 
-/** Task 4: one preview-gate-check entry. */
-function _gate({ name, passed, required, severity, reason, source }) {
-  return { name, passed: !!passed, required: !!required, severity, reason, source };
+/** Canonical previewGateChecks entry shape: {id, label, required, passed, status, reason}. */
+function _gate({ id, label, required, passed, status, reason }) {
+  return { id, label, required: !!required, passed: !!passed, status, reason };
 }
 
-// ── Task 5: Legacy Preview Input — READ-ONLY, treats legacy data as immutable ──
+/** Canonical humanReviewChecklist entry shape: {id, label, required, status, reason}. */
+function _checklistItem(id, label, required, status, reason) {
+  return { id, label, required, status, reason };
+}
+
+// ── Legacy Preview Input — READ-ONLY, treats legacy data as immutable ──────
 function _buildLegacyPreviewInput(legacyPreset, legacyMapping, legacyStyleBudget) {
   const src = legacyPreset ?? legacyMapping ?? null;
   const notes = [], warnings = [];
@@ -76,19 +95,41 @@ function _buildLegacyPreviewInput(legacyPreset, legacyMapping, legacyStyleBudget
   }
   if (legacyStyleBudget) dimensionsAvailable.push('calibration'); else dimensionsUnavailable.push('calibration');
 
-  let riskLevel = 'unknown';
-  if (src) {
-    const risky = [src.hi, src.sh, src.clarity].filter(v => v != null && Math.abs(v) / 100 >= 0.25).length;
-    riskLevel = risky >= 2 ? 'high' : risky === 1 ? 'medium' : 'low';
-  } else if (legacyStyleBudget && (legacyStyleBudget.calibration ?? 0) > 0.5) {
-    riskLevel = 'medium';
-  }
-
   return {
-    available, sourceType, immutable: true, riskLevel,
+    available, sourceType, immutable: true,
     dimensionsAvailable, dimensionsUnavailable: [...new Set(dimensionsUnavailable)],
     notes, warnings,
   };
+}
+
+/**
+ * Canonical humanReviewChecklist builder. NEVER assumes review is
+ * complete — every item defaults to "pending" (or "not-required" if the
+ * overall flag disables the requirement) unless the caller explicitly
+ * supplied a passed/failed status via `input.humanReviewState` (an
+ * optional, read-only map of {[itemId]: 'passed'|'failed'}).
+ */
+function _buildHumanReviewChecklist(requireReview, reviewState) {
+  const items = [
+    ['legacy-output-preserved', 'Confirm legacy output/preset is preserved and unmodified'],
+    ['source-image-reviewed', 'Review the source image alongside the preview'],
+    ['skin-tones-reviewed', 'Confirm skin tones are protected in the preview'],
+    ['highlights-reviewed', 'Confirm highlights are not over-capped or damaged'],
+    ['shadows-reviewed', 'Confirm shadow detail is preserved'],
+    ['white-balance-reviewed', 'Confirm no unwanted white balance shift'],
+    ['color-stacking-reviewed', 'Confirm no risky colour-tool stacking'],
+    ['rollback-confirmed', 'Confirm rollback to legacy mapping works as expected'],
+    ['preview-non-production-confirmed', 'Confirm the preview is clearly marked non-production'],
+    ['export-path-unchanged', 'Confirm the current XMP export path is unchanged'],
+  ];
+  return items.map(([id, label]) => {
+    if (!requireReview) return _checklistItem(id, label, false, 'not-required', 'Human review is not required by current flags.');
+    const suppliedStatus = reviewState?.[id];
+    if (suppliedStatus === 'passed' || suppliedStatus === 'failed') {
+      return _checklistItem(id, label, true, suppliedStatus, `Status supplied by caller: "${suppliedStatus}".`);
+    }
+    return _checklistItem(id, label, true, 'pending', 'No review has been recorded yet — never assumed complete.');
+  });
 }
 
 /**
@@ -105,7 +146,7 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
     legacyOverlaySimulationV2 = null, controlledOverlayTestGateV2 = null,
     styleBudgetIntelligence = null, photographerIntent = null, styleDNA = null,
     styleFeasibility = null, captureCapability = null, referenceColorIntelligence = null,
-    flags: flagsOverride = null,
+    humanReviewState = null, flags: flagsOverride = null,
   } = input ?? {};
 
   const flags = { ...LIGHTROOM_MAPPING_V2_FLAGS, ...(flagsOverride ?? {}) };
@@ -123,189 +164,21 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
   const criticalOverstack = overStackSeverity === 'critical';
   const globalSafetyScore = safety?.globalSafetyScore ?? null;
 
+  // EPIC 2E-E-F: "test gate indicates controlled-test eligibility" is a
+  // REQUIRED, explicit signal — not inferred from mere existence.
+  const testGateEligible = testGate?.canEnterControlledTest === true || testGate?.testEligibility?.eligible === true;
+
   const missingCount = [!testGate, !simulation, !overlay, !safety].filter(Boolean).length;
 
-  // ── Task 5: Legacy Preview Input (read-only) ────────────────────────────
   const legacyPreviewInput = _buildLegacyPreviewInput(legacyPreset, legacyMapping, legacyBudget);
 
-  // ── Task 4: Preview Gate Checks (16) ─────────────────────────────────────
-  const previewGateChecks = [
-    _gate({ name: 'preview sandbox enabled', passed: flags.enableControlledOverlayPreviewSandbox === true, required: true, severity: 'high', reason: flags.enableControlledOverlayPreviewSandbox ? 'Preview sandbox is enabled.' : 'Preview sandbox is disabled.', source: 'Feature Flags' }),
-    _gate({ name: 'preview report allowed', passed: flags.allowOverlayPreviewSandboxReport === true, required: true, severity: 'medium', reason: flags.allowOverlayPreviewSandboxReport ? 'Report output is allowed.' : 'Report output is disabled.', source: 'Feature Flags' }),
-    _gate({ name: 'preview shadow object allowed', passed: flags.allowOverlayPreviewPresetObject === true, required: true, severity: 'medium', reason: flags.allowOverlayPreviewPresetObject ? 'Preview shadow object is allowed.' : 'Preview shadow object is disabled.', source: 'Feature Flags' }),
-    _gate({ name: 'preview XMP export disabled', passed: flags.allowOverlayPreviewXMPExport !== true, required: true, severity: 'critical', reason: flags.allowOverlayPreviewXMPExport ? 'Preview XMP export is ENABLED — unexpected in this phase.' : 'Preview XMP export correctly disabled (default).', source: 'Feature Flags' }),
-    _gate({ name: 'production write disabled', passed: flags.allowOverlayPreviewProductionWrite !== true, required: true, severity: 'critical', reason: flags.allowOverlayPreviewProductionWrite ? 'Production write is ENABLED — unexpected in this phase.' : 'Production write correctly disabled (default).', source: 'Feature Flags' }),
-    _gate({ name: 'preset mutation disabled', passed: flags.allowOverlayPreviewPresetMutation !== true, required: true, severity: 'critical', reason: flags.allowOverlayPreviewPresetMutation ? 'Preset mutation is ENABLED — unexpected in this phase.' : 'Preset mutation correctly disabled (default).', source: 'Feature Flags' }),
-    _gate({ name: 'controlled overlay test gate exists', passed: !!testGate, required: flags.requireControlledOverlayTestGateForPreview, severity: 'medium', reason: testGate ? 'Controlled Overlay Test Gate V2 is available.' : 'Controlled Overlay Test Gate V2 is missing.', source: 'Controlled Overlay Test Gate V2' }),
-    _gate({ name: 'overlay simulation exists', passed: !!simulation, required: flags.requireOverlaySimulationForPreview, severity: 'high', reason: simulation ? 'Overlay Simulation V2 is available.' : 'Overlay Simulation V2 is missing.', source: 'Overlay Simulation V2' }),
-    _gate({ name: 'legacy safety overlay exists', passed: !!overlay, required: flags.requireLegacySafetyOverlayForPreview, severity: 'high', reason: overlay ? 'Legacy Safety Overlay V2 is available.' : 'Legacy Safety Overlay V2 is missing.', source: 'Legacy Safety Overlay V2' }),
-    _gate({ name: 'safety clamp exists', passed: !!safety, required: flags.requireSafetyClampForPreview, severity: 'high', reason: safety ? 'Safety Clamp V2 is available.' : 'Safety Clamp V2 is missing.', source: 'Safety Clamp V2' }),
-    _gate({ name: 'no hard stops', passed: hardStopsCount === 0, required: flags.requireNoHardStopsForPreview, severity: 'critical', reason: hardStopsCount === 0 ? 'No active hard stops.' : `${hardStopsCount} active hard stop(s).`, source: 'Safety Clamp V2' }),
-    _gate({ name: 'no critical over-stack', passed: !criticalOverstack, required: flags.requireNoCriticalOverstackForPreview, severity: 'critical', reason: `Over-stack severity "${overStackSeverity}".`, source: 'Safety Clamp V2' }),
-    _gate({ name: 'preview confidence sufficient', passed: false, required: false, severity: 'medium', reason: 'Evaluated after confidence is computed below (see reasons[]).', source: 'Preview Sandbox' }), // placeholder, patched after confidence calc
-    _gate({ name: 'preview safety score sufficient', passed: false, required: false, severity: 'medium', reason: 'Evaluated after safety score is computed below (see reasons[]).', source: 'Preview Sandbox' }), // placeholder, patched after safetyScore calc
-    _gate({ name: 'rollback available', passed: true, required: true, severity: 'critical', reason: 'Preview-sandbox-only rollback (no production write ever occurs) is always available.', source: 'Legacy Mapping' }),
-    _gate({ name: 'legacy mapping/preset/context available or partial fallback available', passed: legacyPreviewInput.available !== false, required: false, severity: 'medium', reason: `Legacy preview input availability: ${legacyPreviewInput.available}.`, source: 'Legacy Mapping' }),
-  ];
-
-  // ── Task 3: hard guarantees ──────────────────────────────────────────────
-  const canExportPreviewXMP = false; // hard-coded — never true in this phase
-  const canWriteProduction = false; // hard-coded — never true in this phase
-  const selectedOutputSource = 'legacy'; // hard-coded — legacy remains the sole production path
-  const canCreatePreview = flags.enableControlledOverlayPreviewSandbox === true
-    && flags.allowOverlayPreviewSandboxReport === true
-    && flags.allowOverlayPreviewPresetObject === true
-    && (!!simulation || !!overlay); // needs at least some upstream V2 data to build a meaningful preview
-
-  // ── Task 6: Preview Overlay Plan ─────────────────────────────────────────
-  const planMode = !canCreatePreview ? 'disabled' : flags.allowOverlayPreviewPresetObject ? 'preview-object-only' : 'simulation-only';
-  const previewOverlayActions = [];
-  const addPreviewAction = (action, tool, channel, target, severity, reason, productionImpact) => previewOverlayActions.push({ action, tool, channel, target, previewOnly: true, severity, reason, source: 'Preview Sandbox V2', productionImpact });
-
-  const impact = canCreatePreview ? 'preview-only' : 'blocked';
-  addPreviewAction('protect-channel', 'HSL', 'red-orange-yellow skin', 'skin tones', capture?.skinReliability != null && capture.skinReliability < 0.45 ? 'high' : 'medium', 'Skin tones are always previewed as protected first.', impact);
-  const simActions = simulation?.simulatedOverlayActions ?? [];
-  for (const a of simActions) {
-    if (a.action === 'keep-legacy' || a.action === 'require-human-review') continue;
-    addPreviewAction(a.action, a.tool, a.channel, a.target, a.severity, `Derived from Overlay Simulation V2: ${a.reason}`, impact);
-  }
-  if (hardStopsCount > 0) addPreviewAction('require-human-review', 'all', 'all', 'overall safety', 'critical', `${hardStopsCount} active hard stop(s) — preview recommends human review before anything further.`, 'blocked');
-  if (previewOverlayActions.length === 1) addPreviewAction('no-action', 'all', 'all', 'overall direction', 'low', 'No specific risky areas beyond default skin protection — preview recommends keeping legacy mapping as-is.', 'none');
-
-  const blockedActions = ['write overlay to production XMP', 'mutate legacy preset', 'replace legacy mapping', 'export preview as real XMP'];
-  const previewProtectedAreasForPlan = previewOverlayActions.filter(a => a.action === 'protect-channel').map(a => a.target);
-  const previewSuppressedForPlan = previewOverlayActions.filter(a => a.action === 'suppress-risk').map(a => a.target);
-
-  const previewOverlayPlan = {
-    mode: planMode,
-    planState: canCreatePreview ? (legacyPreviewInput.available === true ? 'preview-object-ready' : 'partial-preview') : 'disabled',
-    actions: previewOverlayActions,
-    blockedActions,
-    protectedAreas: previewProtectedAreasForPlan,
-    suppressedRisks: previewSuppressedForPlan,
-    reasons: [`Preview overlay plan mode is "${planMode}" — no action here ever writes to production XMP or mutates the legacy preset.`],
-    warnings: legacyPreviewInput.available !== true ? ['Legacy input is partial or unavailable — preview overlay plan is based on incomplete data.'] : [],
-  };
-
-  // ── Task 7: Preview Preset Shadow Object (abstract only, hard guarantees) ──
-  const shadowType = !canCreatePreview ? 'unavailable' : legacyPreviewInput.available === true ? 'abstract-preview' : 'risk-preview';
-  const changes = previewOverlayActions.filter(a => a.action !== 'no-action' && a.action !== 'require-human-review').map(a => {
-    const intensity = a.severity === 'critical' ? 0.85 : a.severity === 'high' ? 0.65 : a.severity === 'medium' ? 0.45 : 0.25;
-    const direction = a.action === 'protect-channel' ? 'reduce aggressive shift' : a.action === 'suppress-risk' ? 'suppress risky direction' : a.action === 'cap-intensity' ? 'cap intensity' : a.action === 'warn' ? 'flag for caution' : 'maintain restraint';
-    return {
-      area: a.target,
-      simulatedChange: `${a.action.replace('-', ' ')} on ${a.tool}${a.channel && a.channel !== 'all' ? ` / ${a.channel}` : ''}`,
-      direction, intensity: +clamp01(intensity).toFixed(3),
-      reason: a.reason, source: a.source, productionImpact: a.productionImpact,
-    };
-  });
-  const unchangedAreas = ['neutral grays', 'overall composition', 'unaffected tonal ranges'];
-  const previewPresetShadow = {
-    available: canCreatePreview,
-    type: shadowType,
-    source: legacyPreviewInput.sourceType,
-    immutableLegacySource: true,
-    containsRealSliderValues: false, // hard guarantee — never true
-    containsXMPValues: false, // hard guarantee — never true
-    changes,
-    unchangedAreas,
-    blockedChanges: blockedActions,
-    warnings: legacyPreviewInput.available !== true ? ['Preview preset shadow is based on partial legacy context.'] : [],
-    reasons: ['This is an ABSTRACT preview object only — normalized 0-1 intensities, no Lightroom slider values, no XMP fields, never written to production.'],
-  };
-
-  // ── Task 8: Preview Risk Before / After / Delta ─────────────────────────
-  const riskyAreasBefore = [...new Set(previewOverlayActions.filter(a => a.action !== 'no-action' && a.action !== 'require-human-review').map(a => a.target))];
-  const overallRiskBefore = legacyPreviewInput.riskLevel !== 'unknown' ? legacyPreviewInput.riskLevel : (hardStopsCount > 0 ? 'high' : overStackSeverity !== 'unknown' ? overStackSeverity : 'unknown');
-  const previewRiskBefore = { overallRisk: overallRiskBefore, areas: riskyAreasBefore, reasons: [`Before-state derived from legacy preview input (available=${legacyPreviewInput.available}) and Safety Clamp V2 signals.`] };
-
-  const afterRiskPerArea = changes.map(c => c.intensity >= 0.6 ? 'low' : c.intensity >= 0.4 ? 'medium' : 'low');
-  const improvedAreas = changes.filter((c, i) => RISK_RANK[afterRiskPerArea[i]] < RISK_RANK[overallRiskBefore]).map(c => c.area);
-  const overallRiskAfter = legacyPreviewInput.available === true && changes.length ? maxRisk(...afterRiskPerArea, 'none') : overallRiskBefore;
-  const previewRiskAfter = {
-    overallRisk: legacyPreviewInput.available === true ? overallRiskAfter : overallRiskBefore,
-    areas: legacyPreviewInput.available === true ? changes.map(c => c.area) : riskyAreasBefore,
-    reasons: [legacyPreviewInput.available === true ? 'After-state is a PREVIEW estimate only — no production change actually occurred.' : 'Legacy input is partial/unavailable — after-state is not meaningfully different from before-state.'],
-  };
-
-  const deltaLevel = legacyPreviewInput.available !== true ? (improvedAreas.length ? 'small' : 'unknown')
-    : improvedAreas.length >= 3 ? 'strong' : improvedAreas.length === 2 ? 'moderate' : improvedAreas.length === 1 ? 'small' : 'none';
-  const previewRiskDelta = {
-    improved: legacyPreviewInput.available === true && improvedAreas.length > 0,
-    deltaLevel, improvedAreas,
-    unchangedAreas: unchangedAreas,
-    unresolvedRisks: previewOverlayActions.filter(a => a.action === 'require-human-review').map(a => a.target),
-    confidence: +clamp01(legacyPreviewInput.available === true ? 0.6 : 0.25).toFixed(3),
-    reasons: [
-      'This is a PREVIEW, report-only estimate — it does not claim any actual final image quality improvement.',
-      'Preview risk appears lower only where explicitly supported by identified protections/suppressions above.',
-      ...(legacyPreviewInput.available !== true ? ['Legacy preset data is partial/unavailable, so this delta is a rough estimate, not a considered one.'] : []),
-    ],
-  };
-
-  // ── Task 9: Protections / Suppressions / No Action ──────────────────────
-  const previewProtections = previewOverlayActions.filter(a => a.action === 'protect-channel').map(a => ({
-    area: a.target, protectionLevel: a.severity, previewAction: a.action, reason: a.reason, source: a.source,
-  }));
-  const previewSuppressions = previewOverlayActions.filter(a => a.action === 'suppress-risk').map(a => ({
-    risk: a.target, suppression: `preview would suppress "${a.channel}" on ${a.tool}`, severity: a.severity,
-    activeInPreview: canCreatePreview, activeInProduction: false, reason: a.reason, source: a.source,
-  }));
-  const previewNoActionAreas = [];
-  if (legacyPreviewInput.available !== true) previewNoActionAreas.push({ area: 'full legacy comparison', reason: 'no action because legacy data unavailable', source: 'Legacy Preview Input' });
-  if (!flags.allowOverlayPreviewProductionWrite) previewNoActionAreas.push({ area: 'production output', reason: 'no action because production write disabled', source: 'Feature Flags' });
-  if (legacyPreviewInput.riskLevel === 'low' || legacyPreviewInput.riskLevel === 'none') previewNoActionAreas.push({ area: 'overall legacy direction', reason: 'no action because risk is low', source: 'Legacy Risk Review' });
-  if (hardStopsCount > 0) previewNoActionAreas.push({ area: 'controlled test / production write', reason: 'no action because hard stop requires human review', source: 'Safety Clamp V2' });
-
-  // ── Task 10: Preview Comparison ──────────────────────────────────────────
-  const comparisonType = legacyPreviewInput.available === true ? 'abstract-risk-compare' : legacyPreviewInput.available === 'partial' ? 'partial-risk-compare' : 'unavailable';
-  const previewComparison = {
-    available: comparisonType !== 'unavailable',
-    comparisonType,
-    legacySummary: `Legacy risk level: ${legacyPreviewInput.riskLevel}.`,
-    previewSummary: canCreatePreview ? `Preview suggests ${previewProtections.length} protection(s) and ${previewSuppressions.length} suppression(s), risk category "${previewRiskAfter.overallRisk}".` : 'No preview object was created — nothing to summarise.',
-    likelySaferAreas: improvedAreas,
-    unresolvedAreas: previewRiskDelta.unresolvedRisks,
-    confidence: +clamp01(legacyPreviewInput.available === true ? 0.55 : 0.25).toFixed(3),
-    warnings: comparisonType === 'unavailable' ? ['No legacy context available — comparison could not be built.'] : comparisonType === 'partial-risk-compare' ? ['Comparison is based on partial legacy context only.'] : [],
-    reasons: ['Compares abstract RISK CATEGORIES only — never actual image pixels, never a visual-quality claim.'],
-  };
-
-  // ── Task 11: Human Review Notes ───────────────────────────────────────────
-  const humanReviewNotes = [
-    { note: 'Review skin protection preview before any overlay test.', severity: 'high', requiredBefore: 'controlled-overlay-test', reason: 'Skin tones are the highest-priority protection area.' },
-    { note: 'Confirm highlight roll-off is not over-capped.', severity: 'medium', requiredBefore: 'controlled-overlay-test', reason: 'Over-capping highlights can flatten a look unintentionally.' },
-    { note: 'Test real high-key image before preview XMP export.', severity: 'high', requiredBefore: 'preview-xmp-export', reason: 'Synthetic tests do not cover all real-world capture variation.' },
-    { note: 'Confirm no XMP regression with default flags.', severity: 'critical', requiredBefore: 'production-write', reason: 'Default flags must never change current exported XMP.' },
-  ];
-  if (hardStopsCount > 0) humanReviewNotes.unshift({ note: `Resolve ${hardStopsCount} active hard stop(s) before any further review.`, severity: 'critical', requiredBefore: 'controlled-overlay-test', reason: 'Hard stops represent unresolved, real risk.' });
-
-  // ── Task 3: Sandbox State ────────────────────────────────────────────────
-  let sandboxState;
-  if (!flags.enableControlledOverlayPreviewSandbox) {
-    sandboxState = 'disabled';
-  } else if (!canCreatePreview) {
-    sandboxState = missingCount >= 3 ? 'unavailable' : 'blocked';
-  } else if (hardStopsCount > 0 || criticalOverstack) {
-    sandboxState = 'blocked';
-  } else if (legacyPreviewInput.available !== true || missingCount > 0) {
-    sandboxState = 'partial-preview';
-  } else if (globalSafetyScore != null && globalSafetyScore >= flags.minPreviewSandboxSafetyScore) {
-    sandboxState = 'ready-for-human-review';
-  } else {
-    sandboxState = 'preview-object-ready';
-  }
-
-  // ── Task 12: Confidence + Safety Score ───────────────────────────────────
+  // ── Confidence + Safety Score computed FIRST (no placeholder gate checks) ──
   const legacyAvailabilityFactor = legacyPreviewInput.available === true ? 1 : legacyPreviewInput.available === 'partial' ? 0.5 : 0.2;
   const safetyScore = +clamp01(
     (testGate?.safetyScore ?? 0.3) * 0.20 + (simulation?.safetyScore ?? 0.3) * 0.20 +
     (overlay?.safetyScore ?? 0.3) * 0.15 + (globalSafetyScore ?? 0.3) * 0.25 +
     (hardStopsCount === 0 ? 1 : 0) * 0.10 + legacyAvailabilityFactor * 0.10
   ).toFixed(3);
-  // Preview XMP export / production write being disabled must NOT itself
-  // lower confidence or safety score (Task 12 rule) — they only prevent
-  // production/export application.
   const confidence = +clamp01(
     (testGate?.confidence ?? 0.3) * 0.20 + (simulation?.confidence ?? 0.3) * 0.20 +
     (overlay?.confidence ?? 0.3) * 0.15 + (shadowCompare?.confidence ?? 0.3) * 0.15 +
@@ -313,13 +186,163 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
     - (missingCount >= 3 ? 0.2 : missingCount * 0.05)
   ).toFixed(3);
 
-  // Patch the two placeholder gate checks now that confidence/safetyScore exist.
-  previewGateChecks[12] = _gate({ name: 'preview confidence sufficient', passed: confidence >= flags.minPreviewSandboxConfidence, required: true, severity: 'medium', reason: `Preview confidence ${confidence} vs. required ${flags.minPreviewSandboxConfidence}.`, source: 'Preview Sandbox V2' });
-  previewGateChecks[13] = _gate({ name: 'preview safety score sufficient', passed: safetyScore >= flags.minPreviewSandboxSafetyScore, required: true, severity: 'medium', reason: `Preview safety score ${safetyScore} vs. required ${flags.minPreviewSandboxSafetyScore}.`, source: 'Preview Sandbox V2' });
+  // ── Human Review Checklist (never assumed complete) ─────────────────────
+  const requireReview = flags.requireHumanReviewForPreview === true;
+  const humanReviewChecklist = _buildHumanReviewChecklist(requireReview, humanReviewState);
+  const requiredReviewItems = humanReviewChecklist.filter(c => c.required);
+  const humanReviewComplete = !requireReview || (requiredReviewItems.length > 0 && requiredReviewItems.every(c => c.status === 'passed'));
+  const humanReviewFailed = requiredReviewItems.some(c => c.status === 'failed');
+
+  const confidenceSufficient = confidence >= flags.minOverlayPreviewConfidence;
+  const safetyScoreSufficient = safetyScore >= flags.minOverlayPreviewSafetyScore;
+
+  // ── Canonical Preview Gate Checks (deterministic, no placeholders) ──────
+  const previewGateChecks = [
+    _gate({ id: 'sandbox-enabled', label: 'Preview sandbox enabled', required: true, passed: flags.enableOverlayPreviewSandbox === true, status: flags.enableOverlayPreviewSandbox ? 'passed' : 'disabled', reason: flags.enableOverlayPreviewSandbox ? 'Preview sandbox is enabled.' : 'Preview sandbox is disabled.' }),
+    _gate({ id: 'generation-allowed', label: 'Overlay preview generation allowed', required: true, passed: flags.allowOverlayPreviewGeneration === true, status: flags.allowOverlayPreviewGeneration ? 'passed' : 'disabled', reason: flags.allowOverlayPreviewGeneration ? 'Preview generation is allowed.' : 'Preview generation is disabled (default).' }),
+    _gate({ id: 'export-disabled', label: 'Preview export disabled', required: true, passed: flags.allowOverlayPreviewExport !== true, status: flags.allowOverlayPreviewExport ? 'failed' : 'passed', reason: flags.allowOverlayPreviewExport ? 'Preview export flag is ENABLED — export still hard-blocked at the output level regardless.' : 'Preview export correctly disabled (default).' }),
+    _gate({ id: 'production-write-disabled', label: 'Production write disabled', required: true, passed: flags.allowOverlayPreviewProductionWrite !== true, status: flags.allowOverlayPreviewProductionWrite ? 'failed' : 'passed', reason: flags.allowOverlayPreviewProductionWrite ? 'Production write flag is ENABLED — write still hard-blocked at the output level regardless.' : 'Production write correctly disabled (default).' }),
+    _gate({ id: 'preset-mutation-disabled', label: 'Preset mutation disabled', required: true, passed: flags.allowOverlayPreviewPresetMutation !== true, status: flags.allowOverlayPreviewPresetMutation ? 'failed' : 'passed', reason: flags.allowOverlayPreviewPresetMutation ? 'Preset mutation flag is ENABLED — this module never mutates input objects regardless.' : 'Preset mutation correctly disabled (default).' }),
+    _gate({ id: 'test-gate-exists', label: 'Controlled Overlay Test Gate exists', required: flags.requireControlledOverlayTestGateForPreview, passed: !!testGate, status: testGate ? 'passed' : 'unavailable', reason: testGate ? 'Controlled Overlay Test Gate V2 is available.' : 'Controlled Overlay Test Gate V2 is missing.' }),
+    _gate({ id: 'test-gate-eligible', label: 'Test gate indicates controlled-test eligibility', required: true, passed: testGateEligible, status: testGateEligible ? 'passed' : (testGate ? 'failed' : 'unavailable'), reason: testGate ? `Test gate canEnterControlledTest=${testGate.canEnterControlledTest}, eligibility level=${testGate.testEligibility?.level ?? 'unknown'}.` : 'No test gate available to check eligibility.' }),
+    _gate({ id: 'simulation-exists', label: 'Overlay Simulation exists', required: flags.requireOverlaySimulationForPreview, passed: !!simulation, status: simulation ? 'passed' : 'unavailable', reason: simulation ? 'Overlay Simulation V2 is available.' : 'Overlay Simulation V2 is missing.' }),
+    _gate({ id: 'overlay-exists', label: 'Legacy Safety Overlay exists', required: flags.requireLegacySafetyOverlayForPreview, passed: !!overlay, status: overlay ? 'passed' : 'unavailable', reason: overlay ? 'Legacy Safety Overlay V2 is available.' : 'Legacy Safety Overlay V2 is missing.' }),
+    _gate({ id: 'safety-clamp-exists', label: 'Safety Clamp exists', required: flags.requireSafetyClampForPreview, passed: !!safety, status: safety ? 'passed' : 'unavailable', reason: safety ? 'Safety Clamp V2 is available.' : 'Safety Clamp V2 is missing.' }),
+    _gate({ id: 'no-hard-stops', label: 'No hard stops', required: flags.requireNoHardStopsForPreview, passed: hardStopsCount === 0, status: hardStopsCount === 0 ? 'passed' : 'failed', reason: hardStopsCount === 0 ? 'No active hard stops.' : `${hardStopsCount} active hard stop(s).` }),
+    _gate({ id: 'no-critical-overstack', label: 'No critical over-stack', required: flags.requireNoCriticalOverstackForPreview, passed: !criticalOverstack, status: criticalOverstack ? 'failed' : 'passed', reason: `Over-stack severity "${overStackSeverity}".` }),
+    _gate({ id: 'confidence-sufficient', label: 'Preview confidence sufficient', required: true, passed: confidenceSufficient, status: confidenceSufficient ? 'passed' : 'failed', reason: `Confidence ${confidence} vs. required ${flags.minOverlayPreviewConfidence}.` }),
+    _gate({ id: 'safety-score-sufficient', label: 'Preview safety score sufficient', required: true, passed: safetyScoreSufficient, status: safetyScoreSufficient ? 'passed' : 'failed', reason: `Safety score ${safetyScore} vs. required ${flags.minOverlayPreviewSafetyScore}.` }),
+    _gate({ id: 'human-review-complete', label: 'Human review complete or not required', required: flags.requireHumanReviewForPreview, passed: humanReviewComplete, status: !requireReview ? 'not-required' : humanReviewFailed ? 'failed' : humanReviewComplete ? 'passed' : 'pending', reason: !requireReview ? 'Human review is not required by current flags.' : humanReviewComplete ? 'All required review items passed.' : humanReviewFailed ? 'One or more required review items failed.' : `${requiredReviewItems.filter(c => c.status === 'pending').length} required review item(s) still pending.` }),
+    _gate({ id: 'rollback-available', label: 'Rollback available', required: true, passed: true, status: 'passed', reason: 'Preview-sandbox-only rollback (no production write ever occurs) is always available.' }),
+    _gate({ id: 'legacy-context-available', label: 'Legacy mapping/preset/context available or partial fallback available', required: false, passed: legacyPreviewInput.available !== false, status: legacyPreviewInput.available === true ? 'passed' : legacyPreviewInput.available === 'partial' ? 'pending' : 'unavailable', reason: `Legacy preview input availability: ${legacyPreviewInput.available}.` }),
+  ];
 
   const failedRequiredGates = previewGateChecks.filter(g => g.required && !g.passed);
+  const allRequiredGatesPass = failedRequiredGates.length === 0;
 
-  // ── Task 13: Rollback + Fallback ──────────────────────────────────────────
+  // ── Canonical hard guarantees + the one genuinely gated output ─────────
+  const canExportPreview = false; // hard-coded — never true in this EPIC, even if allowOverlayPreviewExport is forced true
+  const canWriteProduction = false; // hard-coded — never true in this EPIC
+  const selectedOutputSource = 'legacy'; // hard-coded — legacy remains the sole production path
+  const canGeneratePreview = allRequiredGatesPass; // EPIC 2E-E-F: requires EVERY required gate, not just "data exists"
+
+  // ── Canonical Preview State ──────────────────────────────────────────────
+  let previewState;
+  if (!flags.enableOverlayPreviewSandbox) {
+    previewState = 'disabled';
+  } else if (missingCount >= 3 && legacyPreviewInput.available === false) {
+    previewState = 'unavailable';
+  } else if (hardStopsCount > 0 || criticalOverstack || humanReviewFailed) {
+    previewState = 'blocked';
+  } else if (canGeneratePreview) {
+    previewState = 'preview-ready';
+  } else {
+    // All technical (non-human-review) gates pass, but human review is
+    // the only thing missing → honestly reflect that state.
+    const technicalGatesExcludingReview = previewGateChecks.filter(g => g.required && g.id !== 'human-review-complete');
+    const technicalGatesPass = technicalGatesExcludingReview.every(g => g.passed);
+    if (technicalGatesPass && requireReview && !humanReviewComplete) previewState = 'awaiting-human-review';
+    else if (technicalGatesPass) previewState = 'eligible';
+    else previewState = 'blocked';
+  }
+
+  // ── Preview Eligibility ──────────────────────────────────────────────────
+  const previewEligibility = {
+    eligible: canGeneratePreview,
+    level: previewState,
+    reason: canGeneratePreview ? 'All required gates passed, including human review.' : `Not yet eligible — ${failedRequiredGates.length} required gate(s) unmet: ${failedRequiredGates.map(g => g.id).join(', ')}.`,
+    missingRequirements: failedRequiredGates.map(g => g.id),
+    passedRequirements: previewGateChecks.filter(g => g.passed).map(g => g.id),
+  };
+
+  // ── Preview Plan ──────────────────────────────────────────────────────────
+  const previewActions = [];
+  const addAction = (action, tool, channel, target, severity, reason) => previewActions.push({ action, tool, channel, target, previewOnly: true, severity, reason, source: 'Preview Sandbox V2', productionImpact: canGeneratePreview ? 'preview-only' : 'blocked' });
+  addAction('protect-channel', 'HSL', 'red-orange-yellow skin', 'skin tones', capture?.skinReliability != null && capture.skinReliability < 0.45 ? 'high' : 'medium', 'Skin tones are always previewed as protected first.');
+  const simActions = simulation?.simulatedOverlayActions ?? [];
+  for (const a of simActions) {
+    if (a.action === 'keep-legacy' || a.action === 'require-human-review') continue;
+    addAction(a.action, a.tool, a.channel, a.target, a.severity, `Derived from Overlay Simulation V2: ${a.reason}`);
+  }
+  if (hardStopsCount > 0) addAction('require-human-review', 'all', 'all', 'overall safety', 'critical', `${hardStopsCount} active hard stop(s) — preview recommends human review before anything further.`);
+  if (previewActions.length === 1) addAction('no-action', 'all', 'all', 'overall direction', 'low', 'No specific risky areas beyond default skin protection — preview recommends keeping legacy mapping as-is.');
+
+  const previewPlan = {
+    mode: !canGeneratePreview ? 'disabled' : 'preview-object-only',
+    planState: canGeneratePreview ? (legacyPreviewInput.available === true ? 'preview-object-ready' : 'partial-preview') : 'disabled',
+    actions: previewActions,
+    blockedActions: ['write overlay to production XMP', 'mutate legacy preset', 'replace legacy mapping', 'export preview as real XMP'],
+    protectedAreas: previewActions.filter(a => a.action === 'protect-channel').map(a => a.target),
+    suppressedRisks: previewActions.filter(a => a.action === 'suppress-risk').map(a => a.target),
+    reasons: [`Preview plan mode is "${!canGeneratePreview ? 'disabled' : 'preview-object-only'}" — no action here ever writes to production XMP or mutates the legacy preset.`],
+    warnings: legacyPreviewInput.available !== true ? ['Legacy input is partial or unavailable — preview plan is based on incomplete data.'] : [],
+  };
+
+  // ── Canonical Simulated Preview Preset (hard guarantees) ────────────────
+  let simulatedPreviewPreset;
+  if (!canGeneratePreview) {
+    simulatedPreviewPreset = {
+      available: false, mode: 'non-production-preview', source: 'legacy-plus-overlay-simulation',
+      productionSafe: false, exportEligible: false, appliedToProduction: false,
+      containsRealSliderValues: false, containsXMPValues: false,
+      values: {}, adjustments: [], metadata: { legacyPreviewInputAvailable: legacyPreviewInput.available, canGeneratePreview },
+      reason: `Preview not generated — ${failedRequiredGates.length ? `required gate(s) unmet: ${failedRequiredGates.map(g => g.id).join(', ')}` : 'preview generation is not currently eligible'}.`,
+    };
+  } else {
+    const adjustments = previewActions.filter(a => a.action !== 'no-action' && a.action !== 'require-human-review').map(a => {
+      const intensity = a.severity === 'critical' ? 0.85 : a.severity === 'high' ? 0.65 : a.severity === 'medium' ? 0.45 : 0.25;
+      const direction = a.action === 'protect-channel' ? 'reduce aggressive shift' : a.action === 'suppress-risk' ? 'suppress risky direction' : a.action === 'cap-intensity' ? 'cap intensity' : a.action === 'warn' ? 'flag for caution' : 'maintain restraint';
+      return { area: a.target, simulatedChange: `${a.action.replace('-', ' ')} on ${a.tool}${a.channel && a.channel !== 'all' ? ` / ${a.channel}` : ''}`, direction, intensity: +clamp01(intensity).toFixed(3), reason: a.reason, source: a.source, productionImpact: 'preview-only' };
+    });
+    // `values` is a NEW plain object — never the legacyPreset reference,
+    // and never contains real Lightroom slider values, only abstract
+    // 0-1 normalized entries keyed by area.
+    const values = {};
+    for (const adj of adjustments) values[adj.area] = { direction: adj.direction, intensity: adj.intensity };
+    simulatedPreviewPreset = {
+      available: true, mode: 'non-production-preview', source: 'legacy-plus-overlay-simulation',
+      productionSafe: false, exportEligible: false, appliedToProduction: false,
+      containsRealSliderValues: false, containsXMPValues: false,
+      values, adjustments,
+      metadata: { legacyPreviewInputAvailable: legacyPreviewInput.available, sourceType: legacyPreviewInput.sourceType, adjustmentCount: adjustments.length },
+      reason: 'Abstract, non-production preview object — normalized 0-1 intensities only, no Lightroom slider values, no XMP fields, never written to production.',
+    };
+  }
+
+  // ── Canonical Preview Risk Review (missing evidence never implies low risk) ──
+  const riskFrom = (val, fallback = 'unknown') => val ?? fallback;
+  const previewRiskReview = {
+    level: legacyPreviewInput.riskLevelComputed ?? (hardStopsCount > 0 ? 'high' : criticalOverstack ? 'critical' : legacyPreviewInput.available === true ? 'medium' : 'unknown'),
+    hardStops: hardStopsCount,
+    overStackSeverity: riskFrom(overStackSeverity),
+    skinRisk: riskFrom(capture?.skinReliability != null ? (capture.skinReliability < 0.45 ? 'high' : 'low') : null),
+    highlightRisk: riskFrom(capture?.highlightRecovery != null ? (capture.highlightRecovery < 0.4 ? 'high' : 'low') : null),
+    shadowRisk: riskFrom(capture?.shadowRecovery != null ? (capture.shadowRecovery < 0.4 ? 'high' : 'low') : null),
+    whiteBalanceRisk: riskFrom(capture?.whiteBalanceLatitude != null ? (capture.whiteBalanceLatitude < 0.4 ? 'medium' : 'low') : null),
+    colorRisk: riskFrom(capture?.colorLatitude != null ? (capture.colorLatitude < 0.4 ? 'medium' : 'low') : null),
+    exportRisk: 'none', // export is hard-blocked in this EPIC — no export can occur, so no export risk exists
+    productionWriteRisk: 'none', // production write is hard-blocked in this EPIC
+    findings: [
+      `${hardStopsCount} hard stop(s), over-stack severity "${overStackSeverity}".`,
+      legacyPreviewInput.available !== true ? 'Legacy context is partial/unavailable — risk findings for missing dimensions are "unknown", never assumed low.' : 'Legacy context is available for risk review.',
+    ],
+  };
+
+  // ── Safety Requirements ──────────────────────────────────────────────────
+  const safetyRequirements = {
+    noHardStops: hardStopsCount === 0,
+    noCriticalOverstack: !criticalOverstack,
+    minSafetyScorePassed: safetyScoreSufficient,
+    minConfidencePassed: confidenceSufficient,
+    legacyFallbackAvailable: true,
+    productionWriteDisabled: true, // always true in this EPIC
+    exportDisabled: true, // always true in this EPIC
+    humanReviewComplete,
+    reasons: [`Safety requirements evaluated against thresholds: safetyScore>=${flags.minOverlayPreviewSafetyScore}, confidence>=${flags.minOverlayPreviewConfidence}.`],
+    warnings: globalSafetyScore == null ? ['Global safety score is unavailable — safety requirement cannot be confidently evaluated.'] : [],
+  };
+
+  // ── Rollback / Fallback ───────────────────────────────────────────────────
   const rollbackPlan = {
     available: true,
     strategy: 'preview-sandbox-no-production-write',
@@ -331,45 +354,59 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
     useLegacyMapping: true,
     selectedFallback: 'legacy Lightroom Mapping',
     safeMode: true,
-    reason: 'EPIC 2E-E only builds an abstract, non-production preview object — legacy Lightroom Mapping remains the exclusive production path regardless of preview output.',
+    reason: 'This module only builds an abstract, non-production preview object — legacy Lightroom Mapping remains the exclusive production path regardless of preview output.',
   };
 
-  const warnings = [...(legacyPreviewInput.warnings ?? [])], reasons = [];
-  reasons.push(`Sandbox state "${sandboxState}" — canCreatePreview=${canCreatePreview}, canExportPreviewXMP=${canExportPreviewXMP}, canWriteProduction=${canWriteProduction}, selectedOutputSource="${selectedOutputSource}".`);
-  if (failedRequiredGates.length) reasons.push(`${failedRequiredGates.length} of ${previewGateChecks.filter(g => g.required).length} required gate(s) failed: ${failedRequiredGates.map(g => g.name).join(', ')}.`);
-  if (missingCount > 0) warnings.push(`${missingCount} of 4 core inputs (testGate/simulation/overlay/safety) missing or incomplete — preview sandbox is a partial preview.`);
-  if (hardStopsCount > 0) warnings.push(`${hardStopsCount} active hard stop(s) — preview includes a require-human-review action.`);
-
-  const photographerSummary = 'Legacy Mapping is still active. Preview Sandbox shows a safe abstract preview of what V2 would protect or suppress, but it does not change exported XMP.';
-  const developerSummary = `canExportPreviewXMP=false and canWriteProduction=false by default; selectedOutputSource=legacy; previewPresetShadow contains no real Lightroom slider values. sandboxState=${sandboxState}, canCreatePreview=${canCreatePreview}, ${changes.length} preview change(s) (all productionImpact!=none unless no-action).`;
-
-  return {
-    mode: 'controlled-overlay-preview-sandbox',
-    sandboxState, canCreatePreview, canExportPreviewXMP, canWriteProduction, selectedOutputSource,
-    previewGateChecks,
-    blockers: _buildPreviewBlockers(flags, testGate, simulation, overlay, safety, legacyPreviewInput, hardStopsCount, criticalOverstack, missingCount),
-    warnings, reasons,
-    legacyPreviewInput, previewOverlayPlan, previewPresetShadow,
-    previewRiskBefore, previewRiskAfter, previewRiskDelta,
-    previewProtections, previewSuppressions, previewNoActionAreas,
-    previewComparison, humanReviewNotes,
-    confidence, safetyScore,
-    rollbackPlan, fallbackStrategy,
-    photographerSummary, developerSummary,
-  };
-}
-
-function _buildPreviewBlockers(flags, testGate, simulation, overlay, safety, legacyPreviewInput, hardStopsCount, criticalOverstack, missingCount) {
+  // ── Blockers ──────────────────────────────────────────────────────────────
   const blockers = [];
-  if (!flags.enableControlledOverlayPreviewSandbox) blockers.push({ blocker: 'Preview sandbox is disabled.', severity: 'high', requiredFix: 'Set LIGHTROOM_MAPPING_V2_FLAGS.enableControlledOverlayPreviewSandbox to true.', source: 'Feature Flags' });
-  blockers.push({ blocker: 'Preview XMP export is disabled by design in EPIC 2E-E.', severity: 'critical', requiredFix: 'A future, separate EPIC would need to introduce preview XMP export capability — not in scope here.', source: 'Feature Flags' });
-  blockers.push({ blocker: 'Production write is disabled by design in EPIC 2E-E.', severity: 'critical', requiredFix: 'A future, separate EPIC would need to introduce production write capability — not in scope here.', source: 'Feature Flags' });
-  if (!testGate) blockers.push({ blocker: 'Controlled Overlay Test Gate V2 is missing.', severity: 'low', requiredFix: 'Ensure EPIC 2E-D test gate runs before the preview sandbox.', source: 'Controlled Overlay Test Gate V2' });
-  if (!simulation) blockers.push({ blocker: 'Overlay Simulation V2 is missing.', severity: 'medium', requiredFix: 'Ensure EPIC 2E-C simulation runs before the preview sandbox.', source: 'Overlay Simulation V2' });
-  if (!overlay) blockers.push({ blocker: 'Legacy Safety Overlay V2 is missing.', severity: 'medium', requiredFix: 'Ensure EPIC 2E-B overlay runs before the preview sandbox.', source: 'Legacy Safety Overlay V2' });
+  if (!flags.enableOverlayPreviewSandbox) blockers.push({ blocker: 'Preview sandbox is disabled.', severity: 'high', requiredFix: 'Set LIGHTROOM_MAPPING_V2_FLAGS.enableOverlayPreviewSandbox to true.', source: 'Feature Flags' });
+  if (!flags.allowOverlayPreviewGeneration) blockers.push({ blocker: 'Overlay preview generation is disabled.', severity: 'critical', requiredFix: 'Set LIGHTROOM_MAPPING_V2_FLAGS.allowOverlayPreviewGeneration to true in a future, deliberate change.', source: 'Feature Flags' });
+  blockers.push({ blocker: 'Preview export is disabled by design in this EPIC.', severity: 'critical', requiredFix: 'A future, separate EPIC would need to introduce preview export capability — not in scope here.', source: 'Feature Flags' });
+  blockers.push({ blocker: 'Production write is disabled by design in this EPIC.', severity: 'critical', requiredFix: 'A future, separate EPIC would need to introduce production write capability — not in scope here.', source: 'Feature Flags' });
+  if (!testGateEligible) blockers.push({ blocker: 'Controlled Overlay Test Gate does not indicate controlled-test eligibility.', severity: 'high', requiredFix: 'Wait for the test gate to reach controlled-test eligibility before generating a preview.', source: 'Controlled Overlay Test Gate V2' });
+  if (requireReview && !humanReviewComplete) blockers.push({ blocker: `Human review is ${humanReviewFailed ? 'failed' : 'incomplete'} (${requiredReviewItems.filter(c => c.status === 'pending').length} item(s) pending).`, severity: 'critical', requiredFix: 'Complete all required human review checklist items.', source: 'Human Review Process' });
   if (hardStopsCount > 0) blockers.push({ blocker: `Safety clamp contains ${hardStopsCount} hard stop(s).`, severity: 'critical', requiredFix: 'Resolve all active hard stops before trusting this preview.', source: 'Safety Clamp V2' });
   if (criticalOverstack) blockers.push({ blocker: 'Over-stack risk is critical.', severity: 'critical', requiredFix: 'Reduce over-stacked tool combinations.', source: 'Safety Clamp V2' });
   if (legacyPreviewInput.available !== true) blockers.push({ blocker: 'Legacy preset/mapping output is not fully available.', severity: 'medium', requiredFix: 'Supply legacyPreset/legacyMapping, or run the preview sandbox after legacy mapping completes.', source: 'Legacy Mapping' });
   if (missingCount > 0) blockers.push({ blocker: `${missingCount} of 4 core V2 inputs are missing or incomplete.`, severity: 'medium', requiredFix: 'Ensure the full V2 chain (EPIC 2A-2E-D) has run.', source: 'Input Validation' });
-  return blockers;
+
+  const warnings = [...(legacyPreviewInput.warnings ?? [])], reasons = [];
+  reasons.push(`Preview state "${previewState}" — canGeneratePreview=${canGeneratePreview}, canExportPreview=${canExportPreview}, canWriteProduction=${canWriteProduction}, selectedOutputSource="${selectedOutputSource}".`);
+  if (failedRequiredGates.length) reasons.push(`${failedRequiredGates.length} of ${previewGateChecks.filter(g => g.required).length} required gate(s) failed: ${failedRequiredGates.map(g => g.id).join(', ')}.`);
+  if (missingCount > 0) warnings.push(`${missingCount} of 4 core inputs (testGate/simulation/overlay/safety) missing or incomplete — preview eligibility reflects a rough sketch.`);
+  if (hardStopsCount > 0) warnings.push(`${hardStopsCount} active hard stop(s) — preview includes a require-human-review action.`);
+  if (requireReview && !humanReviewComplete) warnings.push('Human review is not complete — never assumed passed by default.');
+
+  const photographerSummary = canGeneratePreview
+    ? 'Legacy Mapping is still active. A safe abstract preview of what V2 would protect or suppress is ready to review, but it does not change exported XMP.'
+    : previewState === 'awaiting-human-review'
+      ? 'Legacy Mapping is still active. Preview Sandbox is technically ready, but human review must be completed before a preview object can be generated.'
+      : 'Legacy Mapping is still active. Preview Sandbox is prepared, but preview generation, export, and production write are all disabled by default.';
+  const developerSummary = `canGeneratePreview=${canGeneratePreview}; canExportPreview=false and canWriteProduction=false always; selectedOutputSource=legacy; simulatedPreviewPreset contains no real Lightroom slider values or XMP fields. previewState=${previewState}, ${previewEligibility.missingRequirements.length} missing requirement(s), humanReviewComplete=${humanReviewComplete}.`;
+
+  const result = {
+    // ── Canonical fields (EPIC 2E-E-F) ──
+    mode: 'controlled-overlay-preview-sandbox',
+    previewState, canGeneratePreview, canExportPreview, canWriteProduction, selectedOutputSource,
+    previewGateChecks, blockers, warnings, reasons,
+    previewEligibility, previewPlan, simulatedPreviewPreset, previewRiskReview,
+    humanReviewChecklist, safetyRequirements,
+    rollbackPlan, fallbackStrategy,
+    confidence, safetyScore,
+    photographerSummary, developerSummary,
+  };
+
+  // ── Backward-compatible aliases (EPIC 2E-E names) — same values, not duplicated logic ──
+  result.sandboxState = result.previewState;
+  result.canCreatePreview = result.canGeneratePreview;
+  result.canExportPreviewXMP = result.canExportPreview;
+  result.previewOverlayPlan = result.previewPlan;
+  result.previewPresetShadow = result.simulatedPreviewPreset;
+  result.humanReviewNotes = humanReviewChecklist.filter(c => c.required).map(c => ({ note: c.label, severity: c.status === 'failed' ? 'critical' : 'medium', requiredBefore: 'production-write', reason: c.reason }));
+  // Legacy risk-before/after/delta fields some older callers may still read.
+  result.previewRiskBefore = { overallRisk: previewRiskReview.level, areas: previewPlan.protectedAreas, reasons: ['See previewRiskReview for the canonical, structured risk breakdown.'] };
+  result.previewRiskAfter = { overallRisk: canGeneratePreview ? 'low' : previewRiskReview.level, areas: previewPlan.protectedAreas, reasons: ['This is a PREVIEW estimate only — no production change actually occurred.'] };
+  result.previewRiskDelta = { improved: canGeneratePreview, deltaLevel: canGeneratePreview ? 'small' : 'unknown', improvedAreas: previewPlan.protectedAreas, unchangedAreas: [], unresolvedRisks: previewActions.filter(a => a.action === 'require-human-review').map(a => a.target), confidence: +clamp01(legacyPreviewInput.available === true ? 0.5 : 0.2).toFixed(3), reasons: ['This is a PREVIEW, report-only estimate — it does not claim any actual final image quality improvement.'] };
+
+  return result;
 }
