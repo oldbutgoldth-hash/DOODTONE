@@ -14,17 +14,39 @@ const FONT_SM='500 8.5px Inter,system-ui,sans-serif';
 
 function mkT(dark){return{panel:dark?'rgba(30,20,10,.58)':'rgba(255,255,255,.65)',border:dark?'rgba(255,255,255,.08)':'rgba(0,0,0,.08)',label:dark?'#b89e84':'#6b5843',sub:dark?'#7a6248':'#9e8468',text:dark?'#f0e6d8':'#1c160e',grid:dark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)',ok:'#27714a',warn:'#e5a000',err:'#c0392b',orange:'#f07320'};}
 
+// ─── UI FIX-F: canvas content-width resolution ─────────────────────────────
+// A section's getBoundingClientRect().width is its BORDER-BOX width,
+// which includes padding/border — but the canvas inside it (width:100%)
+// only ever occupies the section's CONTENT box. Passing the section's
+// full width as the canvas's CSS width overshoots by exactly the
+// section's horizontal padding+border, causing overflow/stretching.
+// This resolver only ever trusts the canvas's own measured width (or an
+// explicit override already computed from the canvas itself by the
+// caller) — never a parent/section rect — and never falls back to any
+// hardcoded pixel value. Deliberately avoids canvas.offsetWidth, which
+// can still reflect a stale inline pixel width left over from a
+// PREVIOUS render (canvas.style.width used to be set to an explicit
+// "Npx" value before this patch).
+function resolveCanvasCssWidth(canvas, requestedWidth) {
+  const candidates = [
+    requestedWidth,
+    canvas?.getBoundingClientRect?.().width,
+    canvas?.clientWidth,
+  ];
+  for (const value of candidates) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return Math.max(1, Math.floor(n));
+  }
+  return 0;
+}
+
 export function renderImageAnalysis(canvas, r, opts={}) {
   const dark=opts.dark??document.documentElement.classList.contains('dark');
   const T=mkT(dark);
   const dpr=Math.min(window.devicePixelRatio||1,2);
-  // Prefer an explicit, already-measured width from the caller (e.g. the
-  // first-import render-readiness flow, which measures the container via
-  // getBoundingClientRect AFTER layout has genuinely settled). Falling
-  // back to canvas.offsetWidth/parentElement.offsetWidth keeps this
-  // function working for existing callsites (redraw on tab switch,
-  // dark-mode toggle) that don't pass cssWidth.
-  const W = opts.cssWidth || canvas.offsetWidth || canvas.parentElement?.offsetWidth || 0;
+  // Resolve the canvas's own CONTENT width — never the parent section's
+  // border-box width (see resolveCanvasCssWidth above for why).
+  const W = resolveCanvasCssWidth(canvas, opts.cssWidth);
   // Never commit a distorted render from a zero/invalid width — this was
   // the root cause of the first-import layout bug: a stale 0px reading
   // used to silently fall back to a hardcoded 560, drawing the canvas at
@@ -47,7 +69,7 @@ export function renderImageAnalysis(canvas, r, opts={}) {
     +LABEL_H+QUAL_GRID_H                               // 12-15. quality metrics
     +PAD;
 
-  canvas.style.width=W+'px'; canvas.style.height=totalH+'px';
+  canvas.style.width='100%'; canvas.style.height=totalH+'px';
   canvas.width=Math.round(W*dpr); canvas.height=Math.round(totalH*dpr);
   const ctx=canvas.getContext('2d');
   // Reset transform before scaling — setting canvas.width/height above

@@ -9,21 +9,40 @@ function th(dark){return{panel:dark?'rgba(30,20,10,.55)':'rgba(255,255,255,.6)',
 
 const BADGE={Dominant:{bg:'#f07320',fg:'#fff'},Secondary:{bg:'#8a6a4e',fg:'#fff'},Accent:{bg:'#2a7a8a',fg:'#fff'},Shadow:{bg:'#1a1610',fg:'#e0d0c0'},Highlight:{bg:'#f5ede0',fg:'#4a3828'},Supporting:{bg:'#d0c0b0',fg:'#4a3828'}};
 
+// ─── UI FIX-F: canvas content-width resolution ─────────────────────────────
+// Same rationale as image-analysis-renderer.js's resolver — a section's
+// getBoundingClientRect().width includes its padding/border, but this
+// canvas (width:100%) only occupies the section's content box. Never
+// trusts a parent/section rect, never falls back to a hardcoded value,
+// and avoids canvas.offsetWidth (which could reflect a stale inline
+// pixel width from a previous render).
+function resolveCanvasCssWidth(canvas, requestedWidth) {
+  const candidates = [
+    requestedWidth,
+    canvas?.getBoundingClientRect?.().width,
+    canvas?.clientWidth,
+  ];
+  for (const value of candidates) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return Math.max(1, Math.floor(n));
+  }
+  return 0;
+}
+
 export function renderPalette(canvas, palette, opts={}) {
   const dark=opts.dark??document.documentElement.classList.contains('dark');
   const T=th(dark);
   const dpr=Math.min(window.devicePixelRatio||1,2);
-  // Prefer an explicit, already-measured width from the caller (see
-  // renderImageAnalysis for the full rationale — this fixes the same
-  // first-import layout bug for the K-Means palette section).
-  const W = opts.cssWidth || canvas.offsetWidth || canvas.parentElement?.offsetWidth || 0;
+  // Resolve the canvas's own CONTENT width — never the parent section's
+  // border-box width.
+  const W = resolveCanvasCssWidth(canvas, opts.cssWidth);
   if (W <= 0) return false; // never commit a distorted render from a zero/invalid width
   const roles=['Dominant','Secondary','Accent','Shadow','Highlight'];
   const roleW=Math.floor((W-PAD*2-GAP*(roles.length-1))/roles.length);
   const swatchW=Math.floor((W-PAD*2-GAP*3)/4);
   const rows=Math.ceil(palette.colors.length/4);
   const totalH=PAD+LABEL_H+ROLE_H+GAP+LABEL_H+SWATCH_H*rows+GAP*(rows-1)+GAP+LABEL_H+BAR_H*palette.colors.length+(palette.colors.length-1)*3+PAD;
-  canvas.style.width=W+'px'; canvas.style.height=totalH+'px';
+  canvas.style.width='100%'; canvas.style.height=totalH+'px';
   canvas.width=Math.round(W*dpr); canvas.height=Math.round(totalH*dpr);
   const ctx=canvas.getContext('2d');
   ctx.setTransform(1,0,0,1,0,0);

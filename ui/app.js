@@ -267,11 +267,11 @@ window.closeLang = closeLangModal;
 // ─── Navigation ───────────────────────────────────────────────────────────────
 function redrawGroup(groupName) {
   const groupEl = document.querySelector(`.agroup[data-group="${groupName}"]`);
-  const draw = (cssWidth) => ({
+  const draw = {
     overview: () => {
-      if (state.lastImageAnalysis) { const c=document.getElementById('imageAnalysisCanvas'); if(c) renderImageAnalysis(c, state.lastImageAnalysis, {dark:state.darkMode, cssWidth}); }
+      if (state.lastImageAnalysis) { const c=document.getElementById('imageAnalysisCanvas'); if(c) renderImageAnalysis(c, state.lastImageAnalysis, {dark:state.darkMode}); }
       if (state.lastStats)         { const c=document.getElementById('histCanvas');          if(c) renderHistograms(c, state.lastStats, {dark:state.darkMode}); }
-      if (state.lastPalette)       { const c=document.getElementById('paletteCanvas');       if(c) renderPalette(c, state.lastPalette, {dark:state.darkMode, cssWidth}); }
+      if (state.lastPalette)       { const c=document.getElementById('paletteCanvas');       if(c) renderPalette(c, state.lastPalette, {dark:state.darkMode}); }
     },
     tone: () => {
       if (state.lastBasic)      { const c=document.getElementById('basicCanvas');       if(c) renderBasicPanel(c, state.lastBasic, {dark:state.darkMode}); }
@@ -287,14 +287,18 @@ function redrawGroup(groupName) {
     detail: () => {
       if (state.lastSkin) { const c=document.getElementById('skinCanvas'); if(c) renderSkinTone(c, state.lastSkin, {dark:state.darkMode}); }
     },
-  });
+  };
   // Same shared readiness flow as first-import: waits for the now-visible
   // group's layout to settle (not just one requestAnimationFrame) before
-  // measuring and redrawing — RE-ANALYZE CONSISTENCY requires the same
-  // sizing logic on every render path, not a separate/simpler one here.
-  waitForAnalysisRenderReady({ containers: [groupEl] }).then(([rect]) => {
-    const cssWidth = rect && rect.width > 0 ? rect.width : undefined;
-    (draw(cssWidth)[groupName] || (() => {}))();
+  // drawing — RE-ANALYZE CONSISTENCY requires the same sizing logic on
+  // every render path. `groupEl` is only used to wait for LAYOUT
+  // readiness here (image/fonts/frames/non-zero-size) — its width is
+  // NOT passed down to renderImageAnalysis/renderPalette, since each
+  // section has its own padding different from the .agroup's. Each
+  // renderer resolves its OWN canvas's content width via
+  // resolveCanvasCssWidth once its section is visible and settled.
+  waitForAnalysisRenderReady({ containers: [groupEl] }).then(() => {
+    (draw[groupName] || (() => {}))();
   });
 }
 
@@ -346,16 +350,25 @@ function setupAnalysisResizeObserver() {
     return;
   }
 
-  let lastWidth = 0;
+  const lastWidths = new WeakMap();
   const ro = new ResizeObserver(entries => {
-    const entry = entries[0];
-    if (!entry) return;
-    const newWidth = entry.contentRect.width;
-    // Skip when width hasn't meaningfully changed — prevents redraw (and
-    // any possible ResizeObserver) loops from a sub-pixel/no-op trigger.
-    if (Math.abs(newWidth - lastWidth) < 1) return;
-    lastWidth = newWidth;
-    scheduleRedraw();
+    for (const entry of entries) {
+      const target = entry.target;
+      const newWidth = entry.contentRect.width;
+      const previousWidth = lastWidths.get(target) ?? 0;
+      // Skip when width hasn't meaningfully changed — prevents redraw
+      // (and any possible ResizeObserver) loops from a sub-pixel/no-op
+      // trigger. Tracked PER ELEMENT so one hidden group reporting 0
+      // width can never clobber another group's last-known width.
+      if (Math.abs(newWidth - previousWidth) < 1) continue;
+      lastWidths.set(target, newWidth);
+      // Only the currently active/visible group with a genuinely
+      // positive width should ever trigger a redraw — a hidden .agroup
+      // (display:none) reports contentRect.width === 0 and must never
+      // schedule a redraw of the group that's actually on screen.
+      const isActiveGroup = target.dataset?.group === state.activeAnalysisGroup;
+      if (isActiveGroup && newWidth > 0) scheduleRedraw();
+    }
   });
   document.querySelectorAll('.agroup').forEach(el => ro.observe(el));
 }
@@ -532,10 +545,14 @@ async function runAnalysis() {
       const iac = document.getElementById('imageAnalysisCanvas');
       if (iaSec && iac) {
         iaSec.style.display = 'block';
-        waitForAnalysisRenderReady({ image: img, containers: [iaSec] }).then(([rect]) => {
+        // UI FIX-F: measure the CANVAS itself, not the section — the
+        // section's rect is a border-box width that includes its 20px
+        // padding on each side, which would overshoot the canvas's
+        // actual (width:100%) content box by 40px.
+        waitForAnalysisRenderReady({ image: img, containers: [iac] }).then(([rect]) => {
           if (renderGeneration !== analysisRenderGeneration) return; // a newer import superseded this one
-          const cssWidth = rect && rect.width > 0 ? rect.width : undefined;
-          renderImageAnalysis(iac, coreResult, { dark: state.darkMode, cssWidth });
+          if (!rect || rect.width <= 0) return; // FIX 6: skip safely — never commit a distorted render; ResizeObserver/tab visibility can trigger a later redraw
+          renderImageAnalysis(iac, coreResult, { dark: state.darkMode, cssWidth: rect.width });
         });
       }
       return coreResult;
@@ -547,10 +564,11 @@ async function runAnalysis() {
       const pc = document.getElementById('paletteCanvas');
       if (palSec && pc) {
         palSec.style.display = 'block';
-        waitForAnalysisRenderReady({ image: img, containers: [palSec] }).then(([rect]) => {
+        // UI FIX-F: measure the canvas itself, same rationale as above.
+        waitForAnalysisRenderReady({ image: img, containers: [pc] }).then(([rect]) => {
           if (renderGeneration !== analysisRenderGeneration) return; // a newer import superseded this one
-          const cssWidth = rect && rect.width > 0 ? rect.width : undefined;
-          renderPalette(pc, palette, { dark: state.darkMode, cssWidth });
+          if (!rect || rect.width <= 0) return; // FIX 6: skip safely
+          renderPalette(pc, palette, { dark: state.darkMode, cssWidth: rect.width });
         });
       }
       let harmony = null;
@@ -561,7 +579,7 @@ async function runAnalysis() {
         const hc = document.getElementById('harmonyCanvas');
         if (harSec && hc) {
           harSec.style.display = 'block';
-          waitForAnalysisRenderReady({ image: img, containers: [harSec] }).then(() => {
+          waitForAnalysisRenderReady({ image: img, containers: [hc] }).then(() => {
             if (renderGeneration !== analysisRenderGeneration) return;
             renderColorHarmony(hc, harmony, { dark: state.darkMode });
           });
