@@ -388,26 +388,57 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
   const targetIndex = currentItems.findIndex(i => i && i.id === itemId);
 
   if (targetIndex === -1) {
-    // Unknown item ID — return a full, valid, unchanged-content recomputed
-    // copy (never mutate `state`), with an explicit warning. Never throws.
-    const rebuilt = _buildReviewState({
-      existingReviewState: state, controlledOverlayPreviewSandboxV2: null,
-    });
-    // Re-seed exactly from state's own items (no sandbox re-evaluation —
-    // this path only needs to safely echo state back with a warning).
-    const echoedItems = currentItems.map(i => ({ ...i, evidence: i.evidence ? { ...i.evidence } : i.evidence, warnings: [...(i.warnings ?? [])] }));
-    const progress = _computeProgress(echoedItems);
-    const approval = _computeApproval(echoedItems, state?.metadata?.sandboxAvailable ? { canGeneratePreview: state?.metadata?.sandboxCanGeneratePreview === true } : null);
+    // EPIC 2E-F-A-F Bug 2 fix: an unknown item ID must be a genuine
+    // no-op on every derived field — it must NOT re-derive approval,
+    // progress, or summary state (the previous implementation called
+    // _buildReviewState with a forced-null sandbox, which silently
+    // reset approvalState/canApprovePreview/etc. to their
+    // no-sandbox values regardless of the real state). This path now
+    // deep-clones every field directly from `state` (never
+    // JSON.stringify/parse, which would drop undefined values), adds
+    // exactly one warning, and touches nothing else.
+    const clonedItems = currentItems.map(i => ({
+      ...i,
+      evidence: i.evidence ? { ...i.evidence } : i.evidence,
+      warnings: [...(i.warnings ?? [])],
+    }));
+    const clonedProgress = state?.reviewProgress ? { ...state.reviewProgress } : state?.reviewProgress;
+    const clonedSummary = state?.reviewSummary
+      ? { ...state.reviewSummary, riskSummary: [...(state.reviewSummary.riskSummary ?? [])] }
+      : state?.reviewSummary;
+    const clonedRollbackPlan = state?.rollbackPlan
+      ? { ...state.rollbackPlan, steps: [...(state.rollbackPlan.steps ?? [])], triggerConditions: state.rollbackPlan.triggerConditions ? [...state.rollbackPlan.triggerConditions] : state.rollbackPlan.triggerConditions }
+      : state?.rollbackPlan;
+    const clonedFallbackStrategy = state?.fallbackStrategy ? { ...state.fallbackStrategy } : state?.fallbackStrategy;
+    const clonedBlockers = (state?.blockers ?? []).map(b => ({ ...b }));
+    const clonedReasons = [...(state?.reasons ?? [])];
+    const clonedMetadata = state?.metadata ? { ...state.metadata } : state?.metadata;
+
     return {
-      ...rebuilt,
-      reviewItems: echoedItems,
-      requiredItemIds: echoedItems.filter(i => i.required).map(i => i.id),
-      completedItemIds: echoedItems.filter(i => i.status === 'passed').map(i => i.id),
-      failedItemIds: echoedItems.filter(i => i.status === 'failed').map(i => i.id),
-      pendingItemIds: echoedItems.filter(i => i.status === 'pending').map(i => i.id),
-      unavailableItemIds: echoedItems.filter(i => i.status === 'unavailable').map(i => i.id),
-      reviewProgress: progress,
+      mode: state?.mode ?? 'controlled-preview-human-review',
+      reviewState: state?.reviewState,
+      reviewItems: clonedItems,
+      requiredItemIds: [...(state?.requiredItemIds ?? [])],
+      completedItemIds: [...(state?.completedItemIds ?? [])],
+      failedItemIds: [...(state?.failedItemIds ?? [])],
+      pendingItemIds: [...(state?.pendingItemIds ?? [])],
+      unavailableItemIds: [...(state?.unavailableItemIds ?? [])],
+      reviewProgress: clonedProgress,
+      reviewSummary: clonedSummary,
+      // Every approval-related field is PRESERVED exactly — never
+      // recomputed on this path, since nothing about the real state
+      // changed (the update targeted an ID that doesn't exist).
+      canApprovePreview: state?.canApprovePreview,
+      canRequestAdjustment: state?.canRequestAdjustment,
+      canRejectPreview: state?.canRejectPreview,
+      approvalState: state?.approvalState,
+      blockers: clonedBlockers,
       warnings: [...(state?.warnings ?? []), `Unknown review item id "${itemId}" — update ignored safely.`],
+      reasons: clonedReasons,
+      rollbackPlan: clonedRollbackPlan,
+      fallbackStrategy: clonedFallbackStrategy,
+      confidence: state?.confidence,
+      metadata: clonedMetadata,
     };
   }
 
@@ -421,9 +452,24 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
   if (nextStatus === 'failed' && nextDecision === 'approve') nextDecision = 'undecided';
   if (nextStatus === 'passed' && (update.reviewerDecision === undefined) && nextDecision === 'undecided') nextDecision = 'approve';
 
-  let nextReviewed = currentItems[targetIndex].reviewed;
-  if (nextStatus === 'passed' || nextStatus === 'failed') nextReviewed = true;
-  if (update.reviewed === true || update.reviewed === false) nextReviewed = update.reviewed; // explicit override still allowed, applied after status-driven default
+  // EPIC 2E-F-A-F Bug 1 fix: reviewed consistency is derived from the
+  // FINAL status (after all reviewerDecision↔status normalization
+  // above), in a strict, deterministic order:
+  //   1. If final status is "passed" or "failed" → reviewed is ALWAYS
+  //      true. An explicit update.reviewed=false can NEVER override
+  //      this — the contract requires passed/failed items to have been
+  //      genuinely reviewed.
+  //   2. Otherwise (status is "pending"/"unavailable"/"not-required")
+  //      → an explicit update.reviewed is honoured; if none was given,
+  //      fall back to the item's current reviewed value.
+  let nextReviewed;
+  if (nextStatus === 'passed' || nextStatus === 'failed') {
+    nextReviewed = true;
+  } else if (update.reviewed === true || update.reviewed === false) {
+    nextReviewed = update.reviewed;
+  } else {
+    nextReviewed = currentItems[targetIndex].reviewed;
+  }
 
   const updatedItem = {
     ...currentItems[targetIndex],
