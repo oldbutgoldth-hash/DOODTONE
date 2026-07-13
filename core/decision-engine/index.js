@@ -121,6 +121,26 @@ const SCENE_STRATEGIES = {
  * }} inputs
  * @returns {object} finalPreset — ready for the Pre-XMP Validation Pass
  */
+/**
+ * @param {object} inputs
+ * ...(existing fields unchanged)...
+ * @param {object|null} [inputs.controlledPreviewReviewStateV2] - EPIC 2E-F-B-F:
+ *   optional, existing Controlled Preview Human Review state from a future
+ *   Review Console UI (Phase C). Contains an optional human-review
+ *   checklist state (which items have been reviewed, their status,
+ *   reviewer decisions/notes). It is NEVER trusted as-is: every derived
+ *   field on it (approvalState, canApprovePreview, canRequestAdjustment,
+ *   canRejectPreview, reviewProgress, completedItemIds, failedItemIds,
+ *   confidence, etc.) is fully recalculated by the Review State engine
+ *   against the CURRENT Controlled Overlay Preview Sandbox before use —
+ *   only its raw per-item review data (status/reviewerDecision/
+ *   reviewerNote) is preserved as a normalization seed. Defaults to
+ *   `null` (no existing review state), which is fully backward
+ *   compatible with every existing caller. This input is purely
+ *   informational and read-only from the perspective of production
+ *   output: it does NOT affect Production Lightroom Mapping and does
+ *   NOT affect XMP export in any way.
+ */
 export function buildFinalPreset(inputs) {
   const {
     stats, basic, wb, skin, hsl, calibration, grading, toneCurves,
@@ -133,14 +153,21 @@ export function buildFinalPreset(inputs) {
     // evidence for the already-computed Photographer Style — never to
     // change scores, DNA, validation, or feasibility.
     referenceColorIntelligence = null,
-  } = inputs;
+    // EPIC 2E-F-B-F: optional existing Controlled Preview Human Review
+    // state from a future Phase C UI caller. See JSDoc above — always
+    // safe to omit; every existing caller is unaffected.
+    controlledPreviewReviewStateV2 = null,
+  } = inputs ?? {};
 
-  const fingerprint = inputs.fingerprint ?? buildStyleFingerprint({
+  const fingerprint = inputs?.fingerprint ?? buildStyleFingerprint({
     stats, basic, wb, skin, hsl, calibration, grading, toneCurves,
     palette, harmony, styleRecognition,
   });
 
-  const decision = _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast, mode, styleRecognition, referenceColorIntelligence });
+  const decision = _buildDecision({
+    fingerprint, stats, basic, wb, skin, hsl, scene, cast, mode, styleRecognition, referenceColorIntelligence,
+    existingControlledPreviewReviewStateV2: controlledPreviewReviewStateV2,
+  });
 
   const mapped = mapStyleFingerprintToLightroom({
     fingerprint, decision, stats, basic, wb, hsl, calibration, grading, toneCurves,
@@ -156,7 +183,7 @@ export function buildFinalPreset(inputs) {
 
 // ─── Adaptive decision building ─────────────────────────────────────────────
 
-function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast, mode, styleRecognition, referenceColorIntelligence = null }) {
+function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast, mode, styleRecognition, referenceColorIntelligence = null, existingControlledPreviewReviewStateV2 = null }) {
   const category    = scene?.category ?? stats?.category ?? 'General';
   const sceneConf    = scene?.confidence ?? 0.5;
   const isPortrait   = category === 'Portrait' || category === 'Wedding';
@@ -728,7 +755,7 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
     finalStyleIntent.controlledOverlayPreviewSandboxV2Error = `Overlay preview sandbox failed safely (production unaffected): ${e.message}`;
   }
 
-  // ── EPIC 2E-F Phase B: Controlled Preview Review State ───────────────────
+  // ── EPIC 2E-F Phase B, patched EPIC 2E-F-B-F: Controlled Preview Review State ──
   // Tracks the (future, Phase C) human-review checklist for the preview
   // sandbox object above. This stage is READ-ONLY and produces no side
   // effects — it never activates production output, never enables
@@ -736,15 +763,16 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
   // inside the Preview Sandbox itself), and approval here has no path
   // to influence XMP export in any way.
   //
-  // `existingReviewState` is always `null` in this phase: the current
-  // pipeline runs statelessly (each `buildFinalPreset()` call is a fresh
-  // analysis with no mechanism to receive prior review state from a
-  // caller), so `finalStyleIntent.controlledPreviewReviewStateV2` is
-  // never already set at this point in the same run. This is written to
-  // naturally support a future Phase C caller pre-seeding
-  // `finalStyleIntent.controlledPreviewReviewStateV2` before this stage
-  // runs, without needing to invent a new `_buildDecision` parameter
-  // that doesn't exist in the current architecture.
+  // `existingControlledPreviewReviewStateV2` (a `_buildDecision` param,
+  // itself sourced from `buildFinalPreset(inputs)`'s optional
+  // `inputs.controlledPreviewReviewStateV2`) is how a future Phase C UI
+  // caller passes in prior review progress. It defaults to `null` — the
+  // fully backward-compatible default for every existing caller that
+  // doesn't pass it, in which case behavior is identical to before this
+  // patch. When provided, it is treated as entirely UNTRUSTED raw input:
+  // createPreviewReviewStateV2() below normalizes every review item and
+  // recalculates every derived field itself; nothing here reads or
+  // copies an approval-related field from it.
   //
   // Attached to finalStyleIntent, never read by
   // mapStyleFingerprintToLightroom below, wrapped in try/catch as
@@ -752,7 +780,17 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
   // the preview sandbox (integration order #11, per this phase's spec).
   try {
     finalStyleIntent.controlledPreviewReviewStateV2 = createPreviewReviewStateV2({
-      existingReviewState: finalStyleIntent.controlledPreviewReviewStateV2 ?? null,
+      // EPIC 2E-F-B-F: the explicit incoming state from a future Phase C
+      // caller takes priority over anything already on finalStyleIntent
+      // (which, in the current stateless architecture, is never already
+      // set at this point anyway). Passed through as raw, UNTRUSTED
+      // input — createPreviewReviewStateV2 itself is fully responsible
+      // for normalizing every review item and recalculating every
+      // derived field (approvalState, canApprovePreview, etc.) against
+      // the CURRENT Preview Sandbox below. No approval field is read or
+      // copied here — that would duplicate the Review State engine's own
+      // logic, which this patch must not do.
+      existingReviewState: existingControlledPreviewReviewStateV2 ?? finalStyleIntent.controlledPreviewReviewStateV2 ?? null,
       controlledOverlayPreviewSandboxV2: finalStyleIntent.controlledOverlayPreviewSandboxV2,
       controlledOverlayTestGateV2: finalStyleIntent.controlledOverlayTestGateV2,
       legacyOverlaySimulationV2: finalStyleIntent.legacyOverlaySimulationV2,
