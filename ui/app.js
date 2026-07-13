@@ -81,6 +81,7 @@ const state = {
   isPremium:   true,   // UNLIMITED MODE — quota system disabled
   freeCount:   0,      // unused
   imageLoaded: false,
+  activeAnalysisGroup: 'overview', // which .agroup tab is currently visible — 'overview' matches its default display:flex in index.html
   lastStats:   null,
   lastPalette: null,
   lastWB:      null,
@@ -129,6 +130,7 @@ waitForRoot(() => {
   bindSliders(document.body);
   window.switchTab = switchTab;
   setupAnalysisTabs();
+  setupAnalysisResizeObserver();
 
   // Tone Curve Editor — init after DOM ready
   const curveCanvas = document.getElementById('toneCurveCanvas');
@@ -264,11 +266,12 @@ window.closeLang = closeLangModal;
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 function redrawGroup(groupName) {
-  const draw = {
+  const groupEl = document.querySelector(`.agroup[data-group="${groupName}"]`);
+  const draw = (cssWidth) => ({
     overview: () => {
-      if (state.lastImageAnalysis) { const c=document.getElementById('imageAnalysisCanvas'); if(c) renderImageAnalysis(c, state.lastImageAnalysis, {dark:state.darkMode}); }
+      if (state.lastImageAnalysis) { const c=document.getElementById('imageAnalysisCanvas'); if(c) renderImageAnalysis(c, state.lastImageAnalysis, {dark:state.darkMode, cssWidth}); }
       if (state.lastStats)         { const c=document.getElementById('histCanvas');          if(c) renderHistograms(c, state.lastStats, {dark:state.darkMode}); }
-      if (state.lastPalette)       { const c=document.getElementById('paletteCanvas');       if(c) renderPalette(c, state.lastPalette, {dark:state.darkMode}); }
+      if (state.lastPalette)       { const c=document.getElementById('paletteCanvas');       if(c) renderPalette(c, state.lastPalette, {dark:state.darkMode, cssWidth}); }
     },
     tone: () => {
       if (state.lastBasic)      { const c=document.getElementById('basicCanvas');       if(c) renderBasicPanel(c, state.lastBasic, {dark:state.darkMode}); }
@@ -284,8 +287,15 @@ function redrawGroup(groupName) {
     detail: () => {
       if (state.lastSkin) { const c=document.getElementById('skinCanvas'); if(c) renderSkinTone(c, state.lastSkin, {dark:state.darkMode}); }
     },
-  };
-  requestAnimationFrame(() => { (draw[groupName] || (()=>{}))(); });
+  });
+  // Same shared readiness flow as first-import: waits for the now-visible
+  // group's layout to settle (not just one requestAnimationFrame) before
+  // measuring and redrawing — RE-ANALYZE CONSISTENCY requires the same
+  // sizing logic on every render path, not a separate/simpler one here.
+  waitForAnalysisRenderReady({ containers: [groupEl] }).then(([rect]) => {
+    const cssWidth = rect && rect.width > 0 ? rect.width : undefined;
+    (draw(cssWidth)[groupName] || (() => {}))();
+  });
 }
 
 function setupAnalysisTabs() {
@@ -297,9 +307,57 @@ function setupAnalysisTabs() {
       document.querySelectorAll('.agroup').forEach(g => {
         g.style.display = (g.dataset.group === group) ? 'flex' : 'none';
       });
+      state.activeAnalysisGroup = group;
       redrawGroup(group);   // re-render now-visible canvases (fixes offsetWidth 0)
     });
   });
+}
+
+// ─── Analysis canvas resize handling ───────────────────────────────────────────
+// Redraws the currently-visible analysis group's canvases from CACHED
+// state.last* results when its container is resized (browser resize,
+// mobile rotation, sidebar collapse, etc.) — never re-runs K-Means or any
+// other analysis computation, only re-renders the existing data at the
+// new measured size.
+function setupAnalysisResizeObserver() {
+  const activeGroupEl = () => document.querySelector(`.agroup[data-group="${state.activeAnalysisGroup}"]`) || document.querySelector('.agroup[data-group="overview"]');
+
+  const scheduleRedraw = (() => {
+    let rafPending = false;
+    return () => {
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => {
+        rafPending = false;
+        const el = activeGroupEl();
+        const group = el?.dataset?.group;
+        if (group) redrawGroup(group);
+      });
+    };
+  })();
+
+  if (typeof ResizeObserver === 'undefined') {
+    // Safe fallback for browsers without ResizeObserver support.
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(scheduleRedraw, 150);
+    });
+    return;
+  }
+
+  let lastWidth = 0;
+  const ro = new ResizeObserver(entries => {
+    const entry = entries[0];
+    if (!entry) return;
+    const newWidth = entry.contentRect.width;
+    // Skip when width hasn't meaningfully changed — prevents redraw (and
+    // any possible ResizeObserver) loops from a sub-pixel/no-op trigger.
+    if (Math.abs(newWidth - lastWidth) < 1) return;
+    lastWidth = newWidth;
+    scheduleRedraw();
+  });
+  document.querySelectorAll('.agroup').forEach(el => ro.observe(el));
 }
 
 function setupNavigation() {
@@ -376,6 +434,58 @@ function loadFile(file) {
   reader.readAsDataURL(file);
 }
 
+// ─── Analysis canvas render readiness ──────────────────────────────────────────
+// Root cause of the "first import renders wrong, Re-analyze fixes it" bug:
+// the first-import path used to commit a canvas render after only ONE
+// requestAnimationFrame following a display:none→block change, without
+// waiting for (a) the image to fully decode, (b) web fonts used by the
+// canvas text (Inter, JetBrains Mono — canvases never auto-redraw when a
+// font finishes loading later), or (c) the container's layout to
+// genuinely settle. Re-analyze happened to look correct only because by
+// that point the container had already been visible for a while and
+// fonts had long since loaded — it was never actually a different/more
+// correct code path, just a lucky later timing. This helper is shared by
+// every render call (first import, Re-analyze, tab switch, resize) so
+// there is exactly one readiness contract instead of two silently
+// different ones.
+let analysisRenderGeneration = 0;
+
+async function waitForAnalysisRenderReady({ image = null, containers = [], maxFrames = 6 } = {}) {
+  // 1. Wait for the image to fully decode. img.onload (used to trigger
+  // runAnalysis) already guarantees naturalWidth/naturalHeight are
+  // available, but decode() additionally guarantees the browser has
+  // finished the (potentially async) image decode work — falls back
+  // safely if unsupported or if it rejects on an already-loaded image.
+  if (image && typeof image.decode === 'function') {
+    try { await image.decode(); } catch { /* onload already fired — safe to continue with the fallback (already-loaded) state */ }
+  }
+  // 2. Wait for web fonts used by canvas text. Canvas text is drawn as
+  // pixels once, at draw time — unlike DOM text it never reflows when a
+  // font finishes loading afterward, so drawing before fonts are ready
+  // can bake in fallback-font metrics permanently until the next redraw.
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch { /* Font Loading API unsupported/failed — proceed with whatever font is currently available rather than blocking forever */ }
+  }
+  // 3/4. Wait for the browser to complete layout after any display
+  // change. Two animation frames, not one: the first frame is when the
+  // browser commits a display:none→block layout change; the second
+  // guarantees layout/paint has fully settled before we measure.
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+  // 5. Measure the actual containers. Bounded retry (never an infinite
+  // loop) if a container still reports zero width/height — e.g. an
+  // ancestor element is still settling its own layout.
+  const measure = () => containers.map(c => (c ? c.getBoundingClientRect() : null));
+  let rects = measure();
+  let attempt = 0;
+  while (rects.some(rect => !rect || rect.width <= 0) && attempt < maxFrames) {
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    rects = measure();
+    attempt++;
+  }
+  return rects;
+}
+
 // ─── Analysis pipeline ────────────────────────────────────────────────────────
 async function runAnalysis() {
   const img = document.getElementById('previewImg');
@@ -383,6 +493,13 @@ async function runAnalysis() {
     setAnalysisBox('error', 'รูปภาพยังโหลดไม่เสร็จ');
     return;
   }
+
+  // New generation for this analysis run — any in-flight render callback
+  // from a PREVIOUS import that resolves after this point will see its
+  // captured generation number no longer match and skip committing its
+  // (now stale) render. Fixes "rapid import of two different images"
+  // showing a mix of the old and new image's analysis.
+  const renderGeneration = ++analysisRenderGeneration;
 
   setAnalysisBox('loading', 'กำลังวิเคราะห์ histogram…');
 
@@ -412,11 +529,13 @@ async function runAnalysis() {
     const imageAnalysisCorePromise = analyzeImageCore(img).then(coreResult => {
       state.lastImageAnalysis = coreResult;
       const iaSec = document.getElementById('imageAnalysisSection');
-      if (iaSec) {
+      const iac = document.getElementById('imageAnalysisCanvas');
+      if (iaSec && iac) {
         iaSec.style.display = 'block';
-        requestAnimationFrame(() => {
-          const iac = document.getElementById('imageAnalysisCanvas');
-          if (iac) renderImageAnalysis(iac, coreResult, { dark: state.darkMode });
+        waitForAnalysisRenderReady({ image: img, containers: [iaSec] }).then(([rect]) => {
+          if (renderGeneration !== analysisRenderGeneration) return; // a newer import superseded this one
+          const cssWidth = rect && rect.width > 0 ? rect.width : undefined;
+          renderImageAnalysis(iac, coreResult, { dark: state.darkMode, cssWidth });
         });
       }
       return coreResult;
@@ -425,11 +544,13 @@ async function runAnalysis() {
     const paletteHarmonyPromise = extractPalette(img).then(palette => {
       state.lastPalette = palette;
       const palSec = document.getElementById('paletteSection');
-      if (palSec) {
+      const pc = document.getElementById('paletteCanvas');
+      if (palSec && pc) {
         palSec.style.display = 'block';
-        requestAnimationFrame(() => {
-          const pc = document.getElementById('paletteCanvas');
-          if (pc) renderPalette(pc, palette, { dark: state.darkMode });
+        waitForAnalysisRenderReady({ image: img, containers: [palSec] }).then(([rect]) => {
+          if (renderGeneration !== analysisRenderGeneration) return; // a newer import superseded this one
+          const cssWidth = rect && rect.width > 0 ? rect.width : undefined;
+          renderPalette(pc, palette, { dark: state.darkMode, cssWidth });
         });
       }
       let harmony = null;
@@ -437,11 +558,12 @@ async function runAnalysis() {
         harmony = generateHarmonies(palette);
         state.lastHarmony = harmony;
         const harSec = document.getElementById('harmonySection');
-        if (harSec) {
+        const hc = document.getElementById('harmonyCanvas');
+        if (harSec && hc) {
           harSec.style.display = 'block';
-          requestAnimationFrame(() => {
-            const hc = document.getElementById('harmonyCanvas');
-            if (hc) renderColorHarmony(hc, harmony, { dark: state.darkMode });
+          waitForAnalysisRenderReady({ image: img, containers: [harSec] }).then(() => {
+            if (renderGeneration !== analysisRenderGeneration) return;
+            renderColorHarmony(hc, harmony, { dark: state.darkMode });
           });
         }
       } catch (err) { console.warn('ColorHarmony:', err); }

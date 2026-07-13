@@ -18,7 +18,19 @@ export function renderImageAnalysis(canvas, r, opts={}) {
   const dark=opts.dark??document.documentElement.classList.contains('dark');
   const T=mkT(dark);
   const dpr=Math.min(window.devicePixelRatio||1,2);
-  const W=canvas.offsetWidth||canvas.parentElement?.offsetWidth||560;
+  // Prefer an explicit, already-measured width from the caller (e.g. the
+  // first-import render-readiness flow, which measures the container via
+  // getBoundingClientRect AFTER layout has genuinely settled). Falling
+  // back to canvas.offsetWidth/parentElement.offsetWidth keeps this
+  // function working for existing callsites (redraw on tab switch,
+  // dark-mode toggle) that don't pass cssWidth.
+  const W = opts.cssWidth || canvas.offsetWidth || canvas.parentElement?.offsetWidth || 0;
+  // Never commit a distorted render from a zero/invalid width — this was
+  // the root cause of the first-import layout bug: a stale 0px reading
+  // used to silently fall back to a hardcoded 560, drawing the canvas at
+  // the wrong backing-store size while CSS `width:100%` still stretched
+  // it to the real (different) container width.
+  if (W <= 0) return false;
   const colW=Math.floor((W-PAD*2-GAP)/2);
 
   const BANNER_H=28, WB_H=60, HUE_H=110, QUAL_GRID_H=QUAL_H*2+GAP;
@@ -35,8 +47,17 @@ export function renderImageAnalysis(canvas, r, opts={}) {
     +LABEL_H+QUAL_GRID_H                               // 12-15. quality metrics
     +PAD;
 
-  canvas.width=W*dpr; canvas.height=totalH*dpr; canvas.style.height=totalH+'px';
-  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,totalH);
+  canvas.style.width=W+'px'; canvas.style.height=totalH+'px';
+  canvas.width=Math.round(W*dpr); canvas.height=Math.round(totalH*dpr);
+  const ctx=canvas.getContext('2d');
+  // Reset transform before scaling — setting canvas.width/height above
+  // already implicitly resets the drawing state per the HTML Canvas
+  // spec, but this makes the DPR-scaling contract explicit and immune
+  // to any future refactor that stops re-assigning width/height on
+  // every redraw (which would otherwise silently accumulate scale()).
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
   let y=PAD;
 
   // 1. Summary banner
@@ -80,6 +101,7 @@ export function renderImageAnalysis(canvas, r, opts={}) {
   // 12-15. Quality metrics grid
   _sec(ctx,PAD,y,'12-15 · Sharpness · Blur · Noise · JPEG Artifacts',T); y+=LABEL_H;
   _qualityGrid(ctx,PAD,y,W-PAD*2,QUAL_GRID_H,colW,r,T);
+  return true;
 }
 
 // ─── Banner ───────────────────────────────────────────────────────────────────

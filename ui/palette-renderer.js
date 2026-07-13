@@ -13,14 +13,22 @@ export function renderPalette(canvas, palette, opts={}) {
   const dark=opts.dark??document.documentElement.classList.contains('dark');
   const T=th(dark);
   const dpr=Math.min(window.devicePixelRatio||1,2);
-  const W=canvas.offsetWidth||canvas.parentElement?.offsetWidth||560;
+  // Prefer an explicit, already-measured width from the caller (see
+  // renderImageAnalysis for the full rationale — this fixes the same
+  // first-import layout bug for the K-Means palette section).
+  const W = opts.cssWidth || canvas.offsetWidth || canvas.parentElement?.offsetWidth || 0;
+  if (W <= 0) return false; // never commit a distorted render from a zero/invalid width
   const roles=['Dominant','Secondary','Accent','Shadow','Highlight'];
   const roleW=Math.floor((W-PAD*2-GAP*(roles.length-1))/roles.length);
   const swatchW=Math.floor((W-PAD*2-GAP*3)/4);
   const rows=Math.ceil(palette.colors.length/4);
   const totalH=PAD+LABEL_H+ROLE_H+GAP+LABEL_H+SWATCH_H*rows+GAP*(rows-1)+GAP+LABEL_H+BAR_H*palette.colors.length+(palette.colors.length-1)*3+PAD;
-  canvas.width=W*dpr; canvas.height=totalH*dpr; canvas.style.height=totalH+'px';
-  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,totalH);
+  canvas.style.width=W+'px'; canvas.style.height=totalH+'px';
+  canvas.width=Math.round(W*dpr); canvas.height=Math.round(totalH*dpr);
+  const ctx=canvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
   let y=PAD;
 
   // Role strip
@@ -39,6 +47,7 @@ export function renderPalette(canvas, palette, opts={}) {
   // Pop bars
   _secLbl(ctx,PAD,y,'Population Distribution',T); y+=LABEL_H;
   palette.colors.forEach((c,i)=>_popBar(ctx,PAD,y+i*(BAR_H+3),W-PAD*2,BAR_H,c,T));
+  return true;
 }
 
 function _roleSwatch(ctx,x,y,w,h,color,role,T,BD) {
