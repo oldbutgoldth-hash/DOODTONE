@@ -228,6 +228,21 @@ export function buildReferenceTransferReport(ctx) {
     }
   }
 
+  // EPIC 2E-F Phase B: compact Controlled Preview Human Review context —
+  // read-only, additive to recommendations only, does not touch the
+  // transfer algorithm. `controlledPreviewReviewStateV2` itself is not
+  // cloned or reconstructed here (this function only READS
+  // dec.finalStyleIntent, it never rebuilds it), so the canonical object
+  // on finalStyleIntent is preserved automatically without needing a
+  // second, conflicting Review State object.
+  const reviewState = dec?.finalStyleIntent?.controlledPreviewReviewStateV2 ?? null;
+  if (reviewState) {
+    recommendations2.push(`Preview Review: approval state is "${reviewState.approvalState}" (${reviewState.reviewProgress?.completed ?? 0}/${reviewState.reviewProgress?.required ?? 0} required checks passed) — review approval never activates production output.`);
+    if (reviewState.reviewSummary?.nextRequiredItem) {
+      recommendations2.push(`[dev] Next required review item: ${reviewState.reviewSummary.nextRequiredItem}.`);
+    }
+  }
+
   return {
     referenceConfidence, transferConfidence, complexity,
     lightroomReproduction, wbTransferRisk, recommendations: recommendations2,
@@ -294,6 +309,17 @@ export function buildReferenceTransferReport(ctx) {
       previewExportDisabled: !previewSandbox.canExportPreview,
       topPreviewProtections: (previewSandbox.previewPlan?.protectedAreas ?? []).slice(0, 3),
       unresolvedRisks: previewSandbox.previewPlan?.actions?.filter(a => a.action === 'require-human-review').map(a => a.target) ?? [],
+    } : { available: false },
+    // EPIC 2E-F Phase B: compact context only — the canonical object
+    // lives on finalStyleIntent.controlledPreviewReviewStateV2, preserved
+    // as-is by this pass-through read.
+    reviewStateContext: reviewState ? {
+      available: true,
+      approvalState: reviewState.approvalState,
+      canApprovePreview: reviewState.canApprovePreview,
+      requiredCompleted: reviewState.reviewProgress?.completed ?? 0,
+      requiredTotal: reviewState.reviewProgress?.required ?? 0,
+      nextRequiredItem: reviewState.reviewSummary?.nextRequiredItem ?? null,
     } : { available: false },
   };
 }

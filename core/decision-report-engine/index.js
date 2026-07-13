@@ -327,6 +327,26 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     reasons.push(`[dev] ${sandbox.developerSummary}`);
   }
 
+  // EPIC 2E-F Phase B: Controlled Preview Human Review narration (safe
+  // no-op if missing). Photographer wording never claims Lightroom
+  // accuracy, final visual approval, production readiness, XMP
+  // readiness, or real-image safety beyond what the review state itself
+  // actually supports.
+  const review = fsi.controlledPreviewReviewStateV2;
+  if (review) {
+    const photographerLine = review.approvalState === 'approved'
+      ? 'All required preview review checks have passed. This still does not change your exported preset — legacy mapping remains active.'
+      : review.approvalState === 'unavailable'
+        ? 'No preview is available yet to review.'
+        : `Preview is waiting for visual review (${review.reviewProgress?.completed ?? 0}/${review.reviewProgress?.required ?? 0} required checks passed). Your current production preset still uses the legacy mapping path.`;
+    reasons.push(`Controlled Preview Human Review: ${photographerLine}`);
+    if (review.reviewSummary?.nextRequiredItem) {
+      reasons.push(`[dev] Next required review item: "${review.reviewSummary.nextRequiredItem}".`);
+    }
+    reasons.push(`[dev] mode=${review.mode}, reviewState=${review.reviewState}, approvalState=${review.approvalState}, canApprovePreview=${review.canApprovePreview}, confidence=${review.confidence}, reviewProgress=${JSON.stringify(review.reviewProgress)}, failedItemIds=${JSON.stringify(review.failedItemIds)}, pendingItemIds=${JSON.stringify(review.pendingItemIds)}, unavailableItemIds=${JSON.stringify(review.unavailableItemIds)}, fallbackStrategy.useLegacyMapping=${review.fallbackStrategy?.useLegacyMapping}, rollbackPlan.available=${review.rollbackPlan?.available}.`);
+    if (fsi.controlledPreviewReviewStateV2Error) reasons.push(`[dev] Integration warning: ${fsi.controlledPreviewReviewStateV2Error}`);
+  }
+
   return {
     photographerStyleLabel: fsi.photographerStyleLabel ?? null,
     styleFamily: fsi.styleFamily ?? null,
@@ -536,6 +556,31 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
       },
       photographerSummary: fsi.controlledOverlayPreviewSandboxV2.photographerSummary,
       developerSummary: fsi.controlledOverlayPreviewSandboxV2.developerSummary,
+    } : null,
+    // EPIC 2E-F Phase B: "Controlled Preview Human Review" — compact,
+    // canonical-field-only section (not a raw JSON dump). Read-only;
+    // review approval here has no path to production output or XMP.
+    // Safe if the review-state object is missing entirely.
+    controlledPreviewHumanReview: fsi.controlledPreviewReviewStateV2 ? {
+      approvalState: fsi.controlledPreviewReviewStateV2.approvalState,
+      canApprovePreview: fsi.controlledPreviewReviewStateV2.canApprovePreview,
+      reviewProgress: fsi.controlledPreviewReviewStateV2.reviewProgress,
+      requiredItemsCompleted: fsi.controlledPreviewReviewStateV2.completedItemIds ?? [],
+      requiredItemsRemaining: fsi.controlledPreviewReviewStateV2.pendingItemIds ?? [],
+      failedItems: fsi.controlledPreviewReviewStateV2.failedItemIds ?? [],
+      unavailableItems: fsi.controlledPreviewReviewStateV2.unavailableItemIds ?? [],
+      nextRequiredItem: fsi.controlledPreviewReviewStateV2.reviewSummary?.nextRequiredItem ?? null,
+      blockers: (fsi.controlledPreviewReviewStateV2.blockers ?? []).slice(0, 4).map(b => b.blocker),
+      warnings: fsi.controlledPreviewReviewStateV2.warnings ?? [],
+      rollbackAvailable: fsi.controlledPreviewReviewStateV2.rollbackPlan?.available ?? false,
+      // Explicit, always-true-in-this-phase confirmations per this
+      // stage's spec — never inferred, always read from the objects
+      // that actually enforce them.
+      previewIsNonProduction: true,
+      exportRemainsDisabled: fsi.controlledOverlayPreviewSandboxV2 ? fsi.controlledOverlayPreviewSandboxV2.canExportPreview === false : true,
+      productionMappingRemainsLegacy: fsi.controlledOverlayPreviewSandboxV2 ? fsi.controlledOverlayPreviewSandboxV2.selectedOutputSource === 'legacy' : true,
+      photographerSummary: fsi.controlledPreviewReviewStateV2.reviewSummary?.photographerMessage,
+      developerSummary: fsi.controlledPreviewReviewStateV2.reviewSummary?.developerMessage,
     } : null,
     editingStrategy: strategy ?? null,
     styleBudget: budget ? { name: budget.name, adjustmentsMade: budgetAdjustments.length, details: budgetAdjustments } : null,

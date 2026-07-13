@@ -39,6 +39,7 @@ import { buildLegacySafetyOverlayV2 } from '../lightroom-mapping-engine/mapping-
 import { buildLegacyOverlaySimulationV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-simulation.js';
 import { buildControlledOverlayTestGateV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-test-gate.js';
 import { buildControlledOverlayPreviewSandboxV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js';
+import { createPreviewReviewStateV2 } from '../lightroom-mapping-engine/mapping-v2-preview-review-state.js';
 
 // ─── Scene strategy table ─────────────────────────────────────────────────────
 // Each strategy is a set of TRUST MULTIPLIERS (not the base ENGINE_PRIORITY
@@ -725,6 +726,47 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
   } catch (e) {
     finalStyleIntent.controlledOverlayPreviewSandboxV2 = null;
     finalStyleIntent.controlledOverlayPreviewSandboxV2Error = `Overlay preview sandbox failed safely (production unaffected): ${e.message}`;
+  }
+
+  // ── EPIC 2E-F Phase B: Controlled Preview Review State ───────────────────
+  // Tracks the (future, Phase C) human-review checklist for the preview
+  // sandbox object above. This stage is READ-ONLY and produces no side
+  // effects — it never activates production output, never enables
+  // preview export or production write (those remain hard-coded false
+  // inside the Preview Sandbox itself), and approval here has no path
+  // to influence XMP export in any way.
+  //
+  // `existingReviewState` is always `null` in this phase: the current
+  // pipeline runs statelessly (each `buildFinalPreset()` call is a fresh
+  // analysis with no mechanism to receive prior review state from a
+  // caller), so `finalStyleIntent.controlledPreviewReviewStateV2` is
+  // never already set at this point in the same run. This is written to
+  // naturally support a future Phase C caller pre-seeding
+  // `finalStyleIntent.controlledPreviewReviewStateV2` before this stage
+  // runs, without needing to invent a new `_buildDecision` parameter
+  // that doesn't exist in the current architecture.
+  //
+  // Attached to finalStyleIntent, never read by
+  // mapStyleFingerprintToLightroom below, wrapped in try/catch as
+  // defense-in-depth — same pattern as EPIC 2A-2E-E above. Built AFTER
+  // the preview sandbox (integration order #11, per this phase's spec).
+  try {
+    finalStyleIntent.controlledPreviewReviewStateV2 = createPreviewReviewStateV2({
+      existingReviewState: finalStyleIntent.controlledPreviewReviewStateV2 ?? null,
+      controlledOverlayPreviewSandboxV2: finalStyleIntent.controlledOverlayPreviewSandboxV2,
+      controlledOverlayTestGateV2: finalStyleIntent.controlledOverlayTestGateV2,
+      legacyOverlaySimulationV2: finalStyleIntent.legacyOverlaySimulationV2,
+      legacySafetyOverlayV2: finalStyleIntent.legacySafetyOverlayV2,
+      lightroomSafetyClampV2: finalStyleIntent.lightroomSafetyClampV2,
+      lightroomShadowCompareReportV2: finalStyleIntent.lightroomShadowCompareReportV2,
+      photographerIntent: finalStyleIntent.photographerIntent,
+      photographerStyle: finalStyleIntent.photographerStyle,
+      styleDNA: finalStyleIntent.photographerStyle?.top?.styleDNA,
+      captureCapability: finalStyleIntent.captureCapabilityEstimate,
+    });
+  } catch (e) {
+    finalStyleIntent.controlledPreviewReviewStateV2 = null;
+    finalStyleIntent.controlledPreviewReviewStateV2Error = `Preview review state failed safely (production unaffected): ${e.message}`;
   }
 
   return {
