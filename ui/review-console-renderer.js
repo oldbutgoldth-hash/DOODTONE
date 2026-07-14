@@ -108,6 +108,42 @@ function _normalizeRiskLevel(value) {
 }
 
 /**
+ * Evaluates whether the current Sandbox's `simulatedPreviewPreset`
+ * explicitly proves this preview is non-production — never assumed
+ * true by default. Checks three canonical fields (mode,
+ * appliedToProduction, productionSafe); if ANY of them explicitly
+ * contradicts non-production (mode is a different string,
+ * appliedToProduction===true, or productionSafe===true), the result is
+ * 'anomaly' regardless of any other field that might look safe —
+ * erring on the side of caution rather than letting one good signal
+ * paper over one bad one. Returns 'unknown' when no relevant field is
+ * present/readable at all.
+ */
+function _evaluatePreviewNonProduction(sandboxRecord) {
+  const preset = _isRecord(sandboxRecord?.simulatedPreviewPreset) ? sandboxRecord.simulatedPreviewPreset : null;
+  if (!preset) return 'unknown';
+
+  const modeVal = preset.mode;
+  const appliedVal = preset.appliedToProduction;
+  const safeVal = preset.productionSafe;
+
+  const hasModeEvidence = typeof modeVal === 'string';
+  const hasAppliedEvidence = typeof appliedVal === 'boolean';
+  const hasSafeEvidence = typeof safeVal === 'boolean';
+  if (!hasModeEvidence && !hasAppliedEvidence && !hasSafeEvidence) return 'unknown';
+
+  const anomaly = (hasModeEvidence && modeVal !== 'non-production-preview')
+    || (hasAppliedEvidence && appliedVal === true)
+    || (hasSafeEvidence && safeVal === true);
+  if (anomaly) return 'anomaly';
+
+  const confirmed = (hasModeEvidence && modeVal === 'non-production-preview')
+    || (hasAppliedEvidence && appliedVal === false)
+    || (hasSafeEvidence && safeVal === false);
+  return confirmed ? 'confirmed' : 'unknown';
+}
+
+/**
  * Describes `hardStops` for display regardless of its actual shape
  * (array/number/boolean/object/missing) without ever dumping a raw
  * object or throwing.
@@ -164,6 +200,44 @@ function _mergeAndDedupe(...lists) {
     }
   }
   return out;
+}
+
+/**
+ * Normalizes a reviewProgress record into safe, finite, non-negative
+ * display values. Never produces NaN/Infinity/undefined/negative
+ * counts and never silently shows 0% when progress genuinely cannot
+ * be determined.
+ *
+ * Percentage resolution order:
+ *   1. Use `progress.percentage` directly if it is already a finite
+ *      number (clamped to 0–100).
+ *   2. Otherwise, if both `completed` and `required` are finite,
+ *      non-negative numbers and `required > 0`, calculate
+ *      `completed / required * 100`.
+ *   3. Otherwise, progress is unavailable — `available` is false and
+ *      the caller must show "Review progress unavailable" rather than
+ *      inventing a 0% value.
+ *
+ * `completed` is clamped so it can never exceed a known-valid
+ * `required` (a malformed/inconsistent completed count is corrected
+ * rather than displayed as an impossible "12 of 10").
+ */
+function _normalizeProgress(progress) {
+  const completedValid = Number.isFinite(progress?.completed) && progress.completed >= 0;
+  const requiredValid = Number.isFinite(progress?.required) && progress.required >= 0;
+
+  let completed = completedValid ? progress.completed : null;
+  const required = requiredValid ? progress.required : null;
+  if (completed !== null && required !== null && completed > required) completed = required;
+
+  let percentage = null;
+  if (Number.isFinite(progress?.percentage)) {
+    percentage = Math.max(0, Math.min(100, progress.percentage));
+  } else if (completed !== null && required !== null && required > 0) {
+    percentage = Math.max(0, Math.min(100, (completed / required) * 100));
+  }
+
+  return { available: percentage !== null, completed, required, percentage };
 }
 
 /** Creates an element with optional class/style/text/attrs — text is always set via textContent (never innerHTML), and always passed through _safeText first so non-string values can never crash el(). */
@@ -417,7 +491,14 @@ function _renderBody(container, sandbox, reviewState) {
 
   // ── Tri-state confirmations — never claim more than the data supports ────
   const confirmWrap = el('div', { style: 'display:flex;flex-direction:column;gap:5px;margin:14px 0;padding:12px 14px;background:var(--surface-2);border-radius:3px;border-left:2px solid var(--success)' });
-  confirmWrap.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-dim);display:flex;align-items:center;gap:6px', text: '\u2713  This preview is non-production and does not affect your exported preset.' }));
+
+  const previewNonProductionStatus = _evaluatePreviewNonProduction(sandboxRecord);
+  statusLine(confirmWrap, {
+    confirmedText: 'Preview: Confirmed Non-production.',
+    anomalyText: 'Preview reports an unexpected production state — treat with caution.',
+    unknownText: 'Preview: Unknown / Not confirmed.',
+    status: previewNonProductionStatus,
+  });
 
   const canExportPreview = sandboxRecord ? sandboxRecord.canExportPreview : undefined;
   statusLine(confirmWrap, {
@@ -460,11 +541,12 @@ function _renderBody(container, sandbox, reviewState) {
 
   // ── Review progress (with ARIA progressbar semantics) ────────────────────
   const progress = _isRecord(reviewRecord?.reviewProgress) ? reviewRecord.reviewProgress : null;
-  if (progress) {
+  const normalizedProgress = progress ? _normalizeProgress(progress) : null;
+  if (normalizedProgress?.available) {
     container.appendChild(sectionHeading('Review Progress', 'fact_check'));
-    const pct = Number.isFinite(progress.percentage) ? Math.max(0, Math.min(100, progress.percentage)) : 0;
-    const completedDisplay = Number.isFinite(progress.completed) && progress.completed >= 0 ? progress.completed : 0;
-    const requiredDisplay = Number.isFinite(progress.required) && progress.required >= 0 ? progress.required : 0;
+    const pct = Math.round(normalizedProgress.percentage);
+    const completedText = normalizedProgress.completed !== null ? String(normalizedProgress.completed) : '\u2014';
+    const requiredText = normalizedProgress.required !== null ? String(normalizedProgress.required) : '\u2014';
 
     const progWrap = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:6px' });
     const barOuter = el('div', {
@@ -474,13 +556,13 @@ function _renderBody(container, sandbox, reviewState) {
         'aria-valuemin': '0',
         'aria-valuemax': '100',
         'aria-valuenow': String(pct),
-        'aria-label': `Review progress: ${completedDisplay} of ${requiredDisplay} required checks completed`,
+        'aria-label': `Review progress: ${completedText} of ${requiredText} required checks completed`,
       },
     });
     const barInner = el('div', { style: `height:100%;width:${pct}%;background:var(--accent);border-radius:3px` });
     barOuter.appendChild(barInner);
     progWrap.appendChild(barOuter);
-    progWrap.appendChild(el('span', { style: 'font-family:var(--font-mono);font-size:11px;color:var(--text-dim);white-space:nowrap', text: `${completedDisplay}/${requiredDisplay}` }));
+    progWrap.appendChild(el('span', { style: 'font-family:var(--font-mono);font-size:11px;color:var(--text-dim);white-space:nowrap', text: `${pct}% \u00B7 ${completedText}/${requiredText}` }));
     container.appendChild(progWrap);
 
     const reviewItemsForResolve = Array.isArray(reviewRecord?.reviewItems) ? reviewRecord.reviewItems : [];
