@@ -1058,6 +1058,22 @@ function handleReanalyze() {
 }
 
 function handleReset() {
+  // EPIC 2E-F-C-B-F Bug 1 fix: clear the review console controller's
+  // TRANSIENT confirmation state (armed "Confirm Fail?" prompts, the
+  // Reset-confirmation prompt) before this image's Review State is
+  // cleared below and a new image's analysis begins. Without this, a
+  // confirmation armed on one image's item could visually reappear on
+  // a different image's item that happens to reuse the same canonical
+  // review item ID (every image shares the same fixed set of IDs).
+  // This never touches the Review State object itself, never
+  // rerenders on its own, and never tears down the controller's event
+  // listeners — handleReset() is called unconditionally at the start
+  // of loadFile() (genuine new image import) and by the app's own
+  // Reset button, but NEVER by handleReanalyze() (which calls
+  // runAnalysis() directly), so an ordinary same-image Re-analyze
+  // never clears this.
+  if (reviewConsoleController) reviewConsoleController.resetTransientUiState();
+
   state.imageLoaded = false; state.lastStats = null; state.lastPalette = null; state.lastWB = null;
   state.lastCurveSet = null;
   state.lastSkin = null;

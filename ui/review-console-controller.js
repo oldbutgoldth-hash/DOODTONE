@@ -177,7 +177,7 @@ export function createReviewConsoleController({ container, getState, setState, r
     rerender();
   }
 
-  function _handleNoteCommit(itemId, rawValue) {
+  function _handleNoteCommit(itemId, rawValue, { skipRerender = false } = {}) {
     const current = getState();
     if (!current) return;
     const note = _sanitizeNote(rawValue);
@@ -188,11 +188,32 @@ export function createReviewConsoleController({ container, getState, setState, r
       _safeAnnounce('Could not save this note. The previous review state was kept.');
       return;
     }
+    // Always commit the new state immediately — the whole point of
+    // `skipRerender` is that a click action about to run next (see
+    // `_handleFocusOut` below) reads `getState()` and must see this
+    // note already applied ("the action update must use the latest
+    // note state"). Only the DOM re-render is deferred, never the
+    // state commit itself.
+    setState(next);
     // Notes commit quietly (no toast spam on every blur) — the saved
     // text remaining visible in the textarea after re-render is
     // sufficient feedback.
-    setState(next);
-    rerender();
+    if (!skipRerender) rerender();
+  }
+
+  /**
+   * EPIC 2E-F-C-B-F Bug 2 fix: true only when `el` is another
+   * interactive Review Console control (an action button, including
+   * Reset Review / Confirm-Fail / Cancel) that a `focusout` is
+   * transferring focus TO. When true, the about-to-run `click` handler
+   * for that same control is responsible for the next render — the
+   * focusout handler must not rerender first, or it would replace the
+   * DOM (destroying the very button the browser is about to dispatch
+   * the click event to) before that click ever fires.
+   */
+  function _isPendingActionControl(el) {
+    if (!el || typeof el.closest !== 'function' || !container.contains(el)) return false;
+    return !!el.closest('[data-review-action]');
   }
 
   function _handleClick(e) {
@@ -216,7 +237,15 @@ export function createReviewConsoleController({ container, getState, setState, r
     const itemRow = textarea.closest('[data-review-item-id]');
     const itemId = itemRow?.dataset.reviewItemId;
     if (!itemId) return;
-    _handleNoteCommit(itemId, textarea.value);
+    // If focus is moving to another Review Console action control
+    // (Pass/Fail/Adjust/Pending/Reset/Confirm/Cancel), that control's
+    // own `click` handler will run immediately after this `focusout`
+    // (browser event order: focusout → focus → click) and will perform
+    // the single final rerender itself, using the just-committed note.
+    // Rerendering HERE first would destroy that control before its
+    // click ever fires, silently swallowing the user's action.
+    const skipRerender = _isPendingActionControl(e.relatedTarget);
+    _handleNoteCommit(itemId, textarea.value, { skipRerender });
   }
 
   function _handleInput(e) {
@@ -254,6 +283,28 @@ export function createReviewConsoleController({ container, getState, setState, r
     return { pendingConfirmItemIds: new Set(pendingConfirm), resetConfirmPending };
   }
 
+  /**
+   * EPIC 2E-F-C-B-F Bug 1 fix: clears transient, controller-local
+   * confirmation state (armed "Confirm Fail?" prompts and the
+   * console-level Reset confirmation) WITHOUT touching the Review
+   * State object, WITHOUT rerendering, and WITHOUT tearing down event
+   * listeners. This controller persists for the whole page session
+   * (see module doc), so without an explicit reset, a "Confirm Fail?"
+   * armed on one image's item could visually reappear on a DIFFERENT
+   * image's item that happens to share the same canonical item ID
+   * (every image uses the same fixed set of review item IDs). The
+   * caller (ui/app.js) calls this at the start of a genuine new image
+   * import / full app reset, BEFORE the new analysis result renders —
+   * not on ordinary same-image Re-analyze, where an armed confirmation
+   * MAY be intentionally cleared but the Review State itself must not
+   * be touched by this function. Safe to call even when nothing is
+   * currently armed.
+   */
+  function resetTransientUiState() {
+    pendingConfirm.clear();
+    resetConfirmPending = false;
+  }
+
   attach();
-  return { destroy, getUiState };
+  return { destroy, getUiState, resetTransientUiState };
 }
