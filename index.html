@@ -477,6 +477,17 @@
             <div id="reviewConsoleSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
               <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;display:flex;align-items:center;gap:8px"><span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px;color:var(--accent)">rate_review</span>Controlled Preview Review Console <span style="color:var(--text-faint);font-weight:400;text-transform:none;letter-spacing:normal">&#183; shadow-only, does not affect exported preset</span></div>
               <div id="reviewConsoleInner"></div>
+              <!-- EPIC 2E-F Phase C-B: persistent (never cleared/re-created on
+                   re-render) aria-live region for review-action feedback
+                   ("Review item marked as passed.", etc). Must live OUTSIDE
+                   reviewConsoleInner — a live region that gets destroyed and
+                   recreated by replaceChildren() on every render is not
+                   reliably announced by screen readers, since assistive
+                   tech tracks mutations to a persisting element, not a
+                   freshly-created one. review-console-controller.js writes
+                   directly into this element's textContent; the renderer
+                   never touches it. -->
+              <div id="reviewConsoleLiveRegion" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
             </div>
           </div>
 

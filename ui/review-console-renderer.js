@@ -2,34 +2,45 @@
  * ui/review-console-renderer.js
  *
  * Controlled Preview Review Console (EPIC 2E-F Phase C-A,
- * patched EPIC 2E-F-C-A-F — Honesty and Resilience Patch).
+ * patched EPIC 2E-F-C-A-F/F2 — Honesty and Resilience Patches,
+ * upgraded EPIC 2E-F Phase C-B — Interactive Checklist Controls).
  *
- * A pure, READ-ONLY UI layer over the existing, already-computed
- * `controlledOverlayPreviewSandboxV2` and `controlledPreviewReviewStateV2`
- * objects. This module NEVER:
+ * Renders the Preview Sandbox / Human Review state and, as of Phase
+ * C-B, the interactive controls that let a user Pass/Fail/Request
+ * Adjustment/Return-to-Pending each review item, edit a reviewer note,
+ * and Reset the whole Review State. This module NEVER:
  * - re-runs image analysis, K-Means, or any analysis pipeline stage
  * - calls decision-engine, lightroom-mapping-engine, preset-engine, or
  *   xmp-validator
  * - writes to production XMP or Lightroom Mapping in any way
- * - allows the user to change any review item, approve, reject, request
- *   adjustment, or reset anything — there are NO interactive controls
- *   of any kind (no buttons, checkboxes, textareas, click handlers,
- *   localStorage, or state mutation). Approving/rejecting a preview
- *   item is a FUTURE phase's responsibility, not this one's.
+ * - computes approval, progress, or ANY derived Review State field
+ *   itself — every value shown is read directly from the `reviewState`
+ *   object already computed by the Review State Engine
+ *   (mapping-v2-preview-review-state.js); state MUTATION in response to
+ *   a click/note-edit is entirely the responsibility of
+ *   `ui/review-console-controller.js`, which calls that same engine's
+ *   `updatePreviewReviewItemV2`/`resetPreviewReviewStateV2` and passes
+ *   the ENGINE'S returned new state back in for re-render. This file
+ *   itself never imports or calls those engine functions.
+ * - enables Preview Export, Production Write, or Production Mapping
+ *   activation from any control — approval remains purely informational
+ * - persists anything to localStorage or any other storage
  *
- * This module performs ZERO mutation and calls no state-transition
- * function (e.g. `updatePreviewReviewItemV2`) — it only ever reads the
- * `sandbox`/`reviewState` objects passed in and renders them as static
- * DOM content.
+ * This module performs ZERO mutation of its own `sandbox`/`reviewState`
+ * inputs — it only ever reads them and renders DOM content (including
+ * the interactive controls, whose event WIRING lives entirely in the
+ * controller, not here — this file only marks elements with
+ * `data-review-action`/`data-review-item-id`/`data-review-note`
+ * attributes for the controller's event delegation to find).
  *
  * XSS SAFETY: every piece of text that ultimately originates from
  * upstream analysis/review data (reviewer notes, blocker/warning
- * strings, evidence values, IDs, labels) is inserted via `textContent`
- * or `document.createElement`, never via `innerHTML` string
- * interpolation. Clearing the container uses `replaceChildren()`
- * (falling back to `innerHTML = ''` only if unsupported). The only
- * literal HTML strings in this file are hardcoded, static markup with
- * no interpolated dynamic values.
+ * strings, evidence values, IDs, labels) is inserted via `textContent`,
+ * `document.createElement`, or a form element's `.value` property,
+ * never via `innerHTML` string interpolation. Clearing the container
+ * uses `replaceChildren()` (falling back to `innerHTML = ''` only if
+ * unsupported). The only literal HTML strings in this file are
+ * hardcoded, static markup with no interpolated dynamic values.
  *
  * HONESTY: this module never asserts a safety guarantee (e.g. "export
  * remains disabled") more confidently than the underlying data
@@ -352,18 +363,106 @@ function _buildIdLabelMap(reviewItems) {
   return map;
 }
 
+const ACTION_LABEL = { pass: 'Pass', fail: 'Fail', adjust: 'Needs Adjustment', pending: 'Pending' };
+
 /**
- * Renders one checklist item row as a pure, static display — label,
- * description, category, Required/Optional badge, normalized status,
- * normalized reviewer decision, reviewer note, evidence summary, item
- * warnings, and updated time (only when valid). No buttons, no click
- * handlers, no way for the user to change anything from here.
- * Gracefully handles a malformed entry (null/undefined/non-object/
- * array) inside reviewState.reviewItems instead of throwing — such an
- * entry is shown as an explicit "invalid item" placeholder rather than
- * being silently dropped or crashing the whole console.
+ * Renders the four status-control buttons for one review item (Pass /
+ * Fail / Needs Adjustment / Pending), or — when Fail is armed for
+ * confirmation — a "Confirm Fail?" + Cancel pair instead. Every button
+ * is `type="button"` (never submits a form), has a >=44px touch
+ * target, an `aria-label` that includes the item's own label (so
+ * screen readers announce which item a button belongs to, not just
+ * "Pass"), and `aria-pressed` reflecting whether that action is the
+ * item's CURRENT state — never relying on color alone (each button
+ * also has a distinct, always-visible text label).
  */
-function renderChecklistItem(item) {
+function renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending) {
+  const wrap = el('div', { style: 'display:flex;flex-wrap:wrap;gap:7px;margin-top:10px' });
+  const makeBtn = ({ label, action, active, color, ariaLabel }) => el('button', {
+    style: `min-height:44px;padding:9px 15px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid ${active ? color : 'var(--border)'};background:${active ? color + '20' : 'var(--surface-2)'};color:${active ? color : 'var(--text-dim)'};overflow-wrap:anywhere`,
+    text: label,
+    attrs: {
+      type: 'button',
+      'data-review-action': action,
+      'aria-label': ariaLabel,
+      'aria-pressed': String(active),
+    },
+  });
+
+  if (isFailConfirmPending) {
+    wrap.appendChild(makeBtn({ label: 'Confirm Fail?', action: 'fail', active: true, color: 'var(--danger)', ariaLabel: `Confirm marking "${itemLabel}" as failed` }));
+    wrap.appendChild(el('button', {
+      style: 'min-height:44px;padding:9px 15px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text-dim)',
+      text: 'Cancel',
+      attrs: { type: 'button', 'data-review-action': 'cancel-confirm', 'aria-label': `Cancel failing "${itemLabel}"` },
+    }));
+    return wrap;
+  }
+
+  wrap.appendChild(makeBtn({ label: ACTION_LABEL.pass, action: 'pass', active: statusKey === 'passed' && decisionKey === 'approve', color: 'var(--success)', ariaLabel: `${ACTION_LABEL.pass} — ${itemLabel}` }));
+  wrap.appendChild(makeBtn({ label: ACTION_LABEL.fail, action: 'fail', active: statusKey === 'failed', color: 'var(--danger)', ariaLabel: `${ACTION_LABEL.fail} — ${itemLabel}` }));
+  wrap.appendChild(makeBtn({ label: ACTION_LABEL.adjust, action: 'adjust', active: decisionKey === 'needs-adjustment', color: 'var(--warn)', ariaLabel: `${ACTION_LABEL.adjust} — ${itemLabel}` }));
+  wrap.appendChild(makeBtn({ label: ACTION_LABEL.pending, action: 'pending', active: statusKey === 'pending' && decisionKey === 'undecided', color: 'var(--text-dim)', ariaLabel: `Return "${itemLabel}" to ${ACTION_LABEL.pending.toLowerCase()}` }));
+  return wrap;
+}
+
+/**
+ * Renders the editable reviewer-note field for one item: a labeled
+ * textarea (max 500 characters, enforced both by the `maxlength`
+ * attribute and defensively again by the controller on commit) plus a
+ * live character counter. The textarea's initial value is set via the
+ * `.value` property (the correct, safe way to seed a form control's
+ * content — never via textContent/innerHTML). Committing the note to
+ * the Review State Engine is the controller's job (on focusout,
+ * delegated from the console container) — this function only builds
+ * the field and wires no listeners itself.
+ */
+function renderNoteField(item, itemId, itemLabel) {
+  const wrap = el('div', { style: 'margin-top:10px' });
+  const fieldId = `review-note-${itemId}`;
+  wrap.appendChild(el('label', {
+    style: 'display:block;font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;font-family:var(--font-mono);margin-bottom:4px',
+    text: 'Reviewer note',
+    attrs: { for: fieldId },
+  }));
+  const currentNote = _safeText(item.reviewerNote, '');
+  const textarea = el('textarea', {
+    style: 'width:100%;min-height:52px;padding:8px 10px;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-family:var(--font-sans);font-size:12px;line-height:1.5;resize:vertical;overflow-wrap:anywhere;box-sizing:border-box',
+    attrs: {
+      id: fieldId,
+      maxlength: '500',
+      'data-review-note': 'true',
+      placeholder: `Add a note about "${itemLabel}"…`,
+      'aria-label': `Reviewer note for ${itemLabel}, up to 500 characters`,
+    },
+  });
+  textarea.value = currentNote; // seeding a form control's content — always via .value, never textContent/innerHTML
+  wrap.appendChild(textarea);
+  wrap.appendChild(el('div', {
+    style: 'text-align:right;font-size:9px;color:var(--text-faint);font-family:var(--font-mono);margin-top:2px',
+    text: `${currentNote.length}/500`,
+    attrs: { 'data-note-counter': itemId },
+  }));
+  return wrap;
+}
+
+/**
+ * Renders one checklist item row — label, description, category,
+ * Required/Optional badge, normalized status, normalized reviewer
+ * decision, evidence summary, item warnings, updated time (only when
+ * valid), the interactive Pass/Fail/Needs-Adjustment/Pending controls,
+ * and an editable reviewer-note field. Gracefully handles a malformed
+ * entry (null/undefined/non-object/array) inside
+ * reviewState.reviewItems instead of throwing — such an entry is shown
+ * as an explicit "invalid item" placeholder (with no interactive
+ * controls, since there is no valid ID to act on) rather than being
+ * silently dropped or crashing the whole console.
+ *
+ * `uiState` (optional) carries transient, controller-owned UI state —
+ * currently just which item IDs have an armed "Confirm Fail?" prompt.
+ * It is read-only here; this function never mutates it.
+ */
+function renderChecklistItem(item, uiState) {
   const wrap = el('div', { style: 'padding:12px 0;border-bottom:1px solid var(--border)' });
 
   if (!_isRecord(item)) {
@@ -371,9 +470,13 @@ function renderChecklistItem(item) {
     return wrap;
   }
 
+  const itemId = typeof item.id === 'string' ? item.id : '';
+  if (itemId) wrap.setAttribute('data-review-item-id', itemId);
+
   const top = el('div', { style: 'display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px' });
   const labelCol = el('div', { style: 'flex:1;min-width:0' });
-  labelCol.appendChild(el('div', { style: 'font-size:13px;font-weight:600;color:var(--text);overflow-wrap:anywhere', text: _safeText(item.label, 'Untitled review item') }));
+  const itemLabel = _safeText(item.label, 'Untitled review item');
+  labelCol.appendChild(el('div', { style: 'font-size:13px;font-weight:600;color:var(--text);overflow-wrap:anywhere', text: itemLabel }));
   const descriptionText = _safeText(item.description, '');
   if (descriptionText) {
     labelCol.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:2px;line-height:1.4;overflow-wrap:anywhere', text: descriptionText }));
@@ -397,13 +500,6 @@ function renderChecklistItem(item) {
   if (reasonText) {
     wrap.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:6px;font-style:italic;overflow-wrap:anywhere', text: reasonText }));
   }
-  const reviewerNoteText = _safeText(item.reviewerNote, '');
-  if (reviewerNoteText) {
-    const noteWrap = el('div', { style: 'font-size:11.5px;color:var(--text-dim);margin-top:6px;padding:6px 9px;background:var(--surface-2);border-radius:3px;border-left:2px solid var(--accent);overflow-wrap:anywhere' });
-    noteWrap.appendChild(el('span', { style: 'font-family:var(--font-mono);font-size:9px;color:var(--text-faint);margin-right:6px', text: 'NOTE' }));
-    noteWrap.appendChild(document.createTextNode(reviewerNoteText)); // reviewer-authored free text — always textContent-equivalent, never HTML
-    wrap.appendChild(noteWrap);
-  }
   if (_isRecord(item.evidence) && Object.keys(item.evidence).length) {
     const evWrap = el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:6px;font-family:var(--font-mono);overflow-wrap:anywhere' });
     const parts = Object.entries(item.evidence).map(([k, v]) => `${_safeText(k, '?')}=${_safeText(v, 'null')}`);
@@ -425,6 +521,47 @@ function renderChecklistItem(item) {
     wrap.appendChild(el('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;font-family:var(--font-mono)', text: `Updated ${updatedText}` }));
   }
 
+  // ── Interactive controls — only when the item has a real, actionable ID ──
+  if (itemId) {
+    const isFailConfirmPending = uiState?.pendingConfirmItemIds instanceof Set && uiState.pendingConfirmItemIds.has(itemId);
+    wrap.appendChild(renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending));
+    wrap.appendChild(renderNoteField(item, itemId, itemLabel));
+  }
+
+  return wrap;
+}
+
+/**
+ * Renders the console-level "Reset Review" control. When
+ * `uiState.resetConfirmPending` is true, shows an inline "Reset all
+ * review progress?" confirmation with Confirm/Cancel instead of the
+ * single button — the same lightweight, no-window.confirm() pattern
+ * used for the per-item Fail confirmation, since this app has no
+ * existing modal system to reuse.
+ */
+function renderResetButton(uiState) {
+  const wrap = el('div', { style: 'margin-top:18px;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:center;gap:9px' });
+
+  if (uiState?.resetConfirmPending) {
+    wrap.appendChild(el('span', { style: 'font-size:12px;color:var(--text-dim);overflow-wrap:anywhere', text: 'Reset all review progress? This clears every status, decision, and note.' }));
+    wrap.appendChild(el('button', {
+      style: 'min-height:44px;padding:9px 16px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--danger);background:var(--danger);color:var(--on-accent)',
+      text: 'Yes, Reset',
+      attrs: { type: 'button', 'data-review-action': 'reset-review', 'aria-label': 'Confirm reset of all review progress' },
+    }));
+    wrap.appendChild(el('button', {
+      style: 'min-height:44px;padding:9px 16px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text-dim)',
+      text: 'Cancel',
+      attrs: { type: 'button', 'data-review-action': 'reset-cancel', 'aria-label': 'Cancel reset' },
+    }));
+    return wrap;
+  }
+
+  wrap.appendChild(el('button', {
+    style: 'min-height:44px;padding:9px 18px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text-dim)',
+    text: 'Reset Review',
+    attrs: { type: 'button', 'data-review-action': 'reset-review', 'aria-label': 'Reset all review progress' },
+  }));
   return wrap;
 }
 
@@ -471,7 +608,7 @@ function renderPreviewRiskReview(container, riskReview) {
  * (renderReviewConsole). Any exception thrown while building this body
  * is caught by the caller, never escapes to the host page.
  */
-function _renderBody(container, sandbox, reviewState) {
+function _renderBody(container, sandbox, reviewState, uiState) {
   const sandboxRecord = _isRecord(sandbox) ? sandbox : null;
   const reviewRecord = _isRecord(reviewState) ? reviewState : null;
 
@@ -577,15 +714,16 @@ function _renderBody(container, sandbox, reviewState) {
     container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-faint)', text: 'Review progress unavailable.' }));
   }
 
-  // ── Checklist (pure display — no actions) ───────────────────────────────
+  // ── Checklist (interactive — Pass/Fail/Adjust/Pending + note) ────────────
   const reviewItems = Array.isArray(reviewRecord?.reviewItems) ? reviewRecord.reviewItems : [];
   if (reviewItems.length) {
     container.appendChild(sectionHeading('Human Review Checklist', 'checklist'));
     const listWrap = el('div');
     for (const item of reviewItems) {
-      listWrap.appendChild(renderChecklistItem(item));
+      listWrap.appendChild(renderChecklistItem(item, uiState));
     }
     container.appendChild(listWrap);
+    container.appendChild(renderResetButton(uiState));
   }
 
   // ── Blockers — merged and deduplicated from BOTH sources ─────────────────
@@ -641,10 +779,23 @@ function _clearContainer(container) {
 /**
  * Main entry point. Renders the full Controlled Preview Review Console
  * into `container` (an existing DOM element — its previous content is
- * cleared and replaced, never appended-to indefinitely). PURE
- * READ-ONLY: there is no `opts.onAction` or any other mutation hook,
- * no buttons, no click handlers, no localStorage — this function only
- * ever reads `sandbox`/`reviewState` and renders static DOM content.
+ * cleared and replaced, never appended-to indefinitely).
+ *
+ * As of Phase C-B this includes interactive Pass/Fail/Needs-Adjustment/
+ * Pending controls and an editable reviewer-note field per item, plus
+ * a console-level Reset Review control — but this function ITSELF
+ * still performs zero state mutation and computes zero derived Review
+ * State field: it only builds DOM marked with
+ * `data-review-action`/`data-review-item-id`/`data-review-note`
+ * attributes for `ui/review-console-controller.js`'s event delegation
+ * to act on; all engine calls happen exclusively in that controller.
+ *
+ * `uiState` (optional, 4th param) is the read-only, controller-owned
+ * transient UI state (currently: which item IDs have an armed "Confirm
+ * Fail?" prompt, and whether the console-level Reset confirmation is
+ * showing) — obtained from the controller's `getUiState()`. Omitting
+ * it (or passing `null`) is safe and simply renders every control in
+ * its default, non-confirming state.
  *
  * RESILIENT BY DESIGN: safe to call with `sandbox`/`reviewState` in
  * ANY shape — both `null`, missing fields, wrong types, malformed
@@ -654,12 +805,12 @@ function _clearContainer(container) {
  * neutral, honest fallback message instead of leaving a half-built or
  * crashed console on screen.
  */
-export function renderReviewConsole(container, sandbox, reviewState) {
+export function renderReviewConsole(container, sandbox, reviewState, uiState = null) {
   if (!container || typeof container.appendChild !== 'function') return;
 
   try {
     _clearContainer(container); // clearing our OWN previously-rendered (trusted, DOM-API-built) content — not an XSS vector
-    _renderBody(container, sandbox, reviewState);
+    _renderBody(container, sandbox, reviewState, uiState);
   } catch (err) {
     // Never let malformed upstream data crash the host page. Clear any
     // partial content and show a neutral, honest fallback — this never

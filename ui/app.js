@@ -47,6 +47,7 @@ import { validateFinalPreset, quickSafetyClamp } from '../core/xmp-validator/ind
 import { benchmarkStylePreservation } from '../core/style-benchmark-engine/index.js';
 import { buildDecisionReport } from '../core/decision-report-engine/index.js';
 import { renderReviewConsole } from './review-console-renderer.js';
+import { createReviewConsoleController } from './review-console-controller.js';
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
@@ -108,6 +109,16 @@ const state = {
   curveEditor: null,
 };
 
+// EPIC 2E-F Phase C-B: must be declared BEFORE waitForRoot(...) below —
+// waitForRoot's callback (which calls ensureReviewConsoleController(),
+// defined later in this file as a hoisted function declaration) can
+// run SYNCHRONOUSLY if the DOM root already exists on the very first
+// check, i.e. before this file has finished executing top-to-bottom
+// past this point. A `let`/`const` declared further down the file is
+// in the temporal dead zone until its own statement runs, so it must
+// live here, ahead of the immediately-invoked waitForRoot call.
+let reviewConsoleController = null;
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 // The DC/React runtime streams and mounts the template asynchronously, so the
 // real DOM (#lumixaApp and its children) does not necessarily exist yet by the
@@ -137,6 +148,7 @@ waitForRoot(() => {
   window.switchTab = switchTab;
   setupAnalysisTabs();
   setupAnalysisResizeObserver();
+  ensureReviewConsoleController();
 
   // Tone Curve Editor — init after DOM ready
   const curveCanvas = document.getElementById('toneCurveCanvas');
@@ -506,19 +518,57 @@ async function waitForAnalysisRenderReady({ image = null, containers = [], maxFr
 }
 
 // ─── Analysis pipeline ────────────────────────────────────────────────────────
-// EPIC 2E-F Phase C-A: renders the Controlled Preview Review Console
-// from the current state.lastPreviewSandbox/lastPreviewReviewState.
-// This is PURE READ-ONLY — there is no interactive control of any kind
-// in this phase. It never calls runAnalysis(), never re-runs any
-// analysis stage, and never touches XMP/production output.
+// EPIC 2E-F Phase C-A, upgraded Phase C-B: renders the Controlled
+// Preview Review Console from the current
+// state.lastPreviewSandbox/lastPreviewReviewState. As of Phase C-B this
+// includes interactive Pass/Fail/Needs-Adjustment/Pending controls and
+// an editable reviewer note, but THIS function still never calls
+// runAnalysis(), never re-runs any analysis stage, and never touches
+// XMP/production output directly — it only re-renders DOM from
+// whatever state.lastPreviewReviewState currently holds. All actual
+// state MUTATION happens inside review-console-controller.js, via the
+// Review State Engine's own update/reset functions, never here.
+// (`reviewConsoleController` itself is declared earlier, just before
+// waitForRoot(...) — see the comment there for why.)
+
 function renderReviewConsoleFromState() {
   const reviewInner = document.getElementById('reviewConsoleInner');
   if (!reviewInner) return;
-  // EPIC 2E-F Phase C-A: pure, read-only render — no onAction/mutation
-  // hook of any kind. state.lastPreviewSandbox/state.lastPreviewReviewState
-  // are only ever set from the already-computed analysis result
-  // (see runAnalysis below) and never modified by this UI.
-  renderReviewConsole(reviewInner, state.lastPreviewSandbox, state.lastPreviewReviewState);
+  const uiState = reviewConsoleController ? reviewConsoleController.getUiState() : null;
+  renderReviewConsole(reviewInner, state.lastPreviewSandbox, state.lastPreviewReviewState, uiState);
+}
+
+// EPIC 2E-F Phase C-B: attaches the interactive controller EXACTLY
+// ONCE per page session — not once per analysis/render. This is safe
+// (and is the recommended "one-time listener registration" pattern)
+// because `reviewConsoleInner` is a persistent DOM element that is
+// never itself replaced; every render only replaces ITS CHILDREN via
+// replaceChildren(), so a single delegated listener set attached to
+// `reviewConsoleInner` continues to correctly catch clicks/input on
+// freshly-rendered children across every Re-analyze and new-image
+// import, with zero risk of accumulating duplicate listeners.
+function ensureReviewConsoleController() {
+  if (reviewConsoleController) return;
+  const reviewInner = document.getElementById('reviewConsoleInner');
+  if (!reviewInner) return;
+  reviewConsoleController = createReviewConsoleController({
+    container: reviewInner,
+    // getState/setState close over `state.lastPreviewReviewState`
+    // itself (re-read on every call, never captured once) — this is
+    // the ONE editable Review State object for the currently active
+    // analysis result, exactly as the phase spec's "State Ownership"
+    // section describes. The controller never mutates the object this
+    // getter returns; every call to updatePreviewReviewItemV2/
+    // resetPreviewReviewStateV2 inside the controller produces a NEW
+    // object, which setState below then stores.
+    getState: () => state.lastPreviewReviewState,
+    setState: (next) => { state.lastPreviewReviewState = next; },
+    rerender: renderReviewConsoleFromState,
+    announce: (message) => {
+      const liveRegion = document.getElementById('reviewConsoleLiveRegion');
+      if (liveRegion) liveRegion.textContent = message;
+    },
+  });
 }
 
 async function runAnalysis() {
@@ -739,6 +789,19 @@ async function runAnalysis() {
       scene: sceneRes, cast: castRes, styleRecognition,
       palette: state.lastPalette, harmony: state.lastHarmony,
       fingerprint: styleFingerprint,
+      // EPIC 2E-F Phase C-B: hand the CURRENT editable Review State
+      // back into the pipeline (EPIC 2E-F-B-F input plumbing) so
+      // in-progress human review survives Re-analyze. On a genuine new
+      // image import this is always null here, because handleReset()
+      // (called unconditionally at the start of loadFile(), before
+      // runAnalysis() ever runs) already cleared
+      // state.lastPreviewReviewState — so a different image can never
+      // inherit approval from the previous one. On Re-analyze of the
+      // SAME image, handleReset() is NOT called, so this carries the
+      // user's current review progress in; the Review State Engine
+      // then normalizes it against the freshly-computed Preview
+      // Sandbox, safely downgrading any now-stale approval.
+      controlledPreviewReviewStateV2: state.lastPreviewReviewState,
     });
 
     const { preset: validatedPreset, report: validationReport } = validateFinalPreset(rawPreset, styleFingerprint);
