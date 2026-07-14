@@ -46,6 +46,7 @@ import { buildStyleFeatureGraph } from '../core/feature-fusion-engine/index.js';
 import { validateFinalPreset, quickSafetyClamp } from '../core/xmp-validator/index.js';
 import { benchmarkStylePreservation } from '../core/style-benchmark-engine/index.js';
 import { buildDecisionReport } from '../core/decision-report-engine/index.js';
+import { renderReviewConsole } from './review-console-renderer.js';
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
@@ -98,6 +99,11 @@ const state = {
   lastBenchmark: null,
   lastDecisionReport: null,
   lastReferenceTransfer: null,
+  // EPIC 2E-F Phase C-A: Controlled Preview Review Console state — a
+  // pure UI reflection of already-computed, shadow-only analysis
+  // results. Never influences production output.
+  lastPreviewSandbox: null,
+  lastPreviewReviewState: null,
   lastProcessingLog: null,
   curveEditor: null,
 };
@@ -500,6 +506,21 @@ async function waitForAnalysisRenderReady({ image = null, containers = [], maxFr
 }
 
 // ─── Analysis pipeline ────────────────────────────────────────────────────────
+// EPIC 2E-F Phase C-A: renders the Controlled Preview Review Console
+// from the current state.lastPreviewSandbox/lastPreviewReviewState.
+// This is PURE READ-ONLY — there is no interactive control of any kind
+// in this phase. It never calls runAnalysis(), never re-runs any
+// analysis stage, and never touches XMP/production output.
+function renderReviewConsoleFromState() {
+  const reviewInner = document.getElementById('reviewConsoleInner');
+  if (!reviewInner) return;
+  // EPIC 2E-F Phase C-A: pure, read-only render — no onAction/mutation
+  // hook of any kind. state.lastPreviewSandbox/state.lastPreviewReviewState
+  // are only ever set from the already-computed analysis result
+  // (see runAnalysis below) and never modified by this UI.
+  renderReviewConsole(reviewInner, state.lastPreviewSandbox, state.lastPreviewReviewState);
+}
+
 async function runAnalysis() {
   const img = document.getElementById('previewImg');
   if (!img || !img.naturalWidth || !img.naturalHeight) {
@@ -893,6 +914,22 @@ async function runAnalysis() {
     const groups = document.getElementById('analysisGroups');
     if (groups) groups.style.display = 'block';
 
+    // EPIC 2E-F Phase C-A: Controlled Preview Review Console — pure
+    // read-only display of the already-computed, shadow-only Preview
+    // Sandbox + Review State. Does NOT re-run any analysis, does NOT
+    // call decision-engine/lightroom-mapping-engine/preset-engine/
+    // xmp-validator, and does NOT affect XMP export.
+    state.lastPreviewSandbox = finalPreset._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2 ?? null;
+    state.lastPreviewReviewState = finalPreset._decision?.finalStyleIntent?.controlledPreviewReviewStateV2 ?? null;
+    const reviewSec = document.getElementById('reviewConsoleSection');
+    const reviewInner = document.getElementById('reviewConsoleInner');
+    if (reviewSec && reviewInner && (state.lastPreviewSandbox || state.lastPreviewReviewState)) {
+      reviewSec.style.display = 'block';
+      renderReviewConsoleFromState();
+    } else if (reviewSec) {
+      reviewSec.style.display = 'none';
+    }
+
   } catch (err) {
     setAnalysisBox('error', `<strong>⚠ ล้มเหลว:</strong> ${err.message}`);
     console.error('runAnalysis error:', err);
@@ -976,6 +1013,8 @@ function handleReset() {
   state.lastBenchmark = null;
   state.lastDecisionReport = null;
   state.lastReferenceTransfer = null;
+  state.lastPreviewSandbox = null;
+  state.lastPreviewReviewState = null;
   if (state.curveEditor) state.curveEditor.resetAll();
   document.getElementById('uploadWrap').style.display  = 'block';
   document.getElementById('previewWrap').style.display = 'none';
@@ -983,6 +1022,10 @@ function handleReset() {
   document.getElementById('aiBox').style.display       = 'none';
   const groups = document.getElementById('analysisGroups');
   if (groups) groups.style.display = 'none';
+  const reviewSec = document.getElementById('reviewConsoleSection');
+  if (reviewSec) reviewSec.style.display = 'none';
+  const reviewInner = document.getElementById('reviewConsoleInner');
+  if (reviewInner) reviewInner.innerHTML = '';
   // Reset active tab back to Overview
   document.querySelectorAll('.atab').forEach(t => styleAtab(t, t.dataset.group === 'overview'));
   document.querySelectorAll('.agroup').forEach(g => { g.style.display = (g.dataset.group === 'overview') ? 'flex' : 'none'; });

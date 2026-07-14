@@ -467,6 +467,17 @@
                 <canvas id="skinCanvas" style="width:100%;display:block;border-radius:3px"></canvas>
               </div>
             </div>
+
+            <!-- EPIC 2E-F Phase C-A: Controlled Preview Review Console —
+                 read-only display of the (still shadow-only) Preview
+                 Sandbox + Human Review state. Always visible when analysis
+                 has run, regardless of which tab (overview/tone/colour/
+                 detail) is active — it is not part of the .agroup
+                 tab-switching system. -->
+            <div id="reviewConsoleSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
+              <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;display:flex;align-items:center;gap:8px"><span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px;color:var(--accent)">rate_review</span>Controlled Preview Review Console <span style="color:var(--text-faint);font-weight:400;text-transform:none;letter-spacing:normal">&#183; shadow-only, does not affect exported preset</span></div>
+              <div id="reviewConsoleInner"></div>
+            </div>
           </div>
 
           <!-- ── Sliders panel ── -->
