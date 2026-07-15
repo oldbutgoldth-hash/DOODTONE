@@ -400,19 +400,42 @@ function _renderBody(container, comparison) {
     status: typeof cmp.selectedProductionSource !== 'string' ? 'unknown' : (cmp.selectedProductionSource === 'legacy' ? 'confirmed' : 'anomaly'),
   });
   const exportEligible = v2Preview ? v2Preview.exportEligible : undefined;
+  const appliedToProduction = v2Preview ? v2Preview.appliedToProduction : undefined;
   statusLine(banner, {
     confirmedText: 'Preview Export: Confirmed Disabled.',
     anomalyText: 'Preview Export reports an unexpected enabled state — treat with caution.',
     unknownText: 'Preview Export: Unknown / Not confirmed.',
     status: typeof exportEligible !== 'boolean' ? 'unknown' : (exportEligible === false ? 'confirmed' : 'anomaly'),
   });
-  const appliedToProduction = v2Preview ? v2Preview.appliedToProduction : undefined;
+  // FIX 1 (EPIC 2E-G-C-F2): `appliedToProduction` and
+  // `canWriteProduction` are DIFFERENT concepts — `appliedToProduction:
+  // false` only means "not currently applied", not "writing is
+  // explicitly disabled". Prefer a canonical `canWriteProduction`
+  // boolean when present (checked at both the comparison root and on
+  // v2Preview, in case a future engine revision adds it at either
+  // level); this field does not exist anywhere in the current engine
+  // output, so this currently always falls through to "Unknown / Not
+  // confirmed" honestly, rather than being inferred from
+  // appliedToProduction.
+  const canWriteProduction = typeof cmp.canWriteProduction === 'boolean' ? cmp.canWriteProduction
+    : (v2Preview && typeof v2Preview.canWriteProduction === 'boolean' ? v2Preview.canWriteProduction : undefined);
   statusLine(banner, {
     confirmedText: 'Production Write: Confirmed Disabled.',
     anomalyText: 'Production Write reports an unexpected enabled state — treat with caution.',
     unknownText: 'Production Write: Unknown / Not confirmed.',
-    status: typeof appliedToProduction !== 'boolean' ? 'unknown' : (appliedToProduction === false ? 'confirmed' : 'anomaly'),
+    status: typeof canWriteProduction !== 'boolean' ? 'unknown' : (canWriteProduction === false ? 'confirmed' : 'anomaly'),
   });
+  // Only shown when canWriteProduction itself is unavailable but
+  // appliedToProduction IS available — a separate, honestly-labeled
+  // row that never claims "Write Disabled" from this weaker evidence.
+  if (typeof canWriteProduction !== 'boolean' && typeof appliedToProduction === 'boolean') {
+    statusLine(banner, {
+      confirmedText: 'Production Application: Confirmed Not Applied.',
+      anomalyText: 'Production Application reports an unexpected applied state.',
+      unknownText: 'Production Application: Unknown / Not confirmed.',
+      status: appliedToProduction === false ? 'confirmed' : 'anomaly',
+    });
+  }
   container.appendChild(banner);
 
   // ── Legacy / V2 summary cards ───────────────────────────────────────────
@@ -609,10 +632,10 @@ function _renderBody(container, comparison) {
   devWrap.appendChild(listRow('confidence', Number.isFinite(cmp.confidence) ? cmp.confidence : 'unknown'));
   devWrap.appendChild(listRow('dimension coverage', `${dims.filter(d => _isRecord(d) && d.available).length}/${dims.length}`));
   devWrap.appendChild(listRow('evidence score', Number.isFinite(evidence?.score) ? evidence.score : 'unknown'));
-  devWrap.appendChild(listRow('selectedProductionSource', _safeText(cmp.selectedProductionSource, 'legacy')));
-  devWrap.appendChild(listRow('canRenderLegacyPreview', String(cmp.canRenderLegacyPreview === true)));
-  devWrap.appendChild(listRow('canRenderV2Preview', String(cmp.canRenderV2Preview === true)));
-  devWrap.appendChild(listRow('canCompareVisually', String(cmp.canCompareVisually === true)));
+  devWrap.appendChild(listRow('selectedProductionSource', typeof cmp.selectedProductionSource === 'string' ? cmp.selectedProductionSource : 'unknown'));
+  devWrap.appendChild(listRow('canRenderLegacyPreview', typeof cmp.canRenderLegacyPreview === 'boolean' ? String(cmp.canRenderLegacyPreview) : 'unknown'));
+  devWrap.appendChild(listRow('canRenderV2Preview', typeof cmp.canRenderV2Preview === 'boolean' ? String(cmp.canRenderV2Preview) : 'unknown'));
+  devWrap.appendChild(listRow('canCompareVisually', typeof cmp.canCompareVisually === 'boolean' ? String(cmp.canCompareVisually) : 'unknown'));
   devWrap.appendChild(listRow('fallback.useLegacyMapping', _yesNoUnknown(fallback?.useLegacyMapping)));
   devWrap.appendChild(listRow('rollback.available', _yesNoUnknown(rollback?.available)));
   const developerSummaryText = _safeText(cmp.developerSummary, '');
