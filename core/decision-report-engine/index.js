@@ -600,39 +600,91 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     // this comparison has no path to production output, Preview
     // Export, Production Write, or XMP — it is purely informational.
     // Safe if the comparison object is missing entirely.
-    sideBySidePreviewComparison: fsi.sideBySidePreviewComparisonV2 ? {
-      comparisonState: fsi.sideBySidePreviewComparisonV2.comparisonState,
-      comparisonAvailable: fsi.sideBySidePreviewComparisonV2.comparisonAvailable,
-      legacyDataAvailable: fsi.sideBySidePreviewComparisonV2.legacyPreview?.dataAvailable ?? false,
-      v2DataAvailable: fsi.sideBySidePreviewComparisonV2.v2Preview?.dataAvailable ?? false,
-      // Always false in this phase — no image-rendering pipeline exists.
-      canRenderLegacyPreview: fsi.sideBySidePreviewComparisonV2.canRenderLegacyPreview,
-      canRenderV2Preview: fsi.sideBySidePreviewComparisonV2.canRenderV2Preview,
-      canCompareVisually: fsi.sideBySidePreviewComparisonV2.canCompareVisually,
-      dimensionCoverage: `${(fsi.sideBySidePreviewComparisonV2.comparisonDimensions ?? []).filter(d => d.available).length}/${(fsi.sideBySidePreviewComparisonV2.comparisonDimensions ?? []).length}`,
-      overallSimilarity: fsi.sideBySidePreviewComparisonV2.similaritySummary?.overallSimilarity ?? null,
-      similarityLevel: fsi.sideBySidePreviewComparisonV2.similaritySummary?.level ?? 'unknown',
-      overallDivergence: fsi.sideBySidePreviewComparisonV2.divergenceSummary?.overallDivergence ?? null,
-      divergenceLevel: fsi.sideBySidePreviewComparisonV2.divergenceSummary?.level ?? 'unknown',
-      saferSide: fsi.sideBySidePreviewComparisonV2.safetyComparison?.saferSide ?? 'uncertain',
-      evidenceLevel: fsi.sideBySidePreviewComparisonV2.evidenceQuality?.level ?? 'insufficient',
-      humanReviewApprovalState: fsi.sideBySidePreviewComparisonV2.humanReviewStatus?.approvalState ?? 'unavailable',
-      visualReviewComplete: fsi.sideBySidePreviewComparisonV2.humanReviewStatus?.visualReviewComplete ?? false,
-      majorBlockers: (fsi.sideBySidePreviewComparisonV2.blockers ?? []).slice(0, 4),
-      warnings: (fsi.sideBySidePreviewComparisonV2.warnings ?? []).slice(0, 4),
-      recommendations: (fsi.sideBySidePreviewComparisonV2.recommendations ?? []).slice(0, 5),
-      fallbackUsesLegacyMapping: fsi.sideBySidePreviewComparisonV2.fallbackStrategy?.useLegacyMapping ?? true,
-      rollbackAvailable: fsi.sideBySidePreviewComparisonV2.rollbackPlan?.available ?? false,
-      // Explicit, always-true-in-this-phase confirmations — never
-      // inferred, always read from the objects that actually enforce
-      // them (same pattern as controlledPreviewHumanReview above).
-      selectedProductionSource: fsi.sideBySidePreviewComparisonV2.selectedProductionSource ?? 'legacy',
-      previewExportDisabled: fsi.controlledOverlayPreviewSandboxV2 ? fsi.controlledOverlayPreviewSandboxV2.canExportPreview === false : true,
-      productionWriteDisabled: fsi.controlledOverlayPreviewSandboxV2 ? fsi.controlledOverlayPreviewSandboxV2.canWriteProduction === false : true,
-      xmpUnchanged: true, // structural guarantee — this comparison has no XMP-writing code path at all
-      photographerSummary: fsi.sideBySidePreviewComparisonV2.photographerSummary,
-      developerSummary: fsi.sideBySidePreviewComparisonV2.developerSummary,
-    } : null,
+    sideBySidePreviewComparison: fsi.sideBySidePreviewComparisonV2 ? (() => {
+      const cmp = fsi.sideBySidePreviewComparisonV2;
+      const sandbox = fsi.controlledOverlayPreviewSandboxV2;
+      // FIX 4: never trust comparisonDimensions/blockers/warnings/
+      // recommendations to be arrays — the comparison engine normally
+      // returns canonical arrays, but this Report must stay safe if an
+      // integration fallback or malformed data ever reaches it.
+      const safeDims = Array.isArray(cmp.comparisonDimensions) ? cmp.comparisonDimensions : [];
+      const safeBlockers = Array.isArray(cmp.blockers) ? cmp.blockers : [];
+      const safeWarnings = Array.isArray(cmp.warnings) ? cmp.warnings : [];
+      const safeRecommendations = Array.isArray(cmp.recommendations) ? cmp.recommendations : [];
+
+      // FIX 1: tri-state safety evidence — true only when the Sandbox
+      // EXPLICITLY confirms the field is disabled; false when the
+      // Sandbox exists but reports something other than explicitly
+      // disabled (an anomaly that should never happen, but must be
+      // reported honestly rather than hidden); null when there is no
+      // Sandbox evidence at all to confirm anything. Missing evidence
+      // must NEVER default to true ("confirmed safe").
+      const previewExportDisabled = sandbox ? sandbox.canExportPreview === false : null;
+      const productionWriteDisabled = sandbox ? sandbox.canWriteProduction === false : null;
+
+      const selectedProductionSource = cmp.selectedProductionSource ?? 'legacy';
+
+      // FIX 3: neutral, non-overclaiming photographer-facing wording —
+      // "not confirmed"/"unavailable" whenever evidence is missing,
+      // never a false confirmation. The ONLY claim allowed to sound
+      // fully confirmed is the production-source line, and only when
+      // selectedProductionSource is actually "legacy".
+      const safetyEvidenceSummary = [
+        selectedProductionSource === 'legacy' ? 'Legacy remains the selected production source.' : 'Production source is not confirmed.',
+        previewExportDisabled === true ? 'Preview Export is confirmed disabled.'
+          : previewExportDisabled === false ? 'Preview Export status is not confirmed disabled for this analysis — treat with caution.'
+          : 'Preview Export status is unavailable (no Sandbox evidence to confirm it).',
+        productionWriteDisabled === true ? 'Production Write is confirmed disabled.'
+          : productionWriteDisabled === false ? 'Production Write status is not confirmed disabled for this analysis — treat with caution.'
+          : 'Production Write status is unavailable (no Sandbox evidence to confirm it).',
+        'XMP export code is structurally isolated from this comparison (it has no write path), but no runtime XMP regression check was performed as part of this comparison.',
+      ].join(' ');
+
+      return {
+        comparisonState: cmp.comparisonState,
+        comparisonAvailable: cmp.comparisonAvailable,
+        legacyDataAvailable: cmp.legacyPreview?.dataAvailable ?? false,
+        v2DataAvailable: cmp.v2Preview?.dataAvailable ?? false,
+        // Always false in this phase — no image-rendering pipeline exists.
+        canRenderLegacyPreview: cmp.canRenderLegacyPreview,
+        canRenderV2Preview: cmp.canRenderV2Preview,
+        canCompareVisually: cmp.canCompareVisually,
+        dimensionCoverage: `${safeDims.filter(d => d !== null && typeof d === 'object' && !Array.isArray(d) && d.available).length}/${safeDims.length}`,
+        overallSimilarity: cmp.similaritySummary?.overallSimilarity ?? null,
+        similarityLevel: cmp.similaritySummary?.level ?? 'unknown',
+        overallDivergence: cmp.divergenceSummary?.overallDivergence ?? null,
+        divergenceLevel: cmp.divergenceSummary?.level ?? 'unknown',
+        saferSide: cmp.safetyComparison?.saferSide ?? 'uncertain',
+        evidenceLevel: cmp.evidenceQuality?.level ?? 'insufficient',
+        humanReviewApprovalState: cmp.humanReviewStatus?.approvalState ?? 'unavailable',
+        visualReviewComplete: cmp.humanReviewStatus?.visualReviewComplete ?? false,
+        majorBlockers: safeBlockers.slice(0, 4),
+        warnings: safeWarnings.slice(0, 4),
+        recommendations: safeRecommendations.slice(0, 5),
+        fallbackUsesLegacyMapping: cmp.fallbackStrategy?.useLegacyMapping ?? true,
+        rollbackAvailable: cmp.rollbackPlan?.available ?? false,
+        selectedProductionSource,
+        // FIX 1: tri-state, never defaulted to a false "confirmed safe".
+        previewExportDisabled,
+        productionWriteDisabled,
+        // FIX 2: replaces the ambiguous xmpUnchanged:true — this phase's
+        // integration only proves the comparison module has no XMP
+        // write path; it never ran an actual runtime XMP regression
+        // comparison, so that must never be claimed as verified.
+        xmpIsolation: {
+          comparisonModuleHasNoWritePath: true,
+          regressionVerified: false,
+          status: 'structurally-isolated',
+        },
+        // Retained for backward compatibility with any existing reader
+        // of this field — deliberately `null`, never `true`, since no
+        // runtime regression was actually verified here.
+        xmpUnchanged: null,
+        safetyEvidenceSummary,
+        photographerSummary: cmp.photographerSummary,
+        developerSummary: cmp.developerSummary,
+      };
+    })() : null,
     editingStrategy: strategy ?? null,
     styleBudget: budget ? { name: budget.name, adjustmentsMade: budgetAdjustments.length, details: budgetAdjustments } : null,
     editingStrategyAdjustments: strategyAdjustments,
