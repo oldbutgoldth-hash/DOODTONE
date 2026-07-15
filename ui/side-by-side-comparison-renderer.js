@@ -15,8 +15,13 @@
  *   directly from the canonical object already computed by
  *   mapping-v2-side-by-side-comparison.js
  * - renders a real or fake preview image, a Before/After slider, zoom,
- *   pan, or ANY interactive control (no buttons, no checkboxes, no
- *   approval actions) — this phase is data-level display only
+ *   pan, or ANY comparison-changing / Export / Apply / activation
+ *   control (no checkboxes, no approval actions, no state mutation of
+ *   any kind) — this phase is data-level display only. The ONE
+ *   exception is a single, optional, safe internal-navigation button
+ *   ("Go to Review Console") that only scrolls the page to the
+ *   existing Review Console section — it changes no data, mutates no
+ *   state, and calls no engine.
  * - persists anything to localStorage or any other storage
  *
  * VISUAL HONESTY: this module never implies a rendered image preview
@@ -66,6 +71,18 @@ const STATE_COLOR = {
 const EVIDENCE_LABEL = { insufficient: 'Insufficient', limited: 'Limited', moderate: 'Moderate', strong: 'Strong' };
 const EVIDENCE_COLOR = { insufficient: 'var(--text-faint)', limited: 'var(--warn)', moderate: 'var(--accent)', strong: 'var(--success)' };
 
+const APPROVAL_STATE_LABEL = {
+  'not-started': 'Not Started', 'in-progress': 'In Progress', blocked: 'Blocked',
+  'needs-adjustment': 'Needs Adjustment', rejected: 'Rejected', approved: 'Approved', unavailable: 'Unavailable',
+};
+const APPROVAL_STATE_COLOR = {
+  'not-started': 'var(--text-faint)', 'in-progress': 'var(--accent)', blocked: 'var(--danger)',
+  'needs-adjustment': 'var(--warn)', rejected: 'var(--danger)', approved: 'var(--success)', unavailable: 'var(--text-faint)',
+};
+function _normalizeApprovalState(v) {
+  return typeof v === 'string' && APPROVAL_STATE_LABEL[v] ? v : 'unavailable';
+}
+
 function _isRecord(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
@@ -74,26 +91,50 @@ function _safeArray(v) {
   return Array.isArray(v) ? v : [];
 }
 
-/** Safely converts an arbitrary value to display text — never "[object Object]", never throws on circular references. */
+const _KNOWN_TEXT_KEYS = ['message', 'reason', 'summary', 'label', 'description', 'finding', 'text', 'warning', 'blocker'];
+const _MAX_TEXT_LENGTH = 500;
+
+function _truncate(text) {
+  if (typeof text !== 'string') return text;
+  return text.length > _MAX_TEXT_LENGTH ? `${text.slice(0, _MAX_TEXT_LENGTH)}\u2026` : text;
+}
+
+/**
+ * Safely converts an arbitrary value to display text — never dumps raw
+ * JSON of an unknown object, never "[object Object]", never throws on
+ * circular references. For objects, tries a short list of known
+ * human-readable keys first (message/reason/summary/label/description/
+ * finding/text/warning/blocker) and returns the first non-empty string
+ * found; only falls back to a neutral, generic message if none of
+ * those keys yield a usable string — this is deliberately NOT a JSON
+ * dump, since that could expose large/technical/circular structures
+ * directly to a photographer-facing surface. Long text is truncated
+ * safely with an ellipsis.
+ */
 function _safeText(value, fallback = '') {
   if (value === null || value === undefined) return fallback;
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') return _truncate(value);
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : fallback;
   if (typeof value === 'boolean') return String(value);
-  try {
-    const json = JSON.stringify(value);
-    return typeof json === 'string' && json.length ? json : fallback;
-  } catch {
-    return '(unrepresentable value)';
+  if (Array.isArray(value)) {
+    const parts = value.filter(v => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean').map(v => String(v)).slice(0, 10);
+    return parts.length ? _truncate(parts.join(', ')) : 'Additional comparison information is available.';
   }
+  if (typeof value === 'object') {
+    for (const key of _KNOWN_TEXT_KEYS) {
+      const candidate = value[key];
+      if (typeof candidate === 'string' && candidate.trim()) return _truncate(candidate);
+    }
+    // Unknown object shape (including circular references, which never
+    // even reach here since we never attempt JSON.stringify on them) —
+    // a neutral, non-technical fallback rather than any raw dump.
+    return 'Additional comparison information is available.';
+  }
+  return fallback;
 }
 
 function _normalizeRiskLevel(v) {
-  if (typeof v === 'string') {
-    const lower = v.toLowerCase();
-    if (RISK_LEVELS.has(lower)) return lower;
-    if (lower === 'none') return 'low';
-  }
+  if (typeof v === 'string' && RISK_LEVELS.has(v.toLowerCase())) return v.toLowerCase();
   return 'unknown';
 }
 
@@ -167,10 +208,20 @@ function listRow(labelText, valueNode) {
 }
 
 /** A tri-state confirmation line (same visual language as the Review Console's safety strip): Confirmed/Anomaly/Unknown — never a false green checkmark for missing evidence. */
-function statusLine(wrap, { confirmedText, unknownText, status }) {
-  const color = status === 'confirmed' ? 'var(--success)' : 'var(--text-faint)';
-  const icon = status === 'confirmed' ? '\u2713' : '\u2014';
-  wrap.appendChild(el('div', { style: `font-size:11.5px;color:${color};display:flex;align-items:flex-start;gap:6px;overflow-wrap:anywhere`, text: `${icon}  ${status === 'confirmed' ? confirmedText : unknownText}` }));
+/**
+ * A tri-state confirmation line (same visual language as the Review
+ * Console's safety strip): CONFIRMED (green checkmark — explicit
+ * evidence supports the safe state), ANOMALY (red/danger warning icon
+ * — explicit evidence shows an unexpected, unsafe state; this should
+ * never happen upstream, but must be reported honestly, never hidden),
+ * or UNKNOWN (neutral dash — no evidence to confirm anything either
+ * way). Missing evidence must never be inferred as safe.
+ */
+function statusLine(wrap, { confirmedText, anomalyText, unknownText, status }) {
+  const color = status === 'confirmed' ? 'var(--success)' : status === 'anomaly' ? 'var(--danger)' : 'var(--text-faint)';
+  const icon = status === 'confirmed' ? '\u2713' : status === 'anomaly' ? '\u26A0' : '\u2014';
+  const text = status === 'confirmed' ? confirmedText : status === 'anomaly' ? anomalyText : unknownText;
+  wrap.appendChild(el('div', { style: `font-size:11.5px;color:${color};display:flex;align-items:flex-start;gap:6px;overflow-wrap:anywhere`, text: `${icon}  ${text}` }));
 }
 
 /** Merges and deduplicates one or more possibly-malformed message arrays into safe display strings. */
@@ -182,7 +233,6 @@ function _mergeMessages(...lists) {
     for (const raw of list) {
       let text;
       if (typeof raw === 'string') text = raw;
-      else if (_isRecord(raw)) text = _safeText(raw.blocker ?? raw.warning ?? raw.message, _safeText(raw, ''));
       else text = _safeText(raw, '');
       const trimmed = text.trim();
       if (!trimmed || seen.has(trimmed)) continue;
@@ -308,30 +358,60 @@ function _renderBody(container, comparison) {
   container.appendChild(headerRow);
   container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-bottom:12px', text: 'Data comparison only \u00B7 Visual previews not available yet' }));
 
+  // Extracted early (before the empty-state framing below) so both
+  // this section and the Visual Honesty Banner can use the same
+  // already-normalized preview objects — FIX 1 was previously reading
+  // `!_isRecord(cmp.legacyPreview)?.dataAvailable`, which is a no-op
+  // bug: `_isRecord()` returns a boolean, and a boolean has no
+  // `.dataAvailable` property, so that expression was always
+  // `undefined` regardless of the actual preview data.
+  const legacyPreview = _isRecord(cmp.legacyPreview) ? cmp.legacyPreview : null;
+  const v2Preview = _isRecord(cmp.v2Preview) ? cmp.v2Preview : null;
+  const legacyDataAvailable = legacyPreview?.dataAvailable === true || legacyPreview?.available === true;
+  const v2DataAvailable = v2Preview?.dataAvailable === true || v2Preview?.available === true;
+
   // Insufficient-evidence / blocked empty-state framing (still shows partial diagnostic data below, per spec).
   if (state === 'insufficient-evidence') {
     container.appendChild(el('div', { style: 'font-size:12px;color:var(--text-dim);padding:8px 0 4px', text: 'There is not enough evidence to compare Legacy and V2 reliably.' }));
   } else if (state === 'blocked') {
     container.appendChild(el('div', { style: 'font-size:12px;color:var(--danger);padding:8px 0 4px', text: 'The comparison is blocked by current safety requirements.' }));
-  } else if (!cmp.comparisonAvailable && !_isRecord(cmp.legacyPreview)?.dataAvailable && !_isRecord(cmp.v2Preview)?.dataAvailable) {
+  } else if (legacyDataAvailable || v2DataAvailable) {
     container.appendChild(el('div', { style: 'font-size:12px;color:var(--text-dim);padding:8px 0 4px', text: 'Comparison data is available, but visual preview images are not implemented yet.' }));
+  } else {
+    container.appendChild(el('div', { style: 'font-size:12px;color:var(--text-dim);padding:8px 0 4px', text: 'There is not enough Legacy or V2 data for comparison.' }));
   }
 
   // ── Visual honesty banner ────────────────────────────────────────────────
   const banner = el('div', { style: 'display:flex;flex-direction:column;gap:5px;margin:10px 0 14px;padding:12px 14px;background:var(--surface-2);border-radius:3px;border-left:2px solid var(--warn)' });
   banner.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-dim);font-weight:600', text: 'Visual Legacy/V2 preview images are not available in this stage.' }));
-  const legacyPreview = _isRecord(cmp.legacyPreview) ? cmp.legacyPreview : null;
-  const v2Preview = _isRecord(cmp.v2Preview) ? cmp.v2Preview : null;
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: `Legacy data available: ${_yesNoUnknown(legacyPreview?.dataAvailable ?? legacyPreview?.available)}` }));
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: `V2 data available: ${_yesNoUnknown(v2Preview?.dataAvailable ?? v2Preview?.available)}` }));
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: `Legacy data available: ${_yesNoUnknown(legacyPreview ? legacyDataAvailable : undefined)}` }));
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: `V2 data available: ${_yesNoUnknown(v2Preview ? v2DataAvailable : undefined)}` }));
   banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: 'Legacy visual preview: Not available' }));
   banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: 'V2 visual preview: Not available' }));
   banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: 'Visual comparison: Not available' }));
-  // Production Mapping / Export / Write — only ever claimed confirmed when explicit evidence exists.
+  // Production Mapping / Preview Export / Production Write — only ever
+  // claimed CONFIRMED when explicit evidence exists; an unexpected
+  // (anomalous) explicit value is reported honestly, never hidden;
+  // missing evidence is always UNKNOWN, never inferred as safe.
   statusLine(banner, {
     confirmedText: 'Production Mapping: Legacy.',
+    anomalyText: `Production Mapping reports an unexpected source (selectedOutputSource=${_safeText(cmp.selectedProductionSource, 'unknown')}) — treat with caution.`,
     unknownText: 'Production Mapping: not confirmed.',
-    status: cmp.selectedProductionSource === 'legacy' ? 'confirmed' : 'unknown',
+    status: typeof cmp.selectedProductionSource !== 'string' ? 'unknown' : (cmp.selectedProductionSource === 'legacy' ? 'confirmed' : 'anomaly'),
+  });
+  const exportEligible = v2Preview ? v2Preview.exportEligible : undefined;
+  statusLine(banner, {
+    confirmedText: 'Preview Export: Confirmed Disabled.',
+    anomalyText: 'Preview Export reports an unexpected enabled state — treat with caution.',
+    unknownText: 'Preview Export: Unknown / Not confirmed.',
+    status: typeof exportEligible !== 'boolean' ? 'unknown' : (exportEligible === false ? 'confirmed' : 'anomaly'),
+  });
+  const appliedToProduction = v2Preview ? v2Preview.appliedToProduction : undefined;
+  statusLine(banner, {
+    confirmedText: 'Production Write: Confirmed Disabled.',
+    anomalyText: 'Production Write reports an unexpected enabled state — treat with caution.',
+    unknownText: 'Production Write: Unknown / Not confirmed.',
+    status: typeof appliedToProduction !== 'boolean' ? 'unknown' : (appliedToProduction === false ? 'confirmed' : 'anomaly'),
   });
   container.appendChild(banner);
 
@@ -396,8 +476,10 @@ function _renderBody(container, comparison) {
     grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Legacy score: ${Number.isFinite(safety.legacySafetyScore) ? safety.legacySafetyScore : 'Unknown'}` }));
     grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `V2 score: ${Number.isFinite(safety.v2SafetyScore) ? safety.v2SafetyScore : 'Unknown'}` }));
     grid.appendChild(el('span', { style: 'color:var(--text-faint)', text: `Confidence: ${_formatPercent(safety.confidence)}` }));
-    grid.appendChild(el('span', { style: 'color:var(--danger)', text: `Hard stops: ${Number.isFinite(safety.hardStops) ? safety.hardStops : 0}` }));
-    grid.appendChild(el('span', { style: 'color:var(--danger)', text: `Critical risks: ${Number.isFinite(safety.criticalRisks) ? safety.criticalRisks : 0}` }));
+    const hardStopsText = Number.isFinite(safety.hardStops) && safety.hardStops >= 0 ? safety.hardStops : 'Unknown';
+    const criticalRisksText = Number.isFinite(safety.criticalRisks) && safety.criticalRisks >= 0 ? safety.criticalRisks : 'Unknown';
+    grid.appendChild(el('span', { style: 'color:var(--danger)', text: `Hard stops: ${hardStopsText}` }));
+    grid.appendChild(el('span', { style: 'color:var(--danger)', text: `Critical risks: ${criticalRisksText}` }));
     container.appendChild(grid);
   }
 
@@ -430,13 +512,20 @@ function _renderBody(container, comparison) {
   const review = _isRecord(cmp.humanReviewStatus) ? cmp.humanReviewStatus : null;
   if (review) {
     container.appendChild(sectionHeading('Human Review Status', 'rate_review'));
-    const approvalState = typeof review.approvalState === 'string' ? review.approvalState : 'unavailable';
-    container.appendChild(badge(approvalState, approvalState === 'approved' ? 'var(--success)' : approvalState === 'rejected' || approvalState === 'blocked' ? 'var(--danger)' : 'var(--text-faint)'));
+    const approvalState = _normalizeApprovalState(review.approvalState);
+    container.appendChild(badge(APPROVAL_STATE_LABEL[approvalState], APPROVAL_STATE_COLOR[approvalState]));
     const grid = el('div', { style: 'display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:11px' });
     grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Visual review complete: ${_yesNoUnknown(review.visualReviewComplete)}` }));
-    const completed = Number.isFinite(review.completed) ? review.completed : 0;
-    const required = Number.isFinite(review.required) ? review.required : 0;
-    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Progress: ${completed}/${required}` }));
+    const completedValid = Number.isFinite(review.completed) && review.completed >= 0;
+    const requiredValid = Number.isFinite(review.required) && review.required >= 0;
+    let progressText;
+    if (completedValid && requiredValid) {
+      const clampedCompleted = Math.min(review.completed, review.required);
+      progressText = `${clampedCompleted}/${review.required}`;
+    } else {
+      progressText = 'Progress unavailable';
+    }
+    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: progressText }));
     grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Can approve preview: ${_yesNoUnknown(review.canApprovePreview)}` }));
     container.appendChild(grid);
     const failed = _safeArray(review.failedItems), pending = _safeArray(review.pendingItems), adjust = _safeArray(review.needsAdjustment);
