@@ -6,16 +6,28 @@ resuming work on LUMIXA AI after time away.
 
 ## Current Version
 
-**LUMIXA AI, UI v1.0.0** (as displayed in the sidebar), built on a
-**Stage 2.4.2B.2** core pipeline — confirmed directly in
-`core/decision-engine/index.js` and `core/reference-transfer-engine/index.js`
-header comments and function bodies (`_computeStyleFeasibility`,
-`_validateStyleDNA`, `_buildStyleDNA`, `_classifyPhotographerStyle` all
-present and wired into the pipeline).
+**AI Workflow v1.1.6 (EPIC 2E-F)** — "Lightroom Mapping V2 — Controlled
+Preview Human Review" — as shown in the header/footer/sidebar badges
+(source of truth: `core/project-version.js`). Status line: "Legacy
+Active · Human Review Console Ready · XMP Unchanged". EPIC 2E-F is
+CLOSED as of this Phase D release; production output is still produced
+exclusively by Legacy Lightroom Mapping (`decision.styleBudget` →
+`core/lightroom-mapping-engine/index.js`) — the entire V2 shadow
+pipeline plus Preview Sandbox plus Human Review Console remain
+non-production, informational-only additions layered on top.
 
-`core/` = 29 modules. `ui/` = `app.js` (pipeline orchestration/state) +
-`ui-engine.js` + 12 canvas renderer files. `index.html` = single-page
-static entry point, no build step.
+(Historical note: earlier revisions of this file referenced a separate,
+older "LUMIXA AI, UI v1.0.0" / "Stage 2.4.2B.2" version scheme from
+before the `core/project-version.js` badge existed. That scheme is no
+longer tracked or displayed anywhere in the current UI — the AI
+Workflow badge above is the only version identifier the current
+codebase maintains.)
+
+`core/` = 50 modules (confirmed via `find core -name "*.js" | wc -l`).
+`ui/` = 18 files: `app.js` (pipeline orchestration/state) + `ui-engine.js`
++ `review-console-renderer.js` + `review-console-controller.js` + 14
+canvas/panel renderer files. `index.html` = single-page static entry
+point, no build step, no framework.
 
 ## Completed Development Stages (verified in source)
 
@@ -63,6 +75,16 @@ static entry point, no build step.
 | EPIC 2E-D | Controlled Overlay Test Gate V2 — answers "is the overlay simulation safe enough to enter a controlled TEST mode?" NOT production activation. New `core/lightroom-mapping-engine/mapping-v2-overlay-test-gate.js` (`buildControlledOverlayTestGateV2` — 16 test-gate checks, `testEligibility` with a 5-level ladder, `testPlan` with allowed/prohibited actions, required steps, success/stop criteria, a 10-item `humanReviewChecklist` all defaulting to "pending", `safetyRequirements` with `productionWriteDisabled` always `true`). Added 15 new flags to `mapping-v2-flags.js` — `enableControlledOverlayTestGate` defaults `true` (evaluating readiness never touches production by itself), `allowControlledOverlayTest`/`allowOverlayTestPresetPreview`/`allowOverlayTestProductionWrite` all default `false`. Verified `canWriteProduction` is HARD-CODED `false` inside the module itself (not merely flag-gated, per Task 3's explicit "must remain false for this EPIC" requirement) — confirmed this stays false even when every other flag (`allowControlledOverlayTest`, `allowOverlayTestPresetPreview`, `requireHumanReviewForOverlayTest:false`) is manually forced favourable and `canEnterControlledTest`/`canPreviewOverlayPreset` correctly flip to `true` in that scenario (proving those two ARE genuinely flag-driven, while `canWriteProduction`/`selectedOutputSource` never move). "Production write disabled by design" is treated as a deliberate safety blocker (Task 5), not a system failure. Attached to `finalStyleIntent.controlledOverlayTestGateV2` (try/catch defense-in-depth, no `flags` override); compact sections added to Decision Report ("Controlled Overlay Test Gate V2" via `controlledOverlayTestGate`) and Reference Transfer Report (`testGateContext`), both safe if missing. Bumped `core/project-version.js`/badges/sidebar to "AI Workflow v1.1.3 (EPIC 2E-D)" / "Legacy Active · Overlay Test Gate Ready · XMP Unchanged" — sidebar sync (from EPIC 2E-C-F's title-splitting script) verified to update automatically with zero additional code, confirming that fix's single-source-of-truth design works across EPICs. Verified: production XMP output byte-identical/deterministic, legacy `decision.styleBudget` unchanged, badge and sidebar both visible without scrolling on desktop and mobile, zero console errors, zero remaining stale version text anywhere | New `core/lightroom-mapping-engine/mapping-v2-overlay-test-gate.js`; additive flags in `mapping-v2-flags.js`; minimal, try/catch-wrapped attachment in `core/decision-engine/index.js`; additive, safe-if-missing sections in `core/decision-report-engine/index.js` and `core/reference-transfer-engine/index.js`; version bump in `core/project-version.js`/`index.html` (sidebar synced automatically, no extra script changes needed); production `core/lightroom-mapping-engine/index.js` completely untouched (confirmed via grep) |
 | EPIC 2E-E | Controlled Overlay Preview Sandbox V2 — answers "if we previewed the overlay safely, what abstract preset changes would be simulated?" NOT production activation; builds a SEPARATE, non-production preview object. New `core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js` (`buildControlledOverlayPreviewSandboxV2` — 16 preview gate checks, a read-only, explicitly-immutable `legacyPreviewInput`, `previewOverlayPlan`, a `previewPresetShadow` with abstract 0-1 normalized `changes[]` only, before/after/delta risk estimates that hedge language and never claim visual-quality improvement, `previewComparison` that compares risk CATEGORIES only — never pixels, and 4+ `humanReviewNotes`). Added 15 new flags to `mapping-v2-flags.js` — `enableControlledOverlayPreviewSandbox`/`allowOverlayPreviewSandboxReport`/`allowOverlayPreviewPresetObject` default `true` (building an abstract preview object never touches production by itself), `allowOverlayPreviewXMPExport`/`allowOverlayPreviewProductionWrite`/`allowOverlayPreviewPresetMutation` all default `false`. Verified FIVE hard guarantees hold simultaneously and independently of any flag: `canExportPreviewXMP`, `canWriteProduction`, `previewPresetShadow.containsRealSliderValues`, `previewPresetShadow.containsXMPValues` all stay `false`, and the original `legacyPreset` object is provably never mutated (byte-identical JSON snapshot before/after a full-input call) — confirmed all five stay true even when every export/write/mutation flag (`allowOverlayPreviewXMPExport`, `allowOverlayPreviewProductionWrite`, `allowOverlayPreviewPresetMutation`) is manually forced `true`, while `canCreatePreview` (the one genuinely flag-driven output) correctly builds a real abstract preview object in that same test. Attached to `finalStyleIntent.controlledOverlayPreviewSandboxV2` (try/catch defense-in-depth, no `flags` override); compact sections added to Decision Report ("Controlled Overlay Preview Sandbox V2" via `controlledOverlayPreviewSandbox`) and Reference Transfer Report (`previewSandboxContext`), both safe if missing. Bumped `core/project-version.js`/badges/sidebar to "AI Workflow v1.1.4 (EPIC 2E-E)" / "Legacy Active · Preview Sandbox Ready · XMP Unchanged" — self-caught and fixed a real leftover bug during this stage: the sidebar's static HTML fallback had drifted to read "v1.1.3 · Overlay Test Gate" (a stale hand-edited string from the EPIC 2E-D patch, not derived from the dynamic script) instead of matching the new version; caught via the QA-recommended stale-version grep and corrected to "v1.1.4 · Overlay Preview Sandbox". Verified: production XMP output byte-identical/deterministic, legacy `decision.styleBudget` unchanged, badge and sidebar both visible without scrolling on desktop and mobile, zero console errors, zero remaining stale version text anywhere in the codebase (grep-verified for v1.0.0, v1.1.2, and v1.1.3 strings) | New `core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js`; additive flags in `mapping-v2-flags.js`; minimal, try/catch-wrapped attachment in `core/decision-engine/index.js`; additive, safe-if-missing sections in `core/decision-report-engine/index.js` and `core/reference-transfer-engine/index.js`; version bump in `core/project-version.js`/`index.html` (including a manual fix to the sidebar's stale static fallback text); production `core/lightroom-mapping-engine/index.js` completely untouched (confirmed via grep) |
 | EPIC 2E-E-F | Preview Sandbox Contract and Gate Consistency Patch — confirmed two real defects in EPIC 2E-E's implementation: (1) `canCreatePreview` eligibility only checked "simulation or overlay exists", never actually verifying test-gate eligibility, hard stops, over-stack severity, confidence/safety thresholds, or human review; (2) human review was represented only as free-text `humanReviewNotes`, with no structured, honestly-tracked checklist. Rewrote `mapping-v2-overlay-preview-sandbox.js`'s public contract to canonical field names (`previewState`, `canGeneratePreview`, `canExportPreview`, `previewEligibility`, `previewPlan`, `simulatedPreviewPreset`, `previewRiskReview`, `humanReviewChecklist`, `safetyRequirements`) while keeping the EPIC 2E-E names as backward-compatible aliases pointing at the same values (`sandboxState`, `canCreatePreview`, `canExportPreviewXMP`, `previewOverlayPlan`, `previewPresetShadow`, `humanReviewNotes`, `previewRiskBefore/After/Delta`). `canGeneratePreview` now requires ALL required gates simultaneously — sandbox enabled, generation explicitly allowed, test gate existing AND indicating real controlled-test eligibility, simulation/overlay/safety clamp all existing, no hard stops, no critical over-stack, sufficient confidence AND safety score, AND a complete 10-item human review checklist (`legacy-output-preserved` through `export-path-unchanged`) that is NEVER assumed passed — every item defaults to "pending" unless an optional `humanReviewState` map explicitly supplies "passed"/"failed" per item. Added canonical flags to `mapping-v2-flags.js` (`enableOverlayPreviewSandbox`, `allowOverlayPreviewGeneration`, `allowOverlayPreviewExport`, `requireHumanReviewForPreview`, `minOverlayPreviewConfidence`, `minOverlayPreviewSafetyScore`), keeping the EPIC 2E-E names as documented deprecated aliases (grep-confirmed unused elsewhere). Ran all 7 required QA scenarios: empty input, default flags, forced-dangerous-flags (export/write/mutation all forced true — `canExportPreview`/`canWriteProduction` still hard-coded `false`; `canGeneratePreview` correctly still `false` because the export/write/mutation gate checks themselves fail when those flags are abnormally enabled — a deliberate fail-closed design, not a bug), complete-technical-gates-but-incomplete-human-review (→ `previewState:"awaiting-human-review"`, `canGeneratePreview:false`), all-gates-and-review-complete (→ `previewState:"preview-ready"`, `canGeneratePreview:true`, `simulatedPreviewPreset.available:true`, export/write still `false`), and a full immutability test (legacyPreset/simulation/safety-clamp/test-gate all byte-identical before/after, `simulatedPreviewPreset` confirmed to be a genuinely new object, never the same reference as `legacyPreset`). Updated `decision-report-engine/index.js` and `reference-transfer-engine/index.js` to read canonical field names directly (not the aliases). Confirmed no calls to preset-engine, xmp-validator, or `mapStyleFingerprintToLightroom` anywhere in the rewritten module (grep-verified); production XMP output byte-identical/deterministic; legacy `decision.styleBudget` unchanged; AI Workflow badge/version unchanged (this patch touched no version metadata); zero console errors | `core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js` (full rewrite of the public contract and eligibility logic); additive canonical flags in `mapping-v2-flags.js` (EPIC 2E-E names kept as deprecated aliases); comment-only update in `core/decision-engine/index.js` (no field-access changes needed — it only stores the whole returned object); canonical-field updates in `core/decision-report-engine/index.js` and `core/reference-transfer-engine/index.js`; production `core/lightroom-mapping-engine/index.js` completely untouched |
+| EPIC 2E-F Phase A | Controlled Preview Review State Model (standalone) — new `mapping-v2-preview-review-state.js` with 4 exports: `createPreviewReviewStateV2`, `updatePreviewReviewItemV2`, `resetPreviewReviewStateV2`, `evaluatePreviewReviewStateV2`. A pure state machine tracking the 10-item human review checklist (all default "pending", never auto-approved — especially the 6 visual items: source-image/skin-tones/highlights/shadows/white-balance/color-stacking-reviewed). Two-dimension approval: `approvalState` reflects checklist completion only; `canApprovePreview` additionally requires `sandbox.canGeneratePreview===true`. Self-caught bug during build: metadata used to track sandbox readiness via fragile blocker-text matching — fixed by storing `sandboxCanGeneratePreview` as a direct boolean in `metadata` | New `mapping-v2-preview-review-state.js` only, not yet wired into the pipeline |
+| EPIC 2E-F-A-F | Preview Review State Consistency Patch — 2 real defensive bugs found and fixed. Bug 1: `{status:"passed", reviewed:false}` was a reachable combination — fixed so a final "passed"/"failed" status always forces `reviewed:true`; an explicit `reviewed:false` override is only honored for pending/unavailable/not-required. Bug 2: the unknown-item-ID code path rebuilt state via `_buildReviewState` with a forced-null sandbox, incorrectly resetting `approvalState` to "unavailable" even on an already-approved state — fixed to deep-clone every field directly from the real current state (no `_buildReviewState`, no JSON stringify/parse round-trip) and add exactly one warning, verified every nested array/object is a genuinely new reference | `mapping-v2-preview-review-state.js` only |
+| EPIC 2E-F Phase B | Review State Pipeline Integration — wired `createPreviewReviewStateV2` into `decision-engine/index.js` as the LAST stage (integration order #11, after the Preview Sandbox), attached to `finalStyleIntent.controlledPreviewReviewStateV2`. Added a "Controlled Preview Human Review" Decision Report section (nested under `photographerIntelligence`, matching the existing pattern) and Reference Transfer `reviewStateContext`. Pipeline was stateless at this point — `existingReviewState` always `null` (no caller mechanism existed yet to supply prior progress; that came in EPIC 2E-F-B-F). Bumped to v1.1.5/EPIC 2E-F, sidebar auto-updated via the existing title-splitting script with zero extra code | Integration-only in `core/decision-engine/index.js`; report sections in `decision-report-engine/index.js`/`reference-transfer-engine/index.js`; version bump in `core/project-version.js`/`index.html`; `mapping-v2-preview-review-state.js` itself untouched |
+| EPIC 2E-F-B-F | Existing Review State Input Plumbing Patch — confirmed the gap described in Phase B's own comment was real: `buildFinalPreset(inputs)` had no `controlledPreviewReviewStateV2` field and `_buildDecision` had no matching parameter, so a caller genuinely had no way to pass prior review progress in. Added `inputs.controlledPreviewReviewStateV2` (default `null`, documented via JSDoc, fully backward-compatible) → threaded through `_buildDecision`'s new `existingControlledPreviewReviewStateV2` parameter → passed as `existingReviewState` to `createPreviewReviewStateV2`, with the explicit incoming state given priority. Every derived field (approvalState, canApprovePreview, etc.) is still fully recalculated by the engine — nothing in decision-engine copies an approval field from the incoming state. Verified with 14 QA scenarios: no-input backward compat, partial/full/failed/needs-adjustment input, 6 malformed-input shapes (none crashed), unknown/duplicate item IDs, deterministic output | `core/decision-engine/index.js` only |
+| EPIC 2E-F Phase C-A | Controlled Preview Review Console UI Foundation — new `ui/review-console-renderer.js` (pure, read-only at this stage — explicitly NO interactive controls yet) rendering the safety strip, review progress, checklist, risk summary, blockers/warnings, rollback status, from the already-computed Sandbox/Review State objects. Self-caught and fixed a real pre-existing defect during this stage: `renderReviewConsole` was already wired with interactive Approve/Reject/Needs-Adjustment buttons calling `updatePreviewReviewItemV2` directly from the UI — this violated the phase's explicit "read-only, no actions yet" contract, so all three buttons and the `onAction` callback were removed, leaving pure DOM display. Confirmed 0 buttons render anywhere; XSS-safe via `textContent`/`createElement` throughout | New `ui/review-console-renderer.js`; wiring in `ui/app.js` (`renderReviewConsoleFromState`, called after analysis and on Reset); new `#reviewConsoleSection`/`#reviewConsoleInner` in `index.html` |
+| EPIC 2E-F-C-A-F / F2 | Review Console Honesty and Resilience Patches — two rounds. **F:** fixed a genuine crash bug (`listRow()`'s `appendChild()` threw on a non-Node, non-string value like a numeric `restoreSource`), a circular-reference crash in blocker `JSON.stringify`, a `null`-array-entry crash in `reviewItems`, and the core honesty defect — the safety-strip confirmation lines always showed a green checkmark and fixed wording regardless of what the underlying boolean actually said. Replaced with a tri-state `statusLine()` (Confirmed/Anomaly/Unknown) that never shows a false checkmark for missing or contradictory evidence; also added the previously-missing Preview Risk Review section, full checklist completeness (category/required-optional/reviewer-decision/item-warnings/updatedAt), blocker/warning array-type guards, and `Number.isFinite` progress guards. **F2:** two more real defects found in the SAME areas — the "This preview is non-production" line was STILL hard-coded true regardless of `simulatedPreviewPreset` evidence (fixed with `_evaluatePreviewNonProduction()` reading `mode`/`appliedToProduction`/`productionSafe`, any one contradicting field forces "anomaly"), and the progress-percentage fallback silently showed 0% instead of computing `completed/required*100` when `percentage` itself was invalid (fixed per the spec's exact 3 worked examples, all verified) | `ui/review-console-renderer.js` only, both patches |
+| EPIC 2E-F Phase C-B | Interactive Checklist Controls — upgraded the console from read-only to interactive. New `ui/review-console-controller.js`: ONE delegated event-listener set (click/focusout/input) attached ONCE per page session to the persistent `#reviewConsoleInner` container (never re-attached per render, since only its children — not the container itself — are replaced on each render), calling ONLY `updatePreviewReviewItemV2`/`resetPreviewReviewStateV2` from the existing engine (zero approval logic duplicated in the UI). Pass/Fail/Needs-Adjustment/Pending buttons (Fail uses an inline 2-step "Confirm Fail?" pattern, no `window.confirm`), a 500-char reviewer-note textarea (commits on `focusout`), and a Reset Review control (same 2-step confirm pattern) added to the renderer. `buildFinalPreset()` now receives `controlledPreviewReviewStateV2: state.lastPreviewReviewState` so same-image Re-analyze preserves progress/notes (pipeline re-normalizes against the fresh Sandbox); `handleReset()` (called before every new-image import) already cleared this field, so a different image never inherits approval. Self-caught and fixed a real Temporal-Dead-Zone crash during this build: `let reviewConsoleController` was declared AFTER an immediately-invoked `waitForRoot(...)` call whose callback can run synchronously if the DOM root already exists — fixed by moving the declaration ahead of that call. Verified: 0 Export/Apply buttons ever appear even at full approval; technical Sandbox blockers remain visible even when the checklist is 100% complete; XSS injection in notes produces 0 script elements and 0 fired alerts; rapid clicks and 3x Re-analyze + 1 click produce exactly 1 live-region mutation (no duplicate listeners); 44px touch targets confirmed; XMP byte-identical after heavy review interaction | New `ui/review-console-controller.js`; interactive-controls additions to `ui/review-console-renderer.js`; wiring + `buildFinalPreset` input + TDZ fix in `ui/app.js`; new persistent `#reviewConsoleLiveRegion` in `index.html` |
+| EPIC 2E-F-C-B-F | Interactive Review Lifecycle Patch — two real interaction bugs found and fixed. **Bug 1:** the controller's transient confirmation state (`pendingConfirm`/`resetConfirmPending`) persists for the whole page session with no clearing mechanism, so a "Confirm Fail?" armed on one image's item could visually reappear on a DIFFERENT image's item sharing the same canonical ID (every image uses the same fixed item-ID set) — fixed with a new public `resetTransientUiState()` method (clears only the transient flags, never touches Review State, never rerenders, never tears down listeners), called from `handleReset()` (new-image import / full reset) but never from `handleReanalyze()`. **Bug 2:** `focusout`'s immediate `rerender()` destroyed the DOM — including the button about to receive a `click` — before that click could ever fire, silently dropping the action whenever a user typed a note and clicked Pass/Fail/etc. without blurring first; fixed with `_isPendingActionControl()`: when focus is moving to another review action control, the note still commits to state immediately but the DOM re-render is deferred to that control's own click handler, producing exactly one final render. Verified against the spec's exact expected sequence (type note → click Pass → `{reviewerNote, status:"passed", reviewed:true, reviewerDecision:"approve"}` in one render) plus the Fail-confirm and Reset sequences, new-image stale-confirmation clearing, Re-analyze regression, rapid clicks, and a duplicate-listener check (still exactly 1 mutation per click) | `ui/review-console-controller.js`, `ui/app.js` |
+| Initial Analysis Canvas Layout Fix + Fix-F | Two-stage fix for a first-import canvas sizing bug (unrelated to Review Console, bundled here for the same release). Root cause: the first-import render path used only 1 `requestAnimationFrame` and never waited for `document.fonts.ready` or a settled container width, with a silent `560`px hardcoded fallback on zero-width reads — causing the canvas to render at the wrong size on first import (only "fixed" itself once the user hit Re-analyze, when layout had incidentally settled). Fix-F found and corrected a second-order bug in the first fix: the readiness flow measured the SECTION's border-box width (including 40px+ of padding/border) instead of the canvas's own content width, causing a smaller but still-real overshoot. Final fix: a shared `waitForAnalysisRenderReady()` helper (image.decode → fonts.ready → 2 rAF → bounded container-width retry) plus a `resolveCanvasCssWidth()` resolver that only ever trusts the canvas element's own measured width, never a parent/section rect; `canvas.style.width` kept as responsive `100%` (never a fixed px value); per-element `WeakMap` tracking replaces a single shared `lastWidth` in the `ResizeObserver` (a hidden group's 0-width report can no longer clobber the active group's state). Verified: first-import and Re-analyze produce byte-identical canvas dimensions; DPR 1 and DPR 2 backing-store sizes exact; mobile 390px no overflow; K-Means/analysis values unchanged | `ui/app.js`, `ui/image-analysis-renderer.js`, `ui/palette-renderer.js` |
+| EPIC 2E-F Phase D | Documentation + Final Release Check — closed out EPIC 2E-F as a stable, documented, regression-checked release. Bumped to **v1.1.6 (EPIC 2E-F)**, title "Lightroom Mapping V2 — Controlled Preview Human Review", status "Legacy Active · Human Review Console Ready · XMP Unchanged". Self-caught and fixed a real, multi-EPIC-old stale-version bug during this stage's version-consistency audit: the header/footer/sidebar static HTML fallback text had been silently stuck at **"v1.1.4 (EPIC 2E-E)" / "Legacy Active · Preview Sandbox Ready"** since before Phase B — undetected because the dynamic `project-version.js`-driven script always overwrote it correctly in a working browser, masking the stale fallback in every normal session; also found the `upgradedSystems` static `<li>` list was missing "Controlled Preview Human Review" and "Interactive Review Console" entirely. All fixed and re-verified in-browser (header/footer/sidebar all agree on v1.1.6). Ran the full 15-point release QA audit (syntax, import/export, pipeline order, default safety, dangerous-flag override attempts, Review State engine full test matrix, UI interaction suite, Re-analyze/new-image lifecycle, canvas regression, production isolation, XMP byte-identical regression, mutation/immutability, storage audit, UI version audit) — see `08_EPIC_2E_F_QA_REPORT.md` for full evidence. Added `06_EPIC_2E_F_RELEASE_NOTES.md` and `07_CONTROLLED_PREVIEW_REVIEW_ARCHITECTURE.md` | `core/project-version.js`, `index.html` (version bump + stale-text fixes only — no layout/structure changes); new docs; no other source files modified |
 
 ## Current Version (update)
 
@@ -404,6 +426,63 @@ explainable catalogue — no engine currently reads from it (see
   human-review-recording mechanism anywhere in this codebase (same open
   item as EPIC 2E-A/2E-D's human-review gates) — a real integration would
   need a genuine review-recording system to populate this map honestly.
+- **(EPIC 2E-F, all sub-stages) Preview is not Lightroom-accurate** —
+  `simulatedPreviewPreset.changes[]` are abstract, normalized 0-1
+  intensity values on a hand-chosen severity scale, never real slider
+  values; the Preview Console shows risk/status information, not a
+  rendered image preview of what the change would visually look like.
+- **(EPIC 2E-F Phase C-B onward) Human Review is entirely manual and
+  in-memory only.** There is still no automated verification that a
+  reviewer's Pass/Fail decision is correct — approval is only ever a
+  recorded human judgment. Review State lives in
+  `state.lastPreviewReviewState` in `ui/app.js` for the lifetime of the
+  page; refreshing the browser loses all review progress with no
+  warning (no persistence exists by design, per this phase's explicit
+  "no local storage yet" requirement).
+- **(EPIC 2E-F) Approval never activates anything.** Even a fully
+  "approved" Review State (`canApprovePreview:true`) does not enable
+  Preview Export, Production Write, or Mapping V2 activation — those
+  three booleans remain hard-coded `false` inside
+  `mapping-v2-overlay-preview-sandbox.js` itself, independent of any
+  flag or Review State value. Preview Export itself is not implemented
+  anywhere in this codebase; there is no code path that could write a
+  Preview object to a `.xmp` file even if every gate were satisfied.
+- **(EPIC 2E-F) Production Mapping V2 is not activated** and has no
+  activation path — Legacy Mapping (`decision.styleBudget` →
+  `core/lightroom-mapping-engine/index.js`) remains the sole producer of
+  XMP output through this entire EPIC; the V2 shadow pipeline
+  (`finalStyleIntent.*`) has zero production consumers, confirmed via
+  repeated grep audits across every sub-stage.
+- **(EPIC 2E-F) All Preview Risk Review and human-review-gate
+  thresholds remain hand-calibrated**, same caveat as every other
+  threshold set in this project (see EPIC 2E-A through 2E-E-F entries
+  above) — none of it has been validated against real edited photos or
+  a real reviewer's judgment.
+- **(EPIC 2E-F) Real-image regression testing is still required.** All
+  QA in this EPIC used synthetic test images/inputs (solid-color JPEGs,
+  hand-built mock analysis objects) — no test has run against a diverse
+  set of real photographer-submitted images.
+- **(EPIC 2E-F) Mobile layout has been verified only at the 390px
+  Playwright viewport**, not on real physical devices — ongoing
+  real-device testing is still recommended before treating mobile
+  support as fully proven.
+- **(EPIC 2E-F) No automated full-browser test suite exists** — every
+  QA pass in this EPIC (including this Phase D release audit) was a
+  manual, one-time Playwright script written and run for that specific
+  patch; there is no persisted, re-runnable regression suite checked
+  into the repository.
+- **(Phase D — release process note) Static HTML version-fallback text
+  had silently drifted for at least 4 sub-stages (stuck at "v1.1.4
+  (EPIC 2E-E)" since before Phase B) before being caught in this
+  release's version-consistency audit** — the dynamic
+  `project-version.js`-driven script always overwrote it correctly in a
+  working browser session, which is exactly why the drift went
+  unnoticed for so long: the bug is only visible if the module import
+  ever fails, or via direct source grep. This reinforces the existing
+  "grep for stale versions at the START of every version-bump stage"
+  lesson (first noted at EPIC 2E-E) — it needs to be a mandatory
+  release-audit step, not just a start-of-stage courtesy, since a
+  silent multi-stage drift is easy to miss without one.
 
 No forward-looking roadmap entry is enforced anywhere in the current
 codebase — any future stage should still be defined fresh against the
@@ -416,3 +495,102 @@ their own hard-coded constants**, one engine/one constant at a time (see
 suggested order — validation-threshold first, feasibility/transfer
 scoring coefficients last). This is an option, not a commitment; no
 migration has been scheduled or started.
+
+## EPIC 2E-F Pipeline Order (final, as integrated in `core/decision-engine/index.js`)
+
+1. Style Budget Intelligence
+2. Mapping V2 Planner
+3. Translation V2
+4. Safety Clamp V2
+5. Shadow Compare V2
+6. Controlled Activation V2
+7. Legacy Safety Overlay V2
+8. Overlay Simulation V2
+9. Controlled Overlay Test Gate V2
+10. Controlled Overlay Preview Sandbox V2
+11. Controlled Preview Review State V2 (LAST — built only after the
+    Preview Sandbox it depends on already exists)
+
+Every stage above attaches its own object to `finalStyleIntent` in a
+try/catch block (defense-in-depth — a failure in any one stage cannot
+break analysis or fall back to any unsafe default) and is read only by
+Decision Report / Reference Transfer Report narration. None of them are
+read by `core/lightroom-mapping-engine/index.js`
+(`mapStyleFingerprintToLightroom`), `preset-engine`, or `xmp-validator`
+— confirmed via repeated grep audits across every sub-stage of EPIC
+2E-F, most recently in this Phase D release audit.
+
+## Canonical Object Paths
+
+```
+finalStyleIntent.controlledOverlayPreviewSandboxV2
+finalStyleIntent.controlledPreviewReviewStateV2
+```
+
+Both live under `p._decision.finalStyleIntent` on the object returned
+by `buildFinalPreset()`. The UI reads them via
+`state.lastPreviewSandbox`/`state.lastPreviewReviewState` in
+`ui/app.js`, set once per analysis run right after `buildFinalPreset()`
+returns.
+
+**Human Review approval is purely informational.** `canApprovePreview`
+becoming `true` does not — and structurally cannot, since the relevant
+booleans are hard-coded inside `mapping-v2-overlay-preview-sandbox.js`
+itself — enable Preview Export, Production Write, or Production Mapping
+activation. There is no code path anywhere in this codebase, as of
+v1.1.6, that reads Review State approval and produces or alters any
+production output.
+
+## Safety Boundaries (EPIC 2E-F)
+
+- **Legacy Mapping vs. V2 shadow pipeline:** completely separate code
+  paths. `decision.styleBudget` (computed by
+  `core/lightroom-mapping-engine/index.js`) is the ONLY input to XMP
+  export. The entire `finalStyleIntent.*` V2 chain (stages 1-11 above)
+  is attached to a sibling object that no production code reads.
+- **Preview Sandbox vs. XMP export:** `simulatedPreviewPreset` contains
+  only abstract, normalized 0-1 "changes" — never real Lightroom slider
+  values, never XMP-schema values. `canExportPreview`/
+  `canWriteProduction` are hard-coded `false` inside the Sandbox module
+  itself; confirmed (this release and every prior sub-stage) that no
+  combination of feature flags can flip them.
+- **Review State Engine vs. UI:** all approval/progress/blocker
+  calculation happens exclusively in
+  `mapping-v2-preview-review-state.js`; the UI (`review-console-controller.js`)
+  only ever calls `updatePreviewReviewItemV2`/`resetPreviewReviewStateV2`
+  and renders whatever they return — zero approval logic is duplicated
+  client-side.
+- **UI state ownership:** `state.lastPreviewReviewState` in
+  `ui/app.js` is the single editable Review State for the current
+  analysis result. Same-image Re-analyze passes it back into
+  `buildFinalPreset()` so the engine can re-normalize it against a
+  fresh Sandbox (safely downgrading stale approval). New-image import
+  always clears it (via `handleReset()`, called unconditionally before
+  every `loadFile()`), so a different image can never inherit approval.
+- **Event delegation lifecycle:** `review-console-controller.js`
+  attaches exactly ONE delegated listener set, once per page session,
+  to the persistent `#reviewConsoleInner` container — verified this
+  never duplicates across repeated Re-analyze/new-image cycles (a
+  MutationObserver-based test confirmed exactly 1 DOM mutation per 1
+  user click even after 3 Re-analyzes).
+- **No local persistence:** confirmed via grep — zero
+  `localStorage`/`sessionStorage`/`indexedDB`/cookie usage in any
+  Review Console or Preview Sandbox file. The pre-existing, unrelated
+  dark-mode/language `localStorage` keys in `ui/app.js` predate EPIC
+  2E-F and are explicitly out of scope.
+- **Rollback / fail-safe behavior:** every V2 stage's `rollbackPlan`
+  reports `restoreSource:"legacy"`/`available:true`. If
+  `createPreviewReviewStateV2`/`updatePreviewReviewItemV2` ever throws
+  unexpectedly, the UI controller preserves the last valid state,
+  shows a concise (non-raw-error) message, and never falls back to an
+  approved-looking state.
+
+## Next Recommended EPIC
+
+**EPIC 2E-G — Side-by-Side Preview Comparison.** Purpose: let a
+reviewer visually compare the Legacy Preview against the V2 Controlled
+Preview side-by-side, remaining strictly non-production (no XMP
+activation), to support — not replace — the human review decisions this
+EPIC already introduced. Not implemented as part of EPIC 2E-F; this is
+a recommendation only, to be scoped fresh against the actual
+implementation when work begins.
