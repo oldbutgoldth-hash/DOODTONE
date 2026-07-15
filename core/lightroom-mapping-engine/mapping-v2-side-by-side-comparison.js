@@ -37,6 +37,20 @@ function _isRecord(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
+/**
+ * Normalizes any value to a safe array. Never trusts `x ?? []` alone —
+ * that only guards null/undefined, not a malformed non-array truthy
+ * value like a string or plain object, which would still reach
+ * `.map`/`.filter`/`.slice`/spread and either throw or silently
+ * produce wrong results (e.g. spreading a string iterates characters).
+ * Applied everywhere an untrusted field is used as a collection —
+ * adjustments, blockers, warnings, reasons, strengths, hardStops,
+ * reviewItems, evidence collections.
+ */
+function _safeArray(v) {
+  return Array.isArray(v) ? v : [];
+}
+
 /** Normalizes an arbitrary risk-level-ish value to low/medium/high/critical/unknown. Unknown NEVER becomes low. */
 function _normalizeRiskLevel(v) {
   if (typeof v === 'string') {
@@ -52,6 +66,45 @@ function _directionOf(magnitude) {
   if (magnitude == null || !Number.isFinite(magnitude)) return 'unknown';
   const m = Math.abs(magnitude);
   return m < 0.15 ? 'conservative' : m < 0.4 ? 'balanced' : 'strong';
+}
+
+/**
+ * Normalizes an arbitrary "hard stops" value into a safe, finite,
+ * non-negative integer count. Supports every shape the spec lists:
+ * array → length; finite positive number → integer count; boolean
+ * true → 1, false → 0; object with a numeric `.count` → that count;
+ * object with `.active === true` → 1; anything else (null, missing,
+ * malformed) → 0.
+ */
+function _normalizeHardStopCount(v) {
+  if (Array.isArray(v)) return v.length;
+  if (typeof v === 'number') return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+  if (typeof v === 'boolean') return v ? 1 : 0;
+  if (_isRecord(v)) {
+    if (typeof v.count === 'number' && Number.isFinite(v.count) && v.count > 0) return Math.floor(v.count);
+    if (v.active === true) return 1;
+    return 0;
+  }
+  return 0;
+}
+
+/**
+ * Reads a hard-stop count from BOTH possible sources
+ * (lightroomSafetyClampV2.hardStops and
+ * controlledOverlayPreviewSandboxV2.previewRiskReview.hardStops) and
+ * combines them without double-counting: if both sources are arrays,
+ * their lengths are summed only when they are clearly non-overlapping
+ * signals (different subsystems reporting independently) — since
+ * neither array shares identifiable entries in this data model, the
+ * safest, most honest merge is the GREATER of the two normalized
+ * counts (per spec: "use the greater confirmed count"), not a naive
+ * sum that could double-count the same underlying condition reported
+ * by two subsystems.
+ */
+function _mergedHardStopCount(safetyClamp, sandbox) {
+  const fromSafetyClamp = _normalizeHardStopCount(safetyClamp?.hardStops);
+  const fromSandbox = _normalizeHardStopCount(_isRecord(sandbox?.previewRiskReview) ? sandbox.previewRiskReview.hardStops : undefined);
+  return Math.max(fromSafetyClamp, fromSandbox);
 }
 
 /**
@@ -109,7 +162,7 @@ function _buildLegacyPreview(legacyPreset, legacyMappingSummary) {
   if (!available) {
     reasons.push('No legacy preset or legacy mapping summary was supplied — legacy preview data is unavailable, not assumed.');
     return {
-      available: false, source: 'legacy', productionSource: true, previewOnly: true,
+      available: false, dataAvailable: false, visualPreviewAvailable: false, source: 'legacy', productionSource: true, previewOnly: true,
       evidence: [], strengths, risks, warnings, reasons,
       summary: 'Legacy preview data is not available for this comparison.',
     };
@@ -124,7 +177,7 @@ function _buildLegacyPreview(legacyPreset, legacyMappingSummary) {
   else warnings.push('Legacy preset object was not supplied; relying on legacyMappingSummary only, which is a coarser signal.');
 
   return {
-    available: true, source: 'legacy', productionSource: true, previewOnly: true,
+    available: true, dataAvailable: true, visualPreviewAvailable: false, source: 'legacy', productionSource: true, previewOnly: true,
     // A DATA summary existing (numbers to classify) is NOT the same as a
     // renderable visual preview image existing — this codebase has no
     // image-rendering pipeline, so "evidence" here is always data-level.
@@ -144,7 +197,7 @@ function _buildV2Preview(sandbox) {
   if (!hasSandbox) {
     reasons.push('No controlledOverlayPreviewSandboxV2 was supplied — V2 preview data is unavailable, not assumed.');
     return {
-      available: false, source: 'controlled-v2-preview', productionSource: false, previewOnly: true,
+      available: false, dataAvailable: false, visualPreviewAvailable: false, source: 'controlled-v2-preview', productionSource: false, previewOnly: true,
       exportEligible: false, appliedToProduction: false,
       evidence: [], strengths, risks, warnings, reasons,
       summary: 'V2 preview data is not available for this comparison.',
@@ -156,19 +209,21 @@ function _buildV2Preview(sandbox) {
   // simulatedPreviewPreset.available is genuinely true.
   if (!presetAvailable) {
     reasons.push(`Sandbox previewState is "${sandbox.previewState ?? 'unknown'}" and simulatedPreviewPreset.available is not true — no V2 preview data exists yet to compare.`);
-    if (Array.isArray(sandbox.blockers) && sandbox.blockers.length) warnings.push(`Sandbox reports ${sandbox.blockers.length} blocker(s) preventing preview generation.`);
+    const sandboxBlockers = _safeArray(sandbox.blockers);
+    if (sandboxBlockers.length) warnings.push(`Sandbox reports ${sandboxBlockers.length} blocker(s) preventing preview generation.`);
     return {
-      available: false, source: 'controlled-v2-preview', productionSource: false, previewOnly: true,
+      available: false, dataAvailable: false, visualPreviewAvailable: false, source: 'controlled-v2-preview', productionSource: false, previewOnly: true,
       exportEligible: false, appliedToProduction: false,
       evidence: [], strengths, risks, warnings, reasons,
       summary: 'The V2 Controlled Preview has not been generated yet (Sandbox is not currently eligible) — nothing to compare against Legacy yet.',
     };
   }
 
-  strengths.push(...(preset.adjustments ?? []).slice(0, 5).map(a => a.reason).filter(Boolean));
+  const adjustments = _safeArray(preset.adjustments);
+  strengths.push(..._safeArray(adjustments.slice(0, 5).map(a => _isRecord(a) ? a.reason : null)).filter(Boolean));
   const risk = _isRecord(sandbox.previewRiskReview) ? sandbox.previewRiskReview : null;
   if (risk) {
-    const hardStops = typeof risk.hardStops === 'number' ? risk.hardStops : (Array.isArray(risk.hardStops) ? risk.hardStops.length : 0);
+    const hardStops = _normalizeHardStopCount(risk.hardStops);
     if (hardStops > 0) risks.push(`${hardStops} hard stop(s) currently active in the V2 preview.`);
     const overStack = _normalizeRiskLevel(risk.overStackSeverity);
     if (overStack === 'high' || overStack === 'critical') risks.push(`Over-stack severity is "${overStack}".`);
@@ -176,9 +231,9 @@ function _buildV2Preview(sandbox) {
   reasons.push('V2 preview object exists as an abstract, non-production comparison object — normalized 0-1 intensities only.');
 
   return {
-    available: true, source: 'controlled-v2-preview', productionSource: false, previewOnly: true,
+    available: true, dataAvailable: true, visualPreviewAvailable: false, source: 'controlled-v2-preview', productionSource: false, previewOnly: true,
     exportEligible: false, appliedToProduction: false,
-    evidence: [`simulatedPreviewPreset.available=true`, `${(preset.adjustments ?? []).length} adjustment(s) simulated`],
+    evidence: [`simulatedPreviewPreset.available=true`, `${adjustments.length} adjustment(s) simulated`],
     strengths, risks, warnings, reasons,
     summary: 'V2 Controlled Preview data is available for abstract comparison. This is data-level evidence only, not a rendered visual preview — no real Lightroom slider values or XMP fields are involved.',
   };
@@ -311,17 +366,20 @@ function _buildDivergenceSummary(dims) {
 }
 
 // ── Safety Comparison ──────────────────────────────────────────────────────────
-function _buildSafetyComparison(legacyPreview, v2Preview, safetyClamp) {
+function _buildSafetyComparison(legacyPreview, v2Preview, safetyClamp, sandbox) {
   const reasons = [], warnings = [];
   const legacyEvidence = legacyPreview.available;
   const v2Evidence = v2Preview.available;
-  const hardStops = Array.isArray(safetyClamp?.hardStops) ? safetyClamp.hardStops.length : 0;
-  const overStack = _normalizeRiskLevel(safetyClamp?.overStackAnalysis?.severity);
+  const hardStops = _mergedHardStopCount(safetyClamp, sandbox);
+  const overStack = _normalizeRiskLevel(safetyClamp?.overStackAnalysis?.severity ?? (_isRecord(sandbox?.previewRiskReview) ? sandbox.previewRiskReview.overStackSeverity : undefined));
   const criticalOverstack = overStack === 'critical';
-  const v2SafetyScore = safetyClamp?.globalSafetyScore ?? null;
+  const v2SafetyScore = typeof safetyClamp?.globalSafetyScore === 'number' && Number.isFinite(safetyClamp.globalSafetyScore) ? safetyClamp.globalSafetyScore : null;
   // Legacy mapping has no equivalent numeric safety score of its own —
   // it is the current production path by definition, so its "score"
   // here is deliberately left null/uncertain rather than assumed 1.0.
+  // BUG 5: this being null is exactly why a strong V2 score ALONE must
+  // never be enough to claim "v2" is the safer side — there is no
+  // comparable legacy number to actually compare it against.
   const legacySafetyScore = null;
 
   if (!legacyEvidence) warnings.push('Missing legacy evidence prevents a confident safety comparison.');
@@ -333,15 +391,29 @@ function _buildSafetyComparison(legacyPreview, v2Preview, safetyClamp) {
   let saferSide, confidence;
   if (!legacyEvidence || !v2Evidence) { saferSide = 'uncertain'; confidence = 0.2; reasons.push('Insufficient evidence on one or both sides for a safety-side verdict.'); }
   else if (hardStops > 0 || criticalOverstack) { saferSide = 'legacy'; confidence = 0.55; reasons.push('Legacy remains the safer default while V2 carries unresolved hard-stop/over-stack risk.'); }
-  else if (v2SafetyScore != null && v2SafetyScore >= 0.7) { saferSide = 'v2'; confidence = 0.5; reasons.push(`V2 safety score (${v2SafetyScore}) is strong with no hard stops or critical over-stack.`); }
-  else if (v2SafetyScore != null) { saferSide = 'tie'; confidence = 0.35; reasons.push(`V2 safety score (${v2SafetyScore}) is moderate — not confidently safer or riskier than legacy.`); }
-  else { saferSide = 'uncertain'; confidence = 0.2; reasons.push('No V2 safety score available.'); }
+  else if (legacySafetyScore == null) {
+    // BUG 5 fix: no comparable legacy safety score exists, so the
+    // comparative "safer side" can never be resolved to "v2" or
+    // "legacy" purely from V2's own internal score, no matter how
+    // strong that score is — it is honestly "uncertain".
+    saferSide = 'uncertain'; confidence = v2SafetyScore != null ? 0.3 : 0.2;
+    reasons.push(v2SafetyScore != null
+      ? `V2 reports a strong internal safety score (${v2SafetyScore}), but no comparable Legacy safety score exists — the comparative safer side remains uncertain, not "v2".`
+      : 'No V2 safety score available, and no comparable Legacy safety score exists either.');
+  }
+  else {
+    // Unreachable while legacySafetyScore is always null in this
+    // codebase — kept as an honest, explicit branch for the day a real
+    // comparable legacy safety score becomes available, rather than
+    // silently folding this case into the "uncertain" branch above.
+    saferSide = 'tie'; confidence = 0.3; reasons.push('Comparable legacy safety evidence exists but did not clearly favor either side.');
+  }
 
   return {
     legacySafetyScore, v2SafetyScore, saferSide,
     confidence: +clamp01(confidence).toFixed(2),
     hardStops, criticalRisks: criticalOverstack ? 1 : 0,
-    uncertainty: !legacyEvidence || !v2Evidence || v2SafetyScore == null,
+    uncertainty: !legacyEvidence || !v2Evidence || v2SafetyScore == null || legacySafetyScore == null,
     reasons, warnings,
   };
 }
@@ -349,7 +421,7 @@ function _buildSafetyComparison(legacyPreview, v2Preview, safetyClamp) {
 // ── Risk Comparison (8 areas) ───────────────────────────────────────────────────
 function _buildRiskComparison(sandbox, safetyClamp) {
   const risk = _isRecord(sandbox?.previewRiskReview) ? sandbox.previewRiskReview : {};
-  const hardStopsCount = typeof risk.hardStops === 'number' ? risk.hardStops : (Array.isArray(risk.hardStops) ? risk.hardStops.length : (Array.isArray(safetyClamp?.hardStops) ? safetyClamp.hardStops.length : 0));
+  const hardStopsCount = _mergedHardStopCount(safetyClamp, sandbox);
 
   const areas = [
     ['skin', risk.skinRisk],
@@ -416,6 +488,37 @@ function _buildEvidenceQuality(legacyPreview, v2Preview, reviewState, dims) {
 }
 
 // ── Human Review Status ────────────────────────────────────────────────────────
+const CANONICAL_VISUAL_IDS = ['source-image-reviewed', 'skin-tones-reviewed', 'highlights-reviewed', 'shadows-reviewed', 'white-balance-reviewed', 'color-stacking-reviewed'];
+
+/**
+ * EPIC 2E-G-A-F Bug 2 fix: `visualReviewComplete` may be true ONLY when
+ * every one of the 6 canonical visual-review items is present, has
+ * `status === "passed"`, `reviewed === true`, and a `reviewerDecision`
+ * that is neither "reject" nor "needs-adjustment". Uses a Map keyed by
+ * canonical ID so duplicate IDs can never count as multiple completed
+ * items (the last valid entry for a given ID simply overwrites the
+ * previous one in the map — deterministic, never double-counted).
+ * `[].every(...)` on an empty/partial set was the previous (buggy)
+ * approach — vacuously true for an empty array and blind to missing
+ * IDs; this always explicitly checks map SIZE and every canonical ID
+ * individually instead.
+ */
+function _computeVisualReviewComplete(items) {
+  const map = new Map();
+  for (const item of _safeArray(items)) {
+    if (!_isRecord(item) || typeof item.id !== 'string' || !CANONICAL_VISUAL_IDS.includes(item.id)) continue;
+    map.set(item.id, item); // duplicate IDs: last valid entry wins, never counted twice
+  }
+  if (map.size < CANONICAL_VISUAL_IDS.length) return false; // an empty or partial checklist can never be complete
+  for (const id of CANONICAL_VISUAL_IDS) {
+    const item = map.get(id);
+    if (item.status !== 'passed') return false;
+    if (item.reviewed !== true) return false;
+    if (item.reviewerDecision === 'reject' || item.reviewerDecision === 'needs-adjustment') return false;
+  }
+  return true;
+}
+
 function _buildHumanReviewStatus(reviewState) {
   if (!_isRecord(reviewState)) {
     return {
@@ -426,13 +529,20 @@ function _buildHumanReviewStatus(reviewState) {
       warnings: [],
     };
   }
-  const items = Array.isArray(reviewState.reviewItems) ? reviewState.reviewItems : [];
+  const items = _safeArray(reviewState.reviewItems);
   const progress = _isRecord(reviewState.reviewProgress) ? reviewState.reviewProgress : null;
   const failedItems = items.filter(i => _isRecord(i) && i.status === 'failed').map(i => i.id);
   const pendingItems = items.filter(i => _isRecord(i) && i.status === 'pending').map(i => i.id);
   const needsAdjustment = items.filter(i => _isRecord(i) && i.reviewerDecision === 'needs-adjustment').map(i => i.id);
-  const visualIds = new Set(['source-image-reviewed', 'skin-tones-reviewed', 'highlights-reviewed', 'shadows-reviewed', 'white-balance-reviewed', 'color-stacking-reviewed']);
-  const visualReviewComplete = items.filter(i => _isRecord(i) && visualIds.has(i.id)).every(i => i.status === 'passed');
+  const visualReviewComplete = _computeVisualReviewComplete(items);
+
+  // BUG 2: normalize progress fields to finite, non-negative values —
+  // never trust reviewProgress blindly, malformed/missing values fall
+  // back to 0 rather than NaN/undefined/negative leaking outward.
+  const safeNonNegative = (v) => (Number.isFinite(v) && v >= 0 ? v : 0);
+  const normalizedProgress = safeNonNegative(progress?.percentage);
+  const normalizedCompleted = safeNonNegative(progress?.completed);
+  const normalizedRequired = safeNonNegative(progress?.required);
 
   const warnings = [];
   // EPIC 2E-G explicit rule: never trust stale top-level approval
@@ -443,16 +553,16 @@ function _buildHumanReviewStatus(reviewState) {
   return {
     available: true,
     approvalState: typeof reviewState.approvalState === 'string' ? reviewState.approvalState : 'unavailable',
-    progress: progress?.percentage ?? 0,
-    completed: progress?.completed ?? 0,
-    required: progress?.required ?? 0,
+    progress: normalizedProgress,
+    completed: normalizedCompleted,
+    required: normalizedRequired,
     failedItems, pendingItems, needsAdjustment,
     // Recalculated defensively: canApprovePreview is only ever true here
     // if the engine's own flag says so AND there are no failed items —
     // approval never activates output regardless.
     canApprovePreview: reviewState.canApprovePreview === true && failedItems.length === 0,
     visualReviewComplete,
-    reasons: [`Review approvalState="${reviewState.approvalState ?? 'unknown'}", ${progress?.completed ?? 0}/${progress?.required ?? 0} required items complete.`],
+    reasons: [`Review approvalState="${reviewState.approvalState ?? 'unknown'}", ${normalizedCompleted}/${normalizedRequired} required items complete.`],
     warnings,
   };
 }
@@ -491,7 +601,7 @@ export function buildSideBySidePreviewComparisonV2(input = {}) {
 
   const similaritySummary = _buildSimilaritySummary(comparisonDimensions);
   const divergenceSummary = _buildDivergenceSummary(comparisonDimensions);
-  const safetyComparison = _buildSafetyComparison(legacyPreview, v2Preview, safetyClamp);
+  const safetyComparison = _buildSafetyComparison(legacyPreview, v2Preview, safetyClamp, sandbox);
   const riskComparison = _buildRiskComparison(sandbox, safetyClamp);
   const evidenceQuality = _buildEvidenceQuality(legacyPreview, v2Preview, reviewState, comparisonDimensions);
   const humanReviewStatus = _buildHumanReviewStatus(reviewState);
@@ -508,6 +618,10 @@ export function buildSideBySidePreviewComparisonV2(input = {}) {
   if (!humanReviewStatus.visualReviewComplete) blockers.push('Human visual evidence is required but not yet complete.');
 
   // ── Comparison state ─────────────────────────────────────────────────────────
+  // BUG 3: every state below describes DATA/human-review readiness only
+  // — "ready-for-review" means "ready for a human to review the DATA
+  // comparison", never "a rendered image preview is ready to view
+  // side-by-side". This codebase has no image-rendering pipeline.
   let comparisonState;
   if (!legacyPreview.available && !v2Preview.available) comparisonState = 'unavailable';
   else if (evidenceQuality.level === 'insufficient') comparisonState = 'insufficient-evidence';
@@ -550,9 +664,9 @@ export function buildSideBySidePreviewComparisonV2(input = {}) {
   } else if (hardStopsCount > 0 || criticalOverstack) {
     photographerSummary = 'The V2 preview currently has unresolved safety concerns, so a confident comparison is not possible yet. Legacy remains the active production path.';
   } else if (similaritySummary.level === 'high' || similaritySummary.level === 'very-high') {
-    photographerSummary = 'The Legacy and V2 previews are similar in most areas, but some parts still require visual review. Legacy remains the active production path.';
+    photographerSummary = 'The Legacy and V2 data comparisons are similar in most areas, but some parts still require manual human review — no rendered image preview is available yet. Legacy remains the active production path.';
   } else {
-    photographerSummary = 'The Legacy and V2 previews differ in some areas and still require visual review before any conclusions are drawn. Legacy remains the active production path.';
+    photographerSummary = 'The Legacy and V2 data comparisons differ in some areas and still require manual human review before any conclusions are drawn — no rendered image preview is available yet. Legacy remains the active production path.';
   }
 
   // ── Developer summary ────────────────────────────────────────────────────────
@@ -569,8 +683,8 @@ export function buildSideBySidePreviewComparisonV2(input = {}) {
     mode: 'side-by-side-preview-comparison',
     comparisonState,
     comparisonAvailable,
-    canRenderLegacyPreview: legacyPreview.available,
-    canRenderV2Preview: v2Preview.available,
+    canRenderLegacyPreview: false, // hard-coded — this codebase has no image-rendering pipeline; data availability (legacyPreview.available) is NOT the same as visual renderability
+    canRenderV2Preview: false, // hard-coded — same reason; v2Preview.available means DATA exists, never that a renderable image exists
     canCompareVisually: false, // hard-coded — no image-rendering pipeline exists anywhere in this codebase
     selectedProductionSource: 'legacy', // hard-coded — this module can never select V2 as the production source
     legacyPreview, v2Preview,
