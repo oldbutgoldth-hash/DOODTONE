@@ -347,6 +347,19 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     if (fsi.controlledPreviewReviewStateV2Error) reasons.push(`[dev] Integration warning: ${fsi.controlledPreviewReviewStateV2Error}`);
   }
 
+  // EPIC 2E-G Phase B: Side-by-Side Preview Comparison narration (safe
+  // no-op if missing). Photographer wording NEVER claims a rendered
+  // image preview exists or that the two sides "look" similar/different
+  // — this stage is data-level comparison only, per this phase's
+  // explicit rule ("Do not say 'The previews look similar'").
+  const comparison = fsi.sideBySidePreviewComparisonV2;
+  if (comparison) {
+    reasons.push(`Side-by-Side Preview Comparison: ${comparison.photographerSummary}`);
+    if (comparison.blockers?.length) reasons.push(`[dev] Comparison blockers: ${comparison.blockers.slice(0, 3).join('; ')}.`);
+    reasons.push(`[dev] ${comparison.developerSummary}`);
+    if (fsi.sideBySidePreviewComparisonV2Error) reasons.push(`[dev] Integration warning: ${fsi.sideBySidePreviewComparisonV2Error}`);
+  }
+
   return {
     photographerStyleLabel: fsi.photographerStyleLabel ?? null,
     styleFamily: fsi.styleFamily ?? null,
@@ -581,6 +594,44 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
       productionMappingRemainsLegacy: fsi.controlledOverlayPreviewSandboxV2 ? fsi.controlledOverlayPreviewSandboxV2.selectedOutputSource === 'legacy' : true,
       photographerSummary: fsi.controlledPreviewReviewStateV2.reviewSummary?.photographerMessage,
       developerSummary: fsi.controlledPreviewReviewStateV2.reviewSummary?.developerMessage,
+    } : null,
+    // EPIC 2E-G Phase B: "Side-by-Side Preview Comparison" — compact,
+    // canonical-field-only section (not a raw JSON dump). Read-only;
+    // this comparison has no path to production output, Preview
+    // Export, Production Write, or XMP — it is purely informational.
+    // Safe if the comparison object is missing entirely.
+    sideBySidePreviewComparison: fsi.sideBySidePreviewComparisonV2 ? {
+      comparisonState: fsi.sideBySidePreviewComparisonV2.comparisonState,
+      comparisonAvailable: fsi.sideBySidePreviewComparisonV2.comparisonAvailable,
+      legacyDataAvailable: fsi.sideBySidePreviewComparisonV2.legacyPreview?.dataAvailable ?? false,
+      v2DataAvailable: fsi.sideBySidePreviewComparisonV2.v2Preview?.dataAvailable ?? false,
+      // Always false in this phase — no image-rendering pipeline exists.
+      canRenderLegacyPreview: fsi.sideBySidePreviewComparisonV2.canRenderLegacyPreview,
+      canRenderV2Preview: fsi.sideBySidePreviewComparisonV2.canRenderV2Preview,
+      canCompareVisually: fsi.sideBySidePreviewComparisonV2.canCompareVisually,
+      dimensionCoverage: `${(fsi.sideBySidePreviewComparisonV2.comparisonDimensions ?? []).filter(d => d.available).length}/${(fsi.sideBySidePreviewComparisonV2.comparisonDimensions ?? []).length}`,
+      overallSimilarity: fsi.sideBySidePreviewComparisonV2.similaritySummary?.overallSimilarity ?? null,
+      similarityLevel: fsi.sideBySidePreviewComparisonV2.similaritySummary?.level ?? 'unknown',
+      overallDivergence: fsi.sideBySidePreviewComparisonV2.divergenceSummary?.overallDivergence ?? null,
+      divergenceLevel: fsi.sideBySidePreviewComparisonV2.divergenceSummary?.level ?? 'unknown',
+      saferSide: fsi.sideBySidePreviewComparisonV2.safetyComparison?.saferSide ?? 'uncertain',
+      evidenceLevel: fsi.sideBySidePreviewComparisonV2.evidenceQuality?.level ?? 'insufficient',
+      humanReviewApprovalState: fsi.sideBySidePreviewComparisonV2.humanReviewStatus?.approvalState ?? 'unavailable',
+      visualReviewComplete: fsi.sideBySidePreviewComparisonV2.humanReviewStatus?.visualReviewComplete ?? false,
+      majorBlockers: (fsi.sideBySidePreviewComparisonV2.blockers ?? []).slice(0, 4),
+      warnings: (fsi.sideBySidePreviewComparisonV2.warnings ?? []).slice(0, 4),
+      recommendations: (fsi.sideBySidePreviewComparisonV2.recommendations ?? []).slice(0, 5),
+      fallbackUsesLegacyMapping: fsi.sideBySidePreviewComparisonV2.fallbackStrategy?.useLegacyMapping ?? true,
+      rollbackAvailable: fsi.sideBySidePreviewComparisonV2.rollbackPlan?.available ?? false,
+      // Explicit, always-true-in-this-phase confirmations — never
+      // inferred, always read from the objects that actually enforce
+      // them (same pattern as controlledPreviewHumanReview above).
+      selectedProductionSource: fsi.sideBySidePreviewComparisonV2.selectedProductionSource ?? 'legacy',
+      previewExportDisabled: fsi.controlledOverlayPreviewSandboxV2 ? fsi.controlledOverlayPreviewSandboxV2.canExportPreview === false : true,
+      productionWriteDisabled: fsi.controlledOverlayPreviewSandboxV2 ? fsi.controlledOverlayPreviewSandboxV2.canWriteProduction === false : true,
+      xmpUnchanged: true, // structural guarantee — this comparison has no XMP-writing code path at all
+      photographerSummary: fsi.sideBySidePreviewComparisonV2.photographerSummary,
+      developerSummary: fsi.sideBySidePreviewComparisonV2.developerSummary,
     } : null,
     editingStrategy: strategy ?? null,
     styleBudget: budget ? { name: budget.name, adjustmentsMade: budgetAdjustments.length, details: budgetAdjustments } : null,

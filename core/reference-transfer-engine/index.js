@@ -236,6 +236,12 @@ export function buildReferenceTransferReport(ctx) {
   // on finalStyleIntent is preserved automatically without needing a
   // second, conflicting Review State object.
   const reviewState = dec?.finalStyleIntent?.controlledPreviewReviewStateV2 ?? null;
+  // EPIC 2E-G Phase B: same pass-through pattern as reviewState above —
+  // this reads the canonical object already attached to
+  // dec.finalStyleIntent (never rebuilds finalStyleIntent), so the
+  // canonical sideBySidePreviewComparisonV2 object is preserved as-is
+  // automatically.
+  const sideBySideComparison = dec?.finalStyleIntent?.sideBySidePreviewComparisonV2 ?? null;
   if (reviewState) {
     recommendations2.push(`Preview Review: approval state is "${reviewState.approvalState}" (${reviewState.reviewProgress?.completed ?? 0}/${reviewState.reviewProgress?.required ?? 0} required checks passed) — review approval never activates production output.`);
     if (reviewState.reviewSummary?.nextRequiredItem) {
@@ -320,6 +326,19 @@ export function buildReferenceTransferReport(ctx) {
       requiredCompleted: reviewState.reviewProgress?.completed ?? 0,
       requiredTotal: reviewState.reviewProgress?.required ?? 0,
       nextRequiredItem: reviewState.reviewSummary?.nextRequiredItem ?? null,
+    } : { available: false },
+    // EPIC 2E-G Phase B: compact context only — the full canonical
+    // object lives on finalStyleIntent.sideBySidePreviewComparisonV2,
+    // preserved as-is by this pass-through read (never rebuilt).
+    // canRenderLegacyPreview/canRenderV2Preview/canCompareVisually are
+    // always false here — no image-rendering pipeline exists yet.
+    sideBySideComparisonContext: sideBySideComparison ? {
+      available: true,
+      comparisonState: sideBySideComparison.comparisonState,
+      comparisonAvailable: sideBySideComparison.comparisonAvailable,
+      canCompareVisually: sideBySideComparison.canCompareVisually,
+      saferSide: sideBySideComparison.safetyComparison?.saferSide ?? 'uncertain',
+      selectedProductionSource: sideBySideComparison.selectedProductionSource ?? 'legacy',
     } : { available: false },
   };
 }

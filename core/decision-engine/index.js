@@ -40,6 +40,7 @@ import { buildLegacyOverlaySimulationV2 } from '../lightroom-mapping-engine/mapp
 import { buildControlledOverlayTestGateV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-test-gate.js';
 import { buildControlledOverlayPreviewSandboxV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js';
 import { createPreviewReviewStateV2 } from '../lightroom-mapping-engine/mapping-v2-preview-review-state.js';
+import { buildSideBySidePreviewComparisonV2 } from '../lightroom-mapping-engine/mapping-v2-side-by-side-comparison.js';
 
 // ─── Scene strategy table ─────────────────────────────────────────────────────
 // Each strategy is a set of TRUST MULTIPLIERS (not the base ENGINE_PRIORITY
@@ -172,6 +173,62 @@ export function buildFinalPreset(inputs) {
   const mapped = mapStyleFingerprintToLightroom({
     fingerprint, decision, stats, basic, wb, hsl, calibration, grading, toneCurves,
   });
+
+  // ── EPIC 2E-G Phase B: Side-by-Side Preview Comparison V2 (integration
+  // order #12 — after Preview Sandbox #10 and Review State #11, both of
+  // which already exist on decision.finalStyleIntent at this point). ──
+  //
+  // This MUST be built here, in buildFinalPreset() itself, rather than
+  // inside _buildDecision() (where every other finalStyleIntent stage
+  // lives) — because `mapped` (the REAL production Legacy preset: exp,
+  // con, hi, sh, temp, tint, vib, sat, etc. from
+  // mapStyleFingerprintToLightroom) does not exist until AFTER
+  // _buildDecision() has already returned. Passing anything other than
+  // this real mapped preset as legacyPreset (e.g. a Preview Sandbox
+  // object) would violate this phase's explicit "do not fabricate a
+  // legacy preview" rule.
+  //
+  // `decision.finalStyleIntent` here is the exact same object reference
+  // _buildDecision() already returned (JS objects are references) — so
+  // mutating it now is automatically visible to every downstream reader
+  // (Decision Report, Reference Transfer) without needing to rebuild or
+  // reconstruct finalStyleIntent anywhere.
+  //
+  // Wrapped in try/catch as defense-in-depth (same pattern as every
+  // other V2 stage above) — if the comparison engine throws
+  // unexpectedly, this falls back to the engine's OWN safe empty-input
+  // result (never a hand-duplicated shape) so every field the engine's
+  // contract guarantees stays present and honest, and Legacy Mapping /
+  // XMP export are completely unaffected either way.
+  try {
+    decision.finalStyleIntent.sideBySidePreviewComparisonV2 = buildSideBySidePreviewComparisonV2({
+      // The REAL current production Legacy preset — never the Preview
+      // Sandbox's simulated preset, never a shadow-only abstract hint.
+      legacyPreset: mapped,
+      // No separate "legacy mapping summary" object exists anywhere in
+      // this codebase — the comparison engine already falls back
+      // safely to legacyPreset alone when this is null.
+      legacyMappingSummary: null,
+      lightroomShadowCompareReportV2: decision.finalStyleIntent.lightroomShadowCompareReportV2,
+      controlledOverlayPreviewSandboxV2: decision.finalStyleIntent.controlledOverlayPreviewSandboxV2,
+      controlledPreviewReviewStateV2: decision.finalStyleIntent.controlledPreviewReviewStateV2,
+      legacyOverlaySimulationV2: decision.finalStyleIntent.legacyOverlaySimulationV2,
+      legacySafetyOverlayV2: decision.finalStyleIntent.legacySafetyOverlayV2,
+      lightroomSafetyClampV2: decision.finalStyleIntent.lightroomSafetyClampV2,
+      lightroomTranslationV2: decision.finalStyleIntent.lightroomTranslationV2,
+      photographerIntent: decision.finalStyleIntent.photographerIntent,
+      photographerStyle: decision.finalStyleIntent.photographerStyle,
+      styleDNA: decision.finalStyleIntent.photographerStyle?.top?.styleDNA,
+      captureCapability: decision.finalStyleIntent.captureCapabilityEstimate,
+    });
+  } catch (e) {
+    try {
+      decision.finalStyleIntent.sideBySidePreviewComparisonV2 = buildSideBySidePreviewComparisonV2({});
+    } catch {
+      decision.finalStyleIntent.sideBySidePreviewComparisonV2 = null;
+    }
+    decision.finalStyleIntent.sideBySidePreviewComparisonV2Error = `Side-by-side comparison failed safely (production unaffected): ${e.message}`;
+  }
 
   return {
     ...mapped,
