@@ -520,50 +520,103 @@ function _computeVisualReviewComplete(items) {
 }
 
 function _buildHumanReviewStatus(reviewState) {
-  if (!_isRecord(reviewState)) {
+  const isValidReviewState = _isRecord(reviewState);
+  const incomingApprovalState = isValidReviewState && typeof reviewState.approvalState === 'string' ? reviewState.approvalState : null;
+  const incomingCanApprovePreview = isValidReviewState && reviewState.canApprovePreview === true;
+  const incomingProgress = isValidReviewState && _isRecord(reviewState.reviewProgress) ? {
+    completed: Number.isFinite(reviewState.reviewProgress.completed) ? reviewState.reviewProgress.completed : null,
+    required: Number.isFinite(reviewState.reviewProgress.required) ? reviewState.reviewProgress.required : null,
+    percentage: Number.isFinite(reviewState.reviewProgress.percentage) ? reviewState.reviewProgress.percentage : null,
+  } : null;
+
+  if (!isValidReviewState) {
     return {
-      available: false, approvalState: 'unavailable', progress: 0, completed: 0, required: 0,
+      available: false, approvalState: 'unavailable', progress: 0, completed: 0, required: 6,
       failedItems: [], pendingItems: [], needsAdjustment: [], canApprovePreview: false,
       visualReviewComplete: false,
       reasons: ['No controlledPreviewReviewStateV2 was supplied.'],
       warnings: [],
+      metadata: { incomingApprovalState: null, incomingCanApprovePreview: false, incomingProgress: null },
     };
   }
+
   const items = _safeArray(reviewState.reviewItems);
-  const progress = _isRecord(reviewState.reviewProgress) ? reviewState.reviewProgress : null;
+  const warnings = [];
+
+  // Canonical-ID-keyed map — duplicate IDs never counted twice (last
+  // valid entry for a given ID wins), reused for both
+  // visualReviewComplete and the recalculated progress below.
+  const canonicalMap = new Map();
+  for (const item of items) {
+    if (!_isRecord(item) || typeof item.id !== 'string' || !CANONICAL_VISUAL_IDS.includes(item.id)) continue;
+    canonicalMap.set(item.id, item);
+  }
+
+  const visualReviewComplete = _computeVisualReviewComplete(items);
   const failedItems = items.filter(i => _isRecord(i) && i.status === 'failed').map(i => i.id);
   const pendingItems = items.filter(i => _isRecord(i) && i.status === 'pending').map(i => i.id);
   const needsAdjustment = items.filter(i => _isRecord(i) && i.reviewerDecision === 'needs-adjustment').map(i => i.id);
-  const visualReviewComplete = _computeVisualReviewComplete(items);
 
-  // BUG 2: normalize progress fields to finite, non-negative values —
-  // never trust reviewProgress blindly, malformed/missing values fall
-  // back to 0 rather than NaN/undefined/negative leaking outward.
-  const safeNonNegative = (v) => (Number.isFinite(v) && v >= 0 ? v : 0);
-  const normalizedProgress = safeNonNegative(progress?.percentage);
-  const normalizedCompleted = safeNonNegative(progress?.completed);
-  const normalizedRequired = safeNonNegative(progress?.required);
+  // ── EPIC 2E-G-A-F2: progress is recalculated from the 6 canonical
+  // visual IDs ONLY — never from incoming reviewProgress. An item
+  // counts as "completed" only when it has been actually reviewed
+  // (reviewed===true) and reached a non-pending (terminal) status —
+  // duplicate IDs are never double-counted because canonicalMap has
+  // exactly one entry per ID.
+  const required = 6;
+  let completed = 0;
+  for (const id of CANONICAL_VISUAL_IDS) {
+    const item = canonicalMap.get(id);
+    if (item && item.reviewed === true && item.status !== 'pending') completed++;
+  }
+  const progress = +((completed / required) * 100).toFixed(1);
 
-  const warnings = [];
-  // EPIC 2E-G explicit rule: never trust stale top-level approval
-  // metadata blindly — always re-derive from the canonical reviewItems/
-  // reviewProgress fields, exactly as consumed above.
-  if (reviewState.canApprovePreview === true && failedItems.length > 0) warnings.push('canApprovePreview claims true while failed items exist — using recalculated canonical fields, not the top-level flag, for this status.');
+  // ── EPIC 2E-G-A-F2: approvalState is recalculated from canonical
+  // reviewItems only — incoming reviewState.approvalState is NEVER
+  // trusted as the source of truth, only recorded as metadata below.
+  const canonicalFailed = CANONICAL_VISUAL_IDS.some(id => canonicalMap.get(id)?.status === 'failed');
+  const canonicalRejected = CANONICAL_VISUAL_IDS.some(id => canonicalMap.get(id)?.reviewerDecision === 'reject');
+  const canonicalNeedsAdjustment = CANONICAL_VISUAL_IDS.some(id => canonicalMap.get(id)?.reviewerDecision === 'needs-adjustment');
+
+  let approvalState;
+  if (canonicalMap.size === 0) approvalState = 'not-started';
+  else if (canonicalFailed) approvalState = 'blocked';
+  else if (canonicalRejected) approvalState = 'rejected';
+  else if (canonicalNeedsAdjustment) approvalState = 'needs-adjustment';
+  else if (visualReviewComplete) approvalState = 'approved';
+  else approvalState = 'in-progress';
+
+  // ── EPIC 2E-G-A-F2: canApprovePreview is recalculated — incoming
+  // reviewState.canApprovePreview can never override these rules.
+  // Also honors explicit "Sandbox unavailable" evidence recorded on
+  // the incoming Review State's own metadata, if present.
+  const sandboxKnownUnavailable = _isRecord(reviewState.metadata) && reviewState.metadata.sandboxCanGeneratePreview === false;
+  const canApprovePreview = visualReviewComplete === true
+    && !canonicalFailed && !canonicalRejected && !canonicalNeedsAdjustment
+    && !sandboxKnownUnavailable;
+
+  // ── Honesty warnings — flag disagreement with stale incoming metadata, never silently swallow it ──
+  if (incomingApprovalState === 'approved' && approvalState !== 'approved') {
+    warnings.push(`Incoming approvalState claimed "approved" but recalculated canonical state is "${approvalState}" — the recalculated value is used, not the stale incoming one.`);
+  }
+  if (incomingCanApprovePreview && !canApprovePreview) {
+    warnings.push('Incoming canApprovePreview claimed true but recalculated canonical review items do not support approval — the recalculated value is used.');
+  }
+  if (incomingProgress?.percentage != null && Math.abs(incomingProgress.percentage - progress) > 5) {
+    warnings.push(`Incoming reviewProgress (${incomingProgress.percentage}%) is inconsistent with recalculated canonical visual-review progress (${progress}%) — the recalculated value is used.`);
+  }
 
   return {
     available: true,
-    approvalState: typeof reviewState.approvalState === 'string' ? reviewState.approvalState : 'unavailable',
-    progress: normalizedProgress,
-    completed: normalizedCompleted,
-    required: normalizedRequired,
+    approvalState, progress, completed, required,
     failedItems, pendingItems, needsAdjustment,
-    // Recalculated defensively: canApprovePreview is only ever true here
-    // if the engine's own flag says so AND there are no failed items —
-    // approval never activates output regardless.
-    canApprovePreview: reviewState.canApprovePreview === true && failedItems.length === 0,
+    canApprovePreview,
     visualReviewComplete,
-    reasons: [`Review approvalState="${reviewState.approvalState ?? 'unknown'}", ${normalizedCompleted}/${normalizedRequired} required items complete.`],
+    reasons: [`Recalculated from canonical reviewItems (never trusting incoming top-level metadata): approvalState="${approvalState}", ${completed}/${required} canonical visual item(s) complete, visualReviewComplete=${visualReviewComplete}.`],
     warnings,
+    // Incoming top-level fields are preserved here for transparency/
+    // debugging ONLY — never consumed as the source of truth above.
+    metadata: { incomingApprovalState, incomingCanApprovePreview, incomingProgress },
   };
 }
 
