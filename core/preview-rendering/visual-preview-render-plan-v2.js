@@ -146,10 +146,17 @@ function _buildLegacyAdjustmentModel(legacyPreset) {
   // Limited color-grading approximation: only shadow/midtone/highlight
   // hue+saturation balance (grd_*), never the full Lightroom color-
   // grading wheel model.
-  const gradeFields = ['grd_sh_h', 'grd_sh_s', 'grd_mid_h', 'grd_mid_s', 'grd_hi_h', 'grd_hi_s'];
-  const hasGrade = _isRecord(preset.grade) || gradeFields.some(k => Number.isFinite(preset[k]));
+  // FIX 5 (EPIC 2E-H-A-F): Color Grading is supported ONLY when at
+  // least one actual finite grading field exists — `grade: {}` (an
+  // empty object) must NOT count as real grading data. Check both the
+  // nested `preset.grade` shape and the flat `grd_*` shape, but only
+  // ever set `hasGrade` from a genuinely finite numeric field, never
+  // merely from `preset.grade` existing as an object.
+  const g = _isRecord(preset.grade) ? preset.grade : preset;
+  const gradeCandidateValues = [g.grd_sh_h, g.grd_sh_s, g.grd_mid_h, g.grd_mid_s, g.grd_hi_h, g.grd_hi_s];
+  const hasGrade = gradeCandidateValues.some(v => Number.isFinite(v));
+  const gradeObjectPresentButEmpty = _isRecord(preset.grade) && !hasGrade;
   if (hasGrade) {
-    const g = _isRecord(preset.grade) ? preset.grade : preset;
     model.colorGrading = {
       shadowHue: Number.isFinite(g.grd_sh_h) ? g.grd_sh_h : null,
       shadowSat: _clampUnit((g.grd_sh_s ?? 0) / 30),
@@ -162,6 +169,7 @@ function _buildLegacyAdjustmentModel(legacyPreset) {
   } else {
     model.colorGrading = null;
     unsupportedAdjustments.push('colorGrading');
+    if (gradeObjectPresentButEmpty) normalizationWarnings.push('Legacy preset.grade was present but contained no finite hue/saturation field — treated as unsupported, not fabricated.');
   }
 
   return {
@@ -225,6 +233,11 @@ function _buildRenderConstraints() {
     allowWorkerRendering: false,
     allowProductionWrite: false,
     allowExport: false,
+    // FIX 8 (EPIC 2E-H-A-F): this value is ADVISORY ONLY at the plan
+    // level — this module has no code path that measures or enforces
+    // elapsed time. Whether a consuming renderer actually implements a
+    // bounded timeout is reported honestly by THAT renderer's own
+    // result metadata (`timeoutEnforced`), never implied here.
     timeoutMs: 8000,
   };
 }
@@ -302,7 +315,21 @@ function _buildV2RenderPlan(sandbox) {
 
   return {
     available, renderable, source: 'controlled-v2-preview', previewOnly: true, productionSource: false,
-    exportEligible: false, appliedToProduction: false, // hard-coded — this plan can never claim otherwise regardless of upstream anomalies, which are instead surfaced as warnings/reasons above
+    // This Render Plan's OWN behavior — always hard-coded, regardless
+    // of upstream anomalies (which are preserved honestly below in
+    // `upstreamEvidence`, never silently overwritten or hidden here).
+    exportEligible: false, appliedToProduction: false,
+    // FIX 6 (EPIC 2E-H-A-F): the actual upstream Sandbox report,
+    // preserved as-is — `null` when the field itself was never
+    // supplied (distinct from an explicit `false`), so a genuine
+    // contradiction (upstream reporting `true`) is never silently lost
+    // just because this Plan's own guarantee is hard-coded safe.
+    upstreamEvidence: {
+      simulatedPreviewAvailable: presetAvailable,
+      exportEligible: typeof exportEligible === 'boolean' ? exportEligible : null,
+      appliedToProduction: typeof appliedToProduction === 'boolean' ? appliedToProduction : null,
+      contradictory: contradictoryEvidence,
+    },
     previewAccuracy: 'approximate-browser-preview',
     adjustmentModel, protectedChannels: _buildProtectedChannels(), renderConstraints: _buildRenderConstraints(),
     warnings, reasons,

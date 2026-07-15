@@ -276,12 +276,41 @@ function _runPixelPipeline(imageData, model, appliedAdjustments, skippedAdjustme
  * Test-only pure helper: applies the full pipeline to a plain
  * Uint8ClampedArray/width/height triple without any canvas/DOM
  * involvement. Exported per the phase spec's "test helpers" allowance.
+ *
+ * FIX 7 (EPIC 2E-H-A-F): validates every input shape defensively
+ * before touching it — never throws, never mutates malformed input.
+ * For VALID input, the supplied `data` buffer is mutated in place
+ * (documented here explicitly, per the phase spec's allowance) since
+ * this mirrors the real canvas pipeline's own in-place behavior and
+ * avoids an extra full-size buffer allocation.
  */
 export function applyPreviewPixelTransformV2(imageDataLike, adjustmentModel) {
+  if (!_isRecord(imageDataLike)) {
+    return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: ['imageDataLike must be an object with data/width/height.'] };
+  }
+  const { data, width, height } = imageDataLike;
+  if (!(data instanceof Uint8ClampedArray)) {
+    return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: ['imageDataLike.data must be a Uint8ClampedArray.'] };
+  }
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || !Number.isInteger(width) || !Number.isInteger(height)) {
+    return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: ['imageDataLike.width/height must be finite positive integers.'] };
+  }
+  if (data.length < width * height * 4) {
+    return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: [`imageDataLike.data.length (${data.length}) is smaller than required for ${width}x${height} RGBA pixels (${width * height * 4}).`] };
+  }
   const model = _isRecord(adjustmentModel) ? adjustmentModel : {};
   const applied = [], skipped = [];
-  _runPixelPipeline(imageDataLike, model, applied, skipped);
-  return { appliedAdjustments: applied, skippedAdjustments: skipped };
+  try {
+    _runPixelPipeline(imageDataLike, model, applied, skipped);
+  } catch (e) {
+    return { state: 'failed', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: [`Pixel transform failed unexpectedly: ${e?.message ?? 'unknown error'}`] };
+  }
+  return {
+    state: 'rendered', transformed: true,
+    appliedAdjustments: applied, skippedAdjustments: skipped,
+    warnings: [...HONESTY_WARNINGS],
+    reasons: [`Applied ${applied.length} adjustment(s), skipped ${skipped.length} unsupported/unavailable adjustment(s). Note: the supplied data buffer was mutated in place.`],
+  };
 }
 
 const HONESTY_WARNINGS = [
@@ -359,7 +388,7 @@ function _createTempCanvas(width, height) {
  * @param {number} [params.generationId] - used for stale-render protection when paired with a controller from createIsolatedVisualPreviewRendererV2()
  * @param {AbortSignal} [params.signal]
  */
-export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan, side, generationId, signal } = {}) {
+export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan, side, generationId, signal, shouldCommit } = {}) {
   const startTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const normalizedSide = side === 'v2' ? 'v2' : side === 'legacy' ? 'legacy' : null;
 
@@ -374,6 +403,27 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     return _baseResult({ side: normalizedSide, generationId, state: 'blocked', reasons: [!plan ? 'No render plan was supplied for this side.' : 'The supplied render plan is not marked renderable for this side.'] });
   }
 
+  // FIX 4 (EPIC 2E-H-A-F): for HTMLImageElement sources, wait for
+  // decode readiness BEFORE reading dimensions or drawing — img.onload
+  // already guarantees naturalWidth/naturalHeight are available, but
+  // decode() additionally guarantees the browser has finished any
+  // async decode work. Falls back safely (no arbitrary timeout) when
+  // unsupported or when it rejects on an already-loaded image; never
+  // mutates the source image itself. Canvas/ImageBitmap sources need
+  // no decode step — already fully rasterized pixel data by
+  // construction.
+  if (typeof HTMLImageElement !== 'undefined' && source instanceof HTMLImageElement && typeof source.decode === 'function') {
+    try {
+      await source.decode();
+    } catch (e) {
+      return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Source image failed to decode: ${e?.message ?? 'unknown decode error'}`] });
+    }
+    if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after image decode, before dimension read.'] });
+    if (!Number.isFinite(source.naturalWidth) || !Number.isFinite(source.naturalHeight) || source.naturalWidth <= 0 || source.naturalHeight <= 0) {
+      return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Source image decoded but reports zero or invalid natural dimensions.'] });
+    }
+  }
+
   const sourceDims = _getSourceDimensions(source);
   if (!sourceDims) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Source has zero or invalid dimensions.'] });
 
@@ -382,9 +432,40 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
 
   if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled before pixel processing began.'] });
 
-  const dpr = Math.min(2, (typeof window !== 'undefined' && Number.isFinite(window.devicePixelRatio) ? window.devicePixelRatio : 1), Number.isFinite(plan.renderConstraints?.maxDevicePixelRatio) ? plan.renderConstraints.maxDevicePixelRatio : 2);
-  const backingWidth = Math.max(1, Math.round(safeDims.width * dpr));
-  const backingHeight = Math.max(1, Math.round(safeDims.height * dpr));
+  // FIX 3 (EPIC 2E-H-A-F): compute the REQUESTED DPR first, then
+  // enforce maxPixelCount on the resulting backing dimensions — DPR
+  // must never be allowed to multiply the pixel workload beyond the
+  // configured limit. Malformed constraint values fall back to
+  // conservative defaults rather than being trusted blindly.
+  const constraints = plan.renderConstraints ?? renderPlan?.sharedRenderConstraints ?? {};
+  const maxDPR = Number.isFinite(constraints.maxDevicePixelRatio) && constraints.maxDevicePixelRatio > 0 ? constraints.maxDevicePixelRatio : 2;
+  const maxPixelCount = Number.isFinite(constraints.maxPixelCount) && constraints.maxPixelCount > 0 ? constraints.maxPixelCount : 2048 * 2048;
+  const requestedDpr = Math.min(maxDPR, (typeof window !== 'undefined' && Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1));
+
+  let effectiveDpr = requestedDpr;
+  let backingWidth = Math.max(1, Math.round(safeDims.width * effectiveDpr));
+  let backingHeight = Math.max(1, Math.round(safeDims.height * effectiveDpr));
+  let downscaledForMemorySafety = false;
+
+  if (backingWidth * backingHeight > maxPixelCount) {
+    downscaledForMemorySafety = true;
+    // Reduce effective DPR (never CSS dimensions) to bring the backing
+    // pixel count within budget, preserving aspect ratio exactly.
+    const basePixelCount = Math.max(1, safeDims.width * safeDims.height);
+    const maxDprForBudget = Math.sqrt(maxPixelCount / basePixelCount);
+    effectiveDpr = Math.max(1, Math.min(effectiveDpr, maxDprForBudget));
+    backingWidth = Math.max(1, Math.round(safeDims.width * effectiveDpr));
+    backingHeight = Math.max(1, Math.round(safeDims.height * effectiveDpr));
+    // Final safety net: if even DPR=1 at these CSS dimensions still
+    // exceeds the budget (a very small maxPixelCount), clamp the
+    // backing dimensions directly while preserving aspect ratio —
+    // never silently exceed the configured limit.
+    if (backingWidth * backingHeight > maxPixelCount) {
+      const clampScale = Math.sqrt(maxPixelCount / (backingWidth * backingHeight));
+      backingWidth = Math.max(1, Math.floor(backingWidth * clampScale));
+      backingHeight = Math.max(1, Math.floor(backingHeight * clampScale));
+    }
+  }
 
   let tempCanvas, tempCtx, imageData;
   try {
@@ -406,6 +487,17 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     }
   } catch (e) {
     return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Rendering failed unexpectedly (production unaffected): ${e?.message ?? 'unknown error'}`] });
+  } finally {
+    // FIX 10 (EPIC 2E-H-A-F): the temp canvas/context are no longer
+    // needed once `imageData` has been extracted — dereferencing them
+    // explicitly here (rather than only implicitly at function return)
+    // lets the garbage collector reclaim the temp canvas's backing
+    // memory sooner, which matters because the pixel pipeline below
+    // can run for a while on a large image. This is honest reference
+    // clearing, not a claim of manual memory deallocation — JavaScript
+    // provides no such guarantee, and none is claimed here.
+    tempCanvas = null;
+    tempCtx = null;
   }
 
   if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after pixel read, before processing.'] });
@@ -418,6 +510,26 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   }
 
   if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after processing, before commit — target canvas left untouched.'] });
+
+  // FIX 1 + FIX 9 (EPIC 2E-H-A-F): pre-commit authorization — checked
+  // IMMEDIATELY before touching canvas.width/height/pixels, never
+  // relying only on the post-render staleness check a caller might do
+  // afterward (which is too late: an older render could otherwise
+  // physically overwrite a newer one's pixels before its result object
+  // is even inspected). `shouldCommit` is optional — callers not using
+  // the controller below may omit it and rely on `signal` alone.
+  if (typeof shouldCommit === 'function' && shouldCommit() !== true) {
+    return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Commit authorization denied immediately before commit (stale generation, disposed renderer, or aborted signal) — target canvas left untouched.'] });
+  }
+  // Re-verify the target canvas is still a valid, usable canvas right
+  // before commit — a caller could have discarded/replaced it during
+  // the async work above.
+  if (!canvas || typeof canvas.getContext !== 'function') {
+    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Target canvas became invalid before commit — nothing was written.'] });
+  }
+  if (!Number.isFinite(backingWidth) || !Number.isFinite(backingHeight) || backingWidth <= 0 || backingHeight <= 0 || backingWidth * backingHeight > maxPixelCount) {
+    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Computed backing dimensions are invalid or exceed the configured pixel budget — refusing to commit.'] });
+  }
 
   // Commit: only now does the CALLER-SUPPLIED target canvas get
   // touched — everything above operated on the detached temp canvas,
@@ -445,10 +557,48 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   result.cssHeight = safeDims.height;
   result.backingWidth = backingWidth;
   result.backingHeight = backingHeight;
-  result.devicePixelRatio = dpr;
+  result.devicePixelRatio = effectiveDpr;
   result.appliedAdjustments = appliedAdjustments;
   result.skippedAdjustments = skippedAdjustments;
+  result.metadata = {
+    ...result.metadata,
+    requestedDevicePixelRatio: requestedDpr,
+    effectiveDevicePixelRatio: effectiveDpr,
+    pixelCount: backingWidth * backingHeight,
+    downscaledForMemorySafety,
+    // FIX 8 (EPIC 2E-H-A-F): honest — this renderer does not implement
+    // a bounded elapsed-time timeout in Phase A/A-F; `timeoutMs` in
+    // renderConstraints remains advisory only. Never implying an
+    // enforced timeout that doesn't exist.
+    timeoutEnforced: false,
+  };
   return result;
+}
+
+/**
+ * Combines two AbortSignals into one that aborts when EITHER source
+ * aborts. Uses the native `AbortSignal.any` when available; falls back
+ * to a manual listener-based combine with explicit cleanup (both
+ * listeners are removed once either fires, or when `cleanup()` is
+ * called directly for the render-completed-without-abort case) so no
+ * listener is ever left dangling after a render finishes normally.
+ */
+function _combineSignals(signalA, signalB) {
+  if (!signalA) return { signal: signalB ?? undefined, cleanup: () => {} };
+  if (!signalB) return { signal: signalA, cleanup: () => {} };
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+    return { signal: AbortSignal.any([signalA, signalB]), cleanup: () => {} };
+  }
+  const combined = new AbortController();
+  if (signalA.aborted || signalB.aborted) { combined.abort(); return { signal: combined.signal, cleanup: () => {} }; }
+  const onAbort = () => combined.abort();
+  signalA.addEventListener('abort', onAbort, { once: true });
+  signalB.addEventListener('abort', onAbort, { once: true });
+  const cleanup = () => {
+    signalA.removeEventListener('abort', onAbort);
+    signalB.removeEventListener('abort', onAbort);
+  };
+  return { signal: combined.signal, cleanup };
 }
 
 /**
@@ -457,10 +607,18 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
  * Does not itself hold any canvas/image reference — callers still pass
  * those explicitly to `render()` each time, keeping this controller
  * free of any DOM/mutable-global coupling beyond its own counters.
+ *
+ * FIX 2 (EPIC 2E-H-A-F): dispose() now genuinely cancels any in-flight
+ * render — an internal AbortController is created per active render
+ * and aborted on dispose, invalidating both the generation counter AND
+ * the signal any in-progress renderIsolatedVisualPreviewV2 call is
+ * checking. The caller's OWN AbortSignal (if supplied) is never
+ * aborted by this controller — only the controller's internal one.
  */
 export function createIsolatedVisualPreviewRendererV2(options = {}) {
   let currentGenerationId = 0;
   let disposed = false;
+  const activeControllers = new Map(); // generationId -> internal AbortController
 
   function nextGeneration() {
     return ++currentGenerationId;
@@ -471,19 +629,27 @@ export function createIsolatedVisualPreviewRendererV2(options = {}) {
       return { mode: 'isolated-browser-preview-render', state: 'unavailable', side: input.side === 'v2' ? 'v2' : 'legacy', rendered: false, previewAccuracy: 'approximate-browser-preview', cssWidth: 0, cssHeight: 0, backingWidth: 0, backingHeight: 0, devicePixelRatio: 0, processingTimeMs: 0, appliedAdjustments: [], skippedAdjustments: [], warnings: [...HONESTY_WARNINGS], reasons: ['Renderer has been disposed.'], sourceGenerationId: input.generationId ?? null, disposed: true, metadata: {} };
     }
     const generationId = input.generationId ?? nextGeneration();
-    const result = await renderIsolatedVisualPreviewV2({ ...input, generationId });
-    // Stale-generation protection: if a NEWER render was requested
-    // while this one was in flight, downgrade this result to
-    // "cancelled" even if it technically finished — a newer render
-    // must always win, never an older one committing after it.
-    if (generationId !== currentGenerationId && input.generationId === undefined) {
-      // Only applies when this controller assigned the generation ID
-      // itself (input.generationId === undefined case) — an
-      // explicitly-caller-supplied generationId is the caller's own
-      // responsibility to compare against their own source of truth.
-      return { ...result, state: result.state === 'rendered' ? 'cancelled' : result.state, rendered: false, reasons: [...result.reasons, 'A newer render superseded this one after completion — result discarded.'] };
+    const internalController = new AbortController();
+    activeControllers.set(generationId, internalController);
+
+    const { signal: combinedSignal, cleanup: cleanupSignals } = _combineSignals(internalController.signal, input.signal);
+
+    // FIX 1's exact recommended shouldCommit predicate — the single
+    // final authority checked immediately before any pixel commit,
+    // never relying only on a post-render check.
+    const shouldCommit = () => !disposed && generationId === currentGenerationId && !combinedSignal?.aborted;
+
+    try {
+      const result = await renderIsolatedVisualPreviewV2({ ...input, generationId, signal: combinedSignal, shouldCommit });
+      return result;
+    } finally {
+      // FIX 10 (EPIC 2E-H-A-F): resource cleanup — always runs
+      // regardless of success/failure/cancellation, removing this
+      // render's internal controller and any signal-combine listeners
+      // so nothing is retained beyond the render's own lifetime.
+      activeControllers.delete(generationId);
+      cleanupSignals();
     }
-    return result;
   }
 
   function isStale(generationId) {
@@ -491,7 +657,16 @@ export function createIsolatedVisualPreviewRendererV2(options = {}) {
   }
 
   function dispose() {
+    if (disposed) return; // idempotent — safe to call more than once
     disposed = true;
+    // Invalidate every currently-tracked generation at once — no
+    // future generationId can ever equal -1, so shouldCommit()
+    // permanently denies commit for anything still in flight.
+    currentGenerationId = -1;
+    for (const controller of activeControllers.values()) {
+      try { controller.abort(); } catch { /* already aborted, or AbortController.abort unsupported in this environment — safe to ignore */ }
+    }
+    activeControllers.clear();
   }
 
   return {
