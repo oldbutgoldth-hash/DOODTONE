@@ -260,16 +260,25 @@ function _runPixelPipeline(imageData, model, appliedAdjustments, skippedAdjustme
   else { skippedAdjustments.push('saturation', 'vibrance'); }
   if (model.clarity !== null || model.dehaze !== null) { _applyClarityDehaze(data, width, height, model.clarity ?? 0, model.dehaze ?? 0); if (model.clarity !== null) appliedAdjustments.push('clarity'); else skippedAdjustments.push('clarity'); if (model.dehaze !== null) appliedAdjustments.push('dehaze'); else skippedAdjustments.push('dehaze'); }
   else { skippedAdjustments.push('clarity', 'dehaze'); }
-  track('colorGrading', _applyColorGrading, data, model.colorGrading);
+  // FIX 7 (EPIC 2E-H-A-F3): colorGrading is only genuinely applied when
+  // it has a usable saturation value — Hue-only data is never reported
+  // as applied here, matching the async pipeline and the Plan-level
+  // FIX 1 correction (_applyColorGrading itself only ever reads
+  // shadowSat/highlightSat, never any Hue field).
+  const colorGradingHasUsableSaturation = _isRecord(model.colorGrading) && (Number.isFinite(model.colorGrading.shadowSat) || Number.isFinite(model.colorGrading.highlightSat));
+  if (colorGradingHasUsableSaturation) { _applyColorGrading(data, model.colorGrading); appliedAdjustments.push('colorGrading'); }
+  else skippedAdjustments.push('colorGrading');
 
   // 11. alpha restoration — guarantee alpha is exactly the original
   // captured value, never drifted by any RGB-only transform above.
   for (let i = 0, j = 0; i < data.length; i += 4, j++) data[i + 3] = originalAlpha[j];
 
-  // 12. final clamp — Uint8ClampedArray already clamps every write,
-  // but this guards against any accidental raw-array substitution in
-  // the future; a defensive no-op today, cheap enough to always run.
-  for (let i = 0; i < data.length; i++) data[i] = _clampByte(data[i]);
+  // FIX 4 (EPIC 2E-H-A-F3): the redundant full-buffer final clamp pass
+  // has been REMOVED for parity with the async pipeline — every
+  // transform above writes through `_clampByte()`, and the underlying
+  // buffer is a `Uint8ClampedArray`, which clamps every raw assignment
+  // regardless. See `_runPixelPipelineAsyncV2`'s comment for the full
+  // reasoning.
 }
 
 /** Yields control back to the event loop — a lightweight macrotask boundary, never an arbitrary long delay. */
@@ -308,7 +317,7 @@ async function _runPixelPipelineAsyncV2(imageData, model, appliedAdjustments, sk
     return !!signal?.aborted || (typeof shouldContinue === 'function' && shouldContinue() !== true);
   };
 
-  if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop };
+  if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop, cancelledStage: 'pre-staging' };
 
   // Preserve original alpha values before any RGB processing touches
   // the buffer — this is a single cheap pass (one byte per pixel, no
@@ -322,15 +331,35 @@ async function _runPixelPipelineAsyncV2(imageData, model, appliedAdjustments, sk
   // range-apply function using the SAME transform functions the sync
   // pipeline uses — just invoked per-chunk instead of over the whole
   // buffer at once.
+  // FIX 2 (EPIC 2E-H-A-F3): per-field availability check — a grouped
+  // stage may run its pixel transform once using zero for a missing
+  // counterpart, but bookkeeping must reflect EACH field's actual
+  // availability independently. The previous version pushed every name
+  // in a stage into appliedAdjustments whenever ANY one field in that
+  // stage had a value (e.g. whites present + blacks null incorrectly
+  // reported BOTH as applied) — this now mirrors the sync pipeline's
+  // already-correct per-field behavior.
+  const isAvailable = (v) => v !== null && v !== undefined;
+  const recordFieldAvailability = (names, checks) => {
+    for (let i = 0; i < names.length; i++) {
+      if (checks[i]) appliedAdjustments.push(names[i]);
+      else skippedAdjustments.push(names[i]);
+    }
+  };
   const stages = [
-    { names: ['exposure'], available: model.exposure !== null && model.exposure !== undefined, apply: (s, e) => _applyExposure(data, model.exposure, s, e) },
-    { names: ['whites', 'blacks'], available: model.whites !== null && model.whites !== undefined || model.blacks !== null && model.blacks !== undefined, apply: (s, e) => _applyWhiteBlackPoint(data, model.whites ?? 0, model.blacks ?? 0, s, e) },
-    { names: ['highlights', 'shadows'], available: model.highlights !== null && model.highlights !== undefined || model.shadows !== null && model.shadows !== undefined, apply: (s, e) => _applyHighlightsShadows(data, model.highlights ?? 0, model.shadows ?? 0, s, e) },
-    { names: ['contrast', 'toneCurve'], available: (model.contrast !== null && model.contrast !== undefined) || !!model.toneCurve, apply: (s, e) => _applyContrastToneCurve(data, model.contrast ?? 0, model.toneCurve, s, e) },
-    { names: ['temperature', 'tint'], available: model.temperature !== null && model.temperature !== undefined || model.tint !== null && model.tint !== undefined, apply: (s, e) => _applyTemperatureTint(data, model.temperature ?? 0, model.tint ?? 0, s, e) },
-    { names: ['saturation', 'vibrance'], available: model.saturation !== null && model.saturation !== undefined || model.vibrance !== null && model.vibrance !== undefined, apply: (s, e) => _applySaturationVibrance(data, model.saturation ?? 0, model.vibrance ?? 0, s, e) },
-    { names: ['clarity', 'dehaze'], available: model.clarity !== null && model.clarity !== undefined || model.dehaze !== null && model.dehaze !== undefined, apply: (s, e) => _applyClarityDehaze(data, width, height, model.clarity ?? 0, model.dehaze ?? 0, s, e) },
-    { names: ['colorGrading'], available: model.colorGrading !== null && model.colorGrading !== undefined, apply: (s, e) => _applyColorGrading(data, model.colorGrading, s, e) },
+    { names: ['exposure'], checks: [isAvailable(model.exposure)], available: isAvailable(model.exposure), apply: (s, e) => _applyExposure(data, model.exposure, s, e) },
+    { names: ['whites', 'blacks'], checks: [isAvailable(model.whites), isAvailable(model.blacks)], available: isAvailable(model.whites) || isAvailable(model.blacks), apply: (s, e) => _applyWhiteBlackPoint(data, model.whites ?? 0, model.blacks ?? 0, s, e) },
+    { names: ['highlights', 'shadows'], checks: [isAvailable(model.highlights), isAvailable(model.shadows)], available: isAvailable(model.highlights) || isAvailable(model.shadows), apply: (s, e) => _applyHighlightsShadows(data, model.highlights ?? 0, model.shadows ?? 0, s, e) },
+    { names: ['contrast', 'toneCurve'], checks: [isAvailable(model.contrast), !!model.toneCurve], available: isAvailable(model.contrast) || !!model.toneCurve, apply: (s, e) => _applyContrastToneCurve(data, model.contrast ?? 0, model.toneCurve, s, e) },
+    { names: ['temperature', 'tint'], checks: [isAvailable(model.temperature), isAvailable(model.tint)], available: isAvailable(model.temperature) || isAvailable(model.tint), apply: (s, e) => _applyTemperatureTint(data, model.temperature ?? 0, model.tint ?? 0, s, e) },
+    { names: ['saturation', 'vibrance'], checks: [isAvailable(model.saturation), isAvailable(model.vibrance)], available: isAvailable(model.saturation) || isAvailable(model.vibrance), apply: (s, e) => _applySaturationVibrance(data, model.saturation ?? 0, model.vibrance ?? 0, s, e) },
+    { names: ['clarity', 'dehaze'], checks: [isAvailable(model.clarity), isAvailable(model.dehaze)], available: isAvailable(model.clarity) || isAvailable(model.dehaze), apply: (s, e) => _applyClarityDehaze(data, width, height, model.clarity ?? 0, model.dehaze ?? 0, s, e) },
+    // FIX 7 (EPIC 2E-H-A-F3): colorGrading is only genuinely "available"
+    // to apply when it has a usable saturation value — matching FIX 1's
+    // Plan-level correction. A Hue-only colorGrading object must not be
+    // reported as applied, since _applyColorGrading below only ever
+    // reads shadowSat/highlightSat, never any Hue field.
+    { names: ['colorGrading'], checks: [_isRecord(model.colorGrading) && (Number.isFinite(model.colorGrading.shadowSat) || Number.isFinite(model.colorGrading.highlightSat))], available: _isRecord(model.colorGrading) && (Number.isFinite(model.colorGrading.shadowSat) || Number.isFinite(model.colorGrading.highlightSat)), apply: (s, e) => _applyColorGrading(data, model.colorGrading, s, e) },
   ];
 
   for (const stage of stages) {
@@ -338,23 +367,42 @@ async function _runPixelPipelineAsyncV2(imageData, model, appliedAdjustments, sk
     // Process this stage in bounded byte-range chunks across the whole
     // buffer, checking cancellation after every chunk.
     for (let startByte = 0; startByte < data.length; startByte += chunkBytes) {
-      if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop };
+      if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop, cancelledStage: stage.names[0] };
       const endByte = Math.min(startByte + chunkBytes, data.length);
       stage.apply(startByte, endByte);
       if (endByte < data.length) { await _yieldToEventLoop(); yieldedToEventLoop = true; }
     }
-    if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop };
-    appliedAdjustments.push(...stage.names);
+    if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop, cancelledStage: stage.names[0] };
+    recordFieldAvailability(stage.names, stage.checks);
   }
 
-  if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop };
+  // FIX 3 (EPIC 2E-H-A-F3): alpha restoration is now processed in the
+  // SAME bounded byte-range chunks as every other stage, with an
+  // identical cancellation check + yield between chunks — a large
+  // image can no longer block the event loop during this step either.
+  // No additional full-size buffer is allocated: `originalAlpha` (built
+  // once, above) is the only extra buffer, exactly as before.
+  for (let startByte = 0; startByte < data.length; startByte += chunkBytes) {
+    if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop, cancelledStage: 'alpha-restore' };
+    const endByte = Math.min(startByte + chunkBytes, data.length);
+    for (let i = startByte, j = startByte / 4; i < endByte; i += 4, j++) data[i + 3] = originalAlpha[j];
+    if (endByte < data.length) { await _yieldToEventLoop(); yieldedToEventLoop = true; }
+  }
 
-  // 11. alpha restoration — same guarantee as the sync pipeline.
-  for (let i = 0, j = 0; i < data.length; i += 4, j++) data[i + 3] = originalAlpha[j];
-  // 12. final clamp — defensive no-op, cheap enough to run unchunked.
-  for (let i = 0; i < data.length; i++) data[i] = _clampByte(data[i]);
+  // FIX 4 (EPIC 2E-H-A-F3): the redundant full-buffer final clamp pass
+  // has been REMOVED (chosen option A, not chunked-option B) — every
+  // single transform function above writes through `_clampByte()`
+  // before assignment, AND the underlying buffer is a
+  // `Uint8ClampedArray`, which clamps every raw assignment to it
+  // regardless. No code path anywhere in this pipeline writes an
+  // un-clamped raw value or substitutes a different (non-clamped)
+  // array type, so an additional blocking 16+ million-iteration
+  // defensive pass added no real safety — only unnecessary main-thread
+  // time on large images. The sync `_runPixelPipeline` helper below is
+  // updated identically, for parity.
+  if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop, cancelledStage: null };
 
-  return { cancelled: false, cancellationChecks, yieldedToEventLoop };
+  return { cancelled: false, cancellationChecks, yieldedToEventLoop, cancelledStage: null };
 }
 
 /**
@@ -600,8 +648,8 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Pixel processing failed unexpectedly (production unaffected): ${e?.message ?? 'unknown error'}`] });
   }
   if (pipelineResult.cancelled) {
-    const r = _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled during chunked pixel processing — target canvas left untouched.'] });
-    r.metadata = { ...r.metadata, processingMode: 'chunked-main-thread', chunkPixelBudget: DEFAULT_CHUNK_PIXEL_BUDGET, cancellationChecks: pipelineResult.cancellationChecks, yieldedToEventLoop: pipelineResult.yieldedToEventLoop };
+    const r = _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: [`Cancelled during chunked pixel processing (stage: ${pipelineResult.cancelledStage ?? 'unknown'}) — target canvas left untouched.`] });
+    r.metadata = { ...r.metadata, processingMode: 'chunked-main-thread', chunkPixelBudget: DEFAULT_CHUNK_PIXEL_BUDGET, cancellationChecks: pipelineResult.cancellationChecks, yieldedToEventLoop: pipelineResult.yieldedToEventLoop, cancelledStage: pipelineResult.cancelledStage ?? null };
     return r;
   }
 
@@ -665,8 +713,16 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   // point); if restoration is needed, dimensions are restored honestly
   // and pixel-content restoration is reported as `false`, never
   // silently claimed.
+  // FIX 6 (EPIC 2E-H-A-F3): restoration metadata is now explicit about
+  // WHAT was actually restored — dimensions (cheap, always attempted)
+  // vs. pixel content (never restored, by design, to avoid an
+  // unbounded extra full-resolution snapshot buffer for this expected-
+  // rare failure path). `targetRestoredAfterFailure` is retained for
+  // backward compatibility but is never allowed to imply pixel
+  // restoration occurred — it mirrors `targetPixelsRestoredAfterFailure`
+  // (always `false` on this path), never a generic "restored" claim.
   const previousWidth = canvas.width, previousHeight = canvas.height;
-  let targetRestoredAfterFailure = null;
+  let targetDimensionsRestoredAfterFailure = null;
   try {
     canvas.width = backingWidth;
     canvas.height = backingHeight;
@@ -676,11 +732,20 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     targetCtx.drawImage(stagingCanvas, 0, 0);
     if (canvas.style) canvas.style.width = '100%';
   } catch (e) {
-    try { canvas.width = previousWidth; canvas.height = previousHeight; targetRestoredAfterFailure = false; }
-    catch { targetRestoredAfterFailure = false; }
+    try { canvas.width = previousWidth; canvas.height = previousHeight; targetDimensionsRestoredAfterFailure = true; }
+    catch { targetDimensionsRestoredAfterFailure = false; }
     stagingCanvas = null;
     const r = _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Could not commit rendered pixels to the target canvas: ${e?.message ?? 'unknown error'}`] });
-    r.metadata = { ...r.metadata, commitAtomicity: 'staged', targetRestoredAfterFailure };
+    r.metadata = {
+      ...r.metadata,
+      commitAtomicity: 'staged-best-effort',
+      pixelContentRestorationSupported: false,
+      targetDimensionsRestoredAfterFailure,
+      targetPixelsRestoredAfterFailure: false,
+      // Retained for backward compatibility — never implies pixel
+      // restoration; always mirrors the (always-false) pixel outcome.
+      targetRestoredAfterFailure: false,
+    };
     return r;
   } finally {
     stagingCanvas = null;
@@ -718,7 +783,10 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     chunkPixelBudget: DEFAULT_CHUNK_PIXEL_BUDGET,
     cancellationChecks: pipelineResult.cancellationChecks,
     yieldedToEventLoop: pipelineResult.yieldedToEventLoop,
-    commitAtomicity: 'staged',
+    commitAtomicity: 'staged-best-effort',
+    pixelContentRestorationSupported: false,
+    targetDimensionsRestoredAfterFailure: null, // no failure occurred on this successful path
+    targetPixelsRestoredAfterFailure: null,
     targetRestoredAfterFailure: null, // no failure occurred on this successful path
   };
   return result;

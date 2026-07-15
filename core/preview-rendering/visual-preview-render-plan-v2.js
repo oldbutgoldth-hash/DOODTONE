@@ -165,10 +165,21 @@ function _buildLegacyAdjustmentModel(legacyPreset) {
   ];
   const hasGrade = gradeCandidateValues.some(v => Number.isFinite(v));
   const gradeObjectPresentButEmpty = _isRecord(preset.grade) && !hasGrade;
+  const shSat = pickFinite(nestedGrade.grd_sh_s, preset.grd_sh_s);
+  const midSat = pickFinite(nestedGrade.grd_mid_s, preset.grd_mid_s);
+  const hiSat = pickFinite(nestedGrade.grd_hi_s, preset.grd_hi_s);
+  // FIX 1 (EPIC 2E-H-A-F3): the browser preview Renderer currently
+  // applies ONLY saturation-based nudges for color grading
+  // (`_applyColorGrading` reads `shadowSat`/`highlightSat` only, never
+  // any Hue field) — so a Hue-only preset like `{grd_sh_h: 30}` would
+  // previously report `supportedAdjustments: ["colorGrading"]` and
+  // `renderable: true` while producing literally zero pixel change,
+  // since every saturation value would be `null`. Support/renderable
+  // now requires at least one FINITE, usable saturation value — Hue
+  // alone is preserved in the normalized model (useful metadata/
+  // future-proofing) but never makes this adjustment "supported".
+  const hasUsableSaturation = Number.isFinite(shSat) || Number.isFinite(midSat) || Number.isFinite(hiSat);
   if (hasGrade) {
-    const shSat = pickFinite(nestedGrade.grd_sh_s, preset.grd_sh_s);
-    const midSat = pickFinite(nestedGrade.grd_mid_s, preset.grd_mid_s);
-    const hiSat = pickFinite(nestedGrade.grd_hi_s, preset.grd_hi_s);
     model.colorGrading = {
       shadowHue: pickFinite(nestedGrade.grd_sh_h, preset.grd_sh_h),
       shadowSat: shSat === null ? null : _clampUnit(shSat / 30),
@@ -177,7 +188,16 @@ function _buildLegacyAdjustmentModel(legacyPreset) {
       highlightHue: pickFinite(nestedGrade.grd_hi_h, preset.grd_hi_h),
       highlightSat: hiSat === null ? null : _clampUnit(hiSat / 30),
     };
-    supportedAdjustments.push('colorGrading');
+    if (hasUsableSaturation) {
+      supportedAdjustments.push('colorGrading');
+    } else {
+      // Hue exists but no usable saturation — preserve the Hue data in
+      // the model (never fabricated further), but this is honestly
+      // unsupported by the current renderer, not a rendering-capable
+      // adjustment.
+      unsupportedAdjustments.push('colorGrading');
+      normalizationWarnings.push('Legacy preset has Hue-only color grading data (no finite saturation value) — the browser preview renderer only applies saturation-based grading nudges, so Hue-only grading is not implemented and does not make this adjustment supported.');
+    }
   } else {
     model.colorGrading = null;
     unsupportedAdjustments.push('colorGrading');
