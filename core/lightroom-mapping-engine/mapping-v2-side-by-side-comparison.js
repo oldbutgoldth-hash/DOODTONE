@@ -579,10 +579,17 @@ function _buildHumanReviewStatus(reviewState) {
   const canonicalNeedsAdjustment = CANONICAL_VISUAL_IDS.some(id => canonicalMap.get(id)?.reviewerDecision === 'needs-adjustment');
 
   let approvalState;
+  // EPIC 2E-G-A-F3: reject MUST be checked before a bare "failed"
+  // status — the Review Console's normal Fail action produces
+  // {status:"failed", reviewerDecision:"reject"} together, so reject
+  // must win to correctly report "rejected" rather than the less
+  // specific "blocked". "blocked" is now reserved for a failed item
+  // that carries no explicit reject decision (e.g. reviewerDecision
+  // left "undecided").
   if (canonicalMap.size === 0) approvalState = 'not-started';
-  else if (canonicalFailed) approvalState = 'blocked';
   else if (canonicalRejected) approvalState = 'rejected';
   else if (canonicalNeedsAdjustment) approvalState = 'needs-adjustment';
+  else if (canonicalFailed) approvalState = 'blocked';
   else if (visualReviewComplete) approvalState = 'approved';
   else approvalState = 'in-progress';
 
