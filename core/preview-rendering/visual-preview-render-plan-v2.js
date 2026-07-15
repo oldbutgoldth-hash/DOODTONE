@@ -146,24 +146,36 @@ function _buildLegacyAdjustmentModel(legacyPreset) {
   // Limited color-grading approximation: only shadow/midtone/highlight
   // hue+saturation balance (grd_*), never the full Lightroom color-
   // grading wheel model.
-  // FIX 5 (EPIC 2E-H-A-F): Color Grading is supported ONLY when at
-  // least one actual finite grading field exists — `grade: {}` (an
-  // empty object) must NOT count as real grading data. Check both the
-  // nested `preset.grade` shape and the flat `grd_*` shape, but only
-  // ever set `hasGrade` from a genuinely finite numeric field, never
-  // merely from `preset.grade` existing as an object.
-  const g = _isRecord(preset.grade) ? preset.grade : preset;
-  const gradeCandidateValues = [g.grd_sh_h, g.grd_sh_s, g.grd_mid_h, g.grd_mid_s, g.grd_hi_h, g.grd_hi_s];
+  // FIX 1 (EPIC 2E-H-A-F2): merge nested `preset.grade.*` and flat
+  // `preset.grd_*` fields — the previous either/or logic
+  // (`_isRecord(preset.grade) ? preset.grade : preset`) let an EMPTY
+  // nested `grade: {}` object hide perfectly valid flat `grd_*` data,
+  // since it picked the nested object wholesale merely because it
+  // existed as an object, never checking whether it actually had
+  // anything in it. `pickFinite` instead resolves the first genuinely
+  // finite value across BOTH candidate sources per field — neither
+  // source can hide the other's valid data, and neither ever
+  // fabricates a value when both are genuinely missing.
+  const pickFinite = (...values) => values.find(v => Number.isFinite(v)) ?? null;
+  const nestedGrade = _isRecord(preset.grade) ? preset.grade : {};
+  const gradeCandidateValues = [
+    pickFinite(nestedGrade.grd_sh_h, preset.grd_sh_h), pickFinite(nestedGrade.grd_sh_s, preset.grd_sh_s),
+    pickFinite(nestedGrade.grd_mid_h, preset.grd_mid_h), pickFinite(nestedGrade.grd_mid_s, preset.grd_mid_s),
+    pickFinite(nestedGrade.grd_hi_h, preset.grd_hi_h), pickFinite(nestedGrade.grd_hi_s, preset.grd_hi_s),
+  ];
   const hasGrade = gradeCandidateValues.some(v => Number.isFinite(v));
   const gradeObjectPresentButEmpty = _isRecord(preset.grade) && !hasGrade;
   if (hasGrade) {
+    const shSat = pickFinite(nestedGrade.grd_sh_s, preset.grd_sh_s);
+    const midSat = pickFinite(nestedGrade.grd_mid_s, preset.grd_mid_s);
+    const hiSat = pickFinite(nestedGrade.grd_hi_s, preset.grd_hi_s);
     model.colorGrading = {
-      shadowHue: Number.isFinite(g.grd_sh_h) ? g.grd_sh_h : null,
-      shadowSat: _clampUnit((g.grd_sh_s ?? 0) / 30),
-      midtoneHue: Number.isFinite(g.grd_mid_h) ? g.grd_mid_h : null,
-      midtoneSat: _clampUnit((g.grd_mid_s ?? 0) / 15),
-      highlightHue: Number.isFinite(g.grd_hi_h) ? g.grd_hi_h : null,
-      highlightSat: _clampUnit((g.grd_hi_s ?? 0) / 30),
+      shadowHue: pickFinite(nestedGrade.grd_sh_h, preset.grd_sh_h),
+      shadowSat: shSat === null ? null : _clampUnit(shSat / 30),
+      midtoneHue: pickFinite(nestedGrade.grd_mid_h, preset.grd_mid_h),
+      midtoneSat: midSat === null ? null : _clampUnit(midSat / 15),
+      highlightHue: pickFinite(nestedGrade.grd_hi_h, preset.grd_hi_h),
+      highlightSat: hiSat === null ? null : _clampUnit(hiSat / 30),
     };
     supportedAdjustments.push('colorGrading');
   } else {

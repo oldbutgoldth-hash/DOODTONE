@@ -68,19 +68,19 @@ export function normalizePreviewAdjustmentV2(value) {
 // step in the deterministic pipeline documented in
 // _PIXEL_PIPELINE_ORDER below.
 
-function _applyExposure(data, value) {
+function _applyExposure(data, value, startByte = 0, endByte = data.length) {
   const v = normalizePreviewAdjustmentV2(value);
   if (v === 0) return;
   // Approximate ±2-stop range: 2^(v*2) → v=-1 → 0.25x, v=+1 → 4x.
   const factor = Math.pow(2, v * 2);
-  for (let i = 0; i < data.length; i += 4) {
+  for (let i = startByte; i < endByte; i += 4) {
     data[i] = _clampByte(data[i] * factor);
     data[i + 1] = _clampByte(data[i + 1] * factor);
     data[i + 2] = _clampByte(data[i + 2] * factor);
   }
 }
 
-function _applyWhiteBlackPoint(data, whites, blacks) {
+function _applyWhiteBlackPoint(data, whites, blacks, startByte = 0, endByte = data.length) {
   const w = normalizePreviewAdjustmentV2(whites), b = normalizePreviewAdjustmentV2(blacks);
   if (w === 0 && b === 0) return;
   // Conservative linear remap: whites pushes the white point up/down by
@@ -89,17 +89,17 @@ function _applyWhiteBlackPoint(data, whites, blacks) {
   const whitePoint = 255 - w * 38;
   const blackPoint = b * 38;
   const range = Math.max(1, whitePoint - blackPoint);
-  for (let i = 0; i < data.length; i += 4) {
+  for (let i = startByte; i < endByte; i += 4) {
     for (let c = 0; c < 3; c++) {
       data[i + c] = _clampByte(((data[i + c] - blackPoint) / range) * 255);
     }
   }
 }
 
-function _applyHighlightsShadows(data, highlights, shadows) {
+function _applyHighlightsShadows(data, highlights, shadows, startByte = 0, endByte = data.length) {
   const h = normalizePreviewAdjustmentV2(highlights), s = normalizePreviewAdjustmentV2(shadows);
   if (h === 0 && s === 0) return;
-  for (let i = 0; i < data.length; i += 4) {
+  for (let i = startByte; i < endByte; i += 4) {
     const luma = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
     // Highlights affect bright pixels more (luma-weighted toward 255);
     // shadows affect dark pixels more (luma-weighted toward 0). Both
@@ -111,7 +111,7 @@ function _applyHighlightsShadows(data, highlights, shadows) {
   }
 }
 
-function _applyContrastToneCurve(data, contrast, toneCurve) {
+function _applyContrastToneCurve(data, contrast, toneCurve, startByte = 0, endByte = data.length) {
   const c = normalizePreviewAdjustmentV2(contrast);
   const curve = _isRecord(toneCurve) ? toneCurve : null;
   if (c === 0 && !curve) return;
@@ -120,7 +120,7 @@ function _applyContrastToneCurve(data, contrast, toneCurve) {
   // `toneCurve` — never a full arbitrary spline, only the three
   // canonical zones this codebase's Legacy preset actually produces.
   const contrastFactor = 1 + c * 0.5;
-  for (let i = 0; i < data.length; i += 4) {
+  for (let i = startByte; i < endByte; i += 4) {
     for (let ch = 0; ch < 3; ch++) {
       let val = data[i + ch];
       if (contrastFactor !== 1) val = (val - 128) * contrastFactor + 128;
@@ -135,7 +135,7 @@ function _applyContrastToneCurve(data, contrast, toneCurve) {
   }
 }
 
-function _applyTemperatureTint(data, temperature, tint) {
+function _applyTemperatureTint(data, temperature, tint, startByte = 0, endByte = data.length) {
   const t = normalizePreviewAdjustmentV2(temperature), ti = normalizePreviewAdjustmentV2(tint);
   if (t === 0 && ti === 0) return;
   // Temperature: warm (+t) boosts red/reduces blue, cool (-t) the
@@ -143,17 +143,17 @@ function _applyTemperatureTint(data, temperature, tint) {
   // (-ti) the opposite. Conservative ±20-unit shifts, never a full
   // Kelvin-accurate white-balance model.
   const rShift = t * 20 + ti * 12, gShift = -ti * 16, bShift = -t * 20 + ti * 12;
-  for (let i = 0; i < data.length; i += 4) {
+  for (let i = startByte; i < endByte; i += 4) {
     data[i] = _clampByte(data[i] + rShift);
     data[i + 1] = _clampByte(data[i + 1] + gShift);
     data[i + 2] = _clampByte(data[i + 2] + bShift);
   }
 }
 
-function _applySaturationVibrance(data, saturation, vibrance) {
+function _applySaturationVibrance(data, saturation, vibrance, startByte = 0, endByte = data.length) {
   const s = normalizePreviewAdjustmentV2(saturation), v = normalizePreviewAdjustmentV2(vibrance);
   if (s === 0 && v === 0) return;
-  for (let i = 0; i < data.length; i += 4) {
+  for (let i = startByte; i < endByte; i += 4) {
     const r = data[i], g = data[i + 1], b = data[i + 2];
     const luma = 0.299 * r + 0.587 * g + 0.114 * b;
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -170,7 +170,7 @@ function _applySaturationVibrance(data, saturation, vibrance) {
   }
 }
 
-function _applyClarityDehaze(data, width, height, clarity, dehaze) {
+function _applyClarityDehaze(data, width, height, clarity, dehaze, startByte = 0, endByte = data.length) {
   const c = normalizePreviewAdjustmentV2(clarity), d = normalizePreviewAdjustmentV2(dehaze);
   if (c === 0 && d === 0) return;
   // Conservative approximation only: a simple local-midtone-contrast
@@ -180,7 +180,7 @@ function _applyClarityDehaze(data, width, height, clarity, dehaze) {
   // never claimed to reproduce Lightroom's actual Clarity/Dehaze math.
   const strength = (c + d) * 0.25;
   if (strength === 0) return;
-  for (let i = 0; i < data.length; i += 4) {
+  for (let i = startByte; i < endByte; i += 4) {
     for (let ch = 0; ch < 3; ch++) {
       const val = data[i + ch];
       const distFromMid = val - 128;
@@ -189,7 +189,7 @@ function _applyClarityDehaze(data, width, height, clarity, dehaze) {
   }
 }
 
-function _applyColorGrading(data, colorGrading) {
+function _applyColorGrading(data, colorGrading, startByte = 0, endByte = data.length) {
   const g = _isRecord(colorGrading) ? colorGrading : null;
   if (!g) return;
   // Extremely conservative: only a small additive shadow/highlight hue
@@ -198,7 +198,7 @@ function _applyColorGrading(data, colorGrading) {
   const shadowSat = normalizePreviewAdjustmentV2(g.shadowSat);
   const highlightSat = normalizePreviewAdjustmentV2(g.highlightSat);
   if (shadowSat === 0 && highlightSat === 0) return;
-  for (let i = 0; i < data.length; i += 4) {
+  for (let i = startByte; i < endByte; i += 4) {
     const luma = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
     const isShadow = luma < 85, isHighlight = luma > 170;
     const nudge = isShadow ? shadowSat * 8 : isHighlight ? highlightSat * 8 : 0;
@@ -270,6 +270,91 @@ function _runPixelPipeline(imageData, model, appliedAdjustments, skippedAdjustme
   // but this guards against any accidental raw-array substitution in
   // the future; a defensive no-op today, cheap enough to always run.
   for (let i = 0; i < data.length; i++) data[i] = _clampByte(data[i]);
+}
+
+/** Yields control back to the event loop — a lightweight macrotask boundary, never an arbitrary long delay. */
+function _yieldToEventLoop() {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+const DEFAULT_CHUNK_PIXEL_BUDGET = 100000; // within the spec's recommended 50,000-150,000 range
+
+/**
+ * FIX 2 + FIX 3 (EPIC 2E-H-A-F2): chunked, cancellable pixel pipeline.
+ * Unlike the fully-synchronous `_runPixelPipeline` above (kept for the
+ * small-buffer pure test helper), this version processes each
+ * pipeline stage in bounded pixel-count chunks, yielding to the event
+ * loop after every chunk so the browser can run abort callbacks,
+ * dispose(), and newer render requests WHILE a large image is still
+ * being processed — not just between pipeline stages, but within a
+ * single stage on a large image. `signal`/`shouldContinue` are
+ * re-checked after every single chunk, at every stage boundary, and
+ * immediately before the final alpha-restore/clamp pass.
+ *
+ * Returns `{ cancelled: boolean, cancellationChecks: number,
+ * yieldedToEventLoop: boolean }` in addition to mutating
+ * appliedAdjustments/skippedAdjustments in place, same as the sync
+ * version.
+ */
+async function _runPixelPipelineAsyncV2(imageData, model, appliedAdjustments, skippedAdjustments, { signal, shouldContinue, chunkPixelBudget = DEFAULT_CHUNK_PIXEL_BUDGET } = {}) {
+  const { data, width, height } = imageData;
+  const totalPixels = width * height;
+  const chunkBytes = Math.max(4, Math.floor(chunkPixelBudget) * 4);
+  let cancellationChecks = 0;
+  let yieldedToEventLoop = false;
+
+  const isCancelled = () => {
+    cancellationChecks++;
+    return !!signal?.aborted || (typeof shouldContinue === 'function' && shouldContinue() !== true);
+  };
+
+  if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop };
+
+  // Preserve original alpha values before any RGB processing touches
+  // the buffer — this is a single cheap pass (one byte per pixel, no
+  // per-channel math), left un-chunked since even an 8K image is a
+  // small, fast typed-array copy.
+  const originalAlpha = new Uint8ClampedArray(totalPixels);
+  for (let i = 0, j = 0; i < data.length; i += 4, j++) originalAlpha[j] = data[i + 3];
+
+  // Each stage: a name list (for applied/skipped bookkeeping), an
+  // availability check against the normalized adjustment model, and a
+  // range-apply function using the SAME transform functions the sync
+  // pipeline uses — just invoked per-chunk instead of over the whole
+  // buffer at once.
+  const stages = [
+    { names: ['exposure'], available: model.exposure !== null && model.exposure !== undefined, apply: (s, e) => _applyExposure(data, model.exposure, s, e) },
+    { names: ['whites', 'blacks'], available: model.whites !== null && model.whites !== undefined || model.blacks !== null && model.blacks !== undefined, apply: (s, e) => _applyWhiteBlackPoint(data, model.whites ?? 0, model.blacks ?? 0, s, e) },
+    { names: ['highlights', 'shadows'], available: model.highlights !== null && model.highlights !== undefined || model.shadows !== null && model.shadows !== undefined, apply: (s, e) => _applyHighlightsShadows(data, model.highlights ?? 0, model.shadows ?? 0, s, e) },
+    { names: ['contrast', 'toneCurve'], available: (model.contrast !== null && model.contrast !== undefined) || !!model.toneCurve, apply: (s, e) => _applyContrastToneCurve(data, model.contrast ?? 0, model.toneCurve, s, e) },
+    { names: ['temperature', 'tint'], available: model.temperature !== null && model.temperature !== undefined || model.tint !== null && model.tint !== undefined, apply: (s, e) => _applyTemperatureTint(data, model.temperature ?? 0, model.tint ?? 0, s, e) },
+    { names: ['saturation', 'vibrance'], available: model.saturation !== null && model.saturation !== undefined || model.vibrance !== null && model.vibrance !== undefined, apply: (s, e) => _applySaturationVibrance(data, model.saturation ?? 0, model.vibrance ?? 0, s, e) },
+    { names: ['clarity', 'dehaze'], available: model.clarity !== null && model.clarity !== undefined || model.dehaze !== null && model.dehaze !== undefined, apply: (s, e) => _applyClarityDehaze(data, width, height, model.clarity ?? 0, model.dehaze ?? 0, s, e) },
+    { names: ['colorGrading'], available: model.colorGrading !== null && model.colorGrading !== undefined, apply: (s, e) => _applyColorGrading(data, model.colorGrading, s, e) },
+  ];
+
+  for (const stage of stages) {
+    if (!stage.available) { skippedAdjustments.push(...stage.names); continue; }
+    // Process this stage in bounded byte-range chunks across the whole
+    // buffer, checking cancellation after every chunk.
+    for (let startByte = 0; startByte < data.length; startByte += chunkBytes) {
+      if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop };
+      const endByte = Math.min(startByte + chunkBytes, data.length);
+      stage.apply(startByte, endByte);
+      if (endByte < data.length) { await _yieldToEventLoop(); yieldedToEventLoop = true; }
+    }
+    if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop };
+    appliedAdjustments.push(...stage.names);
+  }
+
+  if (isCancelled()) return { cancelled: true, cancellationChecks, yieldedToEventLoop };
+
+  // 11. alpha restoration — same guarantee as the sync pipeline.
+  for (let i = 0, j = 0; i < data.length; i += 4, j++) data[i + 3] = originalAlpha[j];
+  // 12. final clamp — defensive no-op, cheap enough to run unchunked.
+  for (let i = 0; i < data.length; i++) data[i] = _clampByte(data[i]);
+
+  return { cancelled: false, cancellationChecks, yieldedToEventLoop };
 }
 
 /**
@@ -502,14 +587,23 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
 
   if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after pixel read, before processing.'] });
 
+  // FIX 2 + FIX 3 (EPIC 2E-H-A-F2): chunked, cancellable pixel
+  // processing — checks `signal`/`shouldCommit` after every bounded
+  // chunk (not just at stage boundaries), so a large image cannot
+  // block the event loop long enough to prevent an abort/dispose/
+  // newer-render from taking effect during processing itself.
   const appliedAdjustments = [], skippedAdjustments = [];
+  let pipelineResult;
   try {
-    _runPixelPipeline(imageData, plan.adjustmentModel ?? {}, appliedAdjustments, skippedAdjustments);
+    pipelineResult = await _runPixelPipelineAsyncV2(imageData, plan.adjustmentModel ?? {}, appliedAdjustments, skippedAdjustments, { signal, shouldContinue: shouldCommit });
   } catch (e) {
     return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Pixel processing failed unexpectedly (production unaffected): ${e?.message ?? 'unknown error'}`] });
   }
-
-  if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after processing, before commit — target canvas left untouched.'] });
+  if (pipelineResult.cancelled) {
+    const r = _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled during chunked pixel processing — target canvas left untouched.'] });
+    r.metadata = { ...r.metadata, processingMode: 'chunked-main-thread', chunkPixelBudget: DEFAULT_CHUNK_PIXEL_BUDGET, cancellationChecks: pipelineResult.cancellationChecks, yieldedToEventLoop: pipelineResult.yieldedToEventLoop };
+    return r;
+  }
 
   // FIX 1 + FIX 9 (EPIC 2E-H-A-F): pre-commit authorization — checked
   // IMMEDIATELY before touching canvas.width/height/pixels, never
@@ -531,20 +625,65 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Computed backing dimensions are invalid or exceed the configured pixel budget — refusing to commit.'] });
   }
 
-  // Commit: only now does the CALLER-SUPPLIED target canvas get
-  // touched — everything above operated on the detached temp canvas,
-  // so a cancelled/failed render never leaves partial pixels on the
-  // caller's real canvas.
+  // FIX 4 (EPIC 2E-H-A-F2): staged, atomic commit. The fully-processed
+  // output is first built in a DETACHED staging canvas (never the
+  // caller's target), so if anything fails while building it, the
+  // target canvas is never touched at all. Only after the staging
+  // canvas is complete AND every authorization check has been
+  // re-verified does the target canvas get resized and drawn to, in
+  // one short final operation — never resized/cleared speculatively
+  // before commit is actually guaranteed to succeed.
+  let stagingCanvas;
+  try {
+    stagingCanvas = _createTempCanvas(backingWidth, backingHeight);
+    if (!stagingCanvas) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['No canvas implementation is available in this environment for staging.'] });
+    const stagingCtx = stagingCanvas.getContext('2d');
+    if (!stagingCtx) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Could not acquire a 2D context on the staging canvas.'] });
+    stagingCtx.putImageData(imageData, 0, 0);
+  } catch (e) {
+    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Failed to build staged output: ${e?.message ?? 'unknown error'}`] });
+  }
+
+  // Final pre-commit re-validation — an async gap (however short)
+  // exists between building the staging canvas and here, so
+  // authorization is checked one last time immediately before the
+  // target is ever touched.
+  if (typeof shouldCommit === 'function' && shouldCommit() !== true) {
+    stagingCanvas = null;
+    return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Commit authorization denied immediately before final commit — target canvas left untouched.'] });
+  }
+  if (!canvas || typeof canvas.getContext !== 'function') {
+    stagingCanvas = null;
+    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Target canvas became invalid immediately before final commit — nothing was written.'] });
+  }
+
+  // Capture previous target dimensions (cheap — two integers) for
+  // best-effort restoration if the final commit throws. Pixel content
+  // is NOT snapshotted here — doing so would require an extra
+  // full-resolution buffer for what is expected to be an extremely
+  // rare failure path (everything above has already succeeded by this
+  // point); if restoration is needed, dimensions are restored honestly
+  // and pixel-content restoration is reported as `false`, never
+  // silently claimed.
+  const previousWidth = canvas.width, previousHeight = canvas.height;
+  let targetRestoredAfterFailure = null;
   try {
     canvas.width = backingWidth;
     canvas.height = backingHeight;
     const targetCtx = canvas.getContext('2d');
-    if (!targetCtx) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Could not acquire a 2D context on the target canvas.'] });
+    if (!targetCtx) throw new Error('Target 2D context unavailable immediately after resize.');
     targetCtx.setTransform(1, 0, 0, 1, 0, 0);
-    targetCtx.putImageData(imageData, 0, 0);
+    targetCtx.drawImage(stagingCanvas, 0, 0);
     if (canvas.style) canvas.style.width = '100%';
   } catch (e) {
-    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Could not commit rendered pixels to the target canvas: ${e?.message ?? 'unknown error'}`] });
+    try { canvas.width = previousWidth; canvas.height = previousHeight; targetRestoredAfterFailure = false; }
+    catch { targetRestoredAfterFailure = false; }
+    stagingCanvas = null;
+    const r = _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Could not commit rendered pixels to the target canvas: ${e?.message ?? 'unknown error'}`] });
+    r.metadata = { ...r.metadata, commitAtomicity: 'staged', targetRestoredAfterFailure };
+    return r;
+  } finally {
+    stagingCanvas = null;
   }
 
   const endTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -571,6 +710,16 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     // renderConstraints remains advisory only. Never implying an
     // enforced timeout that doesn't exist.
     timeoutEnforced: false,
+    // FIX 7 (EPIC 2E-H-A-F2): honest processing metadata. Never claims
+    // Worker rendering — `allowWorkerRendering` remains `false` in
+    // sharedRenderConstraints, and `processingMode` always honestly
+    // reports the real (main-thread, chunked) execution model.
+    processingMode: 'chunked-main-thread',
+    chunkPixelBudget: DEFAULT_CHUNK_PIXEL_BUDGET,
+    cancellationChecks: pipelineResult.cancellationChecks,
+    yieldedToEventLoop: pipelineResult.yieldedToEventLoop,
+    commitAtomicity: 'staged',
+    targetRestoredAfterFailure: null, // no failure occurred on this successful path
   };
   return result;
 }
@@ -628,7 +777,19 @@ export function createIsolatedVisualPreviewRendererV2(options = {}) {
     if (disposed) {
       return { mode: 'isolated-browser-preview-render', state: 'unavailable', side: input.side === 'v2' ? 'v2' : 'legacy', rendered: false, previewAccuracy: 'approximate-browser-preview', cssWidth: 0, cssHeight: 0, backingWidth: 0, backingHeight: 0, devicePixelRatio: 0, processingTimeMs: 0, appliedAdjustments: [], skippedAdjustments: [], warnings: [...HONESTY_WARNINGS], reasons: ['Renderer has been disposed.'], sourceGenerationId: input.generationId ?? null, disposed: true, metadata: {} };
     }
-    const generationId = input.generationId ?? nextGeneration();
+    // FIX 5 (EPIC 2E-H-A-F2): the controller ALWAYS owns generation IDs
+    // — render() always calls nextGeneration() itself, regardless of
+    // whether the caller also supplied a generationId. The old
+    // `input.generationId ?? nextGeneration()` let a caller-supplied ID
+    // silently desync from `currentGenerationId` (never updating it),
+    // causing shouldCommit()'s `generationId === currentGenerationId`
+    // check to permanently fail for an otherwise-valid, newest render
+    // — a genuinely stale-forever bug, not just a caller convenience
+    // gap. A caller-supplied ID is now preserved ONLY as external
+    // metadata (`callerSuppliedGenerationId`) on the input passed
+    // through, never used for freshness comparison.
+    const callerSuppliedGenerationId = Number.isFinite(input.generationId) ? input.generationId : null;
+    const generationId = nextGeneration();
     const internalController = new AbortController();
     activeControllers.set(generationId, internalController);
 
@@ -641,6 +802,7 @@ export function createIsolatedVisualPreviewRendererV2(options = {}) {
 
     try {
       const result = await renderIsolatedVisualPreviewV2({ ...input, generationId, signal: combinedSignal, shouldCommit });
+      if (result.metadata) result.metadata.callerSuppliedGenerationId = callerSuppliedGenerationId;
       return result;
     } finally {
       // FIX 10 (EPIC 2E-H-A-F): resource cleanup — always runs
