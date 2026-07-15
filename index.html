@@ -489,6 +489,16 @@
                    never touches it. -->
               <div id="reviewConsoleLiveRegion" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
             </div>
+
+            <!-- EPIC 2E-G Phase C: Side-by-Side Preview Comparison —
+                 pure read-only display of the already-computed, data-level
+                 comparison object (finalStyleIntent.sideBySidePreviewComparisonV2).
+                 No visual preview images, no Before/After slider, no
+                 interactive controls of any kind. Hidden until an analysis
+                 result exists, same lifecycle as reviewConsoleSection. -->
+            <div id="sideBySideComparisonSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
+              <div id="sideBySideComparisonInner"></div>
+            </div>
           </div>
 
           <!-- ── Sliders panel ── -->

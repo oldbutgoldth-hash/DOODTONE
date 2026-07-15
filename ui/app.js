@@ -48,6 +48,7 @@ import { benchmarkStylePreservation } from '../core/style-benchmark-engine/index
 import { buildDecisionReport } from '../core/decision-report-engine/index.js';
 import { renderReviewConsole } from './review-console-renderer.js';
 import { createReviewConsoleController } from './review-console-controller.js';
+import { renderSideBySideComparison } from './side-by-side-comparison-renderer.js';
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
@@ -993,6 +994,21 @@ async function runAnalysis() {
       reviewSec.style.display = 'none';
     }
 
+    // EPIC 2E-G Phase C: Side-by-Side Preview Comparison — pure
+    // read-only display of the already-computed, data-level comparison
+    // object. Does NOT re-run analysis, does NOT call the Comparison
+    // Engine or any other engine, does NOT affect XMP export. Same
+    // section-hide/show lifecycle as the Review Console above.
+    state.lastSideBySideComparison = finalPreset._decision?.finalStyleIntent?.sideBySidePreviewComparisonV2 ?? null;
+    const comparisonSec = document.getElementById('sideBySideComparisonSection');
+    const comparisonInner = document.getElementById('sideBySideComparisonInner');
+    if (comparisonSec && comparisonInner && state.lastSideBySideComparison) {
+      comparisonSec.style.display = 'block';
+      renderSideBySideComparison(comparisonInner, state.lastSideBySideComparison);
+    } else if (comparisonSec) {
+      comparisonSec.style.display = 'none';
+    }
+
   } catch (err) {
     setAnalysisBox('error', `<strong>⚠ ล้มเหลว:</strong> ${err.message}`);
     console.error('runAnalysis error:', err);
@@ -1094,6 +1110,7 @@ function handleReset() {
   state.lastReferenceTransfer = null;
   state.lastPreviewSandbox = null;
   state.lastPreviewReviewState = null;
+  state.lastSideBySideComparison = null;
   if (state.curveEditor) state.curveEditor.resetAll();
   document.getElementById('uploadWrap').style.display  = 'block';
   document.getElementById('previewWrap').style.display = 'none';
@@ -1103,6 +1120,8 @@ function handleReset() {
   if (groups) groups.style.display = 'none';
   const reviewSec = document.getElementById('reviewConsoleSection');
   if (reviewSec) reviewSec.style.display = 'none';
+  const comparisonSec = document.getElementById('sideBySideComparisonSection');
+  if (comparisonSec) comparisonSec.style.display = 'none';
   const reviewInner = document.getElementById('reviewConsoleInner');
   if (reviewInner) reviewInner.innerHTML = '';
   // Reset active tab back to Overview
