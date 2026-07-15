@@ -6,15 +6,19 @@ resuming work on LUMIXA AI after time away.
 
 ## Current Version
 
-**AI Workflow v1.1.6 (EPIC 2E-F)** — "Lightroom Mapping V2 — Controlled
-Preview Human Review" — as shown in the header/footer/sidebar badges
+**AI Workflow v1.1.7 (EPIC 2E-G)** — "Lightroom Mapping V2 — Side-by-Side
+Data Comparison" — as shown in the header/footer/sidebar badges
 (source of truth: `core/project-version.js`). Status line: "Legacy
-Active · Human Review Console Ready · XMP Unchanged". EPIC 2E-F is
-CLOSED as of this Phase D release; production output is still produced
-exclusively by Legacy Lightroom Mapping (`decision.styleBudget` →
-`core/lightroom-mapping-engine/index.js`) — the entire V2 shadow
-pipeline plus Preview Sandbox plus Human Review Console remain
-non-production, informational-only additions layered on top.
+Active · Comparison Console Ready · Visual Preview Pending · XMP
+Unchanged". EPIC 2E-G is CLOSED as of this Phase D release; production
+output is still produced exclusively by Legacy Lightroom Mapping
+(`decision.styleBudget` → `core/lightroom-mapping-engine/index.js`) —
+the entire V2 shadow pipeline plus Preview Sandbox plus Human Review
+Console plus Side-by-Side Comparison remain non-production,
+informational-only additions layered on top. No actual Legacy/V2
+preview image rendering exists yet — the comparison is data-level
+only, honestly reflected everywhere via `canRenderLegacyPreview`/
+`canRenderV2Preview`/`canCompareVisually`, all hard-coded `false`.
 
 (Historical note: earlier revisions of this file referenced a separate,
 older "LUMIXA AI, UI v1.0.0" / "Stage 2.4.2B.2" version scheme from
@@ -85,12 +89,22 @@ point, no build step, no framework.
 | EPIC 2E-F-C-B-F | Interactive Review Lifecycle Patch — two real interaction bugs found and fixed. **Bug 1:** the controller's transient confirmation state (`pendingConfirm`/`resetConfirmPending`) persists for the whole page session with no clearing mechanism, so a "Confirm Fail?" armed on one image's item could visually reappear on a DIFFERENT image's item sharing the same canonical ID (every image uses the same fixed item-ID set) — fixed with a new public `resetTransientUiState()` method (clears only the transient flags, never touches Review State, never rerenders, never tears down listeners), called from `handleReset()` (new-image import / full reset) but never from `handleReanalyze()`. **Bug 2:** `focusout`'s immediate `rerender()` destroyed the DOM — including the button about to receive a `click` — before that click could ever fire, silently dropping the action whenever a user typed a note and clicked Pass/Fail/etc. without blurring first; fixed with `_isPendingActionControl()`: when focus is moving to another review action control, the note still commits to state immediately but the DOM re-render is deferred to that control's own click handler, producing exactly one final render. Verified against the spec's exact expected sequence (type note → click Pass → `{reviewerNote, status:"passed", reviewed:true, reviewerDecision:"approve"}` in one render) plus the Fail-confirm and Reset sequences, new-image stale-confirmation clearing, Re-analyze regression, rapid clicks, and a duplicate-listener check (still exactly 1 mutation per click) | `ui/review-console-controller.js`, `ui/app.js` |
 | Initial Analysis Canvas Layout Fix + Fix-F | Two-stage fix for a first-import canvas sizing bug (unrelated to Review Console, bundled here for the same release). Root cause: the first-import render path used only 1 `requestAnimationFrame` and never waited for `document.fonts.ready` or a settled container width, with a silent `560`px hardcoded fallback on zero-width reads — causing the canvas to render at the wrong size on first import (only "fixed" itself once the user hit Re-analyze, when layout had incidentally settled). Fix-F found and corrected a second-order bug in the first fix: the readiness flow measured the SECTION's border-box width (including 40px+ of padding/border) instead of the canvas's own content width, causing a smaller but still-real overshoot. Final fix: a shared `waitForAnalysisRenderReady()` helper (image.decode → fonts.ready → 2 rAF → bounded container-width retry) plus a `resolveCanvasCssWidth()` resolver that only ever trusts the canvas element's own measured width, never a parent/section rect; `canvas.style.width` kept as responsive `100%` (never a fixed px value); per-element `WeakMap` tracking replaces a single shared `lastWidth` in the `ResizeObserver` (a hidden group's 0-width report can no longer clobber the active group's state). Verified: first-import and Re-analyze produce byte-identical canvas dimensions; DPR 1 and DPR 2 backing-store sizes exact; mobile 390px no overflow; K-Means/analysis values unchanged | `ui/app.js`, `ui/image-analysis-renderer.js`, `ui/palette-renderer.js` |
 | EPIC 2E-F Phase D | Documentation + Final Release Check — closed out EPIC 2E-F as a stable, documented, regression-checked release. Bumped to **v1.1.6 (EPIC 2E-F)**, title "Lightroom Mapping V2 — Controlled Preview Human Review", status "Legacy Active · Human Review Console Ready · XMP Unchanged". Self-caught and fixed a real, multi-EPIC-old stale-version bug during this stage's version-consistency audit: the header/footer/sidebar static HTML fallback text had been silently stuck at **"v1.1.4 (EPIC 2E-E)" / "Legacy Active · Preview Sandbox Ready"** since before Phase B — undetected because the dynamic `project-version.js`-driven script always overwrote it correctly in a working browser, masking the stale fallback in every normal session; also found the `upgradedSystems` static `<li>` list was missing "Controlled Preview Human Review" and "Interactive Review Console" entirely. All fixed and re-verified in-browser (header/footer/sidebar all agree on v1.1.6). Ran the full 15-point release QA audit (syntax, import/export, pipeline order, default safety, dangerous-flag override attempts, Review State engine full test matrix, UI interaction suite, Re-analyze/new-image lifecycle, canvas regression, production isolation, XMP byte-identical regression, mutation/immutability, storage audit, UI version audit) — see `08_EPIC_2E_F_QA_REPORT.md` for full evidence. Added `06_EPIC_2E_F_RELEASE_NOTES.md` and `07_CONTROLLED_PREVIEW_REVIEW_ARCHITECTURE.md` | `core/project-version.js`, `index.html` (version bump + stale-text fixes only — no layout/structure changes); new docs; no other source files modified |
+| EPIC 2E-G Phase A | Side-by-Side Preview Comparison Data Model — new standalone `mapping-v2-side-by-side-comparison.js` exporting `buildSideBySidePreviewComparisonV2(input)`, comparing Legacy Mapping data against the V2 Controlled Overlay Preview Sandbox across 15 abstract dimensions (tonal balance, exposure/contrast direction, highlight/shadow protection, white balance/saturation direction, color separation, skin protection, color stacking, over-stack severity, capture compatibility, style/intent alignment, safety confidence). Not integrated into the pipeline yet (Phase A explicitly standalone). `canCompareVisually`/`selectedProductionSource` hard-coded `false`/`"legacy"` — this codebase has no image-rendering pipeline anywhere, so this module produces DATA comparisons only, never a fake or real rendered preview image. 20 QA scenarios passed including empty/partial/malformed input, full immutability (no `JSON.stringify`/`parse` cloning — object spread only) | New `core/lightroom-mapping-engine/mapping-v2-side-by-side-comparison.js` only |
+| EPIC 2E-G-A-F | Side-by-Side Comparison Honesty and Resilience Patch — 6 real bugs found and fixed. Malformed-array safety (`?? []` doesn't guard non-null truthy non-arrays like strings — added `_safeArray()` everywhere). Visual-review-complete honesty (Map-keyed-by-canonical-ID check requiring all 6 items present/passed/reviewed, replacing a `[].every()` that was vacuously `true` on empty/partial sets). Data-availability vs. visual-renderability separation (`canRenderLegacyPreview`/`canRenderV2Preview` were incorrectly derived from `.available` — now hard-coded `false` with new `dataAvailable`/`visualPreviewAvailable` fields added to distinguish the concepts). Hard-stop normalization (`_normalizeHardStopCount()`/`_mergedHardStopCount()` supporting array/number/boolean/`{count}`/`{active}`, merged from both `lightroomSafetyClampV2` and `sandbox.previewRiskReview` via the greater confirmed count). V2-safer-claim honesty (`saferSide` could become `"v2"` from a strong V2 score alone while `legacySafetyScore` was always `null` — fixed to stay `"uncertain"` unless comparable Legacy evidence exists). Full null-safe contract audit | `mapping-v2-side-by-side-comparison.js` only |
+| EPIC 2E-G-A-F2 | Human Review Metadata Recalculation Patch — confirmed and fixed a genuine contradictory-output bug: `_buildHumanReviewStatus` still trusted incoming top-level `approvalState`/`canApprovePreview`/`reviewProgress`, so `{approvalState:"approved", canApprovePreview:true, visualReviewComplete:false}` was a reachable, self-contradicting combination when `reviewItems` were actually partial/unreviewed. Fixed by recalculating `approvalState`/`canApprovePreview`/`completed`/`required`/`progress` exclusively from canonical `reviewItems` (never trusting incoming top-level fields as source of truth — they're preserved only in a new `metadata.{incomingApprovalState,incomingCanApprovePreview,incomingProgress}` field, with warnings raised on disagreement) | `mapping-v2-side-by-side-comparison.js` only |
+| EPIC 2E-G-A-F3 | Review Decision Priority Patch — confirmed and fixed a real priority-ordering bug: `canonicalFailed` was checked before `canonicalRejected`, so a normal Fail action (which the Review Console always produces as `{status:"failed", reviewerDecision:"reject"}` together) incorrectly reported `approvalState:"blocked"` instead of `"rejected"`. Reordered to reject → needs-adjustment → blocked → approved → in-progress; `"blocked"` is now reserved for a failed item with no explicit reject decision | `mapping-v2-side-by-side-comparison.js` only |
+| EPIC 2E-G Phase B | Side-by-Side Comparison Pipeline Integration — wired `buildSideBySidePreviewComparisonV2` into `decision-engine/index.js` as integration order #12 (after Preview Sandbox #10 and Review State #11), attached to `finalStyleIntent.sideBySidePreviewComparisonV2`. **Key architectural finding**: unlike stages #1–#11, this could NOT be built inside `_buildDecision()` — the real production Legacy preset (`mapped`, with actual `exp`/`con`/`hi`/`sh`/etc. from `mapStyleFingerprintToLightroom`) doesn't exist until AFTER `_buildDecision()` returns — so it's built in `buildFinalPreset()` itself, right after `mapped` is computed, mutating the SAME `decision.finalStyleIntent` object reference `_buildDecision()` already returned (verified this makes it automatically visible to Decision Report/Reference Transfer with zero rebuild). Wrapped in try/catch, falling back to the engine's own safe empty-input result (never a hand-duplicated shape) on any exception. Added a "Side-by-Side Preview Comparison" Decision Report section and a `sideBySideComparisonContext` Reference Transfer compact context (confirmed `reference-transfer-engine` never rebuilds `finalStyleIntent` — pure pass-through, so the canonical object is preserved automatically without needing this addition, which exists only for consistency with the established per-object-context pattern). 18 QA scenarios passed; XMP byte-identical (length 2962) before/after | `core/decision-engine/index.js`, `core/decision-report-engine/index.js`, `core/reference-transfer-engine/index.js` |
+| EPIC 2E-G-B-F | Comparison Report Safety Evidence Patch — 2 real honesty bugs found and fixed in the Decision Report section added by Phase B. `previewExportDisabled`/`productionWriteDisabled` defaulted to `true` ("confirmed safe") whenever `controlledOverlayPreviewSandboxV2` was simply missing — fixed to tri-state (`sandbox ? sandbox.canExportPreview === false : null`), never defaulting missing evidence to a false safety claim. `xmpUnchanged: true` was hard-coded, implying an actual runtime XMP regression comparison had been performed when this integration only proves the comparison module has no XMP write path — replaced with `xmpIsolation: {comparisonModuleHasNoWritePath:true, regressionVerified:false, status:"structurally-isolated"}`, keeping `xmpUnchanged` for backward compat but permanently `null`. Also found and fixed a self-introduced `ReferenceError` (undefined `_isRecordLike` helper — `node --check` doesn't catch this class of runtime-only reference error) during this same patch, caught via the QA run before delivery | `core/decision-report-engine/index.js` only |
+| EPIC 2E-G Phase C | Side-by-Side Comparison UI Foundation — new `ui/side-by-side-comparison-renderer.js`, a pure read-only display of the canonical comparison object: visual-honesty banner (tri-state Production Mapping/Preview Export/Production Write confirmations — same pattern as the Review Console's safety strip), Legacy/V2 summary cards, all 15 comparison dimensions, similarity/divergence summaries, safety/risk comparisons, evidence quality, Human Review status (with exactly ONE interactive element in the whole module — a "Go to Review Console" scroll-only navigation button, never a comparison-changing control), blockers/warnings/recommendations, rollback/fallback, and a collapsible developer-details `<details>` panel. New `#sideBySideComparisonSection` placed directly after the Review Console in `index.html`, following the exact same show/hide/clear lifecycle pattern in `ui/app.js`. 25 QA scenarios passed: zero crashes across 13 malformed-input shapes, zero XSS execution, no duplicate sections across Re-analyze/new-image cycles, all 5 empty states verified, mobile 390px no overflow | New `ui/side-by-side-comparison-renderer.js`; `ui/app.js` (render integration + lifecycle); `index.html` (new section) |
+| EPIC 2E-G-C-F | Comparison UI Honesty and Resilience Patch — 7 real bugs found and fixed. Empty-state logic bug (`!_isRecord(cmp.legacyPreview)?.dataAvailable` — `_isRecord()` returns a boolean, and optional-chaining `.dataAvailable` off a boolean is always `undefined`, making the condition a permanent no-op — fixed using the already-normalized `legacyDataAvailable`/`v2DataAvailable` values, extracted before use). Safety banner completeness (`statusLine()` extended to a real tri-state confirmed/anomaly/unknown; added the previously-missing Preview Export and Production Write rows). Unknown-vs-zero safety counts (`hardStops`/`criticalRisks` now show "Unknown" when missing instead of a dishonest silent `0`, while an explicit numeric `0` still displays `0`). Human Review normalization (`approvalState` validated against a 7-value allow-list; "Progress unavailable" replaces a dishonest silent `0/0` on malformed `completed`/`required`). Removed arbitrary-object JSON dumping from `_safeText()` (now tries known keys — `message`/`reason`/`summary`/`label`/`description`/`finding`/`text`/`warning`/`blocker` — before a neutral non-technical fallback; 500-char truncation). `"none"` no longer silently maps to `"low"` risk (this UI-layer rule is intentionally stricter than the core engine's own synonym handling — an unrecognized risk string here is always `"unknown"`). File-comment corrected to acknowledge the one existing navigation button | `ui/side-by-side-comparison-renderer.js` only |
+| EPIC 2E-G-C-F2 | Final Comparison UI Evidence Semantics Patch — 2 real semantic bugs found and fixed. `appliedToProduction` (meaning "not currently applied") was being used as proof that Production Write is explicitly disabled — a genuinely different concept; fixed to prefer a canonical `canWriteProduction` boolean (checked at both the comparison root and `v2Preview`, forward-compatible since no current engine output has this field yet, so it honestly shows "Unknown / Not confirmed" today), with a separate honestly-labeled "Production Application" row shown only when `canWriteProduction` is unavailable but `appliedToProduction` is. Developer Details no longer defaults missing `selectedProductionSource` to `"legacy"` or missing `canRender*`/`canCompareVisually` booleans to `false` — both are now genuinely tri-state. **Self-caught bug during this same patch**: the first edit deleted the `appliedToProduction` variable declaration while a later `if` block still referenced it via `typeof appliedToProduction === 'boolean'` — since `typeof` never throws on an undeclared variable (it silently evaluates to `"undefined"`), this did NOT crash, but *would* have made the new "Production Application" row permanently unreachable; caught via direct QA testing (not by `node --check`, which cannot catch this class of bug) and fixed by restoring the declaration before delivery | `ui/side-by-side-comparison-renderer.js` only |
+| EPIC 2E-G Phase D | QA, Documentation & Release Closeout — closed out EPIC 2E-G as a stable, documented, regression-checked release. Bumped to **v1.1.7 (EPIC 2E-G)**, title "Lightroom Mapping V2 — Side-by-Side Data Comparison", status "Legacy Active · Comparison Console Ready · Visual Preview Pending · XMP Unchanged". Version-consistency audit found (again) that the static HTML title fallback ("Lightroom Mapping V2 — Overlay Preview Sandbox") had drifted even further back than the EPIC 2E-F Phase D finding — it had NEVER been updated across the entire EPIC 2E-F cycle either, despite the dynamic script correctly overwriting it every session; also found the `upgradedSystems` static `<li>` list missing "Side-by-Side Data Comparison"/"Data-level Legacy vs. V2 Analysis". Both fixed and re-verified live (header/footer/sidebar all agree on v1.1.7). Ran the full 16-point release QA audit (syntax ×2 methods, import/export, pipeline order — confirming Side-by-Side is built in `buildFinalPreset()` itself, not `_buildDecision()`, specifically because it needs the real `mapped` Legacy preset that doesn't exist yet inside `_buildDecision()` — default safety, 5 data-availability + 11 human-review + 7 safety test scenarios, Decision Report, Reference Transfer, UI, visual honesty, production isolation, XMP byte-identical regression, mutation/immutability, storage audit, version audit) — see `11_EPIC_2E_G_QA_REPORT.md` for full evidence. Added `09_EPIC_2E_G_RELEASE_NOTES.md` and `10_SIDE_BY_SIDE_COMPARISON_ARCHITECTURE.md` | `core/project-version.js`, `index.html` (version bump + stale-text fixes only); new docs; no other source files modified |
 
-## Current Version (update)
-
-Following EPIC 1.1, the core pipeline itself is still Stage 2.4.2B.2
-(unchanged) — EPIC 1.1 added a documentation/configuration foundation
-alongside it, not a new pipeline capability.
+(A second, contradicting "Current Version" section that referenced the
+stale "Stage 2.4.2B.2" scheme from EPIC 1.1 was removed here during the
+EPIC 2E-G Phase D documentation audit — it duplicated and directly
+contradicted the single "Current Version" section above, which already
+states that scheme is no longer tracked.)
 
 ## Current Architecture (one-line summary)
 
@@ -483,6 +497,43 @@ explainable catalogue — no engine currently reads from it (see
   lesson (first noted at EPIC 2E-E) — it needs to be a mandatory
   release-audit step, not just a start-of-stage courtesy, since a
   silent multi-stage drift is easy to miss without one.
+- **(EPIC 2E-G, all sub-stages) No actual Legacy or V2 image preview
+  exists.** The comparison is entirely data-level — abstract dimension
+  comparisons, normalized similarity/divergence scores, risk-level
+  labels — never a rendered image. There is no Before/After slider, no
+  zoom, no synchronized pan; none of this exists anywhere in the
+  codebase yet.
+- **(EPIC 2E-G) Similarity/divergence values may be qualitative, not
+  measured.** Several of the 15 comparison dimensions (style alignment,
+  intent alignment, capture compatibility) have no real magnitude to
+  compare — Legacy Mapping never consults Photographer Style/Intent/
+  Capture-Capability data at all, so these dimensions are honestly
+  low-confidence/qualitative rather than precisely measured.
+- **(EPIC 2E-G) No Lightroom-accurate rendering exists or is planned
+  for this EPIC** — even a future visual-preview implementation (see
+  "Next Recommended EPIC" below) would need to explicitly avoid
+  claiming pixel-perfect Lightroom accuracy.
+- **(EPIC 2E-G) Side-by-Side approval does not activate output** — same
+  guarantee as EPIC 2E-F's Review Console: `canApprovePreview`
+  becoming `true` structurally cannot enable Preview Export, Production
+  Write, or Mapping V2 activation, since those booleans are hard-coded
+  false inside `mapping-v2-overlay-preview-sandbox.js` itself,
+  independent of anything the Side-by-Side module reports.
+- **(EPIC 2E-G) Real-image regression testing is still required** — all
+  QA in this EPIC used synthetic test images/inputs and hand-built mock
+  comparison objects, same caveat as EPIC 2E-F.
+- **(EPIC 2E-G) XMP regression in this EPIC was verified via live
+  browser byte-length/schema comparison, not an exhaustive semantic
+  diff** — the Decision Report's own `xmpIsolation.regressionVerified`
+  field is honestly `false` (see EPIC 2E-G-B-F above) precisely because
+  no dedicated semantic XMP-regression test suite exists; this is
+  itself documented as a known gap, not silently assumed safe.
+- **(EPIC 2E-G) No automated, persisted browser test suite exists** —
+  every QA pass across all of EPIC 2E-G's ten sub-stages was a
+  one-time manual Playwright script, same caveat as EPIC 2E-F.
+- **(EPIC 2E-G) Mobile layout verified only at the 390px emulated
+  Playwright viewport**, not on real physical devices — same caveat as
+  EPIC 2E-F.
 
 No forward-looking roadmap entry is enforced anywhere in the current
 codebase — any future stage should still be defined fresh against the
@@ -496,7 +547,7 @@ suggested order — validation-threshold first, feasibility/transfer
 scoring coefficients last). This is an option, not a commitment; no
 migration has been scheduled or started.
 
-## EPIC 2E-F Pipeline Order (final, as integrated in `core/decision-engine/index.js`)
+## EPIC 2E-G Pipeline Order (final, as integrated in `core/decision-engine/index.js`)
 
 1. Style Budget Intelligence
 2. Mapping V2 Planner
@@ -508,58 +559,83 @@ migration has been scheduled or started.
 8. Overlay Simulation V2
 9. Controlled Overlay Test Gate V2
 10. Controlled Overlay Preview Sandbox V2
-11. Controlled Preview Review State V2 (LAST — built only after the
-    Preview Sandbox it depends on already exists)
+11. Controlled Preview Review State V2 (built only after the Preview
+    Sandbox it depends on already exists)
+12. Side-by-Side Preview Comparison V2 (LAST — see the important
+    architectural note below)
 
-Every stage above attaches its own object to `finalStyleIntent` in a
-try/catch block (defense-in-depth — a failure in any one stage cannot
-break analysis or fall back to any unsafe default) and is read only by
-Decision Report / Reference Transfer Report narration. None of them are
-read by `core/lightroom-mapping-engine/index.js`
+Stages 1–11 all attach their own object to `finalStyleIntent` INSIDE
+`_buildDecision()`, each in its own try/catch block (defense-in-depth
+— a failure in any one stage cannot break analysis or fall back to any
+unsafe default). Stage 12 is DIFFERENT: it cannot live inside
+`_buildDecision()` because it needs `mapped` — the REAL production
+Legacy preset (`exp`/`con`/`hi`/`sh`/etc. from
+`mapStyleFingerprintToLightroom`) — which does not exist until AFTER
+`_buildDecision()` has already returned. So stage 12 is built in
+`buildFinalPreset()` itself, right after `mapped` is computed, by
+mutating `decision.finalStyleIntent` — the EXACT SAME object reference
+`_buildDecision()` already returned (JS objects are references), so
+this is automatically visible to Decision Report / Reference Transfer
+without any rebuild. None of these 12 stages are read by
+`core/lightroom-mapping-engine/index.js`
 (`mapStyleFingerprintToLightroom`), `preset-engine`, or `xmp-validator`
-— confirmed via repeated grep audits across every sub-stage of EPIC
-2E-F, most recently in this Phase D release audit.
+— confirmed via repeated grep audits across every sub-stage of both
+EPIC 2E-F and EPIC 2E-G, most recently in this Phase D release audit.
 
 ## Canonical Object Paths
 
 ```
 finalStyleIntent.controlledOverlayPreviewSandboxV2
 finalStyleIntent.controlledPreviewReviewStateV2
+finalStyleIntent.sideBySidePreviewComparisonV2
 ```
 
 Both live under `p._decision.finalStyleIntent` on the object returned
 by `buildFinalPreset()`. The UI reads them via
-`state.lastPreviewSandbox`/`state.lastPreviewReviewState` in
-`ui/app.js`, set once per analysis run right after `buildFinalPreset()`
-returns.
+`state.lastPreviewSandbox`/`state.lastPreviewReviewState`/
+`state.lastSideBySideComparison` in `ui/app.js`, set once per analysis
+run right after `buildFinalPreset()` returns.
 
 **Human Review approval is purely informational.** `canApprovePreview`
 becoming `true` does not — and structurally cannot, since the relevant
 booleans are hard-coded inside `mapping-v2-overlay-preview-sandbox.js`
 itself — enable Preview Export, Production Write, or Production Mapping
 activation. There is no code path anywhere in this codebase, as of
-v1.1.6, that reads Review State approval and produces or alters any
-production output.
+v1.1.7, that reads Review State (or Side-by-Side Comparison) approval
+and produces or alters any production output.
 
-## Safety Boundaries (EPIC 2E-F)
+## Safety Boundaries (EPIC 2E-F + EPIC 2E-G)
 
 - **Legacy Mapping vs. V2 shadow pipeline:** completely separate code
   paths. `decision.styleBudget` (computed by
   `core/lightroom-mapping-engine/index.js`) is the ONLY input to XMP
-  export. The entire `finalStyleIntent.*` V2 chain (stages 1-11 above)
-  is attached to a sibling object that no production code reads.
+  export. The entire `finalStyleIntent.*` V2 chain (all 12 stages
+  above) is attached to a sibling object that no production code
+  reads.
 - **Preview Sandbox vs. XMP export:** `simulatedPreviewPreset` contains
   only abstract, normalized 0-1 "changes" — never real Lightroom slider
   values, never XMP-schema values. `canExportPreview`/
   `canWriteProduction` are hard-coded `false` inside the Sandbox module
   itself; confirmed (this release and every prior sub-stage) that no
   combination of feature flags can flip them.
+- **Side-by-Side Comparison vs. XMP export (EPIC 2E-G):** the
+  comparison module has NO write path to XMP at all — this was proven
+  structurally (no such code exists), not via a runtime regression
+  comparison (`xmpIsolation.regressionVerified` is honestly `false` in
+  the Decision Report — see `11_EPIC_2E_G_QA_REPORT.md`).
+  `canRenderLegacyPreview`/`canRenderV2Preview`/`canCompareVisually`
+  are all hard-coded `false` — this codebase has no image-rendering
+  pipeline anywhere; the comparison is DATA-level only.
 - **Review State Engine vs. UI:** all approval/progress/blocker
   calculation happens exclusively in
   `mapping-v2-preview-review-state.js`; the UI (`review-console-controller.js`)
   only ever calls `updatePreviewReviewItemV2`/`resetPreviewReviewStateV2`
   and renders whatever they return — zero approval logic is duplicated
-  client-side.
+  client-side. The Side-by-Side Comparison module independently
+  RE-CALCULATES its own honest `humanReviewStatus` from canonical
+  `reviewItems` (never trusting incoming top-level approval metadata)
+  rather than reading the Review State Engine's output directly —
+  see the EPIC 2E-G-A-F2 entry above for why this was necessary.
 - **UI state ownership:** `state.lastPreviewReviewState` in
   `ui/app.js` is the single editable Review State for the current
   analysis result. Same-image Re-analyze passes it back into
@@ -567,30 +643,37 @@ production output.
   fresh Sandbox (safely downgrading stale approval). New-image import
   always clears it (via `handleReset()`, called unconditionally before
   every `loadFile()`), so a different image can never inherit approval.
+  `state.lastSideBySideComparison` follows the identical clear/refresh
+  lifecycle.
 - **Event delegation lifecycle:** `review-console-controller.js`
   attaches exactly ONE delegated listener set, once per page session,
   to the persistent `#reviewConsoleInner` container — verified this
   never duplicates across repeated Re-analyze/new-image cycles (a
   MutationObserver-based test confirmed exactly 1 DOM mutation per 1
-  user click even after 3 Re-analyzes).
+  user click even after 3 Re-analyzes). The Side-by-Side Comparison UI
+  has exactly one interactive element in total (a "Go to Review
+  Console" scroll-only navigation button) and needs no comparable
+  listener-lifecycle management.
 - **No local persistence:** confirmed via grep — zero
   `localStorage`/`sessionStorage`/`indexedDB`/cookie usage in any
-  Review Console or Preview Sandbox file. The pre-existing, unrelated
-  dark-mode/language `localStorage` keys in `ui/app.js` predate EPIC
-  2E-F and are explicitly out of scope.
+  Review Console, Preview Sandbox, or Side-by-Side Comparison file. The
+  pre-existing, unrelated dark-mode/language `localStorage` keys in
+  `ui/app.js` predate both EPICs and are explicitly out of scope.
 - **Rollback / fail-safe behavior:** every V2 stage's `rollbackPlan`
   reports `restoreSource:"legacy"`/`available:true`. If
-  `createPreviewReviewStateV2`/`updatePreviewReviewItemV2` ever throws
-  unexpectedly, the UI controller preserves the last valid state,
-  shows a concise (non-raw-error) message, and never falls back to an
+  `createPreviewReviewStateV2`/`updatePreviewReviewItemV2`/
+  `buildSideBySidePreviewComparisonV2` ever throws unexpectedly, the
+  caller preserves the last valid state (UI controller) or falls back
+  to the engine's own safe empty-input result (decision-engine
+  integration), never a hand-duplicated shape and never an
   approved-looking state.
 
 ## Next Recommended EPIC
 
-**EPIC 2E-G — Side-by-Side Preview Comparison.** Purpose: let a
-reviewer visually compare the Legacy Preview against the V2 Controlled
-Preview side-by-side, remaining strictly non-production (no XMP
-activation), to support — not replace — the human review decisions this
-EPIC already introduced. Not implemented as part of EPIC 2E-F; this is
-a recommendation only, to be scoped fresh against the actual
-implementation when work begins.
+**EPIC 2E-H — Visual Preview Rendering Foundation.** Purpose: create
+actual isolated Legacy and V2 preview render plans, remaining strictly
+non-production; build a safe browser preview renderer while avoiding
+Lightroom-accuracy claims; prepare for Before/After visual comparison;
+keep Export and Production Write disabled throughout. Not implemented
+as part of EPIC 2E-G; this is a recommendation only, to be scoped fresh
+against the actual implementation when work begins.

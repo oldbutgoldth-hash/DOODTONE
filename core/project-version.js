@@ -8,12 +8,12 @@
  * place that needs editing to bump the displayed version.
  */
 export const AI_WORKFLOW_VERSION = {
-  version: 'v1.1.6',
-  epic: 'EPIC 2E-F',
-  label: 'AI Workflow v1.1.6 (EPIC 2E-F)',
-  title: 'Lightroom Mapping V2 — Controlled Preview Human Review',
-  status: 'Legacy Active · Human Review Console Ready · XMP Unchanged',
-  statusLine: 'Legacy Active · Human Review Console Ready · XMP Unchanged',
+  version: 'v1.1.7',
+  epic: 'EPIC 2E-G',
+  label: 'AI Workflow v1.1.7 (EPIC 2E-G)',
+  title: 'Lightroom Mapping V2 — Side-by-Side Data Comparison',
+  status: 'Legacy Active · Comparison Console Ready · Visual Preview Pending · XMP Unchanged',
+  statusLine: 'Legacy Active · Comparison Console Ready · Visual Preview Pending · XMP Unchanged',
   upgradedSystems: [
     'Reference Color Intelligence',
     'Photographer Intent Intelligence',
@@ -31,6 +31,8 @@ export const AI_WORKFLOW_VERSION = {
     'Controlled Overlay Preview Sandbox',
     'Controlled Preview Human Review',
     'Interactive Review Console',
+    'Side-by-Side Data Comparison',
+    'Data-level Legacy vs. V2 Analysis',
     'Rollback-ready Legacy Fallback',
     'Legacy Mapping Still Active',
     'XMP Export Unchanged',

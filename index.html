@@ -217,12 +217,12 @@
         <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border);border-radius:20px;background:var(--surface-2);color:var(--text-dim);font-size:9.5px;font-weight:600;letter-spacing:.06em;white-space:nowrap">
           <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0"></span>
           <span class="lx-aiwf-label">AI Workflow</span><span class="lx-aiwf-label-compact" style="display:none">AI</span>
-          <b id="aiWorkflowHeaderVersion" style="color:var(--accent)">v1.1.6</b>
-          <span id="aiWorkflowHeaderEpic" class="lx-aiwf-epic">(EPIC 2E-F)</span>
+          <b id="aiWorkflowHeaderVersion" style="color:var(--accent)">v1.1.7</b>
+          <span id="aiWorkflowHeaderEpic" class="lx-aiwf-epic">(EPIC 2E-G)</span>
         </summary>
         <div class="lx-workflow-panel" style="position:absolute;top:calc(100% + 8px);right:0;z-index:200;width:max-content;max-width:260px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-size:9.5px">
-          <div id="aiWorkflowHeaderTitle" style="color:var(--text);font-weight:600;font-size:10.5px;margin-bottom:3px;text-transform:none;letter-spacing:normal">Lightroom Mapping V2 — Overlay Preview Sandbox</div>
-          <div id="aiWorkflowHeaderStatus" style="text-transform:none;letter-spacing:normal;line-height:1.5;color:var(--text-dim)">Legacy Active &#183; Human Review Console Ready &#183; XMP Unchanged</div>
+          <div id="aiWorkflowHeaderTitle" style="color:var(--text);font-weight:600;font-size:10.5px;margin-bottom:3px;text-transform:none;letter-spacing:normal">Lightroom Mapping V2 — Side-by-Side Data Comparison</div>
+          <div id="aiWorkflowHeaderStatus" style="text-transform:none;letter-spacing:normal;line-height:1.5;color:var(--text-dim)">Legacy Active &#183; Comparison Console Ready &#183; Visual Preview Pending &#183; XMP Unchanged</div>
         </div>
       </details>
       <div class="lx-plan-badge" style="display:flex;align-items:center;gap:7px;padding:6px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)">
@@ -285,7 +285,7 @@
         </div>
         <div>
           <h2 style="font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--text);margin:0">AI Workflow</h2>
-          <p id="aiWorkflowSidebarVersion" style="font-size:10.5px;color:var(--text-dim);margin:2px 0 0;font-family:var(--font-mono);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">v1.1.6 &#183; Controlled Preview Human Review</p>
+          <p id="aiWorkflowSidebarVersion" style="font-size:10.5px;color:var(--text-dim);margin:2px 0 0;font-family:var(--font-mono);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">v1.1.7 &#183; Side-by-Side Data Comparison</p>
         </div>
       </div>
 
@@ -761,11 +761,11 @@
     <details id="aiWorkflowBadge" style="font-family:var(--font-mono);font-size:9.5px;color:var(--text-faint);position:relative">
       <summary style="cursor:pointer;display:flex;align-items:center;gap:6px;color:var(--text-dim);padding:4px 10px;border:1px solid var(--border);border-radius:20px;background:var(--surface-2)">
         <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0"></span>
-        <span>AI Workflow</span> <b id="aiWorkflowVersion" style="color:var(--accent)">v1.1.6</b> <span id="aiWorkflowEpic" style="color:var(--text-faint)">(EPIC 2E-F)</span>
+        <span>AI Workflow</span> <b id="aiWorkflowVersion" style="color:var(--accent)">v1.1.7</b> <span id="aiWorkflowEpic" style="color:var(--text-faint)">(EPIC 2E-G)</span>
       </summary>
       <div class="lx-workflow-panel" style="position:absolute;bottom:calc(100% + 8px);right:0;z-index:200;width:max-content;max-width:260px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.2)">
-        <div id="aiWorkflowTitle" style="color:var(--text);font-weight:600;font-size:10.5px;margin-bottom:3px;text-transform:none;letter-spacing:normal">Lightroom Mapping V2 — Overlay Preview Sandbox</div>
-        <div id="aiWorkflowStatusLine" style="margin-bottom:9px;text-transform:none;letter-spacing:normal;line-height:1.5">Legacy Active &#183; Human Review Console Ready &#183; XMP Unchanged</div>
+        <div id="aiWorkflowTitle" style="color:var(--text);font-weight:600;font-size:10.5px;margin-bottom:3px;text-transform:none;letter-spacing:normal">Lightroom Mapping V2 — Side-by-Side Data Comparison</div>
+        <div id="aiWorkflowStatusLine" style="margin-bottom:9px;text-transform:none;letter-spacing:normal;line-height:1.5">Legacy Active &#183; Comparison Console Ready &#183; Visual Preview Pending &#183; XMP Unchanged</div>
         <div style="color:var(--text-faint);font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">Upgraded Systems</div>
         <ul style="margin:0;padding-left:14px;line-height:1.7;text-transform:none;letter-spacing:normal;color:var(--text-dim)" id="aiWorkflowSystemsList">
           <li>Reference Color Intelligence</li>
@@ -784,6 +784,8 @@
           <li>Controlled Overlay Preview Sandbox</li>
           <li>Controlled Preview Human Review</li>
           <li>Interactive Review Console</li>
+          <li>Side-by-Side Data Comparison</li>
+          <li>Data-level Legacy vs. V2 Analysis</li>
           <li>Rollback-ready Legacy Fallback</li>
           <li>Shadow-only Mapping Safety</li>
           <li>Legacy Mapping Still Active</li>
