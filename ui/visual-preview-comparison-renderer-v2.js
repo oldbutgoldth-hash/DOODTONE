@@ -113,6 +113,23 @@ export function ensureVisualPreviewComparisonLayout(container) {
   });
   root.appendChild(notice);
 
+  // UX Polish (EPIC 2E-H Phase D): a compact, ALWAYS-VISIBLE technical
+  // limitations list — deliberately not hidden only inside a collapsed
+  // `<details>` section, per this phase's explicit requirement.
+  const limitationsNotice = el('div', { style: 'font-size:10px;color:var(--text-faint);line-height:1.6' });
+  const limitationsList = el('ul', { style: 'margin:4px 0 0;padding-left:16px' });
+  [
+    'RAW development is not reproduced',
+    'Camera profiles are not reproduced',
+    'Local masks are not reproduced',
+    'Full ICC proofing is not reproduced',
+    'Sharpening and noise reduction are not guaranteed',
+    'Color Grading support is partial (shadow/highlight saturation only)',
+    'Midtone grading and Hue rendering remain unsupported',
+  ].forEach(t => limitationsList.appendChild(el('li', { text: t })));
+  limitationsNotice.appendChild(limitationsList);
+  root.appendChild(limitationsNotice);
+
   // Safety confirmations strip (tri-state, filled in on render)
   const safetyStrip = el('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;font-size:10.5px' });
   safetyStrip.id = 'vprSafetyStrip';
@@ -384,8 +401,25 @@ export function renderVisualPreviewComparison(container, comparisonState) {
     overallMessagesEl.replaceChildren();
     const legacyRendered = cs.legacy?.rendered === true;
     const v2Rendered = cs.v2?.rendered === true;
+
+    // UX Polish (EPIC 2E-H Phase D): a clear overall-outcome sentence,
+    // exact required wording — never implies accuracy, only completion.
+    if (overallState === 'rendered') {
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--success, green)', text: 'Both approximate browser previews are available.' }));
+    } else if (overallState === 'partial') {
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: 'Partial preview: only one side rendered successfully.' }));
+    } else if (overallState === 'cancelled') {
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--text-dim)', text: 'Preview rendering was cancelled because a newer analysis is active.' }));
+    } else if (overallState === 'failed') {
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--danger, red)', text: 'Visual Preview rendering failed. Analysis results and production output were not changed.' }));
+    }
+
     if (legacyRendered && v2Rendered && (cs.legacy?.metadata?.visualAdjustmentsApplied === false || cs.v2?.metadata?.visualAdjustmentsApplied === false)) {
       overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: 'One preview contains no supported visual adjustment.' }));
+    }
+    // UX Polish: memory-downscale messaging, deduplicated across sides.
+    if ((legacyRendered && cs.legacy?.metadata?.downscaledForMemorySafety === true) || (v2Rendered && cs.v2?.metadata?.downscaledForMemorySafety === true)) {
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--text-dim)', text: 'Preview resolution was reduced for memory safety.' }));
     }
     const blockers = _safeArray(cs.blockers).slice(0, 4);
     blockers.forEach(b => {

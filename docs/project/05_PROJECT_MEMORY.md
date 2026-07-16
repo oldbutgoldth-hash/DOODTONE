@@ -6,19 +6,21 @@ resuming work on LUMIXA AI after time away.
 
 ## Current Version
 
-**AI Workflow v1.1.7 (EPIC 2E-G)** — "Lightroom Mapping V2 — Side-by-Side
-Data Comparison" — as shown in the header/footer/sidebar badges
-(source of truth: `core/project-version.js`). Status line: "Legacy
-Active · Comparison Console Ready · Visual Preview Pending · XMP
-Unchanged". EPIC 2E-G is CLOSED as of this Phase D release; production
+**AI Workflow v1.1.8 (EPIC 2E-H)** — "Lightroom Mapping V2 — Isolated
+Visual Preview Rendering" — as shown in the header/footer/sidebar
+badges (source of truth: `core/project-version.js`). Status line:
+"Legacy Active · Browser Preview Available · V2 Non-Production · XMP
+Unchanged". EPIC 2E-H is CLOSED as of this Phase D release; production
 output is still produced exclusively by Legacy Lightroom Mapping
 (`decision.styleBudget` → `core/lightroom-mapping-engine/index.js`) —
-the entire V2 shadow pipeline plus Preview Sandbox plus Human Review
-Console plus Side-by-Side Comparison remain non-production,
-informational-only additions layered on top. No actual Legacy/V2
-preview image rendering exists yet — the comparison is data-level
-only, honestly reflected everywhere via `canRenderLegacyPreview`/
-`canRenderV2Preview`/`canCompareVisually`, all hard-coded `false`.
+the entire V2 shadow pipeline, Preview Sandbox, Human Review Console,
+Side-by-Side Comparison, and now the isolated Visual Preview Render
+Plan + browser canvas renderer, all remain non-production, layered on
+top. Real Legacy/Controlled-V2 browser preview images DO now exist
+(this is what EPIC 2E-H added) — but they are strictly
+UI-local/approximate, never written back into `finalStyleIntent`,
+never Lightroom-accurate, and never affect Production Mapping or XMP
+in any way.
 
 (Historical note: earlier revisions of this file referenced a separate,
 older "LUMIXA AI, UI v1.0.0" / "Stage 2.4.2B.2" version scheme from
@@ -547,7 +549,7 @@ suggested order — validation-threshold first, feasibility/transfer
 scoring coefficients last). This is an option, not a commitment; no
 migration has been scheduled or started.
 
-## EPIC 2E-G Pipeline Order (final, as integrated in `core/decision-engine/index.js`)
+## EPIC 2E-H Pipeline Order (final, as integrated in `core/decision-engine/index.js`)
 
 1. Style Budget Intelligence
 2. Mapping V2 Planner
@@ -561,26 +563,32 @@ migration has been scheduled or started.
 10. Controlled Overlay Preview Sandbox V2
 11. Controlled Preview Review State V2 (built only after the Preview
     Sandbox it depends on already exists)
-12. Side-by-Side Preview Comparison V2 (LAST — see the important
-    architectural note below)
+12. Side-by-Side Preview Comparison V2 (built after `mapped` — see the
+    important architectural note below)
+13. Visual Preview Render Plan V2 (LAST — built immediately after
+    stage 12, for the identical structural reason: it also needs
+    `mapped`, plus every stage before it)
 
 Stages 1–11 all attach their own object to `finalStyleIntent` INSIDE
 `_buildDecision()`, each in its own try/catch block (defense-in-depth
 — a failure in any one stage cannot break analysis or fall back to any
-unsafe default). Stage 12 is DIFFERENT: it cannot live inside
-`_buildDecision()` because it needs `mapped` — the REAL production
-Legacy preset (`exp`/`con`/`hi`/`sh`/etc. from
+unsafe default). Stages 12 and 13 are DIFFERENT: neither can live
+inside `_buildDecision()` because both need `mapped` — the REAL
+production Legacy preset (`exp`/`con`/`hi`/`sh`/etc. from
 `mapStyleFingerprintToLightroom`) — which does not exist until AFTER
-`_buildDecision()` has already returned. So stage 12 is built in
-`buildFinalPreset()` itself, right after `mapped` is computed, by
-mutating `decision.finalStyleIntent` — the EXACT SAME object reference
-`_buildDecision()` already returned (JS objects are references), so
-this is automatically visible to Decision Report / Reference Transfer
-without any rebuild. None of these 12 stages are read by
+`_buildDecision()` has already returned. So both are built in
+`buildFinalPreset()` itself, right after `mapped` is computed, using
+an IMMUTABLE spread attachment pattern (`decision.finalStyleIntent =
+{...decision.finalStyleIntent, visualPreviewRenderPlanV2, ...}` —
+fixed from an earlier direct-mutation bug caught in EPIC 2E-H-B-F),
+which preserves every prior stage's field while adding the new one.
+This is automatically visible to Decision Report / Reference Transfer
+without any rebuild. None of these 13 stages are read by
 `core/lightroom-mapping-engine/index.js`
 (`mapStyleFingerprintToLightroom`), `preset-engine`, or `xmp-validator`
-— confirmed via repeated grep audits across every sub-stage of both
-EPIC 2E-F and EPIC 2E-G, most recently in this Phase D release audit.
+— confirmed via repeated grep audits across every sub-stage of EPIC
+2E-F, EPIC 2E-G, and EPIC 2E-H, most recently in this Phase D release
+audit.
 
 ## Canonical Object Paths
 
@@ -588,21 +596,29 @@ EPIC 2E-F and EPIC 2E-G, most recently in this Phase D release audit.
 finalStyleIntent.controlledOverlayPreviewSandboxV2
 finalStyleIntent.controlledPreviewReviewStateV2
 finalStyleIntent.sideBySidePreviewComparisonV2
+finalStyleIntent.visualPreviewRenderPlanV2
 ```
 
-Both live under `p._decision.finalStyleIntent` on the object returned
-by `buildFinalPreset()`. The UI reads them via
+All four live under `p._decision.finalStyleIntent` on the object
+returned by `buildFinalPreset()`. The UI reads them via
 `state.lastPreviewSandbox`/`state.lastPreviewReviewState`/
 `state.lastSideBySideComparison` in `ui/app.js`, set once per analysis
 run right after `buildFinalPreset()` returns.
+`visualPreviewRenderPlanV2` is read directly from
+`finalPreset._decision.finalStyleIntent` at the point `runAnalysis()`
+kicks off the (fire-and-forget, generation-checked) Visual Preview
+Comparison render — see the EPIC 2E-H section below for the full
+actual-rendering path, which is entirely separate from this canonical
+Render Plan object.
 
 **Human Review approval is purely informational.** `canApprovePreview`
 becoming `true` does not — and structurally cannot, since the relevant
 booleans are hard-coded inside `mapping-v2-overlay-preview-sandbox.js`
 itself — enable Preview Export, Production Write, or Production Mapping
 activation. There is no code path anywhere in this codebase, as of
-v1.1.7, that reads Review State (or Side-by-Side Comparison) approval
-and produces or alters any production output.
+v1.1.8, that reads Review State (or Side-by-Side Comparison, or Visual
+Preview Render Plan capability) approval/renderability and produces or
+alters any production output.
 
 ## Safety Boundaries (EPIC 2E-F + EPIC 2E-G)
 
@@ -670,10 +686,70 @@ and produces or alters any production output.
 
 ## Next Recommended EPIC
 
-**EPIC 2E-H — Visual Preview Rendering Foundation.** Purpose: create
-actual isolated Legacy and V2 preview render plans, remaining strictly
-non-production; build a safe browser preview renderer while avoiding
-Lightroom-accuracy claims; prepare for Before/After visual comparison;
-keep Export and Production Write disabled throughout. Not implemented
-as part of EPIC 2E-G; this is a recommendation only, to be scoped fresh
-against the actual implementation when work begins.
+**EPIC 2E-I — Interactive Before/After Visual Comparison.** Purpose:
+add a safe Before/After slider comparing the two already-rendered
+Legacy/V2 canvases interactively; add optional synchronized view
+behavior; preserve read-only state throughout; keep Export and
+Production Write disabled; remain honest about browser approximation;
+prepare for structured real-image validation. Not implemented as part
+of EPIC 2E-H; this is a recommendation only, to be scoped fresh against
+the actual implementation when work begins.
+
+## EPIC 2E-H — Isolated Visual Preview Rendering (CLOSED)
+
+**Final version: v1.1.8.** Added the actual browser-rendered preview
+layer on top of EPIC 2E-G's data-level comparison — see the dedicated
+architecture document (`docs/project/13_VISUAL_PREVIEW_RENDERING_ARCHITECTURE.md`)
+for the full three-path breakdown (production / preview-planning /
+actual-UI-render). Summary of what changed:
+
+- **Render Plan Builder** (`core/preview-rendering/visual-preview-render-plan-v2.js`)
+  — data-only capability modeling for Legacy/V2, conservative
+  normalized adjustment model (-1..1), Color Grading supported only
+  for real non-zero shadow/highlight saturation (Hue-only and
+  Midtone-only are honestly unsupported), non-production V2 evidence
+  checks, rollback/fallback metadata, immutable inputs, safe fallback
+  on any internal error (never `null`).
+- **Isolated Canvas Renderer** (`ui/isolated-visual-preview-renderer-v2.js`)
+  — Canvas 2D pixel processing (exposure, highlights/shadows,
+  whites/blacks, contrast/tone-curve, temperature/tint,
+  saturation/vibrance, clarity/dehaze, limited color grading), alpha
+  preservation, `Uint8ClampedArray` channel safety, bounded preview
+  dimensions with DPR-aware `maxPixelCount` enforcement, `image.decode()`
+  readiness, chunked main-thread processing (~100k-pixel chunks,
+  cancellation-checked between every chunk), stale-generation
+  protection at two levels (per-renderer + per-controller), dispose
+  lifecycle, staged best-effort commit (`commitAtomicity:
+  "staged-best-effort"`, pixel-content restoration honestly
+  unsupported after a commit failure — only dimensions are restored).
+- **Pipeline integration** — stage #13, `finalStyleIntent.visualPreviewRenderPlanV2`,
+  immutable spread attachment (fixed a real direct-mutation bug),
+  non-null canonical fallback, tri-state Decision Report projection,
+  bounded Reference Transfer preservation, single-read `safeGet`
+  contract against hostile getters throughout.
+- **UI** (`ui/visual-preview-comparison-controller-v2.js` +
+  `ui/visual-preview-comparison-renderer-v2.js`) — two isolated target
+  canvases (`legacyVisualPreviewCanvasV2` / `controlledV2VisualPreviewCanvasV2`),
+  sequential Legacy-then-V2 rendering (never two large buffers held at
+  once), real render-cancellation on `clear()` (disposes+recreates the
+  underlying renderers — an earlier version only incremented a counter,
+  letting stale pixels commit after clear), Preparing → Rendering →
+  Partial/Rendered/Blocked/Failed/Cancelled states, source/canvas
+  validation with specific blockers, evidence-driven safety strip
+  (Production Mapping/Preview Export/Production Write, each
+  confirmed/anomaly/unknown), read-only throughout (zero Apply/Export/
+  Activate/persistence controls).
+
+**Known limitations (honest, not fixed in this EPIC):** browser preview
+is not Lightroom-accurate; no RAW development, camera-profile
+reproduction, exact tone-curve/Highlight/Shadow parity, full Color
+Grading model (Hue and Midtone remain unsupported), local/AI masks,
+complete ICC proofing, sharpening/noise-reduction reproduction, lens
+corrections, or geometry transforms; rendering is main-thread only;
+large images are downscaled; actual rendered state is UI-local only
+(never written back to `finalStyleIntent`); no automated full-browser
+regression suite exists; real-device mobile and real screen-reader
+testing remain outstanding; exact XMP semantic regression still
+requires a dedicated comparison tool (byte-length/schema/substring
+checks were used instead); Side-by-Side/Review/Render-Plan approval
+never activates V2 in any way.
