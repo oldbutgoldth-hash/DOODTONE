@@ -142,6 +142,53 @@ export function buildDecisionReport(ctx) {
  * (style vocabulary, editing strategy, style budget, photographer
  * acceptance) into one explainable summary section.
  */
+// EPIC 2E-H-B-F FIX 3: tri-state boolean projection — never converts a
+// missing (undefined/null/non-boolean) value to `false`, which would
+// falsely imply "confirmed disabled" when there is actually no
+// evidence either way.
+function _triStateBooleanDR(value) {
+  return value === true ? true : value === false ? false : null;
+}
+
+// EPIC 2E-H-B-F FIX 5: safe message normalizer — never JSON.stringify
+// on an arbitrary object (which could dump large/circular/technical
+// structures into photographer-facing text). For objects, only known
+// human-readable keys are read; anything else (including a circular
+// reference, which would throw on JSON.stringify) safely falls back to
+// a neutral message.
+const _DR_KNOWN_TEXT_KEYS = ['message', 'blocker', 'warning', 'reason', 'summary', 'description', 'text', 'finding'];
+function _safeMessageDR(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') { const t = value.trim(); return t ? (t.length > 500 ? `${t.slice(0, 500)}…` : t) : null; }
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
+  if (typeof value === 'boolean') return String(value);
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    for (const key of _DR_KNOWN_TEXT_KEYS) {
+      const v = value[key];
+      if (typeof v === 'string' && v.trim()) return v.length > 500 ? `${v.slice(0, 500)}…` : v;
+    }
+    return 'Additional Render Plan information is available.';
+  }
+  return null;
+}
+
+// EPIC 2E-H-B-F FIX 5: normalize + deduplicate an untrusted array of
+// blockers/warnings/reasons into safe display strings, bounded to
+// `limit` entries.
+function _normalizeMessagesDR(arr, limit = 4) {
+  const safeArr = Array.isArray(arr) ? arr : [];
+  const seen = new Set();
+  const out = [];
+  for (const item of safeArr) {
+    const text = _safeMessageDR(item);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 function _buildPhotographerIntelligenceSummary({ dec, bench }) {
   const fsi = dec?.finalStyleIntent ?? {};
   const strategy = dec?.editingStrategy;
@@ -715,30 +762,54 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
       const legacyRenderable = legacy.renderable === true;
       const v2Renderable = v2.renderable === true;
       const constraints = (rp.sharedRenderConstraints && typeof rp.sharedRenderConstraints === 'object' && !Array.isArray(rp.sharedRenderConstraints)) ? rp.sharedRenderConstraints : {};
-      const rpBlockers = Array.isArray(rp.blockers) ? rp.blockers : [];
-      const rpWarnings = Array.isArray(rp.renderWarnings) ? rp.renderWarnings : [];
-      const rpReasons = Array.isArray(rp.reasons) ? rp.reasons : [];
       const legacySupported = Array.isArray(legacy.adjustmentModel?.supportedAdjustments) ? legacy.adjustmentModel.supportedAdjustments : [];
       const legacyUnsupported = Array.isArray(legacy.adjustmentModel?.unsupportedAdjustments) ? legacy.adjustmentModel.unsupportedAdjustments : [];
       const v2Supported = Array.isArray(v2.adjustmentModel?.supportedAdjustments) ? v2.adjustmentModel.supportedAdjustments : [];
       const v2Unsupported = Array.isArray(v2.adjustmentModel?.unsupportedAdjustments) ? v2.adjustmentModel.unsupportedAdjustments : [];
-      const planPhotographerSummary = (legacyRenderable || v2Renderable)
-        ? 'Browser preview plans are available, but preview images have not been rendered yet. Legacy remains the active production source. The browser preview is an approximation and is not Lightroom-accurate. V2 preview remains non-production and export-disabled.'
-        : 'No browser preview plan is currently renderable for this analysis. Legacy remains the active production source.';
+
+      // FIX 3 (EPIC 2E-H-B-F): tri-state — missing evidence is honestly
+      // `null`, never coerced to `false` ("confirmed disabled").
+      const allowProductionWrite = _triStateBooleanDR(constraints.allowProductionWrite);
+      const allowExport = _triStateBooleanDR(constraints.allowExport);
+      // A previous version of this line was a no-op tautology
+      // (`x === 'legacy' ? 'legacy' : 'legacy'`, always "legacy"
+      // regardless of the condition) — fixed to a genuine tri-state
+      // check across the only two valid canonical values.
+      const selectedProductionSource = rp.selectedProductionSource === 'legacy' ? 'legacy' : rp.selectedProductionSource === 'v2' ? 'v2' : null;
+
+      const warningsList = [];
+      if (allowExport === true) warningsList.push('Unexpected preview-export capability was reported.');
+      if (allowProductionWrite === true) warningsList.push('Unexpected production-write capability was reported.');
+
+      // FIX 4 (EPIC 2E-H-B-F): wording built from explicit evidence,
+      // never a fixed hard-coded claim regardless of what the data
+      // actually says.
+      const summaryParts = [];
+      summaryParts.push((legacyRenderable || v2Renderable)
+        ? 'Browser preview plans are available, but preview images have not been rendered yet.'
+        : 'No browser preview plan is currently renderable for this analysis.');
+      summaryParts.push(selectedProductionSource === 'legacy'
+        ? 'Legacy remains the active production path.'
+        : 'Production-source evidence is unavailable; the system fallback remains Legacy.');
+      summaryParts.push('The browser preview is an approximation and is not Lightroom-accurate.');
+      summaryParts.push(allowExport === false ? 'Preview export is confirmed disabled.' : allowExport === true ? 'Unexpected preview-export capability was reported — treat with caution.' : 'Preview export status is not confirmed.');
+      summaryParts.push(allowProductionWrite === false ? 'Production write is confirmed disabled.' : allowProductionWrite === true ? 'Unexpected production-write capability was reported — treat with caution.' : 'Production write status is not confirmed.');
+
       return {
         available: true,
         mode: typeof rp.mode === 'string' ? rp.mode : 'isolated-visual-preview-render-plan',
         renderState: typeof rp.renderState === 'string' ? rp.renderState : 'unavailable',
         previewAccuracy: 'approximate-browser-preview',
-        selectedProductionSource: rp.selectedProductionSource === 'legacy' ? 'legacy' : 'legacy',
+        selectedProductionSource,
         capability: {
           legacyDataAvailable: legacy.available === true,
           legacyRenderable,
           v2DataAvailable: v2.available === true,
           v2Renderable,
           bothRenderable: legacyRenderable && v2Renderable,
-          // Phase B covers data availability + render-plan capability
-          // only — actual image rendering never occurs here.
+          // FIX 9 (EPIC 2E-H-B-F): explicit Phase B architectural
+          // facts — never inferred from (potentially malformed)
+          // upstream Render Plan data.
           actualLegacyPreviewRendered: false,
           actualV2PreviewRendered: false,
           visualComparisonAvailable: false,
@@ -750,22 +821,22 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
           maxInputHeight: Number.isFinite(constraints.maxInputHeight) ? constraints.maxInputHeight : null,
           maxPixelCount: Number.isFinite(constraints.maxPixelCount) ? constraints.maxPixelCount : null,
           maxDevicePixelRatio: Number.isFinite(constraints.maxDevicePixelRatio) ? constraints.maxDevicePixelRatio : null,
-          allowProductionWrite: constraints.allowProductionWrite === true, // always false by contract
-          allowExport: constraints.allowExport === true, // always false by contract
-          timeoutEnforced: false, // advisory-only per the Render Plan/Renderer contract
+          allowProductionWrite,
+          allowExport,
+          timeoutEnforced: false, // advisory-only per the Render Plan/Renderer contract — a structural fact, not evidence-dependent
         },
         safety: {
-          previewOnly: true,
+          previewOnly: _triStateBooleanDR(legacy.previewOnly) ?? _triStateBooleanDR(v2.previewOnly),
           productionMappingUnchanged: true,
           xmpWritePathPresent: false,
-          rollbackAvailable: rp.rollbackPlan?.available === true,
-          fallbackUsesLegacy: rp.fallbackStrategy?.useLegacyMapping === true,
+          rollbackAvailable: _triStateBooleanDR(rp.rollbackPlan?.available),
+          fallbackUsesLegacy: _triStateBooleanDR(rp.fallbackStrategy?.useLegacyMapping),
         },
-        blockers: rpBlockers.slice(0, 4),
-        warnings: rpWarnings.slice(0, 4),
-        reasons: rpReasons.slice(0, 4),
-        photographerSummary: planPhotographerSummary,
-        developerDetails: `mode=${rp.mode}, renderState=${rp.renderState}, legacyRenderable=${legacyRenderable}, v2Renderable=${v2Renderable}, maxPixelCount=${constraints.maxPixelCount ?? 'unknown'}, actualRenderInvoked=false, actualPreviewImagesAvailable=false.`,
+        blockers: _normalizeMessagesDR(rp.blockers),
+        warnings: _normalizeMessagesDR([...(Array.isArray(rp.renderWarnings) ? rp.renderWarnings : []), ...warningsList]),
+        reasons: _normalizeMessagesDR(rp.reasons),
+        photographerSummary: summaryParts.join(' '),
+        developerDetails: `mode=${_safeMessageDR(rp.mode) ?? 'unknown'}, renderState=${_safeMessageDR(rp.renderState) ?? 'unknown'}, legacyRenderable=${legacyRenderable}, v2Renderable=${v2Renderable}, maxPixelCount=${Number.isFinite(constraints.maxPixelCount) ? constraints.maxPixelCount : 'unknown'}, allowExport=${allowExport}, allowProductionWrite=${allowProductionWrite}, actualRenderInvoked=false, actualPreviewImagesAvailable=false.`,
       };
     })() : null,
     editingStrategy: strategy ?? null,

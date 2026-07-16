@@ -246,12 +246,16 @@ export function buildFinalPreset(inputs) {
   // `false` in this phase — building a render PLAN is not the same as
   // producing a rendered image.
   //
-  // Same defense-in-depth pattern as every other V2 stage: wrapped in
-  // try/catch, falling back to the engine's own safe empty-input
-  // result (never a hand-duplicated shape) on any exception, so
-  // Legacy Mapping / XMP export are completely unaffected either way.
+  // FIX 1 (EPIC 2E-H-B-F): built into local variables first, then
+  // attached via an immutable spread — never a direct mutation of
+  // `decision.finalStyleIntent` (which the previous integration
+  // incorrectly did). This preserves every existing stage already on
+  // finalStyleIntent (Preview Sandbox, Review State, Side-by-Side
+  // Comparison, etc.) by spreading the CURRENT object first.
+  let visualPreviewRenderPlanV2;
+  let visualPreviewRenderPlanV2Error = null;
   try {
-    decision.finalStyleIntent.visualPreviewRenderPlanV2 = buildVisualPreviewRenderPlanV2({
+    visualPreviewRenderPlanV2 = buildVisualPreviewRenderPlanV2({
       // No source-image-metadata object exists anywhere in this
       // pipeline (no width/height/format capture stage) — passing
       // null is honest; the Render Plan module already handles this
@@ -270,13 +274,48 @@ export function buildFinalPreset(inputs) {
       styleDNA: decision.finalStyleIntent.photographerStyle?.top?.styleDNA,
     });
   } catch (e) {
+    const primaryErrorMessage = e instanceof Error ? e.message : (typeof e === 'string' ? e : 'unknown error');
     try {
-      decision.finalStyleIntent.visualPreviewRenderPlanV2 = buildVisualPreviewRenderPlanV2({});
-    } catch {
-      decision.finalStyleIntent.visualPreviewRenderPlanV2 = null;
+      visualPreviewRenderPlanV2 = buildVisualPreviewRenderPlanV2({});
+    } catch (e2) {
+      // FIX 2 (EPIC 2E-H-B-F): the canonical path must ALWAYS exist —
+      // if even the empty-input call throws, fall back to a final
+      // local safe object matching the module's own contract shape,
+      // never `null`. Non-Error thrown values (e.g. a thrown string or
+      // plain object) are normalized safely — never a raw stack, never
+      // an un-stringifiable value leaking through.
+      visualPreviewRenderPlanV2 = {
+        mode: 'isolated-visual-preview-render-plan',
+        renderState: 'unavailable',
+        previewAccuracy: 'approximate-browser-preview',
+        selectedProductionSource: 'legacy',
+        legacyRenderPlan: {
+          available: false, renderable: false, source: 'legacy', previewOnly: true, productionSource: true,
+          adjustmentModel: { supportedAdjustments: [], unsupportedAdjustments: [] },
+        },
+        v2RenderPlan: {
+          available: false, renderable: false, source: 'controlled-v2-preview', previewOnly: true, productionSource: false,
+          exportEligible: false, appliedToProduction: false,
+          adjustmentModel: { supportedAdjustments: [], unsupportedAdjustments: [] },
+          upstreamEvidence: { simulatedPreviewAvailable: null, exportEligible: null, appliedToProduction: null, contradictory: null },
+        },
+        sharedRenderConstraints: { allowProductionWrite: false, allowExport: false, timeoutEnforced: false },
+        blockers: ['Visual Preview Render Plan could not be built.'],
+        renderWarnings: [], reasons: [],
+        fallbackStrategy: { useLegacyMapping: true, safeMode: true, reason: 'Visual Preview Render Plan unavailable.' },
+        rollbackPlan: {
+          available: true, restoreSource: 'legacy', productionMutationDetected: false,
+          steps: ['Discard the unavailable Visual Preview Render Plan.', 'Keep Legacy Lightroom Mapping active.', 'Keep the existing XMP export path unchanged.'],
+        },
+      };
     }
-    decision.finalStyleIntent.visualPreviewRenderPlanV2Error = `Visual Preview Render Plan failed safely (production unaffected): ${e.message}`;
+    visualPreviewRenderPlanV2Error = `Visual Preview Render Plan failed safely (production unaffected): ${primaryErrorMessage}`;
   }
+  decision.finalStyleIntent = {
+    ...decision.finalStyleIntent,
+    visualPreviewRenderPlanV2,
+    ...(visualPreviewRenderPlanV2Error ? { visualPreviewRenderPlanV2Error } : {}),
+  };
 
   return {
     ...mapped,
