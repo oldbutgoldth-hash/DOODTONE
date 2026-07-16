@@ -146,6 +146,19 @@ export function buildDecisionReport(ctx) {
 // missing (undefined/null/non-boolean) value to `false`, which would
 // falsely imply "confirmed disabled" when there is actually no
 // evidence either way.
+// EPIC 2E-H-B-F2 FIX 2: safe property access — a malformed object with
+// a throwing getter (e.g. `Object.defineProperty(obj, 'x', {get(){throw
+// new Error()}})`) must never crash report construction. Any read that
+// throws is treated as missing evidence, never an uncaught exception.
+function safeGetDR(object, key, fallback = undefined) {
+  try {
+    if (!object || typeof object !== 'object') return fallback;
+    return object[key];
+  } catch {
+    return fallback;
+  }
+}
+
 function _triStateBooleanDR(value) {
   return value === true ? true : value === false ? false : null;
 }
@@ -164,7 +177,7 @@ function _safeMessageDR(value) {
   if (typeof value === 'boolean') return String(value);
   if (typeof value === 'object' && !Array.isArray(value)) {
     for (const key of _DR_KNOWN_TEXT_KEYS) {
-      const v = value[key];
+      const v = safeGetDR(value, key);
       if (typeof v === 'string' && v.trim()) return v.length > 500 ? `${v.slice(0, 500)}…` : v;
     }
     return 'Additional Render Plan information is available.';
@@ -413,15 +426,21 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
   // comparison is available.
   const renderPlan = fsi.visualPreviewRenderPlanV2;
   if (renderPlan) {
-    const legacyRenderable = renderPlan.legacyRenderPlan?.renderable === true;
-    const v2Renderable = renderPlan.v2RenderPlan?.renderable === true;
+    const rpLegacy = safeGetDR(renderPlan, 'legacyRenderPlan');
+    const rpV2 = safeGetDR(renderPlan, 'v2RenderPlan');
+    const legacyRenderable = safeGetDR(rpLegacy, 'renderable') === true;
+    const v2Renderable = safeGetDR(rpV2, 'renderable') === true;
+    const rawSource = safeGetDR(renderPlan, 'selectedProductionSource');
+    const sourceLine = rawSource === 'legacy' ? 'Legacy remains the active production source.'
+      : rawSource === 'v2' ? 'Critical anomaly: V2 was reported as the selected production source — Legacy fallback remains enforced.'
+      : 'Production-source evidence is unavailable; the system fallback remains Legacy.';
     const planSummary = (legacyRenderable || v2Renderable)
       ? 'Browser preview plans are available, but preview images have not been rendered yet.'
       : 'No browser preview plan is currently renderable for this analysis.';
-    reasons.push(`Visual Preview Render Plan: ${planSummary} Legacy remains the active production source. The browser preview is an approximation and is not Lightroom-accurate. V2 preview remains non-production and export-disabled.`);
-    const rpBlockers = Array.isArray(renderPlan.blockers) ? renderPlan.blockers : [];
-    if (rpBlockers.length) reasons.push(`[dev] Render Plan blockers: ${rpBlockers.slice(0, 3).join('; ')}.`);
-    reasons.push(`[dev] mode=${renderPlan.mode}, renderState=${renderPlan.renderState}, legacyRenderable=${legacyRenderable}, v2Renderable=${v2Renderable}, actualRenderInvoked=false.`);
+    reasons.push(`Visual Preview Render Plan: ${planSummary} ${sourceLine} The browser preview is an approximation and is not Lightroom-accurate.`);
+    const rpBlockers = Array.isArray(safeGetDR(renderPlan, 'blockers')) ? renderPlan.blockers : [];
+    if (rpBlockers.length) reasons.push(`[dev] Render Plan blockers: ${_normalizeMessagesDR(rpBlockers, 3).join('; ')}.`);
+    reasons.push(`[dev] mode=${_safeMessageDR(safeGetDR(renderPlan, 'mode')) ?? 'unknown'}, renderState=${_safeMessageDR(safeGetDR(renderPlan, 'renderState')) ?? 'unknown'}, legacyRenderable=${legacyRenderable}, v2Renderable=${v2Renderable}, actualRenderInvoked=false.`);
     if (fsi.visualPreviewRenderPlanV2Error) reasons.push(`[dev] Integration warning: ${fsi.visualPreviewRenderPlanV2Error}`);
   }
 
@@ -757,56 +776,104 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     // `false` in this phase. Safe if the plan object is missing.
     visualPreviewRenderPlan: fsi.visualPreviewRenderPlanV2 ? (() => {
       const rp = fsi.visualPreviewRenderPlanV2;
-      const legacy = (rp.legacyRenderPlan && typeof rp.legacyRenderPlan === 'object' && !Array.isArray(rp.legacyRenderPlan)) ? rp.legacyRenderPlan : {};
-      const v2 = (rp.v2RenderPlan && typeof rp.v2RenderPlan === 'object' && !Array.isArray(rp.v2RenderPlan)) ? rp.v2RenderPlan : {};
-      const legacyRenderable = legacy.renderable === true;
-      const v2Renderable = v2.renderable === true;
-      const constraints = (rp.sharedRenderConstraints && typeof rp.sharedRenderConstraints === 'object' && !Array.isArray(rp.sharedRenderConstraints)) ? rp.sharedRenderConstraints : {};
-      const legacySupported = Array.isArray(legacy.adjustmentModel?.supportedAdjustments) ? legacy.adjustmentModel.supportedAdjustments : [];
-      const legacyUnsupported = Array.isArray(legacy.adjustmentModel?.unsupportedAdjustments) ? legacy.adjustmentModel.unsupportedAdjustments : [];
-      const v2Supported = Array.isArray(v2.adjustmentModel?.supportedAdjustments) ? v2.adjustmentModel.supportedAdjustments : [];
-      const v2Unsupported = Array.isArray(v2.adjustmentModel?.unsupportedAdjustments) ? v2.adjustmentModel.unsupportedAdjustments : [];
+      const rawLegacy = safeGetDR(rp, 'legacyRenderPlan');
+      const legacy = (rawLegacy && typeof rawLegacy === 'object' && !Array.isArray(rawLegacy)) ? rawLegacy : {};
+      const rawV2 = safeGetDR(rp, 'v2RenderPlan');
+      const v2 = (rawV2 && typeof rawV2 === 'object' && !Array.isArray(rawV2)) ? rawV2 : {};
+      const rawConstraints = safeGetDR(rp, 'sharedRenderConstraints');
+      const constraints = (rawConstraints && typeof rawConstraints === 'object' && !Array.isArray(rawConstraints)) ? rawConstraints : {};
+
+      // FIX 5 (EPIC 2E-H-B-F2): capability tri-state — missing
+      // evidence is honestly `null`, never coerced to `false`. Reads
+      // go through safeGetDR (FIX 2) so a throwing getter on a hostile
+      // Render Plan object cannot crash report construction.
+      const legacyDataAvailable = _triStateBooleanDR(safeGetDR(legacy, 'available'));
+      const legacyRenderableTS = _triStateBooleanDR(safeGetDR(legacy, 'renderable'));
+      const v2DataAvailable = _triStateBooleanDR(safeGetDR(v2, 'available'));
+      const v2RenderableTS = _triStateBooleanDR(safeGetDR(v2, 'renderable'));
+      // bothRenderable: true only when BOTH are explicitly true; false
+      // when at least one is explicitly false; null only when neither
+      // conclusion can be drawn (e.g. both unknown, or one unknown +
+      // one true).
+      const bothRenderable = (legacyRenderableTS === true && v2RenderableTS === true) ? true
+        : (legacyRenderableTS === false || v2RenderableTS === false) ? false
+        : null;
+      // Boolean-like values for internal branching only (never
+      // displayed directly) — `null` (unknown) is treated the same as
+      // "not confirmed renderable" for wording-selection purposes,
+      // which is a different question from what tri-state VALUE is
+      // reported to the reader.
+      const legacyRenderableBool = legacyRenderableTS === true;
+      const v2RenderableBool = v2RenderableTS === true;
+
+      // FIX 6 (EPIC 2E-H-B-F2): malformed array access — a throwing
+      // getter or non-array value never throws and never silently
+      // implies "no unsupported adjustments exist"; a compact
+      // evidence-availability flag records whether the array itself
+      // was genuinely readable.
+      const _safeAdjustmentList = (side, key) => {
+        const model = safeGetDR(side, 'adjustmentModel');
+        let raw;
+        try { raw = safeGetDR(model, key); } catch { raw = undefined; }
+        const isArray = Array.isArray(raw);
+        return { list: isArray ? raw.filter(x => typeof x === 'string') : [], evidenceAvailable: isArray };
+      };
+      const legacySupportedInfo = _safeAdjustmentList(legacy, 'supportedAdjustments');
+      const legacyUnsupportedInfo = _safeAdjustmentList(legacy, 'unsupportedAdjustments');
+      const v2SupportedInfo = _safeAdjustmentList(v2, 'supportedAdjustments');
+      const v2UnsupportedInfo = _safeAdjustmentList(v2, 'unsupportedAdjustments');
 
       // FIX 3 (EPIC 2E-H-B-F): tri-state — missing evidence is honestly
       // `null`, never coerced to `false` ("confirmed disabled").
-      const allowProductionWrite = _triStateBooleanDR(constraints.allowProductionWrite);
-      const allowExport = _triStateBooleanDR(constraints.allowExport);
-      // A previous version of this line was a no-op tautology
-      // (`x === 'legacy' ? 'legacy' : 'legacy'`, always "legacy"
-      // regardless of the condition) — fixed to a genuine tri-state
-      // check across the only two valid canonical values.
-      const selectedProductionSource = rp.selectedProductionSource === 'legacy' ? 'legacy' : rp.selectedProductionSource === 'v2' ? 'v2' : null;
+      const allowProductionWrite = _triStateBooleanDR(safeGetDR(constraints, 'allowProductionWrite'));
+      const allowExport = _triStateBooleanDR(safeGetDR(constraints, 'allowExport'));
+      const rawSelectedSource = safeGetDR(rp, 'selectedProductionSource');
+      const selectedProductionSource = rawSelectedSource === 'legacy' ? 'legacy' : rawSelectedSource === 'v2' ? 'v2' : null;
 
       const warningsList = [];
       if (allowExport === true) warningsList.push('Unexpected preview-export capability was reported.');
       if (allowProductionWrite === true) warningsList.push('Unexpected production-write capability was reported.');
+      const blockersList = [];
+
+      // FIX 1 (EPIC 2E-H-B-F2): explicit three-state handling — a "v2"
+      // value is a CRITICAL ANOMALY that must be flagged loudly, never
+      // described the same way as merely "unavailable" evidence. This
+      // module never activates or accepts V2 regardless of what this
+      // field says.
+      let productionSourceLine;
+      if (selectedProductionSource === 'legacy') {
+        productionSourceLine = 'Legacy remains the active production path.';
+      } else if (selectedProductionSource === 'v2') {
+        productionSourceLine = 'Critical anomaly: V2 was reported as the selected production source. Keep Legacy fallback active and do not continue to visual rendering.';
+        blockersList.push('Anomalous production-source evidence (V2) was reported — Legacy fallback remains enforced regardless.');
+      } else {
+        productionSourceLine = 'Production-source evidence is unavailable; the system fallback remains Legacy.';
+      }
 
       // FIX 4 (EPIC 2E-H-B-F): wording built from explicit evidence,
       // never a fixed hard-coded claim regardless of what the data
       // actually says.
       const summaryParts = [];
-      summaryParts.push((legacyRenderable || v2Renderable)
+      summaryParts.push((legacyRenderableBool || v2RenderableBool)
         ? 'Browser preview plans are available, but preview images have not been rendered yet.'
         : 'No browser preview plan is currently renderable for this analysis.');
-      summaryParts.push(selectedProductionSource === 'legacy'
-        ? 'Legacy remains the active production path.'
-        : 'Production-source evidence is unavailable; the system fallback remains Legacy.');
+      summaryParts.push(productionSourceLine);
       summaryParts.push('The browser preview is an approximation and is not Lightroom-accurate.');
       summaryParts.push(allowExport === false ? 'Preview export is confirmed disabled.' : allowExport === true ? 'Unexpected preview-export capability was reported — treat with caution.' : 'Preview export status is not confirmed.');
       summaryParts.push(allowProductionWrite === false ? 'Production write is confirmed disabled.' : allowProductionWrite === true ? 'Unexpected production-write capability was reported — treat with caution.' : 'Production write status is not confirmed.');
 
       return {
         available: true,
-        mode: typeof rp.mode === 'string' ? rp.mode : 'isolated-visual-preview-render-plan',
-        renderState: typeof rp.renderState === 'string' ? rp.renderState : 'unavailable',
+        mode: typeof safeGetDR(rp, 'mode') === 'string' ? safeGetDR(rp, 'mode') : 'isolated-visual-preview-render-plan',
+        renderState: typeof safeGetDR(rp, 'renderState') === 'string' ? safeGetDR(rp, 'renderState') : 'unavailable',
         previewAccuracy: 'approximate-browser-preview',
         selectedProductionSource,
         capability: {
-          legacyDataAvailable: legacy.available === true,
-          legacyRenderable,
-          v2DataAvailable: v2.available === true,
-          v2Renderable,
-          bothRenderable: legacyRenderable && v2Renderable,
+          legacyDataAvailable,
+          legacyRenderable: legacyRenderableTS,
+          v2DataAvailable,
+          v2Renderable: v2RenderableTS,
+          bothRenderable,
           // FIX 9 (EPIC 2E-H-B-F): explicit Phase B architectural
           // facts — never inferred from (potentially malformed)
           // upstream Render Plan data.
@@ -814,29 +881,40 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
           actualV2PreviewRendered: false,
           visualComparisonAvailable: false,
         },
-        supportedAdjustments: { legacy: legacySupported, v2: v2Supported },
-        unsupportedAdjustments: { legacy: legacyUnsupported, v2: v2Unsupported },
+        supportedAdjustments: { legacy: legacySupportedInfo.list, v2: v2SupportedInfo.list },
+        unsupportedAdjustments: { legacy: legacyUnsupportedInfo.list, v2: v2UnsupportedInfo.list },
+        // FIX 6: compact evidence-availability flags — never implies
+        // "no unsupported adjustments" merely because a read failed.
+        supportedAdjustmentEvidenceAvailable: {
+          legacy: legacySupportedInfo.evidenceAvailable && legacyUnsupportedInfo.evidenceAvailable,
+          v2: v2SupportedInfo.evidenceAvailable && v2UnsupportedInfo.evidenceAvailable,
+        },
         constraints: {
-          maxInputWidth: Number.isFinite(constraints.maxInputWidth) ? constraints.maxInputWidth : null,
-          maxInputHeight: Number.isFinite(constraints.maxInputHeight) ? constraints.maxInputHeight : null,
-          maxPixelCount: Number.isFinite(constraints.maxPixelCount) ? constraints.maxPixelCount : null,
-          maxDevicePixelRatio: Number.isFinite(constraints.maxDevicePixelRatio) ? constraints.maxDevicePixelRatio : null,
+          maxInputWidth: Number.isFinite(safeGetDR(constraints, 'maxInputWidth')) ? constraints.maxInputWidth : null,
+          maxInputHeight: Number.isFinite(safeGetDR(constraints, 'maxInputHeight')) ? constraints.maxInputHeight : null,
+          maxPixelCount: Number.isFinite(safeGetDR(constraints, 'maxPixelCount')) ? constraints.maxPixelCount : null,
+          maxDevicePixelRatio: Number.isFinite(safeGetDR(constraints, 'maxDevicePixelRatio')) ? constraints.maxDevicePixelRatio : null,
           allowProductionWrite,
           allowExport,
           timeoutEnforced: false, // advisory-only per the Render Plan/Renderer contract — a structural fact, not evidence-dependent
         },
         safety: {
-          previewOnly: _triStateBooleanDR(legacy.previewOnly) ?? _triStateBooleanDR(v2.previewOnly),
-          productionMappingUnchanged: true,
-          xmpWritePathPresent: false,
-          rollbackAvailable: _triStateBooleanDR(rp.rollbackPlan?.available),
-          fallbackUsesLegacy: _triStateBooleanDR(rp.fallbackStrategy?.useLegacyMapping),
+          previewOnly: _triStateBooleanDR(safeGetDR(legacy, 'previewOnly')) ?? _triStateBooleanDR(safeGetDR(v2, 'previewOnly')),
+          // FIX 8 (EPIC 2E-H-B-F2): neutral integration-scoped wording
+          // — these describe what THIS Phase B integration did (added
+          // no production consumer, added no XMP write path), never a
+          // claim that malformed Render Plan input somehow proves
+          // global XMP regression safety.
+          integrationAddedProductionConsumer: false,
+          integrationAddedXmpWritePath: false,
+          rollbackAvailable: _triStateBooleanDR(safeGetDR(rp, 'rollbackPlan') ? safeGetDR(rp.rollbackPlan, 'available') : undefined),
+          fallbackUsesLegacy: _triStateBooleanDR(safeGetDR(rp, 'fallbackStrategy') ? safeGetDR(rp.fallbackStrategy, 'useLegacyMapping') : undefined),
         },
-        blockers: _normalizeMessagesDR(rp.blockers),
-        warnings: _normalizeMessagesDR([...(Array.isArray(rp.renderWarnings) ? rp.renderWarnings : []), ...warningsList]),
-        reasons: _normalizeMessagesDR(rp.reasons),
+        blockers: _normalizeMessagesDR([...(Array.isArray(safeGetDR(rp, 'blockers')) ? rp.blockers : []), ...blockersList]),
+        warnings: _normalizeMessagesDR([...(Array.isArray(safeGetDR(rp, 'renderWarnings')) ? rp.renderWarnings : []), ...warningsList]),
+        reasons: _normalizeMessagesDR(safeGetDR(rp, 'reasons')),
         photographerSummary: summaryParts.join(' '),
-        developerDetails: `mode=${_safeMessageDR(rp.mode) ?? 'unknown'}, renderState=${_safeMessageDR(rp.renderState) ?? 'unknown'}, legacyRenderable=${legacyRenderable}, v2Renderable=${v2Renderable}, maxPixelCount=${Number.isFinite(constraints.maxPixelCount) ? constraints.maxPixelCount : 'unknown'}, allowExport=${allowExport}, allowProductionWrite=${allowProductionWrite}, actualRenderInvoked=false, actualPreviewImagesAvailable=false.`,
+        developerDetails: `mode=${_safeMessageDR(safeGetDR(rp, 'mode')) ?? 'unknown'}, renderState=${_safeMessageDR(safeGetDR(rp, 'renderState')) ?? 'unknown'}, legacyRenderable=${legacyRenderableTS}, v2Renderable=${v2RenderableTS}, maxPixelCount=${Number.isFinite(constraints.maxPixelCount) ? constraints.maxPixelCount : 'unknown'}, allowExport=${allowExport}, allowProductionWrite=${allowProductionWrite}, selectedProductionSource=${selectedProductionSource ?? 'unknown'}, actualRenderInvoked=false, actualPreviewImagesAvailable=false.`,
       };
     })() : null,
     editingStrategy: strategy ?? null,

@@ -46,6 +46,19 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v ?? 0));
 
 // Tri-state boolean — missing/non-boolean evidence is honestly `null`,
 // never coerced to `false` ("confirmed safe") or `true`.
+// EPIC 2E-H-B-F2 FIX 2: safe property access — a malformed object with
+// a throwing getter must never crash Reference Transfer construction.
+// Any read that throws is treated as missing evidence, never an
+// uncaught exception.
+function safeGetRT(object, key, fallback = undefined) {
+  try {
+    if (!object || typeof object !== 'object') return fallback;
+    return object[key];
+  } catch {
+    return fallback;
+  }
+}
+
 function _triStateBooleanRT(value) {
   return value === true ? true : value === false ? false : null;
 }
@@ -392,82 +405,106 @@ export function buildReferenceTransferReport(ctx) {
     // consumer; if a future renderer needs the full models, they
     // should read finalStyleIntent.visualPreviewRenderPlanV2 directly
         // rather than growing this compact context further.
-    visualPreviewRenderPlanV2: visualPreviewRenderPlan ? {
-      available: true,
-      // `mode` is a structural/schema constant every valid Render Plan
-      // shares (not evidence about THIS analysis), so a safe default
-      // here describes the Projection schema, not fabricated evidence.
-      mode: typeof visualPreviewRenderPlan.mode === 'string' ? visualPreviewRenderPlan.mode : 'isolated-visual-preview-render-plan',
-      // FIX 7 (EPIC 2E-H-B-F): renderState IS evidence about this
-      // specific analysis — honestly "unknown" when missing, never a
-      // fabricated "unavailable" that could be misread as a confirmed
-      // state.
-      renderState: _canonicalStringRT(visualPreviewRenderPlan.renderState, ['unavailable', 'partial', 'blocked', 'ready-for-isolated-render', 'insufficient-data']),
-      previewAccuracy: 'approximate-browser-preview',
-      // FIX 7: never defaulted to "legacy" — that would fabricate
-      // confirmed evidence from missing data. The actual fallback
-      // (Legacy Mapping remains active regardless) is documented
-      // separately via fallbackStrategy.useLegacyMapping below.
-      selectedProductionSource: _canonicalStringRT(visualPreviewRenderPlan.selectedProductionSource, ['legacy', 'v2']),
-      legacy: {
-        available: visualPreviewRenderPlan.legacyRenderPlan?.available === true,
-        renderable: visualPreviewRenderPlan.legacyRenderPlan?.renderable === true,
-        source: _canonicalStringRT(visualPreviewRenderPlan.legacyRenderPlan?.source, ['legacy']),
-        previewOnly: _triStateBooleanRT(visualPreviewRenderPlan.legacyRenderPlan?.previewOnly),
-        productionSource: _triStateBooleanRT(visualPreviewRenderPlan.legacyRenderPlan?.productionSource),
-        supportedAdjustments: _boundedStringArrayRT(visualPreviewRenderPlan.legacyRenderPlan?.adjustmentModel?.supportedAdjustments),
-        unsupportedAdjustments: _boundedStringArrayRT(visualPreviewRenderPlan.legacyRenderPlan?.adjustmentModel?.unsupportedAdjustments),
-        confidence: Number.isFinite(visualPreviewRenderPlan.legacyRenderPlan?.confidence) ? visualPreviewRenderPlan.legacyRenderPlan.confidence : null,
-      },
-      v2: {
-        available: visualPreviewRenderPlan.v2RenderPlan?.available === true,
-        renderable: visualPreviewRenderPlan.v2RenderPlan?.renderable === true,
-        source: _canonicalStringRT(visualPreviewRenderPlan.v2RenderPlan?.source, ['controlled-v2-preview']),
-        previewOnly: _triStateBooleanRT(visualPreviewRenderPlan.v2RenderPlan?.previewOnly),
-        productionSource: _triStateBooleanRT(visualPreviewRenderPlan.v2RenderPlan?.productionSource),
-        exportEligible: false, // hard-coded — never true regardless of upstream data
-        appliedToProduction: false, // hard-coded — never true regardless of upstream data
-        supportedAdjustments: _boundedStringArrayRT(visualPreviewRenderPlan.v2RenderPlan?.adjustmentModel?.supportedAdjustments),
-        unsupportedAdjustments: _boundedStringArrayRT(visualPreviewRenderPlan.v2RenderPlan?.adjustmentModel?.unsupportedAdjustments),
-        confidence: Number.isFinite(visualPreviewRenderPlan.v2RenderPlan?.confidence) ? visualPreviewRenderPlan.v2RenderPlan.confidence : null,
-        // FIX 6 (EPIC 2E-H-B-F): only the 4 canonical primitive
-        // tri-state fields are selected — never a shallow spread of
-        // the whole upstreamEvidence object, which could carry extra
-        // unbounded/nested/function-valued fields from a malformed
-        // upstream Sandbox report.
-        upstreamEvidence: {
-          simulatedPreviewAvailable: _triStateBooleanRT(visualPreviewRenderPlan.v2RenderPlan?.upstreamEvidence?.simulatedPreviewAvailable),
-          exportEligible: _triStateBooleanRT(visualPreviewRenderPlan.v2RenderPlan?.upstreamEvidence?.exportEligible),
-          appliedToProduction: _triStateBooleanRT(visualPreviewRenderPlan.v2RenderPlan?.upstreamEvidence?.appliedToProduction),
-          contradictory: _triStateBooleanRT(visualPreviewRenderPlan.v2RenderPlan?.upstreamEvidence?.contradictory),
+    visualPreviewRenderPlanV2: visualPreviewRenderPlan ? (() => {
+      const rp = visualPreviewRenderPlan;
+      const rpLegacy = safeGetRT(rp, 'legacyRenderPlan');
+      const rpV2 = safeGetRT(rp, 'v2RenderPlan');
+      const rpConstraints = safeGetRT(rp, 'sharedRenderConstraints');
+      const rpFallback = safeGetRT(rp, 'fallbackStrategy');
+      const rpRollback = safeGetRT(rp, 'rollbackPlan');
+      const legacyAdjModel = safeGetRT(rpLegacy, 'adjustmentModel');
+      const v2AdjModel = safeGetRT(rpV2, 'adjustmentModel');
+      const v2Upstream = safeGetRT(rpV2, 'upstreamEvidence');
+
+      return {
+        available: true,
+        // `mode` is a structural/schema constant every valid Render Plan
+        // shares (not evidence about THIS analysis), so a safe default
+        // here describes the Projection schema, not fabricated evidence.
+        mode: typeof safeGetRT(rp, 'mode') === 'string' ? rp.mode : 'isolated-visual-preview-render-plan',
+        // FIX 7 (EPIC 2E-H-B-F): renderState IS evidence about this
+        // specific analysis — honestly "unknown" when missing, never a
+        // fabricated "unavailable" that could be misread as a confirmed
+        // state.
+        renderState: _canonicalStringRT(safeGetRT(rp, 'renderState'), ['unavailable', 'partial', 'blocked', 'ready-for-isolated-render', 'insufficient-data']),
+        previewAccuracy: 'approximate-browser-preview',
+        // FIX 7: never defaulted to "legacy" — that would fabricate
+        // confirmed evidence from missing data. The actual fallback
+        // (Legacy Mapping remains active regardless) is documented
+        // separately via fallbackStrategy.useLegacyMapping below. FIX
+        // 1's rule (do not convert V2 evidence into approval/fallback
+        // selection) means this field only ever PRESERVES whatever
+        // canonical value existed — it never causes V2 to be selected
+        // or activated by this module.
+        selectedProductionSource: _canonicalStringRT(safeGetRT(rp, 'selectedProductionSource'), ['legacy', 'v2']),
+        legacy: {
+          // FIX 4 (EPIC 2E-H-B-F2): tri-state — missing availability/
+          // renderability is honestly `null`, never coerced to `false`.
+          available: _triStateBooleanRT(safeGetRT(rpLegacy, 'available')),
+          renderable: _triStateBooleanRT(safeGetRT(rpLegacy, 'renderable')),
+          source: _canonicalStringRT(safeGetRT(rpLegacy, 'source'), ['legacy']),
+          previewOnly: _triStateBooleanRT(safeGetRT(rpLegacy, 'previewOnly')),
+          productionSource: _triStateBooleanRT(safeGetRT(rpLegacy, 'productionSource')),
+          supportedAdjustments: _boundedStringArrayRT(safeGetRT(legacyAdjModel, 'supportedAdjustments')),
+          unsupportedAdjustments: _boundedStringArrayRT(safeGetRT(legacyAdjModel, 'unsupportedAdjustments')),
+          confidence: Number.isFinite(safeGetRT(rpLegacy, 'confidence')) ? rpLegacy.confidence : null,
         },
-      },
-      constraints: {
-        maxInputWidth: Number.isFinite(visualPreviewRenderPlan.sharedRenderConstraints?.maxInputWidth) ? visualPreviewRenderPlan.sharedRenderConstraints.maxInputWidth : null,
-        maxInputHeight: Number.isFinite(visualPreviewRenderPlan.sharedRenderConstraints?.maxInputHeight) ? visualPreviewRenderPlan.sharedRenderConstraints.maxInputHeight : null,
-        maxPixelCount: Number.isFinite(visualPreviewRenderPlan.sharedRenderConstraints?.maxPixelCount) ? visualPreviewRenderPlan.sharedRenderConstraints.maxPixelCount : null,
-        maxDevicePixelRatio: Number.isFinite(visualPreviewRenderPlan.sharedRenderConstraints?.maxDevicePixelRatio) ? visualPreviewRenderPlan.sharedRenderConstraints.maxDevicePixelRatio : null,
-        // FIX 3/6 (EPIC 2E-H-B-F): tri-state — missing evidence is
-        // honestly `null`, never coerced to `false`.
-        allowProductionWrite: _triStateBooleanRT(visualPreviewRenderPlan.sharedRenderConstraints?.allowProductionWrite),
-        allowExport: _triStateBooleanRT(visualPreviewRenderPlan.sharedRenderConstraints?.allowExport),
-      },
-      // FIX 8: bounded, deduplicated, primitive-string-only — never a
-      // shallow copy of arbitrary (possibly object-valued) array entries.
-      blockers: _boundedStringArrayRT(visualPreviewRenderPlan.blockers),
-      warnings: _boundedStringArrayRT(visualPreviewRenderPlan.renderWarnings),
-      fallbackStrategy: (visualPreviewRenderPlan.fallbackStrategy && typeof visualPreviewRenderPlan.fallbackStrategy === 'object' && !Array.isArray(visualPreviewRenderPlan.fallbackStrategy)) ? {
-        useLegacyMapping: _triStateBooleanRT(visualPreviewRenderPlan.fallbackStrategy.useLegacyMapping),
-        safeMode: _triStateBooleanRT(visualPreviewRenderPlan.fallbackStrategy.safeMode),
-        reason: typeof visualPreviewRenderPlan.fallbackStrategy.reason === 'string' ? visualPreviewRenderPlan.fallbackStrategy.reason.slice(0, 300) : null,
-      } : null,
-      rollbackPlan: (visualPreviewRenderPlan.rollbackPlan && typeof visualPreviewRenderPlan.rollbackPlan === 'object' && !Array.isArray(visualPreviewRenderPlan.rollbackPlan)) ? {
-        available: _triStateBooleanRT(visualPreviewRenderPlan.rollbackPlan.available),
-        restoreSource: _canonicalStringRT(visualPreviewRenderPlan.rollbackPlan.restoreSource, ['legacy']),
-        productionMutationDetected: _triStateBooleanRT(visualPreviewRenderPlan.rollbackPlan.productionMutationDetected),
-        steps: _boundedStringArrayRT(visualPreviewRenderPlan.rollbackPlan.steps),
-      } : null,
-    } : { available: false },
+        v2: {
+          available: _triStateBooleanRT(safeGetRT(rpV2, 'available')),
+          renderable: _triStateBooleanRT(safeGetRT(rpV2, 'renderable')),
+          source: _canonicalStringRT(safeGetRT(rpV2, 'source'), ['controlled-v2-preview']),
+          previewOnly: _triStateBooleanRT(safeGetRT(rpV2, 'previewOnly')),
+          productionSource: _triStateBooleanRT(safeGetRT(rpV2, 'productionSource')),
+          // FIX 4: these two remain hard-coded `false` — NOT tri-state
+          // — because this Reference Transfer projection's OWN
+          // guarantee is that it never reports V2 as export-eligible
+          // or production-applied, regardless of what upstream data
+          // claims (the actual upstream claim is preserved separately
+          // in `upstreamEvidence` below, never lost).
+          exportEligible: false,
+          appliedToProduction: false,
+          supportedAdjustments: _boundedStringArrayRT(safeGetRT(v2AdjModel, 'supportedAdjustments')),
+          unsupportedAdjustments: _boundedStringArrayRT(safeGetRT(v2AdjModel, 'unsupportedAdjustments')),
+          confidence: Number.isFinite(safeGetRT(rpV2, 'confidence')) ? rpV2.confidence : null,
+          // FIX 6 (EPIC 2E-H-B-F): only the 4 canonical primitive
+          // tri-state fields are selected — never a shallow spread of
+          // the whole upstreamEvidence object, which could carry extra
+          // unbounded/nested/function-valued fields from a malformed
+          // upstream Sandbox report.
+          upstreamEvidence: {
+            simulatedPreviewAvailable: _triStateBooleanRT(safeGetRT(v2Upstream, 'simulatedPreviewAvailable')),
+            exportEligible: _triStateBooleanRT(safeGetRT(v2Upstream, 'exportEligible')),
+            appliedToProduction: _triStateBooleanRT(safeGetRT(v2Upstream, 'appliedToProduction')),
+            contradictory: _triStateBooleanRT(safeGetRT(v2Upstream, 'contradictory')),
+          },
+        },
+        constraints: {
+          maxInputWidth: Number.isFinite(safeGetRT(rpConstraints, 'maxInputWidth')) ? rpConstraints.maxInputWidth : null,
+          maxInputHeight: Number.isFinite(safeGetRT(rpConstraints, 'maxInputHeight')) ? rpConstraints.maxInputHeight : null,
+          maxPixelCount: Number.isFinite(safeGetRT(rpConstraints, 'maxPixelCount')) ? rpConstraints.maxPixelCount : null,
+          maxDevicePixelRatio: Number.isFinite(safeGetRT(rpConstraints, 'maxDevicePixelRatio')) ? rpConstraints.maxDevicePixelRatio : null,
+          // FIX 4/6 (EPIC 2E-H-B-F2): tri-state — missing evidence is
+          // honestly `null`, never coerced to `false`.
+          allowProductionWrite: _triStateBooleanRT(safeGetRT(rpConstraints, 'allowProductionWrite')),
+          allowExport: _triStateBooleanRT(safeGetRT(rpConstraints, 'allowExport')),
+        },
+        // FIX 8: bounded, deduplicated, primitive-string-only — never a
+        // shallow copy of arbitrary (possibly object-valued) array entries.
+        blockers: _boundedStringArrayRT(safeGetRT(rp, 'blockers')),
+        warnings: _boundedStringArrayRT(safeGetRT(rp, 'renderWarnings')),
+        fallbackStrategy: (rpFallback && typeof rpFallback === 'object' && !Array.isArray(rpFallback)) ? {
+          useLegacyMapping: _triStateBooleanRT(safeGetRT(rpFallback, 'useLegacyMapping')),
+          safeMode: _triStateBooleanRT(safeGetRT(rpFallback, 'safeMode')),
+          reason: typeof safeGetRT(rpFallback, 'reason') === 'string' ? rpFallback.reason.slice(0, 300) : null,
+        } : null,
+        rollbackPlan: (rpRollback && typeof rpRollback === 'object' && !Array.isArray(rpRollback)) ? {
+          available: _triStateBooleanRT(safeGetRT(rpRollback, 'available')),
+          restoreSource: _canonicalStringRT(safeGetRT(rpRollback, 'restoreSource'), ['legacy']),
+          productionMutationDetected: _triStateBooleanRT(safeGetRT(rpRollback, 'productionMutationDetected')),
+          steps: _boundedStringArrayRT(safeGetRT(rpRollback, 'steps')),
+        } : null,
+      };
+    })() : { available: false },
   };
 }
 
