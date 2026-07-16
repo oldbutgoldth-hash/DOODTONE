@@ -71,6 +71,53 @@ function _clearCanvasSafely(canvas) {
   }
 }
 
+// FIX 4 (EPIC 2E-H-C-F2): honest source validation — replaces the
+// previous `!!source` truthiness-only check. Only the renderer's
+// actually-supported source types are accepted; browser constructors
+// are feature-detected before any `instanceof` check, since some may
+// not exist in every environment. Dimension reads go through safeGet
+// so a hostile dimension getter can never throw.
+function _validateSource(source) {
+  if (!source || typeof source !== 'object') return { valid: false, type: 'none', width: 0, height: 0, reason: 'missing' };
+
+  const isImg = typeof HTMLImageElement !== 'undefined' && source instanceof HTMLImageElement;
+  const isBitmap = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap;
+  const isCanvas = typeof HTMLCanvasElement !== 'undefined' && source instanceof HTMLCanvasElement;
+  const isOffscreen = typeof OffscreenCanvas !== 'undefined' && source instanceof OffscreenCanvas;
+  const type = isImg ? 'image' : isBitmap ? 'bitmap' : isCanvas ? 'canvas' : isOffscreen ? 'offscreen' : 'unsupported';
+
+  if (type === 'unsupported') return { valid: false, type, width: 0, height: 0, reason: 'unsupported-type' };
+
+  let width = 0, height = 0;
+  if (isImg) {
+    width = safeGet(source, 'naturalWidth');
+    height = safeGet(source, 'naturalHeight');
+    const complete = safeGet(source, 'complete');
+    if (complete === false) return { valid: false, type, width: 0, height: 0, reason: 'not-complete' };
+  } else {
+    width = safeGet(source, 'width');
+    height = safeGet(source, 'height');
+  }
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return { valid: false, type, width: 0, height: 0, reason: 'zero-or-invalid-dimensions' };
+  }
+  return { valid: true, type, width, height, reason: null };
+}
+
+// FIX 6 (EPIC 2E-H-C-F2): canvas target validation beyond truthiness —
+// confirms the target is canvas-like with a callable `getContext`.
+// Does not itself call `getContext()` (context acquisition remains
+// owned entirely by the isolated renderer) — only checks that doing so
+// would be safe to attempt.
+function _validateCanvasTarget(canvas) {
+  if (!canvas || typeof canvas !== 'object') return false;
+  try {
+    return typeof canvas.getContext === 'function';
+  } catch {
+    return false;
+  }
+}
+
 // FIX 11 (EPIC 2E-H-C-F): after renderer work has genuinely been
 // aborted (never before — this must not race with an active commit),
 // reset backing dimensions to 0 so old pixel storage is released and
@@ -225,18 +272,24 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
     let legacyResult = null;
     let v2Result = null;
 
-    const hasSource = !!source;
-    const hasLegacyCanvas = !!legacyCanvas;
-    const hasV2Canvas = !!v2Canvas;
+    // FIX 4/5/6 (EPIC 2E-H-C-F2): honest source/target validation —
+    // replaces the previous truthiness-only checks. An unsupported
+    // source type or zero/invalid dimensions never reaches the
+    // isolated renderer at all; a concise blocker is added instead of
+    // silently waiting for the renderer to reject it.
+    const sourceInfo = _validateSource(source);
+    const hasSource = sourceInfo.valid;
+    const hasLegacyCanvas = _validateCanvasTarget(legacyCanvas);
+    const hasV2Canvas = _validateCanvasTarget(v2Canvas);
 
-    // FIX 10 (EPIC 2E-H-C-F): an eligible plan with a missing
-    // source/canvas gets an explicit, specific blocker — never an
-    // ambiguous generic "blocked" with no explanation, and the
-    // isolated renderer is never called with an invalid target.
-    if (legacyEligible && !hasSource) blockers.push('Source image is unavailable for visual preview rendering.');
-    else if (legacyEligible && !hasLegacyCanvas) blockers.push('Legacy preview target canvas is unavailable.');
-    if (v2Eligible && !hasSource && !blockers.some(b => b.startsWith('Source image is unavailable'))) blockers.push('Source image is unavailable for visual preview rendering.');
-    else if (v2Eligible && !hasV2Canvas) blockers.push('V2 preview target canvas is unavailable.');
+    if ((legacyEligible || v2Eligible) && !hasSource) {
+      if (sourceInfo.reason === 'unsupported-type') blockers.push('Source image type is unsupported for visual preview rendering.');
+      else if (sourceInfo.reason === 'zero-or-invalid-dimensions') blockers.push('Source image has invalid or zero dimensions.');
+      else if (sourceInfo.reason === 'not-complete') blockers.push('Source image is not yet fully decoded.');
+      else blockers.push('Source image is unavailable for visual preview rendering.');
+    }
+    if (legacyEligible && hasSource && !hasLegacyCanvas) blockers.push('Legacy preview target canvas is unavailable.');
+    if (v2Eligible && hasSource && !hasV2Canvas) blockers.push('V2 preview target canvas is unavailable.');
 
     // Sequential rendering: Legacy first, release, then V2 — never two
     // large staging buffers held simultaneously (mobile-memory safety).

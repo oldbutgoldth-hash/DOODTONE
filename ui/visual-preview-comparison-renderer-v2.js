@@ -222,7 +222,18 @@ function _renderSidePanel(side, sideResult, selectedProductionSource) {
     else if (state === 'cancelled') msg = 'Preview render was cancelled because a newer analysis is available.';
     else if (state === 'failed') msg = 'Preview rendering failed. The source image and production output were not changed.';
     else if (state === 'unavailable') msg = side === 'Legacy' ? 'Legacy preview plan is unavailable.' : 'V2 preview plan is unavailable.';
-    else if (state === 'preparing') msg = 'Waiting for the sequential render to begin…';
+    else if (state === 'preparing') {
+      // FIX 3 (EPIC 2E-H-C-F2): two genuinely different "preparing"
+      // contexts share the same state value — distinguished via a
+      // metadata flag rather than conflating their wording. When the
+      // whole analysis pipeline is still running (`analysisInProgress`),
+      // neither side has begun anything yet. Otherwise (the Legacy-vs-V2
+      // sequential-render queue from EPIC 2E-H-C-F), V2 is simply
+      // waiting its turn while Legacy renders first.
+      msg = sideResult?.metadata?.analysisInProgress === true
+        ? 'Waiting for the latest analysis…'
+        : 'Waiting for the sequential render to begin…';
+    }
     else if (state === 'rendering') msg = 'Rendering approximate browser preview…';
     else msg = 'Waiting for analysis and Render Plan.';
     placeholderEl.textContent = msg;
@@ -262,6 +273,30 @@ function _renderSidePanel(side, sideResult, selectedProductionSource) {
     row.appendChild(el('span', { style: 'color:var(--text-dim);overflow-wrap:anywhere;text-align:right', text: String(value) }));
     detailsEl.appendChild(row);
   });
+}
+
+/**
+ * FIX 2 (EPIC 2E-H-C-F2): builds a local, synthetic "Preparing" state
+ * to display at the very start of a new analysis run — after the old
+ * preview render has been cancelled/cleared, but before the new
+ * analysis pipeline (Histogram/Skin/HSL/Decision/Render Plan) has
+ * even finished. This is deliberately distinct from
+ * `buildRenderingPlaceholderState()` (which represents "the Render
+ * Plan is ready and pixel rendering is actively starting") — this one
+ * represents "no Render Plan exists yet at all, analysis is still
+ * running". Never claims pixel rendering has started.
+ */
+export function buildPreparingAnalysisState() {
+  return {
+    state: 'preparing',
+    legacy: { state: 'preparing', rendered: false, metadata: { analysisInProgress: true } },
+    v2: { state: 'preparing', rendered: false, metadata: { analysisInProgress: true } },
+    bothRendered: false,
+    visualComparisonAvailable: false,
+    warnings: [],
+    blockers: [],
+    metadata: {},
+  };
 }
 
 /**

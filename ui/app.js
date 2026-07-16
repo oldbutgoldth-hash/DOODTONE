@@ -50,7 +50,7 @@ import { renderReviewConsole } from './review-console-renderer.js';
 import { createReviewConsoleController } from './review-console-controller.js';
 import { renderSideBySideComparison } from './side-by-side-comparison-renderer.js';
 import { createVisualPreviewComparisonControllerV2 } from './visual-preview-comparison-controller-v2.js';
-import { ensureVisualPreviewComparisonLayout, renderVisualPreviewComparison, clearVisualPreviewComparisonDisplay, buildRenderingPlaceholderState } from './visual-preview-comparison-renderer-v2.js';
+import { ensureVisualPreviewComparisonLayout, renderVisualPreviewComparison, clearVisualPreviewComparisonDisplay, buildRenderingPlaceholderState, buildPreparingAnalysisState } from './visual-preview-comparison-renderer-v2.js';
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
@@ -486,6 +486,21 @@ function loadFile(file) {
 // every render call (first import, Re-analyze, tab switch, resize) so
 // there is exactly one readiness contract instead of two silently
 // different ones.
+// EPIC 2E-H-C-F2 FIX 1: safe property access for the canonical Visual
+// Preview Render Plan chain — optional chaining (`?.`) protects against
+// null/undefined but NOT against a throwing getter on an object that
+// genuinely exists. Any read that throws is treated as missing
+// evidence, never propagated as an uncaught exception into the main
+// analysis flow.
+function safeGetVisualPreviewProperty(object, key, fallback = undefined) {
+  try {
+    if (!object || typeof object !== 'object') return fallback;
+    return object[key];
+  } catch {
+    return fallback;
+  }
+}
+
 let analysisRenderGeneration = 0;
 
 async function waitForAnalysisRenderReady({ image = null, containers = [], maxFrames = 6 } = {}) {
@@ -601,7 +616,14 @@ async function runAnalysis() {
   if (visualPreviewComparisonController) {
     visualPreviewComparisonController.clear();
     const vprInnerEarly = document.getElementById('visualPreviewComparisonInner');
-    if (vprInnerEarly) clearVisualPreviewComparisonDisplay(vprInnerEarly);
+    // FIX 2 (EPIC 2E-H-C-F2): show an explicit "Preparing" state
+    // rather than falling back to the generic empty/unavailable
+    // display — the analysis pipeline is genuinely about to run, this
+    // is not "nothing is happening". This update is synchronous and
+    // represents the generation we JUST incremented above, so no
+    // staleness check is needed here (FIX 8 applies to the later
+    // asynchronous updates below, not this one).
+    if (vprInnerEarly) renderVisualPreviewComparison(vprInnerEarly, buildPreparingAnalysisState());
   }
 
   setAnalysisBox('loading', 'กำลังวิเคราะห์ histogram…');
@@ -1040,56 +1062,80 @@ async function runAnalysis() {
     // rest of the analysis result. Any error is caught locally so a
     // Visual Preview Comparison failure never fails the whole
     // analysis flow (per this phase's explicit isolation requirement).
-    const visualPreviewRenderPlan = finalPreset._decision?.finalStyleIntent?.visualPreviewRenderPlanV2 ?? null;
-    const vprSec = document.getElementById('visualPreviewComparisonSection');
-    const vprInner = document.getElementById('visualPreviewComparisonInner');
-    if (vprSec && vprInner) {
-      vprSec.style.display = 'block';
-      ensureVisualPreviewComparisonLayout(vprInner);
-      if (!visualPreviewComparisonController) {
-        const legacyCanvas = document.getElementById('legacyVisualPreviewCanvasV2');
-        const v2Canvas = document.getElementById('controlledV2VisualPreviewCanvasV2');
-        if (legacyCanvas && v2Canvas) {
-          visualPreviewComparisonController = createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canvas });
+    // FIX 1 (EPIC 2E-H-C-F2): each level of the canonical chain read
+    // exactly once through safeGetVisualPreviewProperty — never a
+    // direct optional-chaining read afterward, since a throwing getter
+    // on `_decision`/`finalStyleIntent`/`visualPreviewRenderPlanV2`
+    // itself (as opposed to merely being null/undefined) would not be
+    // caught by `?.` alone.
+    // FIX 7: the entire extraction+invocation boundary below is
+    // wrapped locally — a malformed canonical getter, an unsupported
+    // source, or any Preview UI error must affect ONLY the Visual
+    // Preview section, never enter this function's own analysis
+    // catch block, never replace the analysis result, and never hide
+    // Review Console or Data Comparison.
+    try {
+      const decisionForVpr = safeGetVisualPreviewProperty(finalPreset, '_decision');
+      const finalStyleIntentForVpr = safeGetVisualPreviewProperty(decisionForVpr, 'finalStyleIntent');
+      const visualPreviewRenderPlan = safeGetVisualPreviewProperty(finalStyleIntentForVpr, 'visualPreviewRenderPlanV2', null);
+      const vprSec = document.getElementById('visualPreviewComparisonSection');
+      const vprInner = document.getElementById('visualPreviewComparisonInner');
+      if (vprSec && vprInner) {
+        vprSec.style.display = 'block';
+        ensureVisualPreviewComparisonLayout(vprInner);
+        if (!visualPreviewComparisonController) {
+          const legacyCanvas = document.getElementById('legacyVisualPreviewCanvasV2');
+          const v2Canvas = document.getElementById('controlledV2VisualPreviewCanvasV2');
+          if (legacyCanvas && v2Canvas) {
+            visualPreviewComparisonController = createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canvas });
+          }
         }
-      }
-      if (visualPreviewComparisonController) {
-        // FIX 4 (EPIC 2E-H-C-F): show an immediate "in progress"
-        // placeholder BEFORE render() begins — the section must never
-        // show a stale "Waiting for analysis and Render Plan" message
-        // while pixel rendering is actively starting.
-        renderVisualPreviewComparison(vprInner, buildRenderingPlaceholderState());
-        // Fire-and-forget (never awaited here) — see rationale above.
-        visualPreviewComparisonController.render({
-          source: img,
-          renderPlan: visualPreviewRenderPlan,
-          analysisGenerationId: renderGeneration,
-        }).then(vprState => {
-          // A newer analysis (Re-analyze / new image) may have already
-          // started by the time this resolves — never let a stale
-          // preview render overwrite the current one's display.
-          if (renderGeneration !== analysisRenderGeneration) return;
-          renderVisualPreviewComparison(vprInner, vprState);
-        }).catch(err => {
-          // FIX 5 (EPIC 2E-H-C-F): a caught error must still produce a
-          // VISIBLE failed state in the Preview section — not merely a
-          // console warning that leaves the section silently stuck on
-          // its "rendering" placeholder forever. Generation-checked so
-          // a stale failure from a superseded run can never overwrite
-          // the current analysis's own (possibly successful) display.
-          console.warn('VisualPreviewComparison render failed (analysis unaffected):', err);
-          if (renderGeneration !== analysisRenderGeneration) return;
-          renderVisualPreviewComparison(vprInner, {
-            state: 'failed',
-            legacy: null, v2: null, bothRendered: false, visualComparisonAvailable: false,
-            warnings: [],
-            blockers: ['Visual Preview rendering failed. Analysis results and production output were not changed.'],
-            metadata: {},
+        if (visualPreviewComparisonController) {
+          // FIX 4 (EPIC 2E-H-C-F): show an immediate "in progress"
+          // placeholder BEFORE render() begins — the section must never
+          // show a stale "Waiting for analysis and Render Plan" message
+          // while pixel rendering is actively starting.
+          renderVisualPreviewComparison(vprInner, buildRenderingPlaceholderState());
+          // Fire-and-forget (never awaited here) — see rationale above.
+          visualPreviewComparisonController.render({
+            source: img,
+            renderPlan: visualPreviewRenderPlan,
+            analysisGenerationId: renderGeneration,
+          }).then(vprState => {
+            // FIX 8: a newer analysis (Re-analyze / new image) may have
+            // already started by the time this resolves — never let a
+            // stale preview render overwrite the current one's display.
+            if (renderGeneration !== analysisRenderGeneration) return;
+            renderVisualPreviewComparison(vprInner, vprState);
+          }).catch(err => {
+            // FIX 5 (EPIC 2E-H-C-F): a caught error must still produce a
+            // VISIBLE failed state in the Preview section — not merely a
+            // console warning that leaves the section silently stuck on
+            // its "rendering" placeholder forever. Generation-checked so
+            // a stale failure from a superseded run can never overwrite
+            // the current analysis's own (possibly successful) display.
+            console.warn('VisualPreviewComparison render failed (analysis unaffected):', err);
+            if (renderGeneration !== analysisRenderGeneration) return;
+            renderVisualPreviewComparison(vprInner, {
+              state: 'failed',
+              legacy: null, v2: null, bothRendered: false, visualComparisonAvailable: false,
+              warnings: [],
+              blockers: ['Visual Preview rendering failed. Analysis results and production output were not changed.'],
+              metadata: {},
+            });
           });
-        });
+        }
+      } else if (vprSec) {
+        vprSec.style.display = 'none';
       }
-    } else if (vprSec) {
-      vprSec.style.display = 'none';
+    } catch (vprErr) {
+      // FIX 7 (EPIC 2E-H-C-F2): a failure anywhere in the Visual
+      // Preview extraction/invocation boundary above must never reach
+      // this function's own catch block below — it would otherwise
+      // incorrectly replace the entire analysis result with a generic
+      // error box, hiding Review Console and Data Comparison for a
+      // failure that has nothing to do with them.
+      console.warn('VisualPreviewComparison boundary failed (analysis unaffected):', vprErr);
     }
 
   } catch (err) {
