@@ -499,6 +499,23 @@
             <div id="sideBySideComparisonSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
               <div id="sideBySideComparisonInner"></div>
             </div>
+
+            <!-- EPIC 2E-H Phase C: Visual Preview Comparison — read-only
+                 isolated browser-preview canvases for Legacy and
+                 Controlled V2, built from the canonical Render Plan
+                 object (finalStyleIntent.visualPreviewRenderPlanV2).
+                 Approximate browser preview only — never claims
+                 Lightroom accuracy. No Export/Apply/Activate/Approve
+                 controls of any kind. Hidden until an analysis result
+                 exists, same lifecycle as sideBySideComparisonSection.
+                 The inner skeleton (including the two target canvases)
+                 is built once by ensureVisualPreviewComparisonLayout()
+                 in ui/visual-preview-comparison-renderer-v2.js — never
+                 static markup here, since the canvases must persist
+                 across re-renders without being recreated. -->
+            <div id="visualPreviewComparisonSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
+              <div id="visualPreviewComparisonInner"></div>
+            </div>
           </div>
 
           <!-- ── Sliders panel ── -->

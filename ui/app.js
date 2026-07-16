@@ -49,6 +49,8 @@ import { buildDecisionReport } from '../core/decision-report-engine/index.js';
 import { renderReviewConsole } from './review-console-renderer.js';
 import { createReviewConsoleController } from './review-console-controller.js';
 import { renderSideBySideComparison } from './side-by-side-comparison-renderer.js';
+import { createVisualPreviewComparisonControllerV2 } from './visual-preview-comparison-controller-v2.js';
+import { ensureVisualPreviewComparisonLayout, renderVisualPreviewComparison, clearVisualPreviewComparisonDisplay } from './visual-preview-comparison-renderer-v2.js';
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
@@ -119,6 +121,10 @@ const state = {
 // in the temporal dead zone until its own statement runs, so it must
 // live here, ahead of the immediately-invoked waitForRoot call.
 let reviewConsoleController = null;
+// EPIC 2E-H Phase C: lazy-initialized once the Visual Preview
+// Comparison section's skeleton (and its two target canvases) exists
+// in the DOM — see ensureVisualPreviewComparisonController() below.
+let visualPreviewComparisonController = null;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 // The DC/React runtime streams and mounts the template asynchronously, so the
@@ -1009,6 +1015,52 @@ async function runAnalysis() {
       comparisonSec.style.display = 'none';
     }
 
+    // EPIC 2E-H Phase C: Visual Preview Comparison — isolated,
+    // read-only browser-preview canvases for Legacy and Controlled V2,
+    // built strictly from the canonical
+    // finalStyleIntent.visualPreviewRenderPlanV2 object (never
+    // rebuilt/re-normalized here). This never re-runs analysis, never
+    // calls Decision Engine/Report/Reference Transfer, never mutates
+    // finalStyleIntent or the Side-by-Side Comparison object, and
+    // never affects XMP export. Rendering is started AFTER the
+    // analysis UI above has already committed, and is NOT awaited here
+    // — a slow/failed preview render must never delay or break the
+    // rest of the analysis result. Any error is caught locally so a
+    // Visual Preview Comparison failure never fails the whole
+    // analysis flow (per this phase's explicit isolation requirement).
+    const visualPreviewRenderPlan = finalPreset._decision?.finalStyleIntent?.visualPreviewRenderPlanV2 ?? null;
+    const vprSec = document.getElementById('visualPreviewComparisonSection');
+    const vprInner = document.getElementById('visualPreviewComparisonInner');
+    if (vprSec && vprInner) {
+      vprSec.style.display = 'block';
+      ensureVisualPreviewComparisonLayout(vprInner);
+      if (!visualPreviewComparisonController) {
+        const legacyCanvas = document.getElementById('legacyVisualPreviewCanvasV2');
+        const v2Canvas = document.getElementById('controlledV2VisualPreviewCanvasV2');
+        if (legacyCanvas && v2Canvas) {
+          visualPreviewComparisonController = createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canvas });
+        }
+      }
+      if (visualPreviewComparisonController) {
+        // Fire-and-forget (never awaited here) — see rationale above.
+        visualPreviewComparisonController.render({
+          source: img,
+          renderPlan: visualPreviewRenderPlan,
+          analysisGenerationId: renderGeneration,
+        }).then(vprState => {
+          // A newer analysis (Re-analyze / new image) may have already
+          // started by the time this resolves — never let a stale
+          // preview render overwrite the current one's display.
+          if (renderGeneration !== analysisRenderGeneration) return;
+          renderVisualPreviewComparison(vprInner, vprState);
+        }).catch(err => {
+          console.warn('VisualPreviewComparison render failed (analysis unaffected):', err);
+        });
+      }
+    } else if (vprSec) {
+      vprSec.style.display = 'none';
+    }
+
   } catch (err) {
     setAnalysisBox('error', `<strong>⚠ ล้มเหลว:</strong> ${err.message}`);
     console.error('runAnalysis error:', err);
@@ -1122,6 +1174,16 @@ function handleReset() {
   if (reviewSec) reviewSec.style.display = 'none';
   const comparisonSec = document.getElementById('sideBySideComparisonSection');
   if (comparisonSec) comparisonSec.style.display = 'none';
+  // EPIC 2E-H Phase C: cancel any in-flight preview render, clear both
+  // canvases, and hide the section — same lifecycle guarantee as the
+  // Review Console/Side-by-Side sections above. Safe to call even if
+  // the controller was never created yet (handled internally as a
+  // no-op check).
+  if (visualPreviewComparisonController) visualPreviewComparisonController.clear();
+  const vprSec = document.getElementById('visualPreviewComparisonSection');
+  if (vprSec) vprSec.style.display = 'none';
+  const vprInner = document.getElementById('visualPreviewComparisonInner');
+  if (vprInner) clearVisualPreviewComparisonDisplay(vprInner);
   const reviewInner = document.getElementById('reviewConsoleInner');
   if (reviewInner) reviewInner.innerHTML = '';
   // Reset active tab back to Overview
