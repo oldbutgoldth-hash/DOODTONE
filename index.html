@@ -516,6 +516,19 @@
             <div id="visualPreviewComparisonSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
               <div id="visualPreviewComparisonInner"></div>
             </div>
+
+            <!-- EPIC 2E-I Phase A: Interactive Before/After — a
+                 secondary, read-only interactive split-view comparison
+                 built ONLY on top of the already-rendered Legacy/V2
+                 preview canvases above. Never re-runs analysis, never
+                 calls the pixel renderer again. The inner skeleton
+                 (including its own small bounded display canvases,
+                 separate from the source preview canvases) is built
+                 once by ensureInteractiveBeforeAfterLayout() in
+                 ui/interactive-before-after-renderer-v2.js. -->
+            <div id="interactiveBeforeAfterSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
+              <div id="interactiveBeforeAfterInner"></div>
+            </div>
           </div>
 
           <!-- ── Sliders panel ── -->

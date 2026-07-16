@@ -51,6 +51,8 @@ import { createReviewConsoleController } from './review-console-controller.js';
 import { renderSideBySideComparison } from './side-by-side-comparison-renderer.js';
 import { createVisualPreviewComparisonControllerV2 } from './visual-preview-comparison-controller-v2.js';
 import { ensureVisualPreviewComparisonLayout, renderVisualPreviewComparison, clearVisualPreviewComparisonDisplay, buildRenderingPlaceholderState, buildPreparingAnalysisState } from './visual-preview-comparison-renderer-v2.js';
+import { createInteractiveBeforeAfterControllerV2 } from './interactive-before-after-controller-v2.js';
+import { ensureInteractiveBeforeAfterLayout, getInteractiveBeforeAfterElements, renderInteractiveBeforeAfterStatus, clearInteractiveBeforeAfterDisplay } from './interactive-before-after-renderer-v2.js';
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
@@ -125,6 +127,9 @@ let reviewConsoleController = null;
 // Comparison section's skeleton (and its two target canvases) exists
 // in the DOM — see ensureVisualPreviewComparisonController() below.
 let visualPreviewComparisonController = null;
+// EPIC 2E-I Phase A: lazy-initialized once the Interactive Before/After
+// section's skeleton exists in the DOM.
+let interactiveBeforeAfterController = null;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 // The DC/React runtime streams and mounts the template asynchronously, so the
@@ -593,6 +598,67 @@ function ensureReviewConsoleController() {
   });
 }
 
+/**
+ * EPIC 2E-I Phase A: syncs the Interactive Before/After viewer from an
+ * already-resolved Visual Preview Comparison result. Never re-invokes
+ * the pixel renderer, never re-reads the source image — only ever
+ * reads the two already-rendered preview canvases
+ * (`legacyVisualPreviewCanvasV2` / `controlledV2VisualPreviewCanvasV2`)
+ * that `visualPreviewComparisonController.render()` already committed
+ * pixels into.
+ */
+function _syncInteractiveBeforeAfter(vprState, generationId) {
+  const ibaSec = document.getElementById('interactiveBeforeAfterSection');
+  const ibaInner = document.getElementById('interactiveBeforeAfterInner');
+  if (!ibaSec || !ibaInner) return;
+  ibaSec.style.display = 'block';
+
+  const elements = ensureInteractiveBeforeAfterLayout(ibaInner);
+  if (!elements) return;
+
+  if (!interactiveBeforeAfterController) {
+    interactiveBeforeAfterController = createInteractiveBeforeAfterControllerV2({
+      ...elements,
+      // The provider always reflects the CURRENT analysis generation
+      // at call time — never a captured/stale value — so the
+      // controller's own staleness check stays correct even across
+      // multiple Re-analyze cycles without needing to be recreated.
+      generationProvider: () => analysisRenderGeneration,
+      onStateChange: (state) => renderInteractiveBeforeAfterStatus(ibaInner, state),
+    });
+  }
+
+  // Per the phase's explicit integration rule: only ever bind sources
+  // when the Visual Preview Comparison genuinely completed with both
+  // sides rendered — never inferred from canvas presence/dimensions
+  // alone.
+  const ready = vprState?.bothRendered === true && vprState?.visualComparisonAvailable === true;
+  if (ready) {
+    const legacySourceCanvas = document.getElementById('legacyVisualPreviewCanvasV2');
+    const v2SourceCanvas = document.getElementById('controlledV2VisualPreviewCanvasV2');
+    const newState = interactiveBeforeAfterController.updateSources({
+      legacySourceCanvas, v2SourceCanvas, generationId,
+    });
+    renderInteractiveBeforeAfterStatus(ibaInner, newState);
+  } else {
+    // Only one side rendered (or neither) — reflect Partial/blocked
+    // honestly rather than showing stale interactive content.
+    interactiveBeforeAfterController.clear();
+    const legacyRendered = vprState?.legacy?.rendered === true;
+    const v2Rendered = vprState?.v2?.rendered === true;
+    const partialState = {
+      state: (legacyRendered || v2Rendered) ? 'partial' : 'unavailable',
+      splitPercent: 50, legacyAvailable: legacyRendered, v2Available: v2Rendered, bothAvailable: false,
+      interactive: false, sourceGenerationId: null, currentGenerationId: analysisRenderGeneration,
+      alignment: { legacyWidth: null, legacyHeight: null, v2Width: null, v2Height: null, sameAspectRatio: false, normalizedDisplayRatio: null, exactPixelMatch: false },
+      warnings: [],
+      blockers: (legacyRendered || v2Rendered) ? ['Interactive comparison is unavailable because only one preview rendered.'] : [],
+      metadata: {},
+    };
+    renderInteractiveBeforeAfterStatus(ibaInner, partialState);
+  }
+}
+
 async function runAnalysis() {
   const img = document.getElementById('previewImg');
   if (!img || !img.naturalWidth || !img.naturalHeight) {
@@ -624,6 +690,16 @@ async function runAnalysis() {
     // staleness check is needed here (FIX 8 applies to the later
     // asynchronous updates below, not this one).
     if (vprInnerEarly) renderVisualPreviewComparison(vprInnerEarly, buildPreparingAnalysisState());
+  }
+
+  // EPIC 2E-I Phase A: cancel/clear the Interactive Before/After viewer
+  // at the exact same point — immediately on every new analysis run,
+  // never waiting for the new previews to be ready. Split resets to 50
+  // per this phase's explicit Re-analyze lifecycle requirement.
+  if (interactiveBeforeAfterController) {
+    const newIbaState = interactiveBeforeAfterController.clear();
+    const ibaInnerEarly = document.getElementById('interactiveBeforeAfterInner');
+    if (ibaInnerEarly) renderInteractiveBeforeAfterStatus(ibaInnerEarly, { ...newIbaState, state: 'preparing' });
   }
 
   setAnalysisBox('loading', 'กำลังวิเคราะห์ histogram…');
@@ -1107,6 +1183,11 @@ async function runAnalysis() {
             // stale preview render overwrite the current one's display.
             if (renderGeneration !== analysisRenderGeneration) return;
             renderVisualPreviewComparison(vprInner, vprState);
+            // EPIC 2E-I Phase A: sync the Interactive Before/After
+            // viewer from the SAME resolved Visual Preview Comparison
+            // result — never a separate/duplicate render, never
+            // re-invoking the pixel renderer.
+            _syncInteractiveBeforeAfter(vprState, renderGeneration);
           }).catch(err => {
             // FIX 5 (EPIC 2E-H-C-F): a caught error must still produce a
             // VISIBLE failed state in the Preview section — not merely a
@@ -1123,6 +1204,11 @@ async function runAnalysis() {
               blockers: ['Visual Preview rendering failed. Analysis results and production output were not changed.'],
               metadata: {},
             });
+            // EPIC 2E-I Phase A: a failed Visual Preview render means
+            // the Interactive viewer has no valid sources either —
+            // clear it rather than leaving stale content/interaction
+            // enabled.
+            if (interactiveBeforeAfterController) interactiveBeforeAfterController.clear();
           });
         }
       } else if (vprSec) {
@@ -1261,6 +1347,14 @@ function handleReset() {
   if (vprSec) vprSec.style.display = 'none';
   const vprInner = document.getElementById('visualPreviewComparisonInner');
   if (vprInner) clearVisualPreviewComparisonDisplay(vprInner);
+  // EPIC 2E-I Phase A: same reset guarantee — clear (not dispose, so
+  // the controller remains reusable for the next analysis), hide the
+  // section, reset the status display.
+  if (interactiveBeforeAfterController) interactiveBeforeAfterController.clear();
+  const ibaSec = document.getElementById('interactiveBeforeAfterSection');
+  if (ibaSec) ibaSec.style.display = 'none';
+  const ibaInner = document.getElementById('interactiveBeforeAfterInner');
+  if (ibaInner) clearInteractiveBeforeAfterDisplay(ibaInner);
   const reviewInner = document.getElementById('reviewConsoleInner');
   if (reviewInner) reviewInner.innerHTML = '';
   // Reset active tab back to Overview

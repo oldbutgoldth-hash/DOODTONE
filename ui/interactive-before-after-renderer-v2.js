@@ -1,0 +1,264 @@
+/**
+ * ui/interactive-before-after-renderer-v2.js
+ *
+ * EPIC 2E-I Phase A — pure DOM presentation layer for the Interactive
+ * Before/After section. Never calls the controller's interaction
+ * logic, never validates alignment itself, never copies pixels —
+ * reads only the `state` object returned by
+ * `interactive-before-after-controller-v2.js`.
+ *
+ * XSS-SAFE: every piece of dynamic text is inserted via `textContent`
+ * or `document.createElement` — never `innerHTML`.
+ *
+ * SKELETON/DISPLAY SEPARATION: `ensureInteractiveBeforeAfterLayout()`
+ * builds the static skeleton — including the two bounded DISPLAY
+ * canvases (never the original preview source canvases, which remain
+ * owned by `visual-preview-comparison-controller-v2.js`) — exactly
+ * once per container. `renderInteractiveBeforeAfterStatus()` only ever
+ * updates the status/warning/technical-details text on every call,
+ * never touching the canvases or the CSS split variable directly
+ * (that remains the controller's own responsibility via
+ * `setSplit()`/`updateSources()`).
+ */
+
+const LEGACY_DISPLAY_CANVAS_ID = 'ibaLegacyDisplayCanvasV2';
+const V2_DISPLAY_CANVAS_ID = 'ibaV2DisplayCanvasV2';
+
+function el(tag, { cls, style, text, attrs } = {}) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (style) e.setAttribute('style', style);
+  if (text !== undefined && text !== null) e.textContent = _safeText(text);
+  if (attrs && typeof attrs === 'object') {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v !== undefined && v !== null) e.setAttribute(k, String(v));
+    }
+  }
+  return e;
+}
+
+function _safeText(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') return value.length > 400 ? `${value.slice(0, 400)}…` : value;
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : fallback;
+  if (typeof value === 'boolean') return String(value);
+  return fallback;
+}
+
+function _safeArray(v) {
+  return Array.isArray(v) ? v : [];
+}
+
+function badge(text, color) {
+  const safeColor = typeof color === 'string' && color ? color : 'var(--text-faint)';
+  return el('span', {
+    style: `display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.04em;background:${safeColor}22;color:${safeColor};border:1px solid ${safeColor}44;overflow-wrap:anywhere`,
+    text,
+  });
+}
+
+const STATE_COLOR = {
+  unavailable: 'var(--text-faint)',
+  waiting: 'var(--text-faint)',
+  preparing: 'var(--text-faint)',
+  ready: 'var(--success, green)',
+  partial: 'var(--warn, orange)',
+  blocked: 'var(--warn, orange)',
+  failed: 'var(--danger, red)',
+  cancelled: 'var(--text-faint)',
+};
+const STATE_LABEL = {
+  unavailable: 'Unavailable',
+  waiting: 'Waiting',
+  preparing: 'Preparing',
+  ready: 'Ready',
+  partial: 'Partial',
+  blocked: 'Blocked',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+};
+function _normalizeState(v) {
+  return Object.prototype.hasOwnProperty.call(STATE_LABEL, v) ? v : 'unavailable';
+}
+
+const STATUS_MESSAGE = {
+  ready: 'Interactive comparison is ready.',
+  partial: 'Interactive comparison is unavailable because only one preview rendered.',
+  blocked: 'Interactive comparison is blocked because the previews cannot be aligned safely.',
+  preparing: 'Waiting for the latest Legacy and V2 previews.',
+  waiting: 'Waiting for the latest Legacy and V2 previews.',
+  cancelled: 'Interactive comparison was cancelled because a newer analysis is active.',
+  failed: 'Interactive comparison could not be prepared. Existing analysis and production output were not changed.',
+  unavailable: 'Waiting for the latest Legacy and V2 previews.',
+};
+
+/**
+ * Builds the static skeleton exactly once per container — safe to
+ * call on every analysis run (no-op if already built, checked via a
+ * dataset flag). Returns element references the controller needs.
+ */
+export function ensureInteractiveBeforeAfterLayout(container) {
+  if (!container) return null;
+  if (container.dataset.ibaLayoutBuilt === '1') return getInteractiveBeforeAfterElements(container);
+  container.dataset.ibaLayoutBuilt = '1';
+
+  const root = el('div', { style: 'display:flex;flex-direction:column;gap:12px' });
+
+  const header = el('div', { style: 'display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;justify-content:space-between' });
+  const titleWrap = el('div');
+  titleWrap.appendChild(el('h3', { style: 'margin:0;font-size:14px;font-weight:700;color:var(--text)', text: 'Interactive Before / After' }));
+  titleWrap.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-dim);margin-top:2px', text: 'Legacy vs. Controlled V2 · Approximate browser preview' }));
+  header.appendChild(titleWrap);
+  const statusBadgeWrap = el('div', { attrs: { 'aria-live': 'polite' } });
+  statusBadgeWrap.id = 'ibaStatusBadge';
+  header.appendChild(statusBadgeWrap);
+  root.appendChild(header);
+
+  // Disclaimer — always visible, exact required wording.
+  root.appendChild(el('div', {
+    style: 'font-size:11px;color:var(--text-dim);background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:10px 12px;line-height:1.5',
+    text: 'Before/After uses approximate browser previews and may differ from Lightroom and Adobe Camera Raw.',
+  }));
+
+  // Comparison viewport: base layer (Legacy) + clipped overlay layer (V2) + divider/handle + labels.
+  const viewport = el('div', {
+    style: 'position:relative;width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:2px;overflow:hidden;touch-action:none;user-select:none;--comparison-split:50%',
+  });
+  viewport.id = 'ibaViewport';
+
+  const legacyCanvas = el('canvas', { style: 'display:block;width:100%;height:auto;max-width:100%', attrs: { 'aria-hidden': 'true' } });
+  legacyCanvas.id = LEGACY_DISPLAY_CANVAS_ID;
+  viewport.appendChild(legacyCanvas);
+
+  const overlayWrapper = el('div', { style: 'position:absolute;inset:0;overflow:hidden;clip-path:inset(0 50% 0 0)' });
+  overlayWrapper.id = 'ibaOverlayWrapper';
+  const v2Canvas = el('canvas', { style: 'display:block;width:100%;height:auto;max-width:100%', attrs: { 'aria-hidden': 'true' } });
+  v2Canvas.id = V2_DISPLAY_CANVAS_ID;
+  overlayWrapper.appendChild(v2Canvas);
+  viewport.appendChild(overlayWrapper);
+
+  const divider = el('div', { style: 'position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--accent);pointer-events:none;transform:translateX(-1px)' });
+  divider.id = 'ibaDivider';
+  viewport.appendChild(divider);
+
+  const handle = el('div', {
+    style: 'position:absolute;top:50%;left:50%;width:32px;height:32px;min-width:44px;min-height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:var(--accent);border:2px solid var(--surface-1);cursor:ew-resize;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3)',
+    attrs: {
+      role: 'slider', tabindex: '0', 'aria-label': 'Comparison split between Legacy and Controlled V2 previews',
+      'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '50', 'aria-orientation': 'horizontal',
+    },
+  });
+  handle.id = 'ibaHandle';
+  handle.appendChild(el('span', { style: 'color:#fff;font-size:10px;font-weight:700', text: '⇔' }));
+  viewport.appendChild(handle);
+
+  viewport.appendChild(el('div', { style: 'position:absolute;top:6px;left:6px;padding:2px 8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-weight:600;border-radius:2px;pointer-events:none', text: 'Legacy' }));
+  viewport.appendChild(el('div', { style: 'position:absolute;top:6px;right:6px;padding:2px 8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-weight:600;border-radius:2px;pointer-events:none', text: 'Controlled V2' }));
+
+  const placeholder = el('div', { style: 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;text-align:center;font-size:11px;color:var(--text-faint);background:var(--surface-1)' });
+  placeholder.id = 'ibaPlaceholder';
+  placeholder.textContent = 'Waiting for the latest Legacy and V2 previews.';
+  viewport.appendChild(placeholder);
+
+  root.appendChild(viewport);
+
+  // Accessible keyboard-operable range control (kept visible, not hidden).
+  const rangeWrap = el('div', { style: 'display:flex;align-items:center;gap:8px' });
+  rangeWrap.appendChild(el('span', { style: 'font-size:10px;color:var(--text-faint);white-space:nowrap', text: '0%' }));
+  const range = el('input', {
+    style: 'flex:1;accent-color:var(--accent)',
+    attrs: { type: 'range', min: '0', max: '100', step: '1', value: '50', 'aria-label': 'Comparison split between Legacy and Controlled V2 previews' },
+  });
+  range.id = 'ibaRangeInput';
+  rangeWrap.appendChild(range);
+  rangeWrap.appendChild(el('span', { style: 'font-size:10px;color:var(--text-faint);white-space:nowrap', text: '100%' }));
+  root.appendChild(rangeWrap);
+
+  const statusLine = el('div', { style: 'font-size:11px;color:var(--text-dim)', attrs: { 'aria-live': 'polite' } });
+  statusLine.id = 'ibaStatusLine';
+  root.appendChild(statusLine);
+
+  const messagesWrap = el('div', { style: 'display:flex;flex-direction:column;gap:4px' });
+  messagesWrap.id = 'ibaMessages';
+  root.appendChild(messagesWrap);
+
+  const details = el('details', { style: 'font-size:10.5px;color:var(--text-dim)' });
+  details.appendChild(el('summary', { style: 'cursor:pointer;color:var(--text-dim);font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em', text: 'Technical details' }));
+  const detailsBody = el('div', { style: 'margin-top:6px;display:flex;flex-direction:column;gap:3px' });
+  [
+    'Both previews come from the isolated Canvas 2D browser renderer.',
+    'RAW development is not reproduced.',
+    'Exact camera profiles are not reproduced.',
+    'Local masks are not reproduced.',
+    'Color Grading support is partial (shadow/highlight saturation only).',
+    'There is no production write path from this viewer.',
+  ].forEach(t => detailsBody.appendChild(el('div', { text: t })));
+  details.appendChild(detailsBody);
+  root.appendChild(details);
+
+  container.replaceChildren(root);
+  return getInteractiveBeforeAfterElements(container);
+}
+
+/** Returns the live element references the controller needs, without rebuilding anything. */
+export function getInteractiveBeforeAfterElements(container) {
+  if (!container) return null;
+  return {
+    viewport: document.getElementById('ibaViewport'),
+    legacyDisplayCanvas: document.getElementById(LEGACY_DISPLAY_CANVAS_ID),
+    v2DisplayCanvas: document.getElementById(V2_DISPLAY_CANVAS_ID),
+    overlayWrapper: document.getElementById('ibaOverlayWrapper'),
+    dividerElement: document.getElementById('ibaDivider'),
+    handleElement: document.getElementById('ibaHandle'),
+    rangeInput: document.getElementById('ibaRangeInput'),
+  };
+}
+
+/**
+ * Updates the status/warning/technical-details text from a controller
+ * state object. Never touches the canvases, the split CSS variable, or
+ * the clip-path — those remain the controller's own responsibility.
+ */
+export function renderInteractiveBeforeAfterStatus(container, state) {
+  if (!container) return;
+  ensureInteractiveBeforeAfterLayout(container);
+
+  const s = (state && typeof state === 'object') ? state : {};
+  const normalized = _normalizeState(s.state);
+
+  const badgeEl = document.getElementById('ibaStatusBadge');
+  if (badgeEl) badgeEl.replaceChildren(badge(STATE_LABEL[normalized], STATE_COLOR[normalized]));
+
+  const statusLineEl = document.getElementById('ibaStatusLine');
+  if (statusLineEl) statusLineEl.textContent = STATUS_MESSAGE[normalized] ?? STATUS_MESSAGE.unavailable;
+
+  const placeholderEl = document.getElementById('ibaPlaceholder');
+  const viewportEl = document.getElementById('ibaViewport');
+  const handleEl = document.getElementById('ibaHandle');
+  const rangeEl = document.getElementById('ibaRangeInput');
+  const interactive = s.interactive === true;
+  if (placeholderEl) placeholderEl.style.display = interactive ? 'none' : 'flex';
+  if (placeholderEl && !interactive) placeholderEl.textContent = STATUS_MESSAGE[normalized] ?? STATUS_MESSAGE.unavailable;
+  if (handleEl) handleEl.setAttribute('aria-disabled', interactive ? 'false' : 'true');
+  if (rangeEl) rangeEl.disabled = !interactive;
+  if (viewportEl) viewportEl.style.opacity = interactive || normalized === 'ready' ? '1' : '0.4';
+
+  const messagesEl = document.getElementById('ibaMessages');
+  if (messagesEl) {
+    messagesEl.replaceChildren();
+    _safeArray(s.blockers).slice(0, 3).forEach(b => {
+      const t = _safeText(b);
+      if (t) messagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--danger, red)', text: t }));
+    });
+    _safeArray(s.warnings).slice(0, 3).forEach(w => {
+      const t = _safeText(w);
+      if (t) messagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: t }));
+    });
+  }
+}
+
+/** Resets the section's status display to the empty/waiting state without destroying the skeleton. */
+export function clearInteractiveBeforeAfterDisplay(container) {
+  if (!container || container.dataset.ibaLayoutBuilt !== '1') return;
+  renderInteractiveBeforeAfterStatus(container, { state: 'unavailable', interactive: false, warnings: [], blockers: [] });
+}
