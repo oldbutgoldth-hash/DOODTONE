@@ -360,6 +360,24 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
     if (fsi.sideBySidePreviewComparisonV2Error) reasons.push(`[dev] Integration warning: ${fsi.sideBySidePreviewComparisonV2Error}`);
   }
 
+  // EPIC 2E-H Phase B: Visual Preview Render Plan narration (safe
+  // no-op if missing). This is a RENDER PLAN, not a rendered image —
+  // wording never implies a preview image exists or that visual
+  // comparison is available.
+  const renderPlan = fsi.visualPreviewRenderPlanV2;
+  if (renderPlan) {
+    const legacyRenderable = renderPlan.legacyRenderPlan?.renderable === true;
+    const v2Renderable = renderPlan.v2RenderPlan?.renderable === true;
+    const planSummary = (legacyRenderable || v2Renderable)
+      ? 'Browser preview plans are available, but preview images have not been rendered yet.'
+      : 'No browser preview plan is currently renderable for this analysis.';
+    reasons.push(`Visual Preview Render Plan: ${planSummary} Legacy remains the active production source. The browser preview is an approximation and is not Lightroom-accurate. V2 preview remains non-production and export-disabled.`);
+    const rpBlockers = Array.isArray(renderPlan.blockers) ? renderPlan.blockers : [];
+    if (rpBlockers.length) reasons.push(`[dev] Render Plan blockers: ${rpBlockers.slice(0, 3).join('; ')}.`);
+    reasons.push(`[dev] mode=${renderPlan.mode}, renderState=${renderPlan.renderState}, legacyRenderable=${legacyRenderable}, v2Renderable=${v2Renderable}, actualRenderInvoked=false.`);
+    if (fsi.visualPreviewRenderPlanV2Error) reasons.push(`[dev] Integration warning: ${fsi.visualPreviewRenderPlanV2Error}`);
+  }
+
   return {
     photographerStyleLabel: fsi.photographerStyleLabel ?? null,
     styleFamily: fsi.styleFamily ?? null,
@@ -683,6 +701,71 @@ function _buildPhotographerIntelligenceSummary({ dec, bench }) {
         safetyEvidenceSummary,
         photographerSummary: cmp.photographerSummary,
         developerSummary: cmp.developerSummary,
+      };
+    })() : null,
+    // EPIC 2E-H Phase B: "Visual Preview Render Plan" — compact,
+    // canonical-field-only section. This is a RENDER PLAN, never a
+    // rendered image; `actualLegacyPreviewRendered`/
+    // `actualV2PreviewRendered`/`visualComparisonAvailable` are always
+    // `false` in this phase. Safe if the plan object is missing.
+    visualPreviewRenderPlan: fsi.visualPreviewRenderPlanV2 ? (() => {
+      const rp = fsi.visualPreviewRenderPlanV2;
+      const legacy = (rp.legacyRenderPlan && typeof rp.legacyRenderPlan === 'object' && !Array.isArray(rp.legacyRenderPlan)) ? rp.legacyRenderPlan : {};
+      const v2 = (rp.v2RenderPlan && typeof rp.v2RenderPlan === 'object' && !Array.isArray(rp.v2RenderPlan)) ? rp.v2RenderPlan : {};
+      const legacyRenderable = legacy.renderable === true;
+      const v2Renderable = v2.renderable === true;
+      const constraints = (rp.sharedRenderConstraints && typeof rp.sharedRenderConstraints === 'object' && !Array.isArray(rp.sharedRenderConstraints)) ? rp.sharedRenderConstraints : {};
+      const rpBlockers = Array.isArray(rp.blockers) ? rp.blockers : [];
+      const rpWarnings = Array.isArray(rp.renderWarnings) ? rp.renderWarnings : [];
+      const rpReasons = Array.isArray(rp.reasons) ? rp.reasons : [];
+      const legacySupported = Array.isArray(legacy.adjustmentModel?.supportedAdjustments) ? legacy.adjustmentModel.supportedAdjustments : [];
+      const legacyUnsupported = Array.isArray(legacy.adjustmentModel?.unsupportedAdjustments) ? legacy.adjustmentModel.unsupportedAdjustments : [];
+      const v2Supported = Array.isArray(v2.adjustmentModel?.supportedAdjustments) ? v2.adjustmentModel.supportedAdjustments : [];
+      const v2Unsupported = Array.isArray(v2.adjustmentModel?.unsupportedAdjustments) ? v2.adjustmentModel.unsupportedAdjustments : [];
+      const planPhotographerSummary = (legacyRenderable || v2Renderable)
+        ? 'Browser preview plans are available, but preview images have not been rendered yet. Legacy remains the active production source. The browser preview is an approximation and is not Lightroom-accurate. V2 preview remains non-production and export-disabled.'
+        : 'No browser preview plan is currently renderable for this analysis. Legacy remains the active production source.';
+      return {
+        available: true,
+        mode: typeof rp.mode === 'string' ? rp.mode : 'isolated-visual-preview-render-plan',
+        renderState: typeof rp.renderState === 'string' ? rp.renderState : 'unavailable',
+        previewAccuracy: 'approximate-browser-preview',
+        selectedProductionSource: rp.selectedProductionSource === 'legacy' ? 'legacy' : 'legacy',
+        capability: {
+          legacyDataAvailable: legacy.available === true,
+          legacyRenderable,
+          v2DataAvailable: v2.available === true,
+          v2Renderable,
+          bothRenderable: legacyRenderable && v2Renderable,
+          // Phase B covers data availability + render-plan capability
+          // only — actual image rendering never occurs here.
+          actualLegacyPreviewRendered: false,
+          actualV2PreviewRendered: false,
+          visualComparisonAvailable: false,
+        },
+        supportedAdjustments: { legacy: legacySupported, v2: v2Supported },
+        unsupportedAdjustments: { legacy: legacyUnsupported, v2: v2Unsupported },
+        constraints: {
+          maxInputWidth: Number.isFinite(constraints.maxInputWidth) ? constraints.maxInputWidth : null,
+          maxInputHeight: Number.isFinite(constraints.maxInputHeight) ? constraints.maxInputHeight : null,
+          maxPixelCount: Number.isFinite(constraints.maxPixelCount) ? constraints.maxPixelCount : null,
+          maxDevicePixelRatio: Number.isFinite(constraints.maxDevicePixelRatio) ? constraints.maxDevicePixelRatio : null,
+          allowProductionWrite: constraints.allowProductionWrite === true, // always false by contract
+          allowExport: constraints.allowExport === true, // always false by contract
+          timeoutEnforced: false, // advisory-only per the Render Plan/Renderer contract
+        },
+        safety: {
+          previewOnly: true,
+          productionMappingUnchanged: true,
+          xmpWritePathPresent: false,
+          rollbackAvailable: rp.rollbackPlan?.available === true,
+          fallbackUsesLegacy: rp.fallbackStrategy?.useLegacyMapping === true,
+        },
+        blockers: rpBlockers.slice(0, 4),
+        warnings: rpWarnings.slice(0, 4),
+        reasons: rpReasons.slice(0, 4),
+        photographerSummary: planPhotographerSummary,
+        developerDetails: `mode=${rp.mode}, renderState=${rp.renderState}, legacyRenderable=${legacyRenderable}, v2Renderable=${v2Renderable}, maxPixelCount=${constraints.maxPixelCount ?? 'unknown'}, actualRenderInvoked=false, actualPreviewImagesAvailable=false.`,
       };
     })() : null,
     editingStrategy: strategy ?? null,

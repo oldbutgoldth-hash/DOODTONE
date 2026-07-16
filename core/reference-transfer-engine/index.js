@@ -242,6 +242,11 @@ export function buildReferenceTransferReport(ctx) {
   // canonical sideBySidePreviewComparisonV2 object is preserved as-is
   // automatically.
   const sideBySideComparison = dec?.finalStyleIntent?.sideBySidePreviewComparisonV2 ?? null;
+  // EPIC 2E-H Phase B: same pass-through pattern — reads the canonical
+  // object already attached to dec.finalStyleIntent, never rebuilds
+  // finalStyleIntent, so the canonical visualPreviewRenderPlanV2 object
+  // is preserved as-is automatically.
+  const visualPreviewRenderPlan = dec?.finalStyleIntent?.visualPreviewRenderPlanV2 ?? null;
   if (reviewState) {
     recommendations2.push(`Preview Review: approval state is "${reviewState.approvalState}" (${reviewState.reviewProgress?.completed ?? 0}/${reviewState.reviewProgress?.required ?? 0} required checks passed) — review approval never activates production output.`);
     if (reviewState.reviewSummary?.nextRequiredItem) {
@@ -339,6 +344,60 @@ export function buildReferenceTransferReport(ctx) {
       canCompareVisually: sideBySideComparison.canCompareVisually,
       saferSide: sideBySideComparison.safetyComparison?.saferSide ?? 'uncertain',
       selectedProductionSource: sideBySideComparison.selectedProductionSource ?? 'legacy',
+    } : { available: false },
+    // EPIC 2E-H Phase B: compact context only — the full canonical
+    // object lives on finalStyleIntent.visualPreviewRenderPlanV2,
+    // preserved as-is by this pass-through read (never rebuilt). Only
+    // bounded, canonical fields are preserved here — never a canvas,
+    // ImageData, ImageBitmap, source image, or function (none of those
+    // exist on the source Render Plan object either, since it is
+    // data-only by construction). Full adjustment-model objects are
+    // NOT duplicated here — only their supported/unsupported name
+    // lists, which is sufficient for any current Reference Transfer
+    // consumer; if a future renderer needs the full models, they
+    // should read finalStyleIntent.visualPreviewRenderPlanV2 directly
+        // rather than growing this compact context further.
+    visualPreviewRenderPlanV2: visualPreviewRenderPlan ? {
+      available: true,
+      mode: visualPreviewRenderPlan.mode ?? 'isolated-visual-preview-render-plan',
+      renderState: visualPreviewRenderPlan.renderState ?? 'unavailable',
+      previewAccuracy: 'approximate-browser-preview',
+      selectedProductionSource: visualPreviewRenderPlan.selectedProductionSource ?? 'legacy',
+      legacy: {
+        available: visualPreviewRenderPlan.legacyRenderPlan?.available === true,
+        renderable: visualPreviewRenderPlan.legacyRenderPlan?.renderable === true,
+        source: visualPreviewRenderPlan.legacyRenderPlan?.source ?? 'legacy',
+        previewOnly: visualPreviewRenderPlan.legacyRenderPlan?.previewOnly === true,
+        productionSource: visualPreviewRenderPlan.legacyRenderPlan?.productionSource === true,
+        supportedAdjustments: Array.isArray(visualPreviewRenderPlan.legacyRenderPlan?.adjustmentModel?.supportedAdjustments) ? visualPreviewRenderPlan.legacyRenderPlan.adjustmentModel.supportedAdjustments : [],
+        unsupportedAdjustments: Array.isArray(visualPreviewRenderPlan.legacyRenderPlan?.adjustmentModel?.unsupportedAdjustments) ? visualPreviewRenderPlan.legacyRenderPlan.adjustmentModel.unsupportedAdjustments : [],
+        confidence: Number.isFinite(visualPreviewRenderPlan.legacyRenderPlan?.confidence) ? visualPreviewRenderPlan.legacyRenderPlan.confidence : null,
+      },
+      v2: {
+        available: visualPreviewRenderPlan.v2RenderPlan?.available === true,
+        renderable: visualPreviewRenderPlan.v2RenderPlan?.renderable === true,
+        source: visualPreviewRenderPlan.v2RenderPlan?.source ?? 'controlled-v2-preview',
+        previewOnly: visualPreviewRenderPlan.v2RenderPlan?.previewOnly === true,
+        productionSource: visualPreviewRenderPlan.v2RenderPlan?.productionSource === true,
+        exportEligible: false, // hard-coded — never true regardless of upstream data
+        appliedToProduction: false, // hard-coded — never true regardless of upstream data
+        supportedAdjustments: Array.isArray(visualPreviewRenderPlan.v2RenderPlan?.adjustmentModel?.supportedAdjustments) ? visualPreviewRenderPlan.v2RenderPlan.adjustmentModel.supportedAdjustments : [],
+        unsupportedAdjustments: Array.isArray(visualPreviewRenderPlan.v2RenderPlan?.adjustmentModel?.unsupportedAdjustments) ? visualPreviewRenderPlan.v2RenderPlan.adjustmentModel.unsupportedAdjustments : [],
+        confidence: Number.isFinite(visualPreviewRenderPlan.v2RenderPlan?.confidence) ? visualPreviewRenderPlan.v2RenderPlan.confidence : null,
+        upstreamEvidence: (visualPreviewRenderPlan.v2RenderPlan?.upstreamEvidence && typeof visualPreviewRenderPlan.v2RenderPlan.upstreamEvidence === 'object' && !Array.isArray(visualPreviewRenderPlan.v2RenderPlan.upstreamEvidence)) ? { ...visualPreviewRenderPlan.v2RenderPlan.upstreamEvidence } : null,
+      },
+      constraints: {
+        maxInputWidth: Number.isFinite(visualPreviewRenderPlan.sharedRenderConstraints?.maxInputWidth) ? visualPreviewRenderPlan.sharedRenderConstraints.maxInputWidth : null,
+        maxInputHeight: Number.isFinite(visualPreviewRenderPlan.sharedRenderConstraints?.maxInputHeight) ? visualPreviewRenderPlan.sharedRenderConstraints.maxInputHeight : null,
+        maxPixelCount: Number.isFinite(visualPreviewRenderPlan.sharedRenderConstraints?.maxPixelCount) ? visualPreviewRenderPlan.sharedRenderConstraints.maxPixelCount : null,
+        maxDevicePixelRatio: Number.isFinite(visualPreviewRenderPlan.sharedRenderConstraints?.maxDevicePixelRatio) ? visualPreviewRenderPlan.sharedRenderConstraints.maxDevicePixelRatio : null,
+        allowProductionWrite: visualPreviewRenderPlan.sharedRenderConstraints?.allowProductionWrite === true, // always false by contract
+        allowExport: visualPreviewRenderPlan.sharedRenderConstraints?.allowExport === true, // always false by contract
+      },
+      blockers: Array.isArray(visualPreviewRenderPlan.blockers) ? [...visualPreviewRenderPlan.blockers] : [],
+      warnings: Array.isArray(visualPreviewRenderPlan.renderWarnings) ? [...visualPreviewRenderPlan.renderWarnings] : [],
+      fallbackStrategy: (visualPreviewRenderPlan.fallbackStrategy && typeof visualPreviewRenderPlan.fallbackStrategy === 'object' && !Array.isArray(visualPreviewRenderPlan.fallbackStrategy)) ? { ...visualPreviewRenderPlan.fallbackStrategy } : null,
+      rollbackPlan: (visualPreviewRenderPlan.rollbackPlan && typeof visualPreviewRenderPlan.rollbackPlan === 'object' && !Array.isArray(visualPreviewRenderPlan.rollbackPlan)) ? { ...visualPreviewRenderPlan.rollbackPlan, steps: Array.isArray(visualPreviewRenderPlan.rollbackPlan.steps) ? [...visualPreviewRenderPlan.rollbackPlan.steps] : [] } : null,
     } : { available: false },
   };
 }

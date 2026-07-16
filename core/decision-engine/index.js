@@ -41,6 +41,7 @@ import { buildControlledOverlayTestGateV2 } from '../lightroom-mapping-engine/ma
 import { buildControlledOverlayPreviewSandboxV2 } from '../lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js';
 import { createPreviewReviewStateV2 } from '../lightroom-mapping-engine/mapping-v2-preview-review-state.js';
 import { buildSideBySidePreviewComparisonV2 } from '../lightroom-mapping-engine/mapping-v2-side-by-side-comparison.js';
+import { buildVisualPreviewRenderPlanV2 } from '../preview-rendering/visual-preview-render-plan-v2.js';
 
 // ─── Scene strategy table ─────────────────────────────────────────────────────
 // Each strategy is a set of TRUST MULTIPLIERS (not the base ENGINE_PRIORITY
@@ -228,6 +229,53 @@ export function buildFinalPreset(inputs) {
       decision.finalStyleIntent.sideBySidePreviewComparisonV2 = null;
     }
     decision.finalStyleIntent.sideBySidePreviewComparisonV2Error = `Side-by-side comparison failed safely (production unaffected): ${e.message}`;
+  }
+
+  // ── EPIC 2E-H Phase B: Visual Preview Render Plan V2 (integration
+  // order #13 — after Side-by-Side Comparison #12, which already
+  // exists on decision.finalStyleIntent at this point, and after
+  // `mapped` — the real Legacy Mapping output — same reason as #12:
+  // legacyPreset must be the REAL production preset, never fabricated
+  // or substituted with V2 simulated data). ──
+  //
+  // This is DATA-ONLY: it never reads canvas pixels, allocates
+  // ImageData, decodes images, creates ImageBitmap/OffscreenCanvas, or
+  // invokes the pixel renderer (ui/isolated-visual-preview-renderer-v2.js
+  // is never imported here). `actualRenderInvoked`/
+  // `actualPreviewImagesAvailable` on the resulting plan are always
+  // `false` in this phase — building a render PLAN is not the same as
+  // producing a rendered image.
+  //
+  // Same defense-in-depth pattern as every other V2 stage: wrapped in
+  // try/catch, falling back to the engine's own safe empty-input
+  // result (never a hand-duplicated shape) on any exception, so
+  // Legacy Mapping / XMP export are completely unaffected either way.
+  try {
+    decision.finalStyleIntent.visualPreviewRenderPlanV2 = buildVisualPreviewRenderPlanV2({
+      // No source-image-metadata object exists anywhere in this
+      // pipeline (no width/height/format capture stage) — passing
+      // null is honest; the Render Plan module already handles this
+      // safely (never fabricated).
+      sourceImageMetadata: null,
+      // The REAL current production Legacy preset — never the Preview
+      // Sandbox's simulated preset.
+      legacyPreset: mapped,
+      controlledOverlayPreviewSandboxV2: decision.finalStyleIntent.controlledOverlayPreviewSandboxV2,
+      legacyOverlaySimulationV2: decision.finalStyleIntent.legacyOverlaySimulationV2,
+      lightroomSafetyClampV2: decision.finalStyleIntent.lightroomSafetyClampV2,
+      sideBySidePreviewComparisonV2: decision.finalStyleIntent.sideBySidePreviewComparisonV2,
+      captureCapability: decision.finalStyleIntent.captureCapabilityEstimate,
+      photographerIntent: decision.finalStyleIntent.photographerIntent,
+      photographerStyle: decision.finalStyleIntent.photographerStyle,
+      styleDNA: decision.finalStyleIntent.photographerStyle?.top?.styleDNA,
+    });
+  } catch (e) {
+    try {
+      decision.finalStyleIntent.visualPreviewRenderPlanV2 = buildVisualPreviewRenderPlanV2({});
+    } catch {
+      decision.finalStyleIntent.visualPreviewRenderPlanV2 = null;
+    }
+    decision.finalStyleIntent.visualPreviewRenderPlanV2Error = `Visual Preview Render Plan failed safely (production unaffected): ${e.message}`;
   }
 
   return {
