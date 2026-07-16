@@ -50,7 +50,7 @@ import { renderReviewConsole } from './review-console-renderer.js';
 import { createReviewConsoleController } from './review-console-controller.js';
 import { renderSideBySideComparison } from './side-by-side-comparison-renderer.js';
 import { createVisualPreviewComparisonControllerV2 } from './visual-preview-comparison-controller-v2.js';
-import { ensureVisualPreviewComparisonLayout, renderVisualPreviewComparison, clearVisualPreviewComparisonDisplay } from './visual-preview-comparison-renderer-v2.js';
+import { ensureVisualPreviewComparisonLayout, renderVisualPreviewComparison, clearVisualPreviewComparisonDisplay, buildRenderingPlaceholderState } from './visual-preview-comparison-renderer-v2.js';
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
@@ -592,6 +592,18 @@ async function runAnalysis() {
   // showing a mix of the old and new image's analysis.
   const renderGeneration = ++analysisRenderGeneration;
 
+  // EPIC 2E-H-C-F FIX 2: cancel any in-flight Visual Preview render and
+  // clear stale pixels/metadata IMMEDIATELY on every new analysis run —
+  // before the long Histogram/Skin/HSL/Decision pipeline below even
+  // starts, never waiting until the new Render Plan is ready. This
+  // never clears Human Review state (state.lastPreviewReviewState is
+  // untouched here) — only the Visual Preview canvases/controller.
+  if (visualPreviewComparisonController) {
+    visualPreviewComparisonController.clear();
+    const vprInnerEarly = document.getElementById('visualPreviewComparisonInner');
+    if (vprInnerEarly) clearVisualPreviewComparisonDisplay(vprInnerEarly);
+  }
+
   setAnalysisBox('loading', 'กำลังวิเคราะห์ histogram…');
 
   try {
@@ -1042,6 +1054,11 @@ async function runAnalysis() {
         }
       }
       if (visualPreviewComparisonController) {
+        // FIX 4 (EPIC 2E-H-C-F): show an immediate "in progress"
+        // placeholder BEFORE render() begins — the section must never
+        // show a stale "Waiting for analysis and Render Plan" message
+        // while pixel rendering is actively starting.
+        renderVisualPreviewComparison(vprInner, buildRenderingPlaceholderState());
         // Fire-and-forget (never awaited here) — see rationale above.
         visualPreviewComparisonController.render({
           source: img,
@@ -1054,7 +1071,21 @@ async function runAnalysis() {
           if (renderGeneration !== analysisRenderGeneration) return;
           renderVisualPreviewComparison(vprInner, vprState);
         }).catch(err => {
+          // FIX 5 (EPIC 2E-H-C-F): a caught error must still produce a
+          // VISIBLE failed state in the Preview section — not merely a
+          // console warning that leaves the section silently stuck on
+          // its "rendering" placeholder forever. Generation-checked so
+          // a stale failure from a superseded run can never overwrite
+          // the current analysis's own (possibly successful) display.
           console.warn('VisualPreviewComparison render failed (analysis unaffected):', err);
+          if (renderGeneration !== analysisRenderGeneration) return;
+          renderVisualPreviewComparison(vprInner, {
+            state: 'failed',
+            legacy: null, v2: null, bothRendered: false, visualComparisonAvailable: false,
+            warnings: [],
+            blockers: ['Visual Preview rendering failed. Analysis results and production output were not changed.'],
+            metadata: {},
+          });
         });
       }
     } else if (vprSec) {

@@ -180,7 +180,7 @@ export function ensureVisualPreviewComparisonLayout(container) {
   container.replaceChildren(root);
 }
 
-function _renderSidePanel(side, sideResult) {
+function _renderSidePanel(side, sideResult, selectedProductionSource) {
   const badgesEl = document.getElementById(`vpr${side}Badges`);
   const placeholderEl = document.getElementById(`vpr${side}Placeholder`);
   const statusLineEl = document.getElementById(`vpr${side}StatusLine`);
@@ -195,7 +195,19 @@ function _renderSidePanel(side, sideResult) {
   const sourceLabel = side === 'Legacy' ? 'legacy' : 'controlled-v2-preview';
   badgesEl.appendChild(badge(sourceLabel, side === 'Legacy' ? 'var(--accent)' : 'var(--text-dim)'));
   badgesEl.appendChild(badge('preview-only', 'var(--text-faint)'));
-  if (side === 'Legacy') badgesEl.appendChild(badge('production-source', 'var(--success, green)'));
+  // FIX 8 (EPIC 2E-H-C-F): the Legacy panel's "production-source" badge
+  // is shown ONLY when selectedProductionSource is explicitly
+  // "legacy" — never unconditionally. If evidence reports "v2" (a
+  // critical anomaly, surfaced separately by the safety strip) or is
+  // missing/unknown, this panel shows no false confirmation badge.
+  if (side === 'Legacy') {
+    if (selectedProductionSource === 'legacy') badgesEl.appendChild(badge('production-source', 'var(--success, green)'));
+    else if (selectedProductionSource !== 'v2') badgesEl.appendChild(badge('production source not confirmed', 'var(--text-faint)'));
+    // selectedProductionSource === 'v2': no badge here at all — the
+    // anomaly is already shown loudly at the top-level safety strip;
+    // this panel never claims Legacy is the confirmed production
+    // source when the evidence says otherwise.
+  }
 
   const rendered = sideResult?.rendered === true;
   const state = _normalizeState(sideResult?.state);
@@ -210,7 +222,9 @@ function _renderSidePanel(side, sideResult) {
     else if (state === 'cancelled') msg = 'Preview render was cancelled because a newer analysis is available.';
     else if (state === 'failed') msg = 'Preview rendering failed. The source image and production output were not changed.';
     else if (state === 'unavailable') msg = side === 'Legacy' ? 'Legacy preview plan is unavailable.' : 'V2 preview plan is unavailable.';
-    else msg = 'Rendering approximate browser preview…';
+    else if (state === 'preparing') msg = 'Waiting for the sequential render to begin…';
+    else if (state === 'rendering') msg = 'Rendering approximate browser preview…';
+    else msg = 'Waiting for analysis and Render Plan.';
     placeholderEl.textContent = msg;
   }
 
@@ -251,6 +265,29 @@ function _renderSidePanel(side, sideResult) {
 }
 
 /**
+ * FIX 4 (EPIC 2E-H-C-F): builds a local, synthetic "in progress" state
+ * to display immediately BEFORE `controller.render()` begins — so the
+ * section never shows a stale "Waiting for analysis and Render Plan"
+ * placeholder while pixel rendering is actively in flight. Legacy
+ * renders first (state "rendering"); V2 waits for its sequential turn
+ * (state "preparing") per this module's Legacy-then-V2 render order.
+ * This never rebuilds or duplicates the controller's own render
+ * logic — it is purely a display-only placeholder.
+ */
+export function buildRenderingPlaceholderState() {
+  return {
+    state: 'rendering',
+    legacy: { state: 'rendering', rendered: false, metadata: {} },
+    v2: { state: 'preparing', rendered: false, metadata: {} },
+    bothRendered: false,
+    visualComparisonAvailable: false,
+    warnings: [],
+    blockers: [],
+    metadata: {},
+  };
+}
+
+/**
  * Updates the metadata/status regions from a comparisonState object
  * (as returned by the controller's `render()`/`getState()`). Never
  * touches the canvas elements — the controller commits pixels to them
@@ -269,18 +306,42 @@ export function renderVisualPreviewComparison(container, comparisonState) {
   }
 
   const safetyStripEl = document.getElementById('vprSafetyStrip');
+  const md = (cs.metadata && typeof cs.metadata === 'object') ? cs.metadata : {};
+  const selectedProductionSource = md.selectedProductionSource === 'legacy' ? 'legacy' : md.selectedProductionSource === 'v2' ? 'v2' : 'unknown';
+  const allowExport = md.allowExport === true ? true : md.allowExport === false ? false : null;
+  const allowProductionWrite = md.allowProductionWrite === true ? true : md.allowProductionWrite === false ? false : null;
+
   if (safetyStripEl) {
     safetyStripEl.replaceChildren();
-    safetyStripEl.appendChild(badge('Production Mapping: Legacy', 'var(--success, green)'));
-    safetyStripEl.appendChild(badge('Preview Export: Disabled', 'var(--success, green)'));
-    safetyStripEl.appendChild(badge('Production Write: Disabled', 'var(--success, green)'));
+
+    // FIX 7 (EPIC 2E-H-C-F): Production Mapping — three genuinely
+    // distinct states, never a fixed "Legacy" claim regardless of
+    // evidence.
+    if (selectedProductionSource === 'legacy') {
+      safetyStripEl.appendChild(badge('Production Mapping: Legacy', 'var(--success, green)'));
+    } else if (selectedProductionSource === 'v2') {
+      safetyStripEl.appendChild(badge('Critical anomaly: V2 reported as production source', 'var(--danger, red)'));
+    } else {
+      safetyStripEl.appendChild(badge('Production Mapping: Not confirmed', 'var(--text-faint)'));
+    }
+
+    // FIX 7: Preview Export — confirmed-disabled / enabled-anomaly / unknown.
+    if (allowExport === false) safetyStripEl.appendChild(badge('Preview Export: Confirmed disabled', 'var(--success, green)'));
+    else if (allowExport === true) safetyStripEl.appendChild(badge('Preview Export: Enabled anomaly', 'var(--danger, red)'));
+    else safetyStripEl.appendChild(badge('Preview Export: Not confirmed', 'var(--text-faint)'));
+
+    // FIX 7: Production Write — same tri-state pattern.
+    if (allowProductionWrite === false) safetyStripEl.appendChild(badge('Production Write: Confirmed disabled', 'var(--success, green)'));
+    else if (allowProductionWrite === true) safetyStripEl.appendChild(badge('Production Write: Enabled anomaly', 'var(--danger, red)'));
+    else safetyStripEl.appendChild(badge('Production Write: Not confirmed', 'var(--text-faint)'));
+
     safetyStripEl.appendChild(badge(
       cs.visualComparisonAvailable === true ? 'Actual visual comparison: Available' : 'Actual visual comparison: Not available',
       cs.visualComparisonAvailable === true ? 'var(--success, green)' : 'var(--text-faint)',
     ));
   }
 
-  _renderSidePanel('Legacy', cs.legacy);
+  _renderSidePanel('Legacy', cs.legacy, selectedProductionSource);
   _renderSidePanel('V2', cs.v2);
 
   const overallMessagesEl = document.getElementById('vprOverallMessages');

@@ -41,6 +41,25 @@ function _isRecord(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
+// EPIC 2E-H-C-F FIX 9: safe property access — a malformed/hostile
+// Render Plan object with a throwing getter must never reject/crash
+// this controller's render() call. Any read that throws is treated as
+// missing evidence, never propagated as an error.
+function safeGet(object, key, fallback = undefined) {
+  try {
+    if (!object || typeof object !== 'object') return fallback;
+    return object[key];
+  } catch {
+    return fallback;
+  }
+}
+
+// Tri-state boolean — missing/non-boolean evidence is honestly `null`,
+// never coerced to `false` ("confirmed disabled") or `true`.
+function _triStateBoolean(v) {
+  return v === true ? true : v === false ? false : null;
+}
+
 function _clearCanvasSafely(canvas) {
   if (!canvas) return;
   try {
@@ -49,6 +68,20 @@ function _clearCanvasSafely(canvas) {
   } catch {
     // A cleared canvas is a best-effort cosmetic action — a failure
     // here (e.g. context already lost) is never propagated as an error.
+  }
+}
+
+// FIX 11 (EPIC 2E-H-C-F): after renderer work has genuinely been
+// aborted (never before — this must not race with an active commit),
+// reset backing dimensions to 0 so old pixel storage is released and
+// the CSS layout does not retain the previous image's aspect ratio.
+function _resetCanvasDimensions(canvas) {
+  if (!canvas) return;
+  try {
+    canvas.width = 0;
+    canvas.height = 0;
+  } catch {
+    // Best-effort cosmetic action only.
   }
 }
 
@@ -84,23 +117,36 @@ function _cancelledState(analysisGenerationId) {
  * RENDER CONDITIONS (per EPIC 2E-H Phase C spec) — evaluated purely
  * from the canonical Render Plan's own fields, never re-derived or
  * "fixed" here. A malformed/missing plan is always treated as
- * ineligible, never defaulted to eligible.
+ * ineligible, never defaulted to eligible. FIX 9 (EPIC 2E-H-C-F):
+ * every field read exactly once through safeGet, stored, then
+ * validated from the stored variable only.
  */
 function _legacyEligible(legacyPlan) {
-  return _isRecord(legacyPlan) && legacyPlan.available === true && legacyPlan.renderable === true;
+  if (!_isRecord(legacyPlan)) return false;
+  const available = safeGet(legacyPlan, 'available');
+  const renderable = safeGet(legacyPlan, 'renderable');
+  return available === true && renderable === true;
 }
 
 function _v2Contradictory(v2Plan) {
-  return _isRecord(v2Plan) && _isRecord(v2Plan.upstreamEvidence) && v2Plan.upstreamEvidence.contradictory === true;
+  const upstreamEvidence = safeGet(v2Plan, 'upstreamEvidence');
+  const contradictory = safeGet(upstreamEvidence, 'contradictory');
+  return contradictory === true;
 }
 
 function _v2Eligible(v2Plan) {
   if (!_isRecord(v2Plan)) return false;
-  if (v2Plan.available !== true || v2Plan.renderable !== true) return false;
-  if (v2Plan.previewOnly !== true) return false;
-  if (v2Plan.productionSource === true) return false;
-  if (v2Plan.exportEligible === true) return false;
-  if (v2Plan.appliedToProduction === true) return false;
+  const available = safeGet(v2Plan, 'available');
+  const renderable = safeGet(v2Plan, 'renderable');
+  const previewOnly = safeGet(v2Plan, 'previewOnly');
+  const productionSource = safeGet(v2Plan, 'productionSource');
+  const exportEligible = safeGet(v2Plan, 'exportEligible');
+  const appliedToProduction = safeGet(v2Plan, 'appliedToProduction');
+  if (available !== true || renderable !== true) return false;
+  if (previewOnly !== true) return false;
+  if (productionSource === true) return false;
+  if (exportEligible === true) return false;
+  if (appliedToProduction === true) return false;
   if (_v2Contradictory(v2Plan)) return false;
   return true;
 }
@@ -116,9 +162,22 @@ function _v2Eligible(v2Plan) {
 export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canvas } = {}) {
   let disposed = false;
   let sessionId = 0;
-  const legacyRenderer = createIsolatedVisualPreviewRendererV2();
-  const v2Renderer = createIsolatedVisualPreviewRendererV2();
+  // FIX 1 (EPIC 2E-H-C-F): renderer instances are now REPLACEABLE
+  // (`let`, not `const`) — clear() disposes and recreates both,
+  // genuinely aborting any in-flight pixel work instead of merely
+  // incrementing this controller's own bookkeeping counter (which the
+  // underlying renderer's internal generation never learned about,
+  // letting an old render silently commit after "clear").
+  let legacyRenderer = createIsolatedVisualPreviewRendererV2();
+  let v2Renderer = createIsolatedVisualPreviewRendererV2();
   let lastState = _unavailableState(null);
+
+  function _recreateRenderers() {
+    disposeIsolatedVisualPreviewRendererV2(legacyRenderer);
+    disposeIsolatedVisualPreviewRendererV2(v2Renderer);
+    legacyRenderer = createIsolatedVisualPreviewRendererV2();
+    v2Renderer = createIsolatedVisualPreviewRendererV2();
+  }
 
   /**
    * @param {{ source: (HTMLImageElement|ImageBitmap|HTMLCanvasElement|OffscreenCanvas), renderPlan: object, analysisGenerationId: (number|string|null), signal?: AbortSignal }} input
@@ -128,12 +187,23 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
     const mySession = ++sessionId;
 
     const rp = _isRecord(renderPlan) ? renderPlan : null;
-    const legacyPlan = rp ? rp.legacyRenderPlan : null;
-    const v2Plan = rp ? rp.v2RenderPlan : null;
+    const legacyPlan = rp ? safeGet(rp, 'legacyRenderPlan') : null;
+    const v2Plan = rp ? safeGet(rp, 'v2RenderPlan') : null;
+    const constraints = rp ? safeGet(rp, 'sharedRenderConstraints') : null;
 
     const legacyEligible = _legacyEligible(legacyPlan);
     const v2Contradictory = _v2Contradictory(v2Plan);
     const v2Eligible = _v2Eligible(v2Plan);
+
+    // FIX 6 (EPIC 2E-H-C-F): canonical tri-state safety evidence,
+    // read exactly once and preserved honestly — never overwritten,
+    // never mutated on the Render Plan itself.
+    const rawSelectedSource = safeGet(rp, 'selectedProductionSource');
+    const selectedProductionSource = rawSelectedSource === 'legacy' ? 'legacy' : rawSelectedSource === 'v2' ? 'v2' : 'unknown';
+    const allowExport = _triStateBoolean(safeGet(constraints, 'allowExport'));
+    const allowProductionWrite = _triStateBoolean(safeGet(constraints, 'allowProductionWrite'));
+    const v2ExportEligible = _triStateBoolean(safeGet(v2Plan, 'exportEligible'));
+    const v2AppliedToProduction = _triStateBoolean(safeGet(v2Plan, 'appliedToProduction'));
 
     const warnings = [];
     const blockers = [];
@@ -158,6 +228,15 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
     const hasSource = !!source;
     const hasLegacyCanvas = !!legacyCanvas;
     const hasV2Canvas = !!v2Canvas;
+
+    // FIX 10 (EPIC 2E-H-C-F): an eligible plan with a missing
+    // source/canvas gets an explicit, specific blocker — never an
+    // ambiguous generic "blocked" with no explanation, and the
+    // isolated renderer is never called with an invalid target.
+    if (legacyEligible && !hasSource) blockers.push('Source image is unavailable for visual preview rendering.');
+    else if (legacyEligible && !hasLegacyCanvas) blockers.push('Legacy preview target canvas is unavailable.');
+    if (v2Eligible && !hasSource && !blockers.some(b => b.startsWith('Source image is unavailable'))) blockers.push('Source image is unavailable for visual preview rendering.');
+    else if (v2Eligible && !hasV2Canvas) blockers.push('V2 preview target canvas is unavailable.');
 
     // Sequential rendering: Legacy first, release, then V2 — never two
     // large staging buffers held simultaneously (mobile-memory safety).
@@ -211,18 +290,26 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
       analysisGenerationId: analysisGenerationId ?? null,
       warnings,
       blockers,
-      metadata: { legacyEligible, v2Eligible, v2Contradictory },
+      metadata: {
+        legacyEligible, v2Eligible, v2Contradictory,
+        selectedProductionSource, allowExport, allowProductionWrite,
+        v2ExportEligible, v2AppliedToProduction,
+      },
     };
 
     if (mySession === sessionId) lastState = newState;
     return newState;
   }
 
-  /** Cancels any in-flight render, clears both canvases, and resets to the empty/waiting state. Used on Re-analyze start, new-image import, and reset/removal. */
+  /** Cancels any in-flight render by disposing and recreating both isolated renderers, resets both canvases to empty, and returns to the waiting state. Used on Re-analyze start, new-image import, and reset/removal. */
   function clear() {
-    sessionId++; // invalidate any render() currently in flight
+    if (disposed) return; // FIX 1: do not recreate renderers after the controller itself has been disposed
+    sessionId++; // invalidate any render() currently in flight at the controller level
+    _recreateRenderers(); // FIX 1: genuinely aborts in-flight pixel work
     _clearCanvasSafely(legacyCanvas);
     _clearCanvasSafely(v2Canvas);
+    _resetCanvasDimensions(legacyCanvas); // FIX 11
+    _resetCanvasDimensions(v2Canvas);
     lastState = _unavailableState(null);
   }
 
@@ -235,6 +322,8 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
     disposeIsolatedVisualPreviewRendererV2(v2Renderer);
     _clearCanvasSafely(legacyCanvas);
     _clearCanvasSafely(v2Canvas);
+    _resetCanvasDimensions(legacyCanvas); // FIX 11
+    _resetCanvasDimensions(v2Canvas);
     lastState = _unavailableState(null);
   }
 
