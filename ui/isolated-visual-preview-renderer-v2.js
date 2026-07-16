@@ -52,6 +52,39 @@ function _isRecord(v) {
 }
 
 /**
+ * FIX 3 (EPIC 2E-H-A-F4): ONE shared internal capability helper used by
+ * BOTH the synchronous pixel helper and the asynchronous production
+ * renderer, so they can never disagree about what Color Grading data
+ * is genuinely renderable. Mirrors the equivalent (necessarily
+ * separate, since it lives in a different module and must not import
+ * UI code) logic in `visual-preview-render-plan-v2.js`'s Plan
+ * construction — only `shadowSat`/`highlightSat` are ever rendered;
+ * `midtoneSat` and any Hue field are never rendered. FIX 6: a finite
+ * ZERO value is real data but produces no visual change (matches
+ * `_applyColorGrading`'s own `if (shadowSat === 0 && highlightSat ===
+ * 0) return;` early exit) — so a value must be finite AND non-zero to
+ * count as a genuinely renderable component here.
+ */
+function _getColorGradingRenderCapability(model) {
+  const g = _isRecord(model?.colorGrading) ? model.colorGrading : null;
+  const shSat = g?.shadowSat;
+  const hiSat = g?.highlightSat;
+  const hasShadowSaturation = Number.isFinite(shSat) && shSat !== 0;
+  const hasHighlightSaturation = Number.isFinite(hiSat) && hiSat !== 0;
+  const hasUnsupportedMidtone = Number.isFinite(g?.midtoneSat);
+  const hasUnsupportedHue = Number.isFinite(g?.shadowHue) || Number.isFinite(g?.midtoneHue) || Number.isFinite(g?.highlightHue);
+  const renderable = hasShadowSaturation || hasHighlightSaturation;
+  return {
+    renderable,
+    hasShadowSaturation,
+    hasHighlightSaturation,
+    hasUnsupportedMidtone,
+    hasUnsupportedHue,
+    partial: renderable && (hasUnsupportedMidtone || hasUnsupportedHue),
+  };
+}
+
+/**
  * Normalizes an arbitrary adjustment-model value to a safe multiplier/
  * offset input for the pixel transforms below. Exported as a pure test
  * helper per the phase spec — never touches any mutable global state.
@@ -248,25 +281,30 @@ function _runPixelPipeline(imageData, model, appliedAdjustments, skippedAdjustme
   for (let i = 0, j = 0; i < data.length; i += 4, j++) originalAlpha[j] = data[i + 3];
 
   track('exposure', _applyExposure, data, model.exposure);
-  if (model.whites !== null || model.blacks !== null) { _applyWhiteBlackPoint(data, model.whites ?? 0, model.blacks ?? 0); if (model.whites !== null) appliedAdjustments.push('whites'); else skippedAdjustments.push('whites'); if (model.blacks !== null) appliedAdjustments.push('blacks'); else skippedAdjustments.push('blacks'); }
+  // FIX 6/7 (EPIC 2E-H-A-F4): use isAvailableSync() (checks both null
+  // AND undefined) — the previous `model.x !== null` checks
+  // incorrectly treated an `undefined` field (e.g. a genuinely empty
+  // `{}` model, as `applyPreviewPixelTransformV2` can legitimately
+  // receive) as "available", since `undefined !== null` evaluates to
+  // `true`. This caused every unset field to be wrongly reported as
+  // applied.
+  const isAvailableSync = (v) => v !== null && v !== undefined;
+  if (isAvailableSync(model.whites) || isAvailableSync(model.blacks)) { _applyWhiteBlackPoint(data, model.whites ?? 0, model.blacks ?? 0); if (isAvailableSync(model.whites)) appliedAdjustments.push('whites'); else skippedAdjustments.push('whites'); if (isAvailableSync(model.blacks)) appliedAdjustments.push('blacks'); else skippedAdjustments.push('blacks'); }
   else { skippedAdjustments.push('whites', 'blacks'); }
-  if (model.highlights !== null || model.shadows !== null) { _applyHighlightsShadows(data, model.highlights ?? 0, model.shadows ?? 0); if (model.highlights !== null) appliedAdjustments.push('highlights'); else skippedAdjustments.push('highlights'); if (model.shadows !== null) appliedAdjustments.push('shadows'); else skippedAdjustments.push('shadows'); }
+  if (isAvailableSync(model.highlights) || isAvailableSync(model.shadows)) { _applyHighlightsShadows(data, model.highlights ?? 0, model.shadows ?? 0); if (isAvailableSync(model.highlights)) appliedAdjustments.push('highlights'); else skippedAdjustments.push('highlights'); if (isAvailableSync(model.shadows)) appliedAdjustments.push('shadows'); else skippedAdjustments.push('shadows'); }
   else { skippedAdjustments.push('highlights', 'shadows'); }
-  if (model.contrast !== null || model.toneCurve) { _applyContrastToneCurve(data, model.contrast ?? 0, model.toneCurve); if (model.contrast !== null) appliedAdjustments.push('contrast'); else skippedAdjustments.push('contrast'); if (model.toneCurve) appliedAdjustments.push('toneCurve'); else skippedAdjustments.push('toneCurve'); }
+  if (isAvailableSync(model.contrast) || model.toneCurve) { _applyContrastToneCurve(data, model.contrast ?? 0, model.toneCurve); if (isAvailableSync(model.contrast)) appliedAdjustments.push('contrast'); else skippedAdjustments.push('contrast'); if (model.toneCurve) appliedAdjustments.push('toneCurve'); else skippedAdjustments.push('toneCurve'); }
   else { skippedAdjustments.push('contrast', 'toneCurve'); }
-  if (model.temperature !== null || model.tint !== null) { _applyTemperatureTint(data, model.temperature ?? 0, model.tint ?? 0); if (model.temperature !== null) appliedAdjustments.push('temperature'); else skippedAdjustments.push('temperature'); if (model.tint !== null) appliedAdjustments.push('tint'); else skippedAdjustments.push('tint'); }
+  if (isAvailableSync(model.temperature) || isAvailableSync(model.tint)) { _applyTemperatureTint(data, model.temperature ?? 0, model.tint ?? 0); if (isAvailableSync(model.temperature)) appliedAdjustments.push('temperature'); else skippedAdjustments.push('temperature'); if (isAvailableSync(model.tint)) appliedAdjustments.push('tint'); else skippedAdjustments.push('tint'); }
   else { skippedAdjustments.push('temperature', 'tint'); }
-  if (model.saturation !== null || model.vibrance !== null) { _applySaturationVibrance(data, model.saturation ?? 0, model.vibrance ?? 0); if (model.saturation !== null) appliedAdjustments.push('saturation'); else skippedAdjustments.push('saturation'); if (model.vibrance !== null) appliedAdjustments.push('vibrance'); else skippedAdjustments.push('vibrance'); }
+  if (isAvailableSync(model.saturation) || isAvailableSync(model.vibrance)) { _applySaturationVibrance(data, model.saturation ?? 0, model.vibrance ?? 0); if (isAvailableSync(model.saturation)) appliedAdjustments.push('saturation'); else skippedAdjustments.push('saturation'); if (isAvailableSync(model.vibrance)) appliedAdjustments.push('vibrance'); else skippedAdjustments.push('vibrance'); }
   else { skippedAdjustments.push('saturation', 'vibrance'); }
-  if (model.clarity !== null || model.dehaze !== null) { _applyClarityDehaze(data, width, height, model.clarity ?? 0, model.dehaze ?? 0); if (model.clarity !== null) appliedAdjustments.push('clarity'); else skippedAdjustments.push('clarity'); if (model.dehaze !== null) appliedAdjustments.push('dehaze'); else skippedAdjustments.push('dehaze'); }
+  if (isAvailableSync(model.clarity) || isAvailableSync(model.dehaze)) { _applyClarityDehaze(data, width, height, model.clarity ?? 0, model.dehaze ?? 0); if (isAvailableSync(model.clarity)) appliedAdjustments.push('clarity'); else skippedAdjustments.push('clarity'); if (isAvailableSync(model.dehaze)) appliedAdjustments.push('dehaze'); else skippedAdjustments.push('dehaze'); }
   else { skippedAdjustments.push('clarity', 'dehaze'); }
-  // FIX 7 (EPIC 2E-H-A-F3): colorGrading is only genuinely applied when
-  // it has a usable saturation value — Hue-only data is never reported
-  // as applied here, matching the async pipeline and the Plan-level
-  // FIX 1 correction (_applyColorGrading itself only ever reads
-  // shadowSat/highlightSat, never any Hue field).
-  const colorGradingHasUsableSaturation = _isRecord(model.colorGrading) && (Number.isFinite(model.colorGrading.shadowSat) || Number.isFinite(model.colorGrading.highlightSat));
-  if (colorGradingHasUsableSaturation) { _applyColorGrading(data, model.colorGrading); appliedAdjustments.push('colorGrading'); }
+  // FIX 3 (EPIC 2E-H-A-F4): shared capability helper — never disagrees
+  // with the async pipeline's identical check.
+  const colorGradingCapability = _getColorGradingRenderCapability(model);
+  if (colorGradingCapability.renderable) { _applyColorGrading(data, model.colorGrading); appliedAdjustments.push('colorGrading'); }
   else skippedAdjustments.push('colorGrading');
 
   // 11. alpha restoration — guarantee alpha is exactly the original
@@ -354,12 +392,9 @@ async function _runPixelPipelineAsyncV2(imageData, model, appliedAdjustments, sk
     { names: ['temperature', 'tint'], checks: [isAvailable(model.temperature), isAvailable(model.tint)], available: isAvailable(model.temperature) || isAvailable(model.tint), apply: (s, e) => _applyTemperatureTint(data, model.temperature ?? 0, model.tint ?? 0, s, e) },
     { names: ['saturation', 'vibrance'], checks: [isAvailable(model.saturation), isAvailable(model.vibrance)], available: isAvailable(model.saturation) || isAvailable(model.vibrance), apply: (s, e) => _applySaturationVibrance(data, model.saturation ?? 0, model.vibrance ?? 0, s, e) },
     { names: ['clarity', 'dehaze'], checks: [isAvailable(model.clarity), isAvailable(model.dehaze)], available: isAvailable(model.clarity) || isAvailable(model.dehaze), apply: (s, e) => _applyClarityDehaze(data, width, height, model.clarity ?? 0, model.dehaze ?? 0, s, e) },
-    // FIX 7 (EPIC 2E-H-A-F3): colorGrading is only genuinely "available"
-    // to apply when it has a usable saturation value — matching FIX 1's
-    // Plan-level correction. A Hue-only colorGrading object must not be
-    // reported as applied, since _applyColorGrading below only ever
-    // reads shadowSat/highlightSat, never any Hue field.
-    { names: ['colorGrading'], checks: [_isRecord(model.colorGrading) && (Number.isFinite(model.colorGrading.shadowSat) || Number.isFinite(model.colorGrading.highlightSat))], available: _isRecord(model.colorGrading) && (Number.isFinite(model.colorGrading.shadowSat) || Number.isFinite(model.colorGrading.highlightSat)), apply: (s, e) => _applyColorGrading(data, model.colorGrading, s, e) },
+    // FIX 3 (EPIC 2E-H-A-F4): uses the shared _getColorGradingRenderCapability
+    // helper — never disagrees with the sync pipeline's identical check.
+    { names: ['colorGrading'], checks: [_getColorGradingRenderCapability(model).renderable], available: _getColorGradingRenderCapability(model).renderable, apply: (s, e) => _applyColorGrading(data, model.colorGrading, s, e) },
   ];
 
   for (const stage of stages) {
@@ -438,11 +473,25 @@ export function applyPreviewPixelTransformV2(imageDataLike, adjustmentModel) {
   } catch (e) {
     return { state: 'failed', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: [`Pixel transform failed unexpectedly: ${e?.message ?? 'unknown error'}`] };
   }
+  // FIX 7 (EPIC 2E-H-A-F4): deduplicate — unique names in each array,
+  // preserving first-seen order, and a field must never appear in
+  // both arrays (applied always takes priority when present in both,
+  // since only a real executed transform should ever add to
+  // `applied`).
+  const uniqueApplied = [...new Set(applied)];
+  const uniqueSkipped = [...new Set(skipped)].filter(name => !uniqueApplied.includes(name));
+  // FIX 4 (EPIC 2E-H-A-F4): `transformed` is honest — true only when at
+  // least one adjustment was genuinely applied. A valid buffer with no
+  // applicable supported adjustments must not claim transformation
+  // occurred.
+  const transformed = uniqueApplied.length > 0;
   return {
-    state: 'rendered', transformed: true,
-    appliedAdjustments: applied, skippedAdjustments: skipped,
+    state: 'rendered', transformed,
+    appliedAdjustments: uniqueApplied, skippedAdjustments: uniqueSkipped,
     warnings: [...HONESTY_WARNINGS],
-    reasons: [`Applied ${applied.length} adjustment(s), skipped ${skipped.length} unsupported/unavailable adjustment(s). Note: the supplied data buffer was mutated in place.`],
+    reasons: transformed
+      ? [`Applied ${uniqueApplied.length} adjustment(s), skipped ${uniqueSkipped.length} unsupported/unavailable adjustment(s). Note: the supplied data buffer was mutated in place.`]
+      : ['No supported preview adjustments were applied; the pixel buffer remains unchanged.'],
   };
 }
 
@@ -752,9 +801,26 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   }
 
   const endTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  // FIX 7 (EPIC 2E-H-A-F4): deduplicate — same guarantee as the sync
+  // helper: unique names, no field in both arrays, applied takes
+  // priority.
+  const uniqueApplied = [...new Set(appliedAdjustments)];
+  const uniqueSkipped = [...new Set(skippedAdjustments)].filter(name => !uniqueApplied.includes(name));
+  // FIX 5 (EPIC 2E-H-A-F4): a malformed external Render Plan could in
+  // principle report `renderable: true` while genuinely having zero
+  // supported adjustments once actually normalized here — this must
+  // never be silently described as a meaningful visual change. The
+  // isolated source copy still renders (state stays "rendered",
+  // rendered stays true, since a preview canvas WAS genuinely
+  // produced), but `visualAdjustmentsApplied: false` honestly reports
+  // that no visual adjustment occurred, and the reason text reflects
+  // that rather than implying otherwise.
+  const visualAdjustmentsApplied = uniqueApplied.length > 0;
   const result = _baseResult({
     side: normalizedSide, generationId, state: 'rendered', rendered: true,
-    reasons: [`Rendered ${appliedAdjustments.length} adjustment(s), skipped ${skippedAdjustments.length} unsupported/unavailable adjustment(s).`],
+    reasons: [visualAdjustmentsApplied
+      ? `Rendered ${uniqueApplied.length} adjustment(s), skipped ${uniqueSkipped.length} unsupported/unavailable adjustment(s).`
+      : 'Preview rendered without supported visual adjustments.'],
     processingTimeMs: endTime - startTime,
   });
   result.cssWidth = safeDims.width;
@@ -762,8 +828,8 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   result.backingWidth = backingWidth;
   result.backingHeight = backingHeight;
   result.devicePixelRatio = effectiveDpr;
-  result.appliedAdjustments = appliedAdjustments;
-  result.skippedAdjustments = skippedAdjustments;
+  result.appliedAdjustments = uniqueApplied;
+  result.skippedAdjustments = uniqueSkipped;
   result.metadata = {
     ...result.metadata,
     requestedDevicePixelRatio: requestedDpr,
@@ -788,6 +854,9 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     targetDimensionsRestoredAfterFailure: null, // no failure occurred on this successful path
     targetPixelsRestoredAfterFailure: null,
     targetRestoredAfterFailure: null, // no failure occurred on this successful path
+    // FIX 5 (EPIC 2E-H-A-F4): honest visual-effect reporting — never
+    // implied by `rendered`/`state` alone.
+    visualAdjustmentsApplied,
   };
   return result;
 }

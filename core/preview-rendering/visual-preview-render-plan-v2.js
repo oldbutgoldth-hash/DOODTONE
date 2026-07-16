@@ -168,41 +168,70 @@ function _buildLegacyAdjustmentModel(legacyPreset) {
   const shSat = pickFinite(nestedGrade.grd_sh_s, preset.grd_sh_s);
   const midSat = pickFinite(nestedGrade.grd_mid_s, preset.grd_mid_s);
   const hiSat = pickFinite(nestedGrade.grd_hi_s, preset.grd_hi_s);
-  // FIX 1 (EPIC 2E-H-A-F3): the browser preview Renderer currently
-  // applies ONLY saturation-based nudges for color grading
-  // (`_applyColorGrading` reads `shadowSat`/`highlightSat` only, never
-  // any Hue field) — so a Hue-only preset like `{grd_sh_h: 30}` would
-  // previously report `supportedAdjustments: ["colorGrading"]` and
-  // `renderable: true` while producing literally zero pixel change,
-  // since every saturation value would be `null`. Support/renderable
-  // now requires at least one FINITE, usable saturation value — Hue
-  // alone is preserved in the normalized model (useful metadata/
-  // future-proofing) but never makes this adjustment "supported".
-  const hasUsableSaturation = Number.isFinite(shSat) || Number.isFinite(midSat) || Number.isFinite(hiSat);
+  const shHue = pickFinite(nestedGrade.grd_sh_h, preset.grd_sh_h);
+  const midHue = pickFinite(nestedGrade.grd_mid_h, preset.grd_mid_h);
+  const hiHue = pickFinite(nestedGrade.grd_hi_h, preset.grd_hi_h);
+  // FIX 1 (EPIC 2E-H-A-F4): the browser preview Renderer applies ONLY
+  // shadow/highlight saturation nudges — it never reads midtoneSat or
+  // any Hue field at all. A previous patch (A-F3) correctly excluded
+  // Hue from the support check, but still incorrectly included
+  // `midSat`, so `{grd_mid_s: 10}` alone still falsely reported
+  // `renderable: true` while producing zero pixel change. Support now
+  // requires shadowSat and/or highlightSat specifically — midtoneSat
+  // is preserved in the normalized model (useful metadata/future-
+  // proofing) but never counted as supported.
+  //
+  // FIX 6 (EPIC 2E-H-A-F4): a FINITE ZERO is valid data but produces no
+  // visual change (`_applyColorGrading` returns immediately when both
+  // are exactly 0) — so a value must be finite AND non-zero to count
+  // as genuinely supported/renderable. This distinguishes "field
+  // available" (preserved in the model regardless) from "visual effect
+  // non-zero" (what actually makes this adjustment renderable).
+  const hasShadowSaturation = Number.isFinite(shSat) && shSat !== 0;
+  const hasHighlightSaturation = Number.isFinite(hiSat) && hiSat !== 0;
+  const hasUnsupportedMidtone = Number.isFinite(midSat);
+  const hasUnsupportedHue = Number.isFinite(shHue) || Number.isFinite(midHue) || Number.isFinite(hiHue);
+  const colorGradingRenderable = hasShadowSaturation || hasHighlightSaturation;
   if (hasGrade) {
     model.colorGrading = {
-      shadowHue: pickFinite(nestedGrade.grd_sh_h, preset.grd_sh_h),
+      shadowHue: shHue,
       shadowSat: shSat === null ? null : _clampUnit(shSat / 30),
-      midtoneHue: pickFinite(nestedGrade.grd_mid_h, preset.grd_mid_h),
+      midtoneHue: midHue,
       midtoneSat: midSat === null ? null : _clampUnit(midSat / 15),
-      highlightHue: pickFinite(nestedGrade.grd_hi_h, preset.grd_hi_h),
+      highlightHue: hiHue,
       highlightSat: hiSat === null ? null : _clampUnit(hiSat / 30),
     };
-    if (hasUsableSaturation) {
+    if (colorGradingRenderable) {
       supportedAdjustments.push('colorGrading');
+      // FIX 2 (EPIC 2E-H-A-F4): note when unsupported components
+      // (Midtone saturation, any Hue) coexist alongside a genuinely
+      // renderable shadow/highlight value — this is a PARTIAL
+      // rendering, never the complete Lightroom Color Grading model.
+      if (hasUnsupportedMidtone) normalizationWarnings.push('Midtone Color Grading component is present but not rendered by the browser preview — only shadow/highlight saturation are applied.');
+      if (hasUnsupportedHue) normalizationWarnings.push('Color Grading Hue components are preserved as data but not rendered by the browser preview — only saturation nudges are applied.');
     } else {
-      // Hue exists but no usable saturation — preserve the Hue data in
-      // the model (never fabricated further), but this is honestly
-      // unsupported by the current renderer, not a rendering-capable
-      // adjustment.
+      // No usable (finite, non-zero) shadow/highlight saturation —
+      // preserve whatever data exists in the model (never fabricated
+      // further), but this is honestly unsupported/non-renderable.
       unsupportedAdjustments.push('colorGrading');
-      normalizationWarnings.push('Legacy preset has Hue-only color grading data (no finite saturation value) — the browser preview renderer only applies saturation-based grading nudges, so Hue-only grading is not implemented and does not make this adjustment supported.');
+      if (hasUnsupportedMidtone && !hasShadowSaturation && !hasHighlightSaturation) normalizationWarnings.push('Legacy preset has Midtone-only color grading data — the browser preview renderer only applies shadow/highlight saturation nudges, so Midtone-only grading is not implemented and does not make this adjustment supported.');
+      else if (hasUnsupportedHue) normalizationWarnings.push('Legacy preset has Hue-only color grading data (no finite non-zero shadow/highlight saturation) — the browser preview renderer only applies saturation-based grading nudges, so Hue-only grading is not implemented and does not make this adjustment supported.');
+      else normalizationWarnings.push('Legacy preset color grading saturation values are all zero — a finite zero produces no visual change, so this adjustment is not treated as renderable.');
     }
   } else {
     model.colorGrading = null;
     unsupportedAdjustments.push('colorGrading');
     if (gradeObjectPresentButEmpty) normalizationWarnings.push('Legacy preset.grade was present but contained no finite hue/saturation field — treated as unsupported, not fabricated.');
   }
+  // FIX 2 (EPIC 2E-H-A-F4): compact capability metadata — never claims
+  // the complete Lightroom Color Grading model was reproduced.
+  model.colorGradingCapability = {
+    shadowSaturation: hasShadowSaturation,
+    midtoneSaturation: false, // never rendered — always false regardless of data presence
+    highlightSaturation: hasHighlightSaturation,
+    hueRendering: false, // never rendered — always false regardless of data presence
+    partial: colorGradingRenderable && (hasUnsupportedMidtone || hasUnsupportedHue),
+  };
 
   return {
     ...model,
