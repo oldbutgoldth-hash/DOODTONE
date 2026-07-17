@@ -84,7 +84,9 @@ function _normalizeState(v) {
 const STATUS_MESSAGE = {
   ready: 'Interactive comparison is ready.',
   partial: 'Interactive comparison is unavailable because only one preview rendered.',
-  blocked: 'Interactive comparison is blocked because the previews cannot be aligned safely.',
+  // FIX 9 (EPIC 2E-I-A-F2): explicit that this is a GEOMETRY mismatch —
+  // never implies the previews' Tone/Color differences caused it.
+  blocked: 'Preview geometry differs beyond the safe comparison tolerance.',
   preparing: 'Waiting for the latest Legacy and V2 previews.',
   waiting: 'Waiting for the latest Legacy and V2 previews.',
   cancelled: 'Interactive comparison was cancelled because a newer analysis is active.',
@@ -274,6 +276,8 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
       const rows = [
         ['Exact source pixel match', a.exactSourcePixelMatch === true ? 'Yes' : a.exactSourcePixelMatch === false ? 'No' : 'unknown'],
         ['Same aspect ratio', a.sameAspectRatio === true ? 'Yes' : a.sameAspectRatio === false ? 'No' : 'unknown'],
+        ['Aspect-ratio difference', Number.isFinite(a.aspectRatioRelativeDifference) ? `${(a.aspectRatioRelativeDifference * 100).toFixed(3)}%` : 'unknown'],
+        ['Comparison tolerance', Number.isFinite(a.aspectRatioTolerance) ? `${(a.aspectRatioTolerance * 100).toFixed(3)}%` : 'unknown'],
         ['Display dimensions normalized', a.displayDimensionsNormalized === true ? 'Yes' : a.displayDimensionsNormalized === false ? 'No' : 'unknown'],
         ['Display resolution', (Number.isFinite(a.displayWidth) && Number.isFinite(a.displayHeight)) ? `${a.displayWidth}×${a.displayHeight}` : 'unavailable'],
         ['Legacy source resolution', (Number.isFinite(a.sourceLegacyWidth) && Number.isFinite(a.sourceLegacyHeight)) ? `${a.sourceLegacyWidth}×${a.sourceLegacyHeight}` : 'unknown'],

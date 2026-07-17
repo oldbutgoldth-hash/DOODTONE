@@ -45,7 +45,14 @@ function safeGet(object, key, fallback = undefined) {
   }
 }
 
-const ASPECT_RATIO_TOLERANCE = 0.02; // ~2% relative tolerance, documented
+// FIX 3 (EPIC 2E-I-A-F2): tightened from 0.02 (2%) to 0.001 (0.1%).
+// Legacy and Controlled V2 previews are both derived from the SAME
+// source image, so their aspect ratios should be almost identical —
+// a broad 2% tolerance could visibly stretch geometry in an overlay
+// comparison. 0.1% still comfortably tolerates ordinary integer
+// pixel-rounding differences (e.g. 400/300 vs 401/300) while blocking
+// any materially different geometry.
+const ASPECT_RATIO_TOLERANCE = 0.001;
 
 function _clampSplit(value) {
   const n = Number(value);
@@ -94,6 +101,7 @@ function _computeAlignment(legacyDims, v2Dims) {
       sourceV2Width: v2Dims?.width ?? null, sourceV2Height: v2Dims?.height ?? null,
       displayWidth: null, displayHeight: null,
       sameAspectRatio: false, exactSourcePixelMatch: false, displayDimensionsNormalized: false,
+      aspectRatioRelativeDifference: null, aspectRatioTolerance: ASPECT_RATIO_TOLERANCE,
     };
   }
   const legacyRatio = legacyDims.width / legacyDims.height;
@@ -111,9 +119,21 @@ function _computeAlignment(legacyDims, v2Dims) {
     } else {
       // Bounded common size: preserve Legacy's aspect ratio, never
       // upscale beyond either source's actual resolution.
-      displayWidth = Math.min(legacyDims.width, v2Dims.width);
-      displayHeight = Math.max(1, Math.round(displayWidth / legacyRatio));
-      displayDimensionsNormalized = true;
+      const candidateWidth = Math.min(legacyDims.width, v2Dims.width);
+      const candidateHeight = Math.max(1, Math.round(candidateWidth / legacyRatio));
+      // FIX 4 (EPIC 2E-I-A-F2): guard against rounding pushing the
+      // derived height above either source's actual height (which
+      // would mean, however slightly, upscaling one side beyond its
+      // real resolution). If that would happen, refuse to normalize —
+      // block interaction rather than distort geometry.
+      if (candidateWidth <= legacyDims.width && candidateWidth <= v2Dims.width && candidateHeight <= legacyDims.height && candidateHeight <= v2Dims.height) {
+        displayWidth = candidateWidth;
+        displayHeight = candidateHeight;
+        displayDimensionsNormalized = true;
+      }
+      // else: displayWidth/displayHeight remain null — the caller
+      // treats this the same as a material aspect-ratio mismatch
+      // (blocked, no copy).
     }
   }
 
@@ -121,7 +141,8 @@ function _computeAlignment(legacyDims, v2Dims) {
     sourceLegacyWidth: legacyDims.width, sourceLegacyHeight: legacyDims.height,
     sourceV2Width: v2Dims.width, sourceV2Height: v2Dims.height,
     displayWidth, displayHeight,
-    sameAspectRatio, exactSourcePixelMatch, displayDimensionsNormalized,
+    sameAspectRatio: sameAspectRatio && (displayWidth !== null || exactSourcePixelMatch), exactSourcePixelMatch, displayDimensionsNormalized,
+    aspectRatioRelativeDifference: relativeDiff, aspectRatioTolerance: ASPECT_RATIO_TOLERANCE,
   };
 }
 
@@ -190,6 +211,11 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   let isDragging = false;
   let pendingRafId = null; // FIX 7: a real RAF ID, never a boolean flag alone
   let activePointerId = null;
+  // FIX 5 (EPIC 2E-I-A-F2): the element that actually owns pointer
+  // capture, stored so capture can be released from contexts that
+  // never receive an Event object (clear(), dispose(), a mid-drag
+  // rebind) — not merely from a pointerup/pointercancel handler.
+  let activePointerTarget = null;
   // FIX 4: tri-state (true/false/null) preview-effect metadata, passed
   // in from the caller (ui/app.js) via updateSources() and never
   // inferred here.
@@ -212,6 +238,19 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
       if (legacyDisplayCanvas) { legacyDisplayCanvas.width = 0; legacyDisplayCanvas.height = 0; }
       if (v2DisplayCanvas) { v2DisplayCanvas.width = 0; v2DisplayCanvas.height = 0; }
     } catch { /* best-effort cosmetic cleanup */ }
+  }
+
+  // FIX 5 (EPIC 2E-I-A-F2): releases pointer capture using the STORED
+  // target/ID — never depends on receiving an Event object, so it
+  // works identically whether called from a real pointerup handler or
+  // from clear()/dispose()/a mid-drag rebind where no event exists.
+  function _releaseActivePointerCapture() {
+    if (activePointerTarget && activePointerId !== null && typeof activePointerTarget.releasePointerCapture === 'function') {
+      try { activePointerTarget.releasePointerCapture(activePointerId); } catch { /* best-effort */ }
+    }
+    activePointerTarget = null;
+    activePointerId = null;
+    isDragging = false;
   }
 
   const hasGenerationProvider = typeof generationProvider === 'function';
@@ -365,6 +404,24 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     // FIX 2: check #1 — before any copy begins.
     if (_staleNow()) { lastState = _abortAsStale(); _emitStateChange(); return lastState; }
 
+    // FIX 1/6 (EPIC 2E-I-A-F2): before validating/copying the NEW
+    // source pair, unconditionally clear everything left over from any
+    // PRIOR bind — cancel any pending RAF (an old scheduled frame must
+    // never later apply to the newly-bound pair), release pointer
+    // capture and end any in-progress drag, disable interaction, and
+    // wipe both display canvases back to 0×0. This guarantees a
+    // Legacy-only rebind can never retain a stale V2 image (and vice
+    // versa), and that a failed/blocked new bind can never keep
+    // showing a previous successful Ready pair.
+    _cancelPendingRaf();
+    _releaseActivePointerCapture();
+    legacyAvailable = false;
+    v2Available = false;
+    alignment = _computeAlignment(null, null);
+    legacyVisualAdjustmentsApplied = null;
+    v2VisualAdjustmentsApplied = null;
+    _clearDisplayCanvases();
+
     const legacyValidCanvas = _validateCanvasLike(legacySourceCanvas);
     const v2ValidCanvas = _validateCanvasLike(v2SourceCanvas);
     const legacyDims = legacyValidCanvas ? _readCanvasDimensions(legacySourceCanvas) : null;
@@ -441,7 +498,22 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
 
   function _scheduleSplitFromClientX(clientX) {
     if (!viewport || pendingRafId !== null) return;
-    if (!hasRaf) { setSplit(((clientX - (viewport.getBoundingClientRect?.().left ?? 0)) / (viewport.getBoundingClientRect?.().width || 1)) * 100); return; }
+    if (!hasRaf) {
+      // FIX 7 (EPIC 2E-I-A-F2): the no-rAF fallback previously called
+      // getBoundingClientRect() with no try/catch — a hostile or
+      // disconnected viewport could throw straight out of this
+      // function. Wrapped the same way as the rAF branch below: a
+      // failure here is a silent no-op, never a crash, and never
+      // changes the split.
+      try {
+        const rect = viewport.getBoundingClientRect();
+        if (!rect || !(rect.width > 0)) return;
+        setSplit(((clientX - rect.left) / rect.width) * 100);
+      } catch {
+        // A hostile/disconnected DOM read here is a no-op, never a crash.
+      }
+      return;
+    }
     pendingRafId = requestAnimationFrame(() => {
       pendingRafId = null;
       if (disposed || !isDragging) return;
@@ -467,6 +539,7 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     e.stopPropagation?.();
     isDragging = true;
     activePointerId = e.pointerId;
+    activePointerTarget = e.target; // FIX 5: stored so capture can be released without needing an Event later
     try { if (e.target && typeof e.target.setPointerCapture === 'function') e.target.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
     e.preventDefault?.();
     _scheduleSplitFromClientX(e.clientX);
@@ -479,9 +552,7 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
 
   function _endDrag(e) {
     if (!isDragging) return;
-    isDragging = false;
-    try { if (e?.target && typeof e.target.releasePointerCapture === 'function' && e.pointerId === activePointerId) e.target.releasePointerCapture(e.pointerId); } catch { /* best-effort */ }
-    activePointerId = null;
+    _releaseActivePointerCapture(); // FIX 5: uses the stored target/ID, not the (possibly absent) event
   }
 
   function _onRangeInput(e) {
@@ -542,7 +613,7 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   function clear() {
     if (disposed) return lastState;
     _cancelPendingRaf(); // FIX 9
-    _endDrag(); // FIX 9: ends any in-progress drag and best-effort releases pointer capture
+    _releaseActivePointerCapture(); // FIX 5/9: ends any in-progress drag and releases capture without needing an event
     sourceGenerationId = null;
     legacyAvailable = false;
     v2Available = false;
@@ -559,9 +630,8 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   function dispose() {
     if (disposed) return;
     disposed = true;
-    isDragging = false;
-    activePointerId = null;
     _cancelPendingRaf(); // FIX 7: genuinely cancels any pending scheduled frame, not just a boolean flag
+    _releaseActivePointerCapture(); // FIX 5
     for (const { target, type, handler, opts } of listeners) {
       try { target.removeEventListener(type, handler, opts); } catch { /* best-effort */ }
     }
