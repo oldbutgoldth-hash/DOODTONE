@@ -185,6 +185,12 @@ export function ensureInteractiveBeforeAfterLayout(container) {
   const details = el('details', { style: 'font-size:10.5px;color:var(--text-dim)' });
   details.appendChild(el('summary', { style: 'cursor:pointer;color:var(--text-dim);font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em', text: 'Technical details' }));
   const detailsBody = el('div', { style: 'margin-top:6px;display:flex;flex-direction:column;gap:3px' });
+  // FIX 10 (EPIC 2E-I-A-F): dynamic per-generation alignment info,
+  // updated on every renderInteractiveBeforeAfterStatus() call —
+  // separate from the static limitations list below it.
+  const alignmentInfo = el('div', { style: 'display:flex;flex-direction:column;gap:3px;padding-bottom:4px;margin-bottom:4px;border-bottom:1px solid var(--border)' });
+  alignmentInfo.id = 'ibaAlignmentInfo';
+  detailsBody.appendChild(alignmentInfo);
   [
     'Both previews come from the isolated Canvas 2D browser renderer.',
     'RAW development is not reproduced.',
@@ -254,6 +260,35 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
       const t = _safeText(w);
       if (t) messagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: t }));
     });
+  }
+
+  // FIX 10 (EPIC 2E-I-A-F): compact alignment technical metadata,
+  // shown when both sides carry real alignment data (Ready or
+  // Blocked) — never claims exact pixel alignment when dimensions
+  // actually differed and resampling was required.
+  const alignmentInfoEl = document.getElementById('ibaAlignmentInfo');
+  if (alignmentInfoEl) {
+    alignmentInfoEl.replaceChildren();
+    const a = (s.alignment && typeof s.alignment === 'object') ? s.alignment : null;
+    if (a && a.sourceLegacyWidth !== null && a.sourceV2Width !== null) {
+      const rows = [
+        ['Exact source pixel match', a.exactSourcePixelMatch === true ? 'Yes' : a.exactSourcePixelMatch === false ? 'No' : 'unknown'],
+        ['Same aspect ratio', a.sameAspectRatio === true ? 'Yes' : a.sameAspectRatio === false ? 'No' : 'unknown'],
+        ['Display dimensions normalized', a.displayDimensionsNormalized === true ? 'Yes' : a.displayDimensionsNormalized === false ? 'No' : 'unknown'],
+        ['Display resolution', (Number.isFinite(a.displayWidth) && Number.isFinite(a.displayHeight)) ? `${a.displayWidth}×${a.displayHeight}` : 'unavailable'],
+        ['Legacy source resolution', (Number.isFinite(a.sourceLegacyWidth) && Number.isFinite(a.sourceLegacyHeight)) ? `${a.sourceLegacyWidth}×${a.sourceLegacyHeight}` : 'unknown'],
+        ['V2 source resolution', (Number.isFinite(a.sourceV2Width) && Number.isFinite(a.sourceV2Height)) ? `${a.sourceV2Width}×${a.sourceV2Height}` : 'unknown'],
+      ];
+      rows.forEach(([label, value]) => {
+        const row = el('div', { style: 'display:flex;justify-content:space-between;gap:8px' });
+        row.appendChild(el('span', { style: 'color:var(--text-faint)', text: label }));
+        row.appendChild(el('span', { style: 'color:var(--text-dim);overflow-wrap:anywhere;text-align:right', text: String(value) }));
+        alignmentInfoEl.appendChild(row);
+      });
+      if (a.displayDimensionsNormalized === true) {
+        alignmentInfoEl.appendChild(el('div', { style: 'font-size:10px;color:var(--text-faint);font-style:italic;margin-top:2px', text: 'Display dimensions were normalized once for alignment; source preview canvases were not changed.' }));
+      }
+    }
   }
 }
 

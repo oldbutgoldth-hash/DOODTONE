@@ -75,43 +75,66 @@ function _readCanvasDimensions(canvas) {
 }
 
 /**
- * Builds the compact alignment metadata object per the phase's
- * suggested shape. `sameAspectRatio` uses a small documented tolerance
- * (2%, relative); `exactPixelMatch` requires literally identical
- * backing dimensions.
+ * Builds the compact alignment metadata object per FIX 3's expanded
+ * shape. `sameAspectRatio` uses a small documented tolerance (2%,
+ * relative); `exactSourcePixelMatch` requires literally identical
+ * SOURCE backing dimensions (never claimed when resampling to a
+ * common display size was required). When aspect ratios are
+ * compatible, a single bounded common display dimension is chosen
+ * (Legacy's aspect ratio preserved, width bounded by the smaller of
+ * the two source widths — never upscaling beyond either source's
+ * actual resolution) so both display canvases can be set to IDENTICAL
+ * dimensions, which is what makes the CSS split-overlay layering
+ * genuinely aligned rather than merely "close enough by luck".
  */
 function _computeAlignment(legacyDims, v2Dims) {
   if (!legacyDims || !v2Dims) {
     return {
-      legacyWidth: legacyDims?.width ?? null, legacyHeight: legacyDims?.height ?? null,
-      v2Width: v2Dims?.width ?? null, v2Height: v2Dims?.height ?? null,
-      sameAspectRatio: false, normalizedDisplayRatio: null, exactPixelMatch: false,
+      sourceLegacyWidth: legacyDims?.width ?? null, sourceLegacyHeight: legacyDims?.height ?? null,
+      sourceV2Width: v2Dims?.width ?? null, sourceV2Height: v2Dims?.height ?? null,
+      displayWidth: null, displayHeight: null,
+      sameAspectRatio: false, exactSourcePixelMatch: false, displayDimensionsNormalized: false,
     };
   }
   const legacyRatio = legacyDims.width / legacyDims.height;
   const v2Ratio = v2Dims.width / v2Dims.height;
   const relativeDiff = Math.abs(legacyRatio - v2Ratio) / Math.max(legacyRatio, v2Ratio);
   const sameAspectRatio = relativeDiff <= ASPECT_RATIO_TOLERANCE;
-  const exactPixelMatch = legacyDims.width === v2Dims.width && legacyDims.height === v2Dims.height;
+  const exactSourcePixelMatch = legacyDims.width === v2Dims.width && legacyDims.height === v2Dims.height;
+
+  let displayWidth = null, displayHeight = null, displayDimensionsNormalized = false;
+  if (sameAspectRatio) {
+    if (exactSourcePixelMatch) {
+      displayWidth = legacyDims.width;
+      displayHeight = legacyDims.height;
+      displayDimensionsNormalized = false; // dimensions already identical — no resampling needed
+    } else {
+      // Bounded common size: preserve Legacy's aspect ratio, never
+      // upscale beyond either source's actual resolution.
+      displayWidth = Math.min(legacyDims.width, v2Dims.width);
+      displayHeight = Math.max(1, Math.round(displayWidth / legacyRatio));
+      displayDimensionsNormalized = true;
+    }
+  }
+
   return {
-    legacyWidth: legacyDims.width, legacyHeight: legacyDims.height,
-    v2Width: v2Dims.width, v2Height: v2Dims.height,
-    sameAspectRatio, normalizedDisplayRatio: legacyRatio, exactPixelMatch,
+    sourceLegacyWidth: legacyDims.width, sourceLegacyHeight: legacyDims.height,
+    sourceV2Width: v2Dims.width, sourceV2Height: v2Dims.height,
+    displayWidth, displayHeight,
+    sameAspectRatio, exactSourcePixelMatch, displayDimensionsNormalized,
   };
 }
 
-/** Copies a source canvas's current pixels into a bounded display canvas ONCE. Never called on every pointer movement. */
-function _copyCanvasToDisplay(sourceCanvas, displayCanvas) {
-  if (!sourceCanvas || !displayCanvas) return false;
+/** Copies a source canvas's current pixels into a bounded display canvas at an explicit target size, ONCE. Never called on every pointer movement. */
+function _copyCanvasToDisplay(sourceCanvas, displayCanvas, targetWidth, targetHeight) {
+  if (!sourceCanvas || !displayCanvas || !Number.isFinite(targetWidth) || !Number.isFinite(targetHeight) || targetWidth <= 0 || targetHeight <= 0) return false;
   try {
-    const dims = _readCanvasDimensions(sourceCanvas);
-    if (!dims) return false;
-    displayCanvas.width = dims.width;
-    displayCanvas.height = dims.height;
+    displayCanvas.width = targetWidth;
+    displayCanvas.height = targetHeight;
     const ctx = displayCanvas.getContext('2d');
     if (!ctx) return false;
-    ctx.clearRect(0, 0, dims.width, dims.height);
-    ctx.drawImage(sourceCanvas, 0, 0);
+    ctx.clearRect(0, 0, targetWidth, targetHeight);
+    ctx.drawImage(sourceCanvas, 0, 0, targetWidth, targetHeight);
     return true;
   } catch {
     return false;
@@ -131,7 +154,7 @@ function _unavailableState(extra = {}) {
     alignment: _computeAlignment(null, null),
     warnings: [],
     blockers: [],
-    metadata: {},
+    metadata: { legacyVisualAdjustmentsApplied: null, v2VisualAdjustmentsApplied: null },
     ...extra,
   };
 }
@@ -165,8 +188,31 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   let alignment = _computeAlignment(null, null);
   let lastState = _unavailableState();
   let isDragging = false;
-  let rafPending = false;
+  let pendingRafId = null; // FIX 7: a real RAF ID, never a boolean flag alone
   let activePointerId = null;
+  // FIX 4: tri-state (true/false/null) preview-effect metadata, passed
+  // in from the caller (ui/app.js) via updateSources() and never
+  // inferred here.
+  let legacyVisualAdjustmentsApplied = null;
+  let v2VisualAdjustmentsApplied = null;
+
+  const hasRaf = typeof requestAnimationFrame === 'function';
+  const hasCancelRaf = typeof cancelAnimationFrame === 'function';
+
+  function _cancelPendingRaf() {
+    if (pendingRafId !== null && hasCancelRaf) {
+      try { cancelAnimationFrame(pendingRafId); } catch { /* best-effort */ }
+    }
+    pendingRafId = null;
+  }
+
+  /** Resets both display canvases to 0×0, releasing their pixel storage. Shared by FIX 2's stale-abort path and clear()/dispose(). */
+  function _clearDisplayCanvases() {
+    try {
+      if (legacyDisplayCanvas) { legacyDisplayCanvas.width = 0; legacyDisplayCanvas.height = 0; }
+      if (v2DisplayCanvas) { v2DisplayCanvas.width = 0; v2DisplayCanvas.height = 0; }
+    } catch { /* best-effort cosmetic cleanup */ }
+  }
 
   const hasGenerationProvider = typeof generationProvider === 'function';
 
@@ -187,7 +233,16 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   function _applySplitToDom(percent) {
     if (viewport && viewport.style) viewport.style.setProperty('--comparison-split', `${percent}%`);
     if (overlayWrapper && overlayWrapper.style) {
-      overlayWrapper.style.clipPath = `inset(0 ${100 - percent}% 0 0)`;
+      // FIX 1 (EPIC 2E-I-A-F): the overlay (Controlled V2) must be
+      // clipped from the LEFT by `splitPercent` — not from the right —
+      // so that Legacy (the base layer underneath) shows through on
+      // the LEFT side (0 to splitPercent%) and V2 remains visible only
+      // on the RIGHT side (splitPercent% to 100%), matching the
+      // required "Left: Legacy / Right: Controlled V2" labels exactly.
+      // At splitPercent=0: `inset(0 0 0 0%)` clips nothing — V2 fills
+      // the whole viewport. At splitPercent=100: `inset(0 0 0 100%)`
+      // clips everything — V2 occupies 0%, Legacy fills the viewport.
+      overlayWrapper.style.clipPath = `inset(0 0 0 ${percent}%)`;
     }
     if (dividerElement && dividerElement.style) dividerElement.style.left = `${percent}%`;
     if (handleElement) {
@@ -237,20 +292,30 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     }
 
     // Both available — check alignment before declaring ready.
+    const effectMetadata = { legacyVisualAdjustmentsApplied, v2VisualAdjustmentsApplied };
+    // FIX 4 (EPIC 2E-I-A-F): a no-op-preview warning is honest only
+    // when the evidence EXPLICITLY says false — missing (`null`)
+    // evidence must never be treated as false.
+    const legacyNoOp = legacyVisualAdjustmentsApplied === false;
+    const v2NoOp = v2VisualAdjustmentsApplied === false;
+    const effectWarnings = [];
+    if (legacyNoOp && v2NoOp) effectWarnings.push('Both previews were rendered without supported visual adjustments and may appear identical.');
+    else if (legacyNoOp || v2NoOp) effectWarnings.push('The two previews may appear identical because one side contains no supported visual adjustment.');
+
     if (!alignment.sameAspectRatio) {
       return {
         state: 'blocked', splitPercent, legacyAvailable: true, v2Available: true, bothAvailable: true,
         interactive: false, sourceGenerationId, currentGenerationId: _currentGeneration(), alignment,
-        warnings: [],
+        warnings: effectWarnings,
         blockers: ['Interactive comparison is blocked because the previews cannot be aligned safely.'],
-        metadata: {},
+        metadata: effectMetadata,
       };
     }
 
     return {
       state: 'ready', splitPercent, legacyAvailable: true, v2Available: true, bothAvailable: true,
       interactive: true, sourceGenerationId, currentGenerationId: _currentGeneration(), alignment,
-      warnings: [], blockers: [], metadata: {},
+      warnings: effectWarnings, blockers: [], metadata: effectMetadata,
     };
   }
 
@@ -265,35 +330,108 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
    * canvases. Copies each into this module's own bounded display
    * canvas exactly once (never re-copied on slider movement).
    *
-   * @param {{ legacySourceCanvas: (HTMLCanvasElement|null), v2SourceCanvas: (HTMLCanvasElement|null), generationId: (number|string|null) }} input
+   * FIX 2 (EPIC 2E-I-A-F): the proposed generation is checked against
+   * `generationProvider()` at multiple points during this binding
+   * operation — before any copy begins, after dimension validation,
+   * after the Legacy copy, after the V2 copy, and immediately before
+   * declaring "ready". If the generation becomes stale at ANY of these
+   * points, both display canvases are cleared and a `cancelled` result
+   * is returned — stale pixels are never exposed, even momentarily.
+   *
+   * @param {{ legacySourceCanvas: (HTMLCanvasElement|null), v2SourceCanvas: (HTMLCanvasElement|null), generationId: (number|string|null), legacyVisualAdjustmentsApplied?: (boolean|null), v2VisualAdjustmentsApplied?: (boolean|null) }} input
    */
-  function updateSources({ legacySourceCanvas, v2SourceCanvas, generationId } = {}) {
+  function updateSources({ legacySourceCanvas, v2SourceCanvas, generationId, legacyVisualAdjustmentsApplied: legacyEffectMeta, v2VisualAdjustmentsApplied: v2EffectMeta } = {}) {
     if (disposed) return lastState;
 
-    sourceGenerationId = generationId ?? null;
+    const proposedGenerationId = generationId ?? null;
+
+    function _staleNow() {
+      if (!hasGenerationProvider) return false;
+      return proposedGenerationId !== _currentGeneration();
+    }
+    function _abortAsStale() {
+      _clearDisplayCanvases();
+      sourceGenerationId = null;
+      legacyAvailable = false;
+      v2Available = false;
+      alignment = _computeAlignment(null, null);
+      return _unavailableState({
+        state: 'cancelled',
+        currentGenerationId: _currentGeneration(),
+        blockers: ['Interactive comparison was cancelled because a newer analysis is active.'],
+      });
+    }
+
+    // FIX 2: check #1 — before any copy begins.
+    if (_staleNow()) { lastState = _abortAsStale(); _emitStateChange(); return lastState; }
 
     const legacyValidCanvas = _validateCanvasLike(legacySourceCanvas);
     const v2ValidCanvas = _validateCanvasLike(v2SourceCanvas);
-
     const legacyDims = legacyValidCanvas ? _readCanvasDimensions(legacySourceCanvas) : null;
     const v2Dims = v2ValidCanvas ? _readCanvasDimensions(v2SourceCanvas) : null;
 
-    legacyAvailable = !!legacyDims && _copyCanvasToDisplay(legacySourceCanvas, legacyDisplayCanvas);
-    v2Available = !!v2Dims && _copyCanvasToDisplay(v2SourceCanvas, v2DisplayCanvas);
+    // FIX 2: check #2 — after dimension validation.
+    if (_staleNow()) { lastState = _abortAsStale(); _emitStateChange(); return lastState; }
 
-    alignment = _computeAlignment(legacyAvailable ? legacyDims : null, v2Available ? v2Dims : null);
+    const proposedAlignment = _computeAlignment(legacyDims, v2Dims);
+    const targetW = proposedAlignment.displayWidth, targetH = proposedAlignment.displayHeight;
+    const bothPresent = !!legacyDims && !!v2Dims;
+    const alignmentOk = proposedAlignment.sameAspectRatio && Number.isFinite(targetW) && Number.isFinite(targetH);
+
+    let copiedLegacy = false, copiedV2 = false;
+    // FIX 3: when a misaligned pair is deliberately NOT copied, data
+    // was still genuinely valid for both sides — `skippedForMisalignment`
+    // tracks this so availability correctly reflects "blocked" (both
+    // sides had real data, alignment failed) rather than being
+    // conflated with "unavailable" (no valid data at all).
+    let skippedForMisalignment = false;
+
+    if (bothPresent && alignmentOk) {
+      copiedLegacy = _copyCanvasToDisplay(legacySourceCanvas, legacyDisplayCanvas, targetW, targetH);
+      // FIX 2: check #3 — after the Legacy copy.
+      if (_staleNow()) { lastState = _abortAsStale(); _emitStateChange(); return lastState; }
+      copiedV2 = _copyCanvasToDisplay(v2SourceCanvas, v2DisplayCanvas, targetW, targetH);
+      // FIX 2: check #4 — after the V2 copy.
+      if (_staleNow()) { lastState = _abortAsStale(); _emitStateChange(); return lastState; }
+    } else if (bothPresent && !alignmentOk) {
+      // FIX 3: material aspect-ratio mismatch — never copy a
+      // deceptive, non-aligned pair of display canvases. The
+      // "blocked" state (computed below from `alignment.sameAspectRatio`)
+      // communicates this; no pixels are drawn. Any pixels from a
+      // PRIOR successful bind are explicitly cleared here too — a
+      // blocked result must never silently keep showing stale content
+      // from an earlier ready state.
+      skippedForMisalignment = true;
+      _clearDisplayCanvases();
+    } else if (legacyDims && !v2Dims) {
+      copiedLegacy = _copyCanvasToDisplay(legacySourceCanvas, legacyDisplayCanvas, legacyDims.width, legacyDims.height);
+      if (_staleNow()) { lastState = _abortAsStale(); _emitStateChange(); return lastState; }
+    } else if (v2Dims && !legacyDims) {
+      copiedV2 = _copyCanvasToDisplay(v2SourceCanvas, v2DisplayCanvas, v2Dims.width, v2Dims.height);
+      if (_staleNow()) { lastState = _abortAsStale(); _emitStateChange(); return lastState; }
+    }
+
+    legacyAvailable = skippedForMisalignment ? !!legacyDims : copiedLegacy;
+    v2Available = skippedForMisalignment ? !!v2Dims : copiedV2;
+    alignment = proposedAlignment;
+    legacyVisualAdjustmentsApplied = (legacyEffectMeta === true || legacyEffectMeta === false) ? legacyEffectMeta : null;
+    v2VisualAdjustmentsApplied = (v2EffectMeta === true || v2EffectMeta === false) ? v2EffectMeta : null;
+    sourceGenerationId = proposedGenerationId;
 
     // Reset split to 50 on every new source bind — never persisted
     // across analysis generations in Phase A.
     splitPercent = 50;
     _applySplitToDom(splitPercent);
 
+    // FIX 2: check #5 — immediately before declaring ready.
+    if (_staleNow()) { lastState = _abortAsStale(); _emitStateChange(); return lastState; }
+
     return _refreshState();
   }
 
-  /** Sets the split percentage (0-100), clamped and NaN/Infinity-safe. Never redraws pixels — CSS-only. */
+  /** Sets the split percentage (0-100), clamped and NaN/Infinity-safe. Never redraws pixels — CSS-only. FIX 8: refuses to update the DOM when disposed, non-interactive, or stale. */
   function setSplit(value) {
-    if (disposed) return lastState;
+    if (disposed || lastState.interactive !== true || _isStale()) return lastState;
     splitPercent = _clampSplit(value);
     _applySplitToDom(splitPercent);
     lastState = { ...lastState, splitPercent };
@@ -302,10 +440,10 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   }
 
   function _scheduleSplitFromClientX(clientX) {
-    if (!viewport || rafPending) return;
-    rafPending = true;
-    requestAnimationFrame(() => {
-      rafPending = false;
+    if (!viewport || pendingRafId !== null) return;
+    if (!hasRaf) { setSplit(((clientX - (viewport.getBoundingClientRect?.().left ?? 0)) / (viewport.getBoundingClientRect?.().width || 1)) * 100); return; }
+    pendingRafId = requestAnimationFrame(() => {
+      pendingRafId = null;
       if (disposed || !isDragging) return;
       try {
         const rect = viewport.getBoundingClientRect();
@@ -320,6 +458,13 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
 
   function _onPointerDown(e) {
     if (disposed || lastState.interactive !== true) return;
+    // FIX 6 (EPIC 2E-I-A-F): the handle is a child of the viewport,
+    // and both have their own pointerdown listener — without this,
+    // pressing the handle would bubble the same event up to the
+    // viewport's listener too, processing the single press twice.
+    // stopPropagation() here means the viewport's own listener never
+    // fires for a press that started on the handle.
+    e.stopPropagation?.();
     isDragging = true;
     activePointerId = e.pointerId;
     try { if (e.target && typeof e.target.setPointerCapture === 'function') e.target.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
@@ -396,18 +541,17 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   /** Clears bound sources, resets split, and returns to the unavailable/waiting state. Controller remains reusable afterward. */
   function clear() {
     if (disposed) return lastState;
-    isDragging = false;
-    activePointerId = null;
+    _cancelPendingRaf(); // FIX 9
+    _endDrag(); // FIX 9: ends any in-progress drag and best-effort releases pointer capture
     sourceGenerationId = null;
     legacyAvailable = false;
     v2Available = false;
     alignment = _computeAlignment(null, null);
+    legacyVisualAdjustmentsApplied = null; // FIX 9: clear effect metadata too
+    v2VisualAdjustmentsApplied = null;
     splitPercent = 50;
     _applySplitToDom(splitPercent);
-    try {
-      if (legacyDisplayCanvas) { legacyDisplayCanvas.width = 0; legacyDisplayCanvas.height = 0; }
-      if (v2DisplayCanvas) { v2DisplayCanvas.width = 0; v2DisplayCanvas.height = 0; }
-    } catch { /* best-effort cosmetic cleanup */ }
+    _clearDisplayCanvases(); // FIX 9: dimensions reset to 0×0, releasing pixel storage
     return _refreshState();
   }
 
@@ -417,15 +561,12 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     disposed = true;
     isDragging = false;
     activePointerId = null;
-    rafPending = true; // prevents any already-scheduled rAF callback from doing anything further
+    _cancelPendingRaf(); // FIX 7: genuinely cancels any pending scheduled frame, not just a boolean flag
     for (const { target, type, handler, opts } of listeners) {
       try { target.removeEventListener(type, handler, opts); } catch { /* best-effort */ }
     }
     listeners.length = 0;
-    try {
-      if (legacyDisplayCanvas) { legacyDisplayCanvas.width = 0; legacyDisplayCanvas.height = 0; }
-      if (v2DisplayCanvas) { v2DisplayCanvas.width = 0; v2DisplayCanvas.height = 0; }
-    } catch { /* best-effort */ }
+    _clearDisplayCanvases();
     lastState = _unavailableState({ blockers: ['Interactive Before/After controller has been disposed.'] });
   }
 
