@@ -83,7 +83,7 @@ function _readCanvasDimensions(canvas) {
 
 /**
  * Builds the compact alignment metadata object per FIX 3's expanded
- * shape. `sameAspectRatio` uses a small documented tolerance (2%,
+ * shape. `sameAspectRatio` uses a small documented tolerance (0.1%,
  * relative); `exactSourcePixelMatch` requires literally identical
  * SOURCE backing dimensions (never claimed when resampling to a
  * common display size was required). When aspect ratios are
