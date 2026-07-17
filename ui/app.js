@@ -781,6 +781,10 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
     if (!interactivePreviewObservationController) {
       interactivePreviewObservationController = createInteractivePreviewObservationControllerV2({
         ...elements,
+        // FIX 2 (EPIC 2E-J-A-F): the SAME canonical current-generation
+        // provider Interactive Before/After itself uses — never a
+        // duplicate generation counter.
+        generationProvider: () => analysisRenderGeneration,
         onStateChange: (s) => renderInteractivePreviewObservationV2(obsInner, s),
       });
     }
@@ -802,6 +806,11 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
       interactiveState: typeof rawState === 'string' ? rawState : null,
       interactiveReady: rawInteractive === true,
       safetyBlocked,
+      // FIX 4 (EPIC 2E-J-A-F): preserve the real blockedReason so the
+      // Observation layer can distinguish safety/alignment/preview-state
+      // causes honestly, rather than collapsing every "blocked" cause
+      // into the same generic message.
+      blockedReason: typeof rawBlockedReason === 'string' ? rawBlockedReason : null,
     });
   } catch (obsErr) {
     console.warn('Preview Observation sync failed (Interactive Before/After unaffected):', obsErr);

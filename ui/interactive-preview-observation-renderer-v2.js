@@ -1,10 +1,11 @@
 /**
  * ui/interactive-preview-observation-renderer-v2.js
  *
- * EPIC 2E-J Phase A — pure DOM builder/updater for the Preview
- * Observation section. Holds no state of its own; every render call is
- * a pure function of the state object it's given. Never uses
- * innerHTML with untrusted content, never evaluates strings.
+ * EPIC 2E-J Phase A (+ EPIC 2E-J-A-F correctness patch) — pure DOM
+ * builder/updater for the Preview Observation section. Holds no state
+ * of its own; every render call is a pure function of the state object
+ * it's given. Never uses innerHTML with untrusted content, never
+ * evaluates strings.
  */
 
 const OBSERVATION_OPTIONS = [
@@ -14,17 +15,34 @@ const OBSERVATION_OPTIONS = [
   { value: 'unsure', label: 'Unsure' },
 ];
 
-const STATUS_MESSAGE = {
-  ready: 'Choose an observation for this comparison.',
+const SELECTED_MESSAGE = {
   'prefer-legacy': 'Observation recorded: Legacy preview preferred.',
   'prefer-v2': 'Observation recorded: Controlled V2 preview preferred.',
   'no-visible-difference': 'Observation recorded: no meaningful visual difference noticed.',
   unsure: 'Observation recorded: undecided.',
+};
+
+const STATE_MESSAGE = {
+  ready: 'Choose an observation for this comparison.',
   cleared: 'Observation cleared. Production output was not changed.',
-  unavailable: 'Observation is available after both previews are ready.',
-  blocked: 'Observation is unavailable while the comparison is blocked.',
   disposed: 'Observation is unavailable.',
 };
+
+// FIX 6 (EPIC 2E-J-A-F): one honest message per real cause — never a
+// single generic "unavailable" message regardless of the actual
+// reason. Mirrors the controller's own UNAVAILABLE_REASON_MESSAGE map.
+const UNAVAILABLE_REASON_MESSAGE = {
+  preparing: 'Observation will be available when both previews finish rendering.',
+  partial: 'Observation is unavailable because only one preview rendered.',
+  failed: 'Observation is unavailable because the comparison could not be prepared.',
+  cancelled: 'The previous observation was cleared because a newer analysis is active.',
+  alignment: 'Observation is unavailable because the previews cannot be aligned safely.',
+  'preview-state': 'Observation is unavailable because one preview did not pass its render requirements.',
+  source: 'Observation is unavailable because the preview sources are incomplete.',
+  'missing-generation': 'Observation is unavailable because the current analysis generation is unknown.',
+  'not-ready': 'Observation is available after both previews are ready.',
+};
+const SAFETY_BLOCKED_MESSAGE = 'Observation is unavailable while the comparison is blocked by a safety anomaly.';
 
 const SAFETY_NOTE = 'Observation only \u00B7 Legacy remains production \u00B7 XMP unchanged';
 const V2_REMINDER = 'Controlled V2 remains non-production.';
@@ -39,11 +57,15 @@ function _safeGetR(object, key, fallback = undefined) {
   }
 }
 
-function _safeText(value, maxLen = 300) {
+function _safeText(value, maxLen = 240) {
   if (typeof value !== 'string') return null;
   const t = value.trim();
   if (!t) return null;
   return t.length > maxLen ? `${t.slice(0, maxLen)}…` : t;
+}
+
+function _safeArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 
 function el(tag, { style, cls, text, attrs } = {}) {
@@ -67,6 +89,15 @@ export function ensureInteractivePreviewObservationLayout(container) {
 
   const root = el('div', { style: 'display:flex;flex-direction:column;gap:10px' });
 
+  // FIX 10 (EPIC 2E-J-A-F): scoped :focus-visible rules for the radio
+  // labels and the Clear button — the section had no explicit focus
+  // style at all before this patch.
+  const styleTag = el('style', {
+    text: '#ipoFieldset label:focus-within{outline:2px solid var(--accent, #4a9eff);outline-offset:2px;} '
+      + '#ipoClearButton:focus-visible{outline:2px solid var(--accent, #4a9eff);outline-offset:2px;}',
+  });
+  root.appendChild(styleTag);
+
   root.appendChild(el('h4', { style: 'margin:0;font-size:13px;font-weight:600;color:var(--text)', text: 'Preview Observation' }));
   root.appendChild(el('p', { style: 'margin:0;font-size:11px;color:var(--text-dim)', text: 'Record what you notice in the approximate browser comparison' }));
 
@@ -76,7 +107,7 @@ export function ensureInteractivePreviewObservationLayout(container) {
   fieldset.appendChild(legend);
 
   const optionsWrap = el('div', { style: 'display:flex;flex-wrap:wrap;gap:8px' });
-  OBSERVATION_OPTIONS.forEach(({ value, label }, i) => {
+  OBSERVATION_OPTIONS.forEach(({ value, label }) => {
     const optionLabel = el('label', {
       style: 'display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--text);min-height:44px;flex:1 1 140px',
     });
@@ -102,7 +133,15 @@ export function ensureInteractivePreviewObservationLayout(container) {
   statusEl.id = 'ipoStatus';
   root.appendChild(statusEl);
 
-  const safetyNoteEl = el('div', { style: 'font-size:10px;color:var(--text-faint)', text: SAFETY_NOTE });
+  // FIX 7 (EPIC 2E-J-A-F): a separate, bounded warning element — the
+  // renderer previously read `state.warnings` but never displayed them
+  // at all.
+  const warningEl = el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', attrs: { 'aria-live': 'polite' } });
+  warningEl.id = 'ipoWarning';
+  root.appendChild(warningEl);
+
+  // FIX 10: text-faint (low contrast) replaced with text-dim.
+  const safetyNoteEl = el('div', { style: 'font-size:10px;color:var(--text-dim)', text: SAFETY_NOTE });
   safetyNoteEl.id = 'ipoSafetyNote';
   root.appendChild(safetyNoteEl);
 
@@ -115,18 +154,16 @@ export function ensureInteractivePreviewObservationLayout(container) {
 export function getInteractivePreviewObservationElements(container) {
   if (!container) return null;
   return {
-    root: container.querySelector('div') || null,
-    fieldset: container.querySelector('#ipoFieldset') || null,
     optionInputs: Array.from(container.querySelectorAll('input[name="ipoObservation"]')),
     clearButton: container.querySelector('#ipoClearButton') || null,
-    statusElement: container.querySelector('#ipoStatus') || null,
-    safetyNoteElement: container.querySelector('#ipoSafetyNote') || null,
   };
 }
 
 /**
  * Renders the current observation state into the DOM. Pure function of
  * `state` — never reads anything from the controller directly.
+ * FIX 3 (EPIC 2E-J-A-F): every projected field read exactly once via
+ * `_safeGetR`, stored, then reused — never a second direct access.
  */
 export function renderInteractivePreviewObservationV2(container, state) {
   if (!container) return;
@@ -137,7 +174,7 @@ export function renderInteractivePreviewObservationV2(container, state) {
   const rawObservation = _safeGetR(s, 'observation');
   const rawWarnings = _safeGetR(s, 'warnings');
   const rawMetadata = _safeGetR(s, 'metadata');
-  const rawBlockers = _safeGetR(rawMetadata, 'blockers');
+  const rawUnavailableReason = _safeGetR(rawMetadata, 'unavailableReason');
 
   const normalizedState = typeof rawState === 'string' ? rawState : 'unavailable';
   const enabled = normalizedState === 'ready' || normalizedState === 'selected' || normalizedState === 'cleared';
@@ -146,6 +183,7 @@ export function renderInteractivePreviewObservationV2(container, state) {
   const optionInputs = Array.from(container.querySelectorAll('input[name="ipoObservation"]'));
   const clearButton = container.querySelector('#ipoClearButton');
   const statusEl = container.querySelector('#ipoStatus');
+  const warningEl = container.querySelector('#ipoWarning');
   const safetyNoteEl = container.querySelector('#ipoSafetyNote');
 
   if (fieldset) fieldset.disabled = !enabled;
@@ -155,23 +193,34 @@ export function renderInteractivePreviewObservationV2(container, state) {
   });
   if (clearButton) clearButton.disabled = !enabled || rawObservation === null || rawObservation === undefined;
 
-  // Status message: prefer a specific observation-value message when one
-  // is selected; otherwise use the state-level message. Never render
-  // undefined/[object Object].
+  // FIX 6/7 (EPIC 2E-J-A-F): status message chosen from the ACTUAL
+  // cause, never a single generic fallback. Priority: a specific
+  // selected-observation message > the state-level message (ready/
+  // cleared/disposed) > safety-blocked message > the honest
+  // unavailableReason message.
   let message;
-  if (normalizedState === 'selected' && typeof rawObservation === 'string' && STATUS_MESSAGE[rawObservation]) {
-    message = STATUS_MESSAGE[rawObservation];
+  if (normalizedState === 'selected' && typeof rawObservation === 'string' && SELECTED_MESSAGE[rawObservation]) {
+    message = SELECTED_MESSAGE[rawObservation];
+  } else if (STATE_MESSAGE[normalizedState]) {
+    message = STATE_MESSAGE[normalizedState];
+  } else if (normalizedState === 'blocked') {
+    message = SAFETY_BLOCKED_MESSAGE;
+  } else if (typeof rawUnavailableReason === 'string' && UNAVAILABLE_REASON_MESSAGE[rawUnavailableReason]) {
+    message = UNAVAILABLE_REASON_MESSAGE[rawUnavailableReason];
   } else {
-    message = STATUS_MESSAGE[normalizedState] ?? STATUS_MESSAGE.unavailable;
-  }
-  // Blockers (e.g. "Observation is unavailable while the comparison is
-  // blocked.") take precedence when present and the state itself isn't
-  // already a specific message.
-  const blockerText = _safeArray(rawBlockers).map((b) => _safeText(b)).find(Boolean);
-  if ((normalizedState === 'blocked' || normalizedState === 'unavailable') && blockerText) {
-    message = blockerText;
+    message = UNAVAILABLE_REASON_MESSAGE['not-ready'];
   }
   if (statusEl) statusEl.textContent = message;
+
+  // FIX 7: at most one primary warning, bounded and deduplicated
+  // against the status message (never repeats the same text in both
+  // elements). Priority: stale-generation warning > safety blocker >
+  // any other supplied warning.
+  if (warningEl) {
+    const candidates = _safeArray(rawWarnings).map((w) => _safeText(w)).filter(Boolean);
+    const primaryWarning = candidates.find((w) => w !== message) ?? null;
+    warningEl.textContent = primaryWarning ?? '';
+  }
 
   if (safetyNoteEl) {
     let note = SAFETY_NOTE;
@@ -182,12 +231,8 @@ export function renderInteractivePreviewObservationV2(container, state) {
   }
 }
 
-function _safeArray(value) {
-  return Array.isArray(value) ? value : [];
-}
-
 /** Resets the section's display to the unavailable/empty state without destroying the skeleton. */
 export function clearInteractivePreviewObservationDisplay(container) {
   if (!container || container.dataset.ipoLayoutBuilt !== '1') return;
-  renderInteractivePreviewObservationV2(container, { state: 'unavailable', observation: null, warnings: [], metadata: { blockers: [] } });
+  renderInteractivePreviewObservationV2(container, { state: 'unavailable', observation: null, warnings: [], metadata: { blockers: [], unavailableReason: 'not-ready' } });
 }
