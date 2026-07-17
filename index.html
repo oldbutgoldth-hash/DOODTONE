@@ -8,9 +8,25 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
   <style>
-    html, body { margin: 0; padding: 0; overflow-x: hidden; }
+    html, body { margin: 0; padding: 0; }
     * { box-sizing: border-box; }
     body { -webkit-font-smoothing: antialiased; }
+    /* EPIC 2E-I-C-F2: scoped overflow containment for the Material
+       Symbols icon ligature-text fallback. When the "Material Symbols
+       Outlined" web font fails to load (e.g. no network access to
+       Google Fonts), the browser falls back to rendering the literal
+       ligature text (e.g. "light_mode", "palette") instead of a single
+       icon glyph — this text is far wider than the intended icon and
+       was the ROOT CAUSE of a full-page horizontal overflow discovered
+       during EPIC 2E-I-C-F/F2 QA (traced by walking the actual overflow
+       chain element-by-element from #previewImg to <html> — the
+       overflow originated here, not in the preview viewer, which was
+       already correctly self-contained via its own `overflow: auto`).
+       This rule clips any oversized fallback text to the icon's
+       intended box — a graceful degradation when the font is
+       unavailable — without altering anything when the font loads
+       normally (a real icon glyph never exceeds this box anyway). */
+    .material-symbols-outlined { display: inline-block; width: 1em; height: 1em; overflow: hidden; white-space: nowrap; vertical-align: middle; }
     @keyframes lumixa-spin { to { transform: rotate(360deg); } }
     @keyframes lumixa-modal-in { from { opacity: 0; transform: scale(.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
     @keyframes lumixa-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -35,12 +51,21 @@
          function) lives entirely in the main column and is unaffected. */
       .lx-sidebar-left, .lx-sidebar-right { display: none !important; }
       .lx-main-layout { flex-direction: column !important; }
-    }
-    @media (max-width: 680px) {
-      .lx-topbar-left { gap: 14px !important; }
+      /* EPIC 2E-I-C-F2: previously this rule only applied at 680px,
+         leaving a genuine full-page horizontal-overflow gap between
+         680-900px — at e.g. 768px the sidebars were already hidden
+         above but the topbar's nav links (Dashboard/Analytics/Tools/
+         Export) were not yet hidden, and the full topbar row (logo +
+         nav + AI-workflow badge + language/dark-mode buttons + plan
+         badge) genuinely does not fit in that width. Moved here to
+         share the same breakpoint as the sidebar hiding above, closing
+         that gap — verified via direct measurement at 768px. */
       .lx-topbar-nav  { display: none !important; }
       .lx-plan-badge  { display: none !important; }
       .lx-topbar-right { gap: 6px !important; }
+    }
+    @media (max-width: 680px) {
+      .lx-topbar-left { gap: 14px !important; }
       /* The 1fr/1fr grids below were being pushed wider than the viewport
          because unconstrained "1fr" tracks let intrinsic content width
          win over the fraction — the standard CSS grid gotcha (needs

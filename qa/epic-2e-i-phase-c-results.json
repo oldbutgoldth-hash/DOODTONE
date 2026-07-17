@@ -1,9 +1,9 @@
 {
   "suite": "EPIC 2E-I Phase C smoke test",
-  "generatedAt": "2026-07-17T09:46:58.866Z",
+  "generatedAt": "2026-07-17T10:20:48.484Z",
   "summary": {
-    "total": 19,
-    "pass": 19,
+    "total": 31,
+    "pass": 31,
     "fail": 0,
     "notTested": 0
   },
@@ -54,6 +54,31 @@
       "evidence": "splitPercent=100"
     },
     {
+      "test": "focus-visible computed outline on handle",
+      "result": "PASS",
+      "evidence": "outlineStyle=\"solid\""
+    },
+    {
+      "test": "focus-visible computed outline on range input",
+      "result": "PASS",
+      "evidence": "outlineStyle=\"solid\""
+    },
+    {
+      "test": "Shift+Tab does not trap focus",
+      "result": "PASS",
+      "evidence": "\"ibaRangeInput\" -> \"ibaHandle\""
+    },
+    {
+      "test": "Pointer drag updates split",
+      "result": "PASS",
+      "evidence": "splitPercent=80 (expected roughly 80)"
+    },
+    {
+      "test": "Dragging class removed after pointerup",
+      "result": "PASS",
+      "evidence": "iba-dragging present=false"
+    },
+    {
       "test": "No drawImage during slider movement",
       "result": "PASS",
       "evidence": "drawImage calls=0"
@@ -82,6 +107,41 @@
       "test": "No document horizontal overflow at 430px",
       "result": "PASS",
       "evidence": "scrollWidth=430, clientWidth=430"
+    },
+    {
+      "test": "No document horizontal overflow at 768px",
+      "result": "PASS",
+      "evidence": "scrollWidth=768, clientWidth=768"
+    },
+    {
+      "test": "No document horizontal overflow at 900px",
+      "result": "PASS",
+      "evidence": "scrollWidth=900, clientWidth=900"
+    },
+    {
+      "test": "No document horizontal overflow at 1024px",
+      "result": "PASS",
+      "evidence": "scrollWidth=1024, clientWidth=1024"
+    },
+    {
+      "test": "No document horizontal overflow at 1440px",
+      "result": "PASS",
+      "evidence": "scrollWidth=1440, clientWidth=1440"
+    },
+    {
+      "test": "Document does not overflow with a 3000x2000 image loaded",
+      "result": "PASS",
+      "evidence": "scrollWidth=1440, clientWidth=1440"
+    },
+    {
+      "test": "#viewerViewport remains internally horizontally scrollable",
+      "result": "PASS",
+      "evidence": "viewerScrollWidth=3034, viewerClientWidth=788, scrollLeftAfterSet=150"
+    },
+    {
+      "test": "Large image is not resized to satisfy overflow containment",
+      "result": "PASS",
+      "evidence": "naturalWidth=3000, displayedClientWidth=3000"
     },
     {
       "test": "No duplicate #interactiveBeforeAfterSection before any import",

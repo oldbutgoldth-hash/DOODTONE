@@ -262,3 +262,97 @@ using the real application stylesheet, and corrected an honesty gap in the
 original report's image-fixture terminology. No pixel-processing,
 Render-Plan, Mapping, or XMP behavior was touched. The Phase C decision is
 now backed by concrete before/after evidence for both fixed defects.
+
+---
+
+## EPIC 2E-I-C-F2 Addendum — Scoped Overflow Containment
+
+This final Phase C closeout patch replaces the previous (EPIC 2E-I-C-F)
+global `html, body { overflow-x: hidden; }` fix with a properly scoped,
+root-cause fix, and substantially extends the reproducible smoke-test
+evidence.
+
+### Root cause correction
+
+The prior patch's global fix worked, but masked the *actual* cause rather
+than correcting it. Element-by-element investigation of the real overflow
+chain (from `#previewImg` up to `<html>`) found **two distinct, genuine
+layout defects**, neither of which was the preview viewer itself:
+
+1. **Material Symbols icon font fallback.** When the "Material Symbols
+   Outlined" web font fails to load (no network access to Google Fonts in
+   this environment), the browser renders the literal ligature text (e.g.
+   `"light_mode"`, `"palette"`) instead of a single icon glyph — this text
+   is far wider than the intended ~19px icon box. Fixed with a scoped rule:
+   `.material-symbols-outlined { display:inline-block; width:1em; height:1em; overflow:hidden; white-space:nowrap; vertical-align:middle; }`.
+   This clips any oversized fallback text to the icon's intended box and
+   has zero effect when the font loads normally (a real glyph never
+   exceeds this box).
+2. **A topbar responsive-breakpoint gap.** The sidebar-hiding breakpoint
+   was `900px`, but the topbar's nav-links-hiding breakpoint was a
+   separate, narrower `680px` — leaving a genuine unhandled gap between
+   680–900px (e.g. at 768px) where the full topbar row (logo + 4 nav links
+   + AI-workflow badge + language/dark-mode buttons + plan badge)
+   genuinely does not fit. Fixed by moving `.lx-topbar-nav`/`.lx-plan-badge`
+   hiding to share the same `900px` breakpoint as the sidebar hiding,
+   closing the gap.
+
+**`#viewerViewport`'s own `overflow: auto` was never the actual cause** —
+it was already correctly self-contained (its own `getBoundingClientRect().width`
+never exceeded its parent at any tested width); this was verified again in
+this patch via the internal-scroll test below.
+
+### Internal viewer scroll verification (FIX 2)
+
+With a 3000×2000 fixture loaded at a 1440px viewport:
+
+| Metric | Value |
+|---|---|
+| Document `scrollWidth` / `clientWidth` | 1440 / 1440 (no overflow) |
+| `#viewerViewport` `scrollWidth` / `clientWidth` | 3034 / 788 (correctly still internally scrollable) |
+| `scrollLeft` after programmatically setting to 150 | 150 (confirmed functional after smooth-scroll settles) |
+| Image `naturalWidth` vs. displayed `clientWidth` | 3000 vs. 3000 (never resized to satisfy overflow containment) |
+
+### Extended reproducible smoke test (FIX 3)
+
+`qa/epic-2e-i-phase-c-smoke-test.mjs` was extended from 19 to **31**
+automated checks, adding: focus-visible computed outline on both the
+handle and the range input, Shift+Tab non-trapping verification, real
+pointer-drag split verification, dragging-class removal on pointerup,
+viewport overflow checks at 768/900/1024px (closing the exact gap that
+caused the original defect), and the 3000×2000 internal-scroll/no-resize
+verification above. **Result: 31/31 PASS, 0 FAIL** (`qa/epic-2e-i-phase-c-results.json`).
+
+### Evidence distinction (FIX 4)
+
+- **Current smoke-test evidence (this patch):** the 31 checks in
+  `qa/epic-2e-i-phase-c-results.json`, all executed live in this session.
+- **Prior Phase C/C-F evidence:** alignment, safety-blocking, no-op,
+  lifecycle-stress, and security results carried forward unchanged (no
+  code touched by this patch affects them) — see the original sections
+  above.
+- **Code-inspection evidence:** performance claims (no resize listener, no
+  `drawImage` outside `updateSources()`) remain code-inspection based,
+  clearly labeled as such above.
+- **NOT TESTED:** real physical device, real screen-reader software, real
+  photographic content — unchanged, still explicitly not claimed.
+
+### Screenshot evidence (FIX 5)
+
+`mobile_390px.png` re-captured after the scoped fix — confirmed no
+page-level clipping is concealing any genuinely overflowing card (the
+scoped fix corrects the actual offending elements rather than hiding
+overflow at the document level, so if a card were still genuinely
+overflowing, it would show as a real horizontal scrollbar, not be
+silently clipped).
+
+### Revised Phase C Decision
+
+**PASS — Ready for EPIC 2E-I Phase D Release Closeout.**
+
+Justification: the scoped root-cause containment now works correctly at
+every tested width (320/360/390/430/768/900/1024/1440px) without any
+global `overflow-x: hidden` on `html`/`body`. All 31 reproducible smoke
+tests pass. The internal 1:1 image-scrolling feature remains fully
+functional and unresized. Focus visibility, pointer behavior, and keyboard
+behavior are all verified. No blocking defect remains.

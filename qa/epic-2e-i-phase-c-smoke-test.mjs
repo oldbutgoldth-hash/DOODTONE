@@ -160,6 +160,40 @@ async function main() {
     const afterEnd = await page.evaluate(() => window.__controller.getState().splitPercent);
     record('Keyboard End = 100% (Legacy)', afterEnd === 100 ? 'PASS' : 'FAIL', `splitPercent=${afterEnd}`);
 
+    // ── FIX 3 (EPIC 2E-I-C-F2): focus-visible computed outline ──
+    await page.evaluate(() => document.getElementById('ibaHandle').focus());
+    const handleOutline = await page.evaluate(() => getComputedStyle(document.getElementById('ibaHandle')).outlineStyle);
+    record('focus-visible computed outline on handle', handleOutline === 'solid' ? 'PASS' : 'FAIL', `outlineStyle="${handleOutline}"`);
+    await page.evaluate(() => document.getElementById('ibaRangeInput').focus());
+    const rangeOutline = await page.evaluate(() => getComputedStyle(document.getElementById('ibaRangeInput')).outlineStyle);
+    record('focus-visible computed outline on range input', rangeOutline === 'solid' ? 'PASS' : 'FAIL', `outlineStyle="${rangeOutline}"`);
+
+    // ── FIX 3: Tab reaches an Interactive control; Shift+Tab does not trap ──
+    await page.evaluate(() => document.body.focus());
+    await page.evaluate(() => document.getElementById('ibaRangeInput').scrollIntoView());
+    // Focus the range input directly (a full page Tab-walk is environment-dependent);
+    // verify Shift+Tab moves focus AWAY from it without throwing/trapping.
+    await page.evaluate(() => document.getElementById('ibaRangeInput').focus());
+    const focusedBeforeShiftTab = await page.evaluate(() => document.activeElement.id);
+    await page.keyboard.press('Shift+Tab');
+    const focusedAfterShiftTab = await page.evaluate(() => document.activeElement.id);
+    record('Shift+Tab does not trap focus', focusedAfterShiftTab !== focusedBeforeShiftTab ? 'PASS' : 'FAIL', `"${focusedBeforeShiftTab}" -> "${focusedAfterShiftTab}"`);
+
+    // ── FIX 3: pointer drag updates split ──
+    const viewportBox = await page.evaluate(() => {
+      const r = document.getElementById('ibaViewport').getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    });
+    await page.mouse.move(viewportBox.x + viewportBox.width * 0.2, viewportBox.y + viewportBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(viewportBox.x + viewportBox.width * 0.8, viewportBox.y + viewportBox.height / 2, { steps: 5 });
+    await page.waitForTimeout(100);
+    const splitAfterDrag = await page.evaluate(() => window.__controller.getState().splitPercent);
+    record('Pointer drag updates split', splitAfterDrag > 60 && splitAfterDrag < 90 ? 'PASS' : 'FAIL', `splitPercent=${splitAfterDrag} (expected roughly 80)`);
+    await page.mouse.up();
+    const draggingClassAfterUp = await page.evaluate(() => document.getElementById('ibaViewport').classList.contains('iba-dragging'));
+    record('Dragging class removed after pointerup', !draggingClassAfterUp ? 'PASS' : 'FAIL', `iba-dragging present=${draggingClassAfterUp}`);
+
     // ── No drawImage/getImageData during slider movement (instrumented) ──
     const drawCallsDuringDrag = await page.evaluate(async () => {
       let drawImageCalls = 0;
@@ -180,7 +214,7 @@ async function main() {
     await page.close();
 
     // ── Full-page viewport/overflow tests on the real index.html ──
-    for (const width of [320, 360, 390, 430]) {
+    for (const width of [320, 360, 390, 430, 768, 900, 1024, 1440]) {
       const p = await browser.newPage({ viewport: { width, height: 800 } });
       const pErrors = [];
       p.on('pageerror', (e) => pErrors.push(String(e)));
@@ -193,6 +227,42 @@ async function main() {
       record(`No document horizontal overflow at ${width}px`, overflow.scrollW <= overflow.clientW ? 'PASS' : 'FAIL', `scrollWidth=${overflow.scrollW}, clientWidth=${overflow.clientW}`);
       await p.close();
     }
+
+    // ── FIX 2/3 (EPIC 2E-I-C-F2): a large (3000x2000) image must remain
+    // internally scrollable within #viewerViewport WITHOUT the document
+    // itself ever scrolling horizontally, and the image must never be
+    // resized merely to satisfy overflow containment. ──
+    const largeImgPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const largeImgErrors = [];
+    largeImgPage.on('pageerror', (e) => largeImgErrors.push(String(e)));
+    await largeImgPage.goto(`http://localhost:${PORT}/index.html`);
+    await largeImgPage.waitForTimeout(600);
+    // Use the well-known /tmp fixture used throughout this project's manual QA.
+    await largeImgPage.setInputFiles('#fileIn', '/tmp/test_photo_large.jpg').catch(() => null);
+    await largeImgPage.waitForTimeout(20000);
+    const largeImgResult = await largeImgPage.evaluate(() => {
+      const docEl = document.documentElement;
+      const viewer = document.getElementById('viewerViewport');
+      const img = document.getElementById('previewImg');
+      viewer.scrollLeft = 150;
+      return {
+        docScrollW: docEl.scrollWidth, docClientW: docEl.clientWidth,
+        viewerScrollW: viewer.scrollWidth, viewerClientW: viewer.clientWidth,
+        naturalW: img.naturalWidth, displayW: img.clientWidth,
+      };
+    });
+    await largeImgPage.waitForTimeout(500);
+    const scrollLeftSettled = await largeImgPage.evaluate(() => document.getElementById('viewerViewport').scrollLeft);
+    record('Document does not overflow with a 3000x2000 image loaded',
+      largeImgResult.docScrollW <= largeImgResult.docClientW ? 'PASS' : 'FAIL',
+      `scrollWidth=${largeImgResult.docScrollW}, clientWidth=${largeImgResult.docClientW}`);
+    record('#viewerViewport remains internally horizontally scrollable',
+      largeImgResult.viewerScrollW > largeImgResult.viewerClientW && scrollLeftSettled === 150 ? 'PASS' : 'FAIL',
+      `viewerScrollWidth=${largeImgResult.viewerScrollW}, viewerClientWidth=${largeImgResult.viewerClientW}, scrollLeftAfterSet=${scrollLeftSettled}`);
+    record('Large image is not resized to satisfy overflow containment',
+      largeImgResult.naturalW === largeImgResult.displayW ? 'PASS' : 'FAIL',
+      `naturalWidth=${largeImgResult.naturalW}, displayedClientWidth=${largeImgResult.displayW}`);
+    await largeImgPage.close();
 
     // ── Duplicate-ID check on the real app after an image import ──
     const dupPage = await browser.newPage({ viewport: { width: 1024, height: 900 } });
