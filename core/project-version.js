@@ -8,12 +8,12 @@
  * place that needs editing to bump the displayed version.
  */
 export const AI_WORKFLOW_VERSION = {
-  version: 'v1.1.8',
-  epic: 'EPIC 2E-H',
-  label: 'AI Workflow v1.1.8 (EPIC 2E-H)',
-  title: 'Lightroom Mapping V2 — Isolated Visual Preview Rendering',
-  status: 'Legacy Active · Browser Preview Available · V2 Non-Production · XMP Unchanged',
-  statusLine: 'Legacy Active · Browser Preview Available · V2 Non-Production · XMP Unchanged',
+  version: 'v1.1.9',
+  epic: 'EPIC 2E-I',
+  label: 'AI Workflow v1.1.9 (EPIC 2E-I)',
+  title: 'Lightroom Mapping V2 — Interactive Before/After Visual Comparison',
+  status: 'Legacy Active · Interactive Browser Preview Available · V2 Non-Production · XMP Unchanged',
+  statusLine: 'Legacy Active · Interactive Browser Preview Available · V2 Non-Production · XMP Unchanged',
   upgradedSystems: [
     'Reference Color Intelligence',
     'Photographer Intent Intelligence',
@@ -36,6 +36,12 @@ export const AI_WORKFLOW_VERSION = {
     'Isolated Visual Preview Render Plan',
     'Legacy Browser Preview Rendering',
     'Controlled V2 Browser Preview Rendering',
+    'Interactive Before/After Split Viewer',
+    'Legacy-left / Controlled-V2-right Comparison',
+    'One-time Display Canvas Normalization',
+    'Strict Aspect-Ratio Alignment Tolerance',
+    'CSS-only Interactive Slider Movement',
+    'Interactive Safety-Anomaly Blocking',
     'Approximate Browser Preview (Non-Production)',
     'Rollback-ready Legacy Fallback',
     'Legacy Mapping Still Active',

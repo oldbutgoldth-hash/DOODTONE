@@ -356,3 +356,16 @@ global `overflow-x: hidden` on `html`/`body`. All 31 reproducible smoke
 tests pass. The internal 1:1 image-scrolling feature remains fully
 functional and unresized. Focus visibility, pointer behavior, and keyboard
 behavior are all verified. No blocking defect remains.
+
+---
+
+## Phase D Closeout Note
+
+This report's "Build/Version Tested" (Section 2) correctly reflects
+**v1.1.8 (EPIC 2E-H)**, since project version metadata was intentionally
+not updated during Phase C/C-F/C-F2 per instruction. The project version
+was subsequently updated to **v1.1.9 (EPIC 2E-I)** during EPIC 2E-I Phase
+D (Release Closeout) — see `docs/project/18_EPIC_2E_I_FINAL_QA_REPORT.md`
+for the version-1.1.9 final release audit, which re-ran this report's
+underlying smoke test fresh against the updated codebase (still 31/31
+PASS).

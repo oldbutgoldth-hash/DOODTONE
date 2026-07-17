@@ -753,3 +753,84 @@ testing remain outstanding; exact XMP semantic regression still
 requires a dedicated comparison tool (byte-length/schema/substring
 checks were used instead); Side-by-Side/Review/Render-Plan approval
 never activates V2 in any way.
+
+---
+
+## EPIC 2E-I — Interactive Before/After Visual Comparison (v1.1.9)
+
+**Status: complete.** Adds a read-only, browser-side split-comparison
+viewer on top of the existing Legacy/Controlled-V2 approximate browser
+previews. Legacy visible on the left, Controlled V2 on the right; split
+0% = Controlled V2 fills the viewport, 100% = Legacy fills the viewport,
+50% = half/half. Comparison is browser-preview-only — never claims
+Lightroom or Adobe Camera Raw parity.
+
+**Core mechanics:**
+- CSS-only slider movement (`clip-path` + custom property) — zero
+  `drawImage`/`getImageData` during drag, instrumented and verified.
+- Pixel copy happens exactly **once** per newly-bound analysis
+  generation, never on every state message or badge update.
+- Strict aspect-ratio alignment tolerance: **0.1%** (tightened from an
+  initial, too-permissive 2% found during development). Materially
+  mismatched geometry blocks interaction rather than stretching it.
+- A single shared pure function (`deriveInteractiveBeforeAfterStateV2`)
+  is the sole state-priority ruleset, used both by the controller
+  internally and by `ui/app.js`'s pre-bind path — never two divergent
+  copies of the priority logic.
+- **Safety anomalies always block interaction**, even before any preview
+  canvas is bound: `selectedProductionSource === "v2"`,
+  `v2Contradictory === true`, `allowExport === true`, or
+  `allowProductionWrite === true`. Missing (not contradictory) evidence
+  only shows a neutral advisory, never blocks and never shows as success.
+- Source canvases are read-only (verified via pixel sampling
+  before/after every bind); the Interactive viewer never mutates them.
+- Hostile-getter and malformed-input safety verified extensively (always-
+  throw and throw-on-second-read getters at every boundary; HTML/script-
+  injection warnings render as safely-escaped text; circular warning
+  objects safely dropped; repeated `dispose()` is idempotent).
+
+**V2 remains strictly non-production:** no Apply, Export, Download, or
+Activate-V2 control exists anywhere in the Interactive viewer.
+`selectedProductionSource` remains **hard-coded `"legacy"`** in
+`core/preview-rendering/visual-preview-render-plan-v2.js` — confirmed via
+direct source inspection (including that file's own documenting comment)
+that there is no code path by which Controlled V2 or the Interactive
+viewer can influence what gets written to production. XMP export remains
+byte-identical (2962 bytes) to the pre-EPIC-2E-I baseline.
+
+**Production isolation:** an exhaustive project-wide search for
+`splitPercent`/`interactiveBeforeAfter`/`displayDimensionsNormalized`/
+`legacyStatus`/`v2Status` outside `ui/`/`docs/`/`qa/` found **zero**
+matches anywhere under `core/`.
+
+**Files:**
+- `ui/interactive-before-after-controller-v2.js` — state machine,
+  pixel-copy, pointer/RAF/generation lifecycle, alignment, safety.
+- `ui/interactive-before-after-renderer-v2.js` — pure DOM builder/updater.
+- `ui/app.js` (`_syncInteractiveBeforeAfter`) — safe integration glue.
+- `core/project-version.js` — bumped to v1.1.9 (EPIC 2E-I); this remains
+  the single place to edit to change the displayed version badge.
+
+**Current manual QA limitations (honest, not fixed in this EPIC):**
+physical mobile/touch device testing, real screen-reader software
+(NVDA/JAWS/VoiceOver), and real photographic-content testing (portrait/
+wedding/event photographs) were all **NOT TESTED** — every fixture used
+in this EPIC's QA was a synthetic flat-color or simple-shape test image
+(an earlier, imprecise "real image" labeling of these synthetic fixtures
+was found and honestly corrected during EPIC 2E-I-C-F). Exhaustive
+field-by-field semantic XMP comparison (beyond byte-length) also remains
+NOT TESTED. A pre-existing, unrelated full-page mobile horizontal-
+overflow defect (root-caused to a Material Symbols icon-font fallback and
+a topbar responsive-breakpoint gap, neither related to the Interactive
+viewer itself) was found and fixed at its actual source during this
+EPIC's closeout.
+
+**Release version:** 1.1.9. **Release decision:** CONDITIONAL PASS — core
+release safe, only the explicitly-listed manual/physical/real-content QA
+above remains outstanding, with no known defect in any of those areas.
+
+**Next EPIC recommendation:** EPIC 2E-J — Interactive Preview Observation
+& User Feedback Layer (optional local-only "Legacy preferred / V2
+preferred / No visible difference" observation capture; UI-local only, no
+production activation, no Mapping/XMP write, no automatic model
+decision). Not implemented yet.
