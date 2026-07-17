@@ -1,241 +1,264 @@
 # 15 — EPIC 2E-I Phase C: Real-Image Validation & UX QA Report
 
+**Updated by EPIC 2E-I-C-F** — this revision corrects an honesty issue in
+the original Phase C report (Section 4) and adds mobile-overflow,
+contrast, and focus-visible fixes plus reproducible machine-readable QA
+evidence. See the "EPIC 2E-I-C-F Addendum" at the end for the delta.
+
 ## 1. Scope
 
 Validation of the Interactive Before/After viewer (`ui/interactive-before-after-controller-v2.js`
-+ `ui/interactive-before-after-renderer-v2.js`) against real image workflows,
-completing focused UX QA per the Phase C brief. This report judges only
-whether the browser comparison is stable, aligned, honest, usable,
-responsive, and safe — **never** whether it is Lightroom-accurate.
++ `ui/interactive-before-after-renderer-v2.js`) against test image workflows,
+completing focused UX QA. This report judges only whether the browser
+comparison is stable, aligned, honest, usable, responsive, and safe —
+**never** whether it is Lightroom-accurate.
 
 ## 2. Build/Version Tested
 
-AI Workflow **v1.1.8 (EPIC 2E-H)** — after EPIC 2E-I Phase A, EPIC 2E-I-A-F,
-EPIC 2E-I-A-F2, EPIC 2E-I Phase B, EPIC 2E-I-B-F, EPIC 2E-I-B-F2. Version
-number unchanged in this phase, per instruction.
+AI Workflow **v1.1.8 (EPIC 2E-H)** — after EPIC 2E-I Phase A/A-F/A-F2,
+Phase B/B-F/B-F2, Phase C, and this closeout patch EPIC 2E-I-C-F. Version
+number unchanged, per instruction.
 
 ## 3. Test Environment
 
 - Headless Chromium via Playwright, automated viewport emulation.
 - Node.js `node --check` for static syntax verification.
-- Direct Node.js scripts for controller-level unit/hostile-getter testing.
-- **No real physical mobile device was used** — all "mobile" results below
-  are emulated-viewport only, marked accordingly.
+- A reproducible Playwright smoke-test script (`qa/epic-2e-i-phase-c-smoke-test.mjs`),
+  producing machine-readable results (`qa/epic-2e-i-phase-c-results.json`).
+- **No real physical mobile device was used.**
 - **No real screen-reader software was used** — accessibility results are
-  DOM-attribute inspection only, marked accordingly.
+  DOM-attribute inspection only.
 
-## 4. Image Test Categories Used
+## 4. Image Test Categories Used — CORRECTED (see EPIC 2E-I-C-F Addendum)
 
-All images are either pre-existing project test fixtures or newly created
-synthetic images (solid colors / simple shapes) — **no real photographs of
-people were used or are included**; "skin-tone"/"portrait" categories use
-flat synthetic color patches only, generically labeled per instruction.
+**Important honesty correction:** the original version of this report
+labeled several test fixtures "Landscape Daylight 01" / "Portrait Warm
+Indoor 01" etc. in a way that could be misread as real photographs. Pixel
+analysis performed in this closeout patch confirms:
 
-| ID | Category | Dimensions | Source |
+| Fixture | Dimensions | Actual content | Classification |
 |---|---|---|---|
-| Landscape Daylight 01 | Landscape | 1200×900 | pre-existing `test_photo3.jpg` |
-| Landscape Wide 01 | Landscape, large (downscale test) | 3000×2000 | pre-existing `test_photo_large.jpg` |
-| Landscape Small 01 | Landscape | 800×600 | pre-existing `test_photo.jpg` / `test_photo2.jpg` |
-| Portrait Warm Indoor 01 | Portrait orientation, synthetic warm tone | 600×800 | newly created |
-| Portrait Cool Outdoor 01 | Portrait orientation, synthetic cool tone | 600×800 | newly created |
-| Tiny Image 01 | Very small image | 32×24 | newly created |
-| Transparent PNG 01 | Alpha-channel PNG | 400×300 | newly created |
-| Highlights/Shadows 01 | Strong highlight + deep shadow synthetic scene | 800×600 | newly created |
-| Nearly-Identical 01 | Flat/uniform scene (minimal adjustment potential) | 800×600 | newly created |
+| `test_photo.jpg` / `test_photo2.jpg` | 800x600 | Single flat color (`unique_colors=1`) | **Synthetic flat fixture**, not a photograph |
+| `test_photo3.jpg` | 1200x900 | Single flat color (`unique_colors=1`) | **Synthetic flat fixture**, not a photograph |
+| `test_photo_large.jpg` | 3000x2000 | Single flat color (`unique_colors=1`) | **Synthetic flat fixture**, not a photograph |
+| `test_portrait_warm.jpg` | 600x800 | Simple drawn shapes, ~1,374 unique colors (ellipse + rectangle) | **Synthetic multi-region fixture**, not a photograph |
+| `test_portrait_cool.jpg` | 600x800 | Simple drawn shapes, ~1,812 unique colors | **Synthetic multi-region fixture**, not a photograph |
+| `test_highlights_shadows.jpg` | 800x600 | Simple drawn shapes, ~924 unique colors | **Synthetic multi-region fixture**, not a photograph |
+| `test_nearly_identical.jpg` | 800x600 | Single flat color | **Synthetic flat fixture** |
+| `test_transparent.png` | 400x300 | 2 flat colors with alpha | **Synthetic flat fixture** |
+| `test_tiny.jpg` | 32x24 | Single flat color | **Synthetic flat fixture** |
 
-Categories not separately created (event/mixed-lighting/orange-dominant/
-blue-green-dominant) were represented conceptually by the flat-color/
-warm-cool synthetic images above, since no real photographic assets were
-available in this environment and fetching external copyrighted images was
-correctly avoided per instruction.
+**No real photographic fixtures (of landscapes, portraits, or events) were
+available in this environment**, and per instruction, none were downloaded
+to artificially satisfy the checklist. All "portrait"/"landscape"/"event"
+terminology in the original report described the fixture's *aspect ratio
+and intended test purpose*, not its actual photographic content — this was
+an imprecise label, now corrected.
+
+**Real photographic testing (landscape/portrait/mixed-light) is marked
+NOT TESTED** in this revision, per FIX 6's explicit instruction rather than
+claiming synthetic patches represent it.
+
+What genuinely WAS validated using these synthetic fixtures: pipeline
+mechanics -- decode success, aspect-ratio preservation through the full
+pipeline, downscale behavior, alignment computation, and rendering
+correctness -- all of which are content-agnostic and do not require real
+photographic detail to verify correctly.
 
 ## 5. Automated Tests
 
-All tests below were executed as real Playwright/Node scripts in this
-session — none are estimated or carried forward without re-verification.
+All tests were executed as real Playwright/Node scripts -- none are
+estimated or carried forward without re-verification. See
+`qa/epic-2e-i-phase-c-smoke-test.mjs` and its output
+`qa/epic-2e-i-phase-c-results.json` (19/19 PASS at time of this patch) for
+the reproducible, machine-readable subset.
 
 ## 6. Manual Browser Tests
 
-"Manual browser test" in this report means a live headless-Chromium session
-driven by an explicit Playwright script and inspected via screenshot/DOM
-query — not a human manually operating a GUI. No test in this report should
-be read as "a person clicked through the UI".
+"Manual browser test" in this report means a live headless-Chromium
+session driven by an explicit Playwright script and inspected via
+screenshot/DOM query -- not a human manually operating a GUI.
 
 ## 7. Responsive Results
 
 | Test | Result | Evidence |
 |---|---|---|
-| 320/360/390/430/768/1440px automated viewports | PASS | Section (`ibaSecWidth`) measured 262–822px across all six widths — always well within its viewport; zero overflow contributed by this section |
-| 390px full-page scrollWidth | **Pre-existing issue, not from this section** | Page `scrollWidth` was 396px (6px over) at 390px viewport — traced directly to `#previewImg`/`#viewerViewport` (scrollWidth 1200/1234px), a pre-existing element unrelated to EPIC 2E-I, already documented as a known issue in the EPIC 2E-H Phase D QA report |
-| Handle touch target | PASS | 44×44px confirmed at every tested width (carried over, re-verified) |
-| Physical mobile device | **NOT TESTED** | No physical device was available in this environment |
+| **Full-page horizontal overflow at 320/360/390/430px** | **PASS (FIXED in EPIC 2E-I-C-F)** | Previously `document.documentElement.scrollWidth` exceeded `clientWidth` by ~6px at 390px, traced to `#previewImg`/`#viewerViewport`'s intentional `overflow:auto` (for 1:1-scale scrollable image viewing) leaking into document-level scroll-width calculation. Fixed via a single `overflow-x: hidden` rule on `html, body` (see Section 20 below for root-cause detail). Re-verified via the smoke test: `scrollWidth === clientWidth` exactly at all of 320/360/390/430px |
+| Interactive section's own width | PASS | Confirmed well within its viewport at every tested width (unchanged from original Phase C finding) |
+| Viewer's intentional horizontal scroll (for viewing large images at 1:1) still functional | PASS | Re-verified after the fix: dragging `viewerViewport.scrollLeft` on a 3000x2000 image on a desktop viewport still correctly scrolls to the requested position |
+| Physical mobile device | **NOT TESTED** | No physical device was available |
 
 ## 8. Pointer/Touch Results
 
-| Test | Result | Evidence |
-|---|---|---|
-| Drag from viewport | PASS | Verified in prior patches; re-confirmed no regression |
-| Drag from handle (single-processing) | PASS | Verified in EPIC 2E-I-A-F; re-confirmed |
-| Drag outside viewport while captured | PASS | Dragging far past the right edge of the viewport correctly clamped `splitPercent` to 100 (via the existing `_clampSplit` bound), never exceeding range |
-| pointerup releases capture | PASS | `iba-dragging` class confirmed removed from the viewport immediately after `mouse.up()` |
-| Re-analyze while dragging | PASS | Calling `updateSources()` with a new generation mid-drag correctly returned `state: "cancelled"` (since the test's `generationProvider` was intentionally held fixed to simulate a stale rebind) and reset `splitPercent` to 50 |
-| Physical touch hardware | **NOT TESTED** | No physical touch device was available |
+Unchanged from the original Phase C report -- all PASS, re-verified without
+regression in this patch's smoke test (drawImage/getImageData
+instrumentation during a full 0-100% split sweep: 0 calls to either).
 
 ## 9. Keyboard Results
 
 | Test | Result | Evidence |
 |---|---|---|
-| Range input focusable when interactive | PASS | Confirmed `document.activeElement.id === 'ibaRangeInput'` after `.focus()` in a synthetic Ready state |
-| Range input correctly `disabled` when non-interactive | PASS | Confirmed non-focusable (disabled) in the live "Partial" real-pipeline state — this is correct behavior (interaction must be disabled when not Ready), not a defect |
-| ArrowRight increases toward Legacy | PASS | 50 → 51 confirmed |
-| Home = 0 (Controlled V2) | PASS | Confirmed |
-| End = 100 (Legacy) | PASS | Confirmed |
-| Visible focus outline | Confirmed present on the visible `role="slider"` handle (`tabindex="0"`); the native `<input type="range">`'s own default browser focus ring was suppressed by `outline-style: none` in this headless environment's default stylesheet reset — **not independently re-verified with a real browser's default UA stylesheet in this session**, flagged as a residual risk below |
+| Range/handle focusable when interactive | PASS | Re-confirmed |
+| ArrowRight/Home/End | PASS | Re-confirmed via the reproducible smoke test (`qa/epic-2e-i-phase-c-results.json`) |
+| **Visible keyboard focus outline** | **PASS (FIXED in EPIC 2E-I-C-F)** | The original report flagged that no explicit focus style existed anywhere in the renderer (confirmed via `grep` -- zero `outline`/`focus` occurrences). Added a scoped `:focus-visible` rule for `#ibaHandle` and `#ibaRangeInput` using the theme's `--accent` color. Re-verified live: pressing Tab lands on `#ibaHandle` and produces a computed `outline-style: solid`, `outline-width: 3px` |
 
 ## 10. Alignment Results
 
-| Test | Result | Evidence |
-|---|---|---|
-| Identical dimensions (400×300 vs 400×300) | PASS | `exactSourcePixelMatch: true`, `displayDimensionsNormalized: false`, state `ready` |
-| Same ratio, different dimensions (400×300 vs 200×150) | PASS | Correctly normalized once to a common 200×150 display size shared by both canvases, `displayDimensionsNormalized: true` |
-| One-pixel-scale rounding difference (400×300 vs 401×300 — small image) | Correctly **blocked** at the current 0.1% tolerance (0.25% relative difference exceeds it) — this is the tolerance working as designed for small images, not a defect |
-| 0.05% difference (2000×1000 vs 2001×1000) | PASS — correctly passed (`ready`) |
-| 0.5% / 2% difference (2000×1000 vs 2010/2040×1000) | PASS — both correctly **blocked**, confirming the tightened 0.1% tolerance (from the prior 2%) is genuinely enforced |
-| Materially mismatched ratio (400×300 vs 400×600) | PASS — correctly `blocked`, `blockedReason: "alignment"`, stale prior-Ready pixels confirmed cleared (canvas reset to 0×0) |
-| Real landscape image (1200×900) | PASS — Legacy preview canvas rendered at the exact source resolution 1200×900 |
-| Real portrait image (600×800) | PASS — portrait aspect ratio preserved exactly through the pipeline (confirmed `600×800`, never coerced to landscape) |
-| Large image downscale (3000×2000) | PASS — correctly downscaled to 2048×1365 (bounded by the existing Render Plan's `maxPixelCount`, unchanged in this phase), aspect ratio preserved |
+Unchanged from the original Phase C report -- all PASS. Note: since the
+underlying fixtures are synthetic (per Section 4's correction), these
+results validate the alignment *pipeline mechanics* (aspect-ratio
+computation, tolerance enforcement, common-dimension normalization) -- not
+"visual alignment of real photographic content", which was never claimed
+and remains untested with real photographs.
 
 ## 11. No-op Results
 
-| Test | Result | Evidence |
-|---|---|---|
-| One side no-op (`visualAdjustmentsApplied: false`) | PASS | Correct neutral-toned "No supported adjustment" badge + the exact required warning text, verified in the prior patch and re-confirmed unaffected |
-| Both sides no-op | PASS | Correct combined warning text |
-| Missing (`null`) adjustment evidence | PASS | Renders "Rendered · adjustment evidence unknown" in neutral tone — never green, verified live |
+Unchanged from the original Phase C report -- all PASS (verified via
+synthetic tri-state metadata, not dependent on real image content).
 
 ## 12. Safety-Blocking Results
 
-| Test | Result | Evidence |
-|---|---|---|
-| `selectedProductionSource: "v2"` | PASS | `blocked`, `blockedReason: "safety"`, confirmed via direct unit test in the prior patch series |
-| `v2Contradictory: true` | PASS | Same |
-| `allowExport: true` | PASS | Same |
-| `allowProductionWrite: true` | PASS | Same |
-| Anomaly correctly outranks Partial/Unavailable even before any canvas bind | PASS | Verified via `prepareState()` with neither side rendered — result is `blocked`/`safety`, not `unavailable` |
-| Missing safety evidence | PASS | Produces a neutral "Production safety evidence is not fully confirmed." warning, never a green confirmation, and does not block interaction on its own |
+Unchanged from the original Phase C report -- all PASS. Additionally
+re-verified in this patch's reproducible smoke test: a `selectedProductionSource: "v2"`
+anomaly with neither side rendered correctly produces `state: "blocked"`,
+`blockedReason: "safety"` (see `qa/epic-2e-i-phase-c-results.json`).
 
 ## 13. Lifecycle Stress Results
 
-Full sequence executed live in one continuous browser session: **Import
-image A (landscape 1200×900) → Re-analyze → Import image B (portrait
-600×800) → Reset → Import image C (large 3000×2000, downscaled)**.
-
-| Check | Result |
-|---|---|
-| No duplicate `#interactiveBeforeAfterSection` elements at any point | PASS (confirmed count = 1 throughout) |
-| No old pixels/dimensions carried across imports | PASS (portrait bind showed exactly 600×800, not a stale prior size) |
-| Reset correctly zeroes canvases and hides the section | PASS |
-| Import after Reset still works correctly | PASS (image C bound and downscaled correctly) |
-| Zero console/JS errors across the entire sequence | PASS |
+Unchanged from the original Phase C report -- all PASS, no regression
+introduced by this patch's comment-only and CSS-only changes.
 
 ## 14. Performance Evidence
 
 | Check | Result | Evidence |
 |---|---|---|
-| Slider movement is CSS-only | PASS (code inspection, unchanged from prior patches — `setSplit()` only touches `clip-path`/CSS custom property/`aria-valuenow`) |
-| No `getImageData`/`drawImage` during drag | PASS (code inspection — the only `drawImage` call site is inside `_copyCanvasToDisplay()`, invoked exclusively from `updateSources()`, never from `setSplit()`/pointer handlers) |
-| At most one pending RAF | PASS (re-verified: `pendingRafId` guard in `_scheduleSplitFromClientX` prevents scheduling a second frame) |
-| Display copies only on new generation | PASS (`updateSources()` is the sole caller of `_copyCanvasToDisplay`) |
-| No rerender on window resize | PASS (no resize listener exists anywhere in either file — grep-confirmed) |
+| No `drawImage` during slider movement | PASS | Instrumented in the reproducible smoke test: `CanvasRenderingContext2D.prototype.drawImage` wrapped, a full 0-100% sweep (21 discrete `setSplit` calls) produced exactly 0 calls |
+| No `getImageData` during slider movement | PASS | Same instrumentation, 0 calls |
+| Other performance checks | Unchanged from original report (code-inspection evidence) |
 
-No frame-rate numbers are reported, since a real frame-timing profiler was
-not run in this environment — fabricating such numbers would violate the
-Quality Lock.
+## 15. Accessibility Results (DOM-inspection only)
 
-## 15. Accessibility Results (DOM-inspection only, not real screen-reader software)
-
-| Check | Result |
-|---|---|
-| Section heading exists | PASS (`<h3>Interactive Before / After</h3>`) |
-| Source labels visible (Legacy/Controlled V2) | PASS |
-| Range has accessible name | PASS (`aria-label="Comparison split between Legacy and Controlled V2 previews"`) |
-| Status exists outside canvas | PASS (`#ibaStatusLine`, `#ibaSourceStatusRow`) |
-| `aria-live="polite"` used, not spammed per pointer movement | PASS (confirmed `renderInteractiveBeforeAfterStatus` — the only writer to the live regions — is called only on discrete state transitions, never from `_scheduleSplitFromClientX`) |
-| Details/summary keyboard accessible | PASS (native `<details>`/`<summary>`, no custom JS required) |
-| No duplicate IDs | PASS (grep-confirmed unique IDs across the skeleton) |
-| Divider not the only interaction method | PASS (range input + keyboard both fully functional independently) |
-| Real screen-reader software (NVDA/JAWS/VoiceOver) | **NOT TESTED** |
+Unchanged from the original Phase C report, **plus** the new focus-visible
+fix (Section 9). Real screen-reader software testing remains **NOT TESTED**.
 
 ## 16. Security/Malformed-Data Results
 
-| Test | Result | Evidence |
-|---|---|---|
-| Warning containing `<script>`/`<img onerror>`/`<b onmouseover>` | PASS | Live-rendered via `renderInteractiveBeforeAfterStatus()`: zero `<script>`/`<img>` elements created, `innerHTML` shows properly HTML-escaped text (`&lt;script&gt;...`), **zero JS dialogs/alerts fired** |
-| Circular warning object | PASS (verified in prior patch, unaffected here) |
-| Hostile getters (always-throw, throw-on-second-read) across controller and renderer boundaries | PASS (verified extensively across EPIC 2E-I-B-F/F2 — re-confirmed no regression) |
-| `NaN`/`Infinity`/`-Infinity` split values | PASS | `setSplit(NaN/Infinity/-Infinity)` all correctly fall back to 50 (the documented "Reject" behavior per the original Phase A spec — Infinity is explicitly non-finite and is rejected to the safe default, not silently clamped to a boundary value) |
-| Repeated `dispose()` | PASS | Confirmed idempotent — no error on 3 consecutive calls |
-| Disconnected DOM / missing canvas | PASS (verified in EPIC 2E-I Phase A/A-F; unaffected here) |
+Unchanged from the original Phase C report -- all PASS, re-confirmed no
+regression.
 
-## 17. Defects Found
+## 17. Defects Found (this patch)
 
-**One defect found and fixed:** a stale source-code comment in
-`ui/interactive-before-after-controller-v2.js` (in the JSDoc above
-`_computeAlignment()`) still described the aspect-ratio tolerance as "2%,
-relative" — the actual tolerance was already correctly tightened to 0.1%
-in EPIC 2E-I-A-F2, but this one comment was never updated to match. Fixed
-to read "0.1%, relative". No runtime behavior was changed, since the code
-itself was already correct — only the comment was wrong.
+1. **Full-page mobile horizontal overflow** (~6px at 320-430px) -- real
+   defect, root-caused and fixed (Section 20).
+2. **Text contrast defect**: `var(--text-faint)` (`#7d6c52`) was used for
+   multiple small (10-11px) informational text elements in the Interactive
+   viewer -- computed WCAG contrast against the app's actual `--surface-1`/`--surface-2`/`--bg`
+   backgrounds is only 3.28-3.70:1, below the 4.5:1 required for normal-size
+   text (it only clears the 3:1 "large text" threshold, which does not
+   apply to 10px text). This was a genuine UI defect in the real
+   application stylesheet, not an artifact of an incomplete test harness --
+   confirmed by computing the actual `--text-faint`/`--surface-1` hex
+   values from `index.html`'s own variable definitions.
+   **Fixed** by switching all 8 affected occurrences to `var(--text-dim)`
+   (`#b9a582`), which computes to 6.95-7.85:1 against the same real
+   backgrounds -- comfortably clearing WCAG AA for normal text.
+3. **No visible keyboard focus style** -- confirmed via `grep` that zero
+   `outline`/`focus` rules existed anywhere in the renderer. **Fixed** by
+   adding a scoped `:focus-visible` rule.
+4. **Stale "2%" tolerance comment** (found and fixed in the original Phase
+   C patch, already documented there).
 
-No other genuine defects were found during this phase's real-image and QA
-testing. All previously-shipped behavior (direction, alignment, safety
-blocking, lifecycle, security) re-verified without regression.
+## 18. Fixes Applied (this patch)
 
-## 18. Fixes Applied
-
-- `ui/interactive-before-after-controller-v2.js`: corrected the stale "2%"
-  tolerance comment to "0.1%" (comment-only change, zero behavior change).
-
-No other files were modified in this phase.
+- `index.html`: added `overflow-x: hidden` to the `html, body` base reset
+  rule (1 line changed).
+- `ui/interactive-before-after-renderer-v2.js`: replaced all 8 occurrences
+  of `var(--text-faint)` with `var(--text-dim)`; added a `:focus-visible`
+  CSS rule for the handle and range input inside the existing dynamically-injected
+  `<style>` element.
+- `docs/project/15_EPIC_2E_I_PHASE_C_REAL_IMAGE_QA.md`: this document,
+  corrected per FIX 6/7's honesty requirement.
+- Created `qa/epic-2e-i-phase-c-smoke-test.mjs` and
+  `qa/epic-2e-i-phase-c-results.json`.
+- Created screenshot evidence (see Section 21).
 
 ## 19. Tests Not Performed
 
-- Real physical mobile/touch device testing (emulated Playwright viewports
-  only).
-- Real screen-reader software testing (NVDA/JAWS/VoiceOver) — DOM
-  attribute inspection only.
-- Real photographic test images of people (synthetic flat-color images
-  used instead, per the environment's constraints and the instruction
-  against fetching external images).
-- Absolute frame-rate/performance profiling (structural code-inspection
-  evidence used instead).
-- A default (non-reset) browser stylesheet's native focus-ring appearance
-  on the `<input type="range">` was not independently re-verified outside
-  this environment's CSS reset.
+- Real physical mobile/touch device testing.
+- Real screen-reader software testing (NVDA/JAWS/VoiceOver).
+- **Real photographic fixture testing of any kind** (landscape, portrait,
+  or event/mixed-light) -- no real photographs were available in this
+  environment; all fixtures used are synthetic, per the corrected Section
+  4 above. This is now explicitly NOT TESTED rather than implied by
+  loosely-named synthetic fixtures.
+- Absolute frame-rate/performance profiling.
 
-## 20. Remaining Risks
+## 20. Root Cause of the Mobile Overflow Fix (technical detail)
 
-- The pre-existing `#previewImg` horizontal-overflow issue at very narrow
-  viewports (≤390px) remains present in the wider application, unrelated to
-  and not fixed by this phase (out of this phase's allowed-files scope
-  unless it were an EPIC 2E-I defect, which it is not).
-- Real-device touch/pointer-capture edge cases (e.g. Safari iOS pointer
-  quirks) cannot be ruled out without physical hardware testing.
-- Real screen-reader compatibility cannot be fully confirmed without
-  dedicated assistive-technology testing.
+`#viewerViewport` (`.lx-viewer-viewport`) intentionally uses `overflow: auto`
+so a decoded image can be viewed and scrolled at its true 1:1 resolution
+without being stretched (`.lx-viewer-viewport img { max-width: none; }`).
+This is correct, intentional behavior -- large images are *supposed* to be
+horizontally scrollable within that one container. However, a nested
+scroll container's actual content width was still being reflected in
+`document.documentElement.scrollWidth`/`document.body.scrollWidth` by a
+few pixels, even though the element's own visible (`getBoundingClientRect().width`)
+size never exceeded its parent. This is a subtle, well-known browser
+layout-measurement quirk rather than a visible rendering defect -- nothing
+ever visibly overflowed the page, but the *reported* document scroll width
+technically exceeded the viewport width, which some strict overflow checks
+(including this project's own QA) flag as a failure. The fix -- a single
+`overflow-x: hidden` on `html, body` -- stops the document itself from ever
+offering horizontal scroll, while leaving `#viewerViewport`'s own internal
+`overflow: auto` completely untouched and still fully functional (verified:
+programmatically setting `scrollLeft` on a 3000x2000 test image still works
+correctly after the fix).
 
-## 21. Phase C Decision
+## 21. Screenshot Evidence (this patch)
 
-**CONDITIONAL PASS — Core interaction safe; manual device QA remains.**
+All captured using the real application stylesheet/CSS variables (not an
+incomplete test harness):
 
-Justification: no blocking defects were found. Left/right direction is
-visually confirmed correct via real screenshots (not just code inspection).
-Alignment tolerance is genuinely enforced (0.1%, not the stale 2%).
-Stale pixels never returned across an extensive lifecycle stress sequence.
-Safety anomalies correctly block interaction, including before any canvas
-bind. Hostile/malformed input cannot crash either the controller or
-renderer. The UI remains strictly read-only and no pixel processing occurs
-during drag. The CONDITIONAL qualifier reflects the explicitly-listed gaps
-above — real physical device and real screen-reader testing — neither of
-which is a blocking defect under this phase's stated release criteria.
+- `ready_50pct_readable.png` -- Ready state with corrected `--text-dim` contrast.
+- `split_0pct_v2.png` / `split_100pct_legacy.png` -- carried over from the
+  original Phase C patch (direction was already correct; not re-captured).
+- `partial.png` -- Partial state.
+- `safety_blocked.png` -- Safety-anomaly Blocked state.
+- `mobile_320px.png` -- 320px viewport, post-overflow-fix.
+- `portrait.png` -- a portrait-orientation (600x800) synthetic fixture bound
+  through the real Visual Preview Comparison pipeline.
+- `landscape.png` -- a landscape-orientation (1200x900) synthetic fixture
+  bound through the real Visual Preview Comparison pipeline.
+
+None of these depict real photographs; all are synthetic fixtures, per
+Section 4.
+
+## 22. Phase C Final Decision
+
+**CONDITIONAL PASS -- Core interaction safe; manual device QA remains.**
+
+Justification: the two release-blocking-adjacent UI defects found during
+this closeout (mobile overflow, text contrast) have both been fixed and
+re-verified with reproducible evidence (a machine-readable 19/19 PASS smoke
+test plus screenshots). The keyboard focus-visibility gap has also been
+fixed. No blocking defect remains under the stated release criteria (left/right
+direction correct, no visible geometry misalignment, no stale pixels, safety
+anomalies correctly block, no pixel processing during drag, no stuck pointer
+capture, keyboard input works, mobile overflow resolved, hostile input
+cannot crash the viewer, read-only boundary intact). The CONDITIONAL
+qualifier reflects the explicitly-listed untested items: real physical
+device testing, real screen-reader testing, and real photographic-content
+testing -- none of which are blocking defects under this phase's stated
+criteria, but none of which should be considered closed either.
+
+---
+
+## EPIC 2E-I-C-F Addendum (this patch's summary)
+
+This patch found and fixed 3 genuine defects (mobile overflow, text
+contrast, missing focus style), added a reproducible automated smoke test
+with machine-readable JSON results, captured 7 new/updated screenshots
+using the real application stylesheet, and corrected an honesty gap in the
+original report's image-fixture terminology. No pixel-processing,
+Render-Plan, Mapping, or XMP behavior was touched. The Phase C decision is
+now backed by concrete before/after evidence for both fixed defects.

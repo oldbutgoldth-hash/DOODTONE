@@ -1,0 +1,107 @@
+{
+  "suite": "EPIC 2E-I Phase C smoke test",
+  "generatedAt": "2026-07-17T09:46:58.866Z",
+  "summary": {
+    "total": 19,
+    "pass": 19,
+    "fail": 0,
+    "notTested": 0
+  },
+  "results": [
+    {
+      "test": "Ready state reachable",
+      "result": "PASS",
+      "evidence": "state=\"ready\""
+    },
+    {
+      "test": "Split 0% direction (V2 fills (no clip))",
+      "result": "PASS",
+      "evidence": "clip-path=\"inset(0px 0px 0px 0%)\""
+    },
+    {
+      "test": "Split 50% direction (half-split)",
+      "result": "PASS",
+      "evidence": "clip-path=\"inset(0px 0px 0px 50%)\""
+    },
+    {
+      "test": "Split 100% direction (Legacy fills (full clip))",
+      "result": "PASS",
+      "evidence": "clip-path=\"inset(0px 0px 0px 100%)\""
+    },
+    {
+      "test": "Partial state reachable",
+      "result": "PASS",
+      "evidence": "state=\"partial\""
+    },
+    {
+      "test": "Safety Blocked state (v2 production source anomaly)",
+      "result": "PASS",
+      "evidence": "state=\"blocked\", blockedReason=\"safety\""
+    },
+    {
+      "test": "Keyboard ArrowRight increases split",
+      "result": "PASS",
+      "evidence": "50 -> 51"
+    },
+    {
+      "test": "Keyboard Home = 0% (V2)",
+      "result": "PASS",
+      "evidence": "splitPercent=0"
+    },
+    {
+      "test": "Keyboard End = 100% (Legacy)",
+      "result": "PASS",
+      "evidence": "splitPercent=100"
+    },
+    {
+      "test": "No drawImage during slider movement",
+      "result": "PASS",
+      "evidence": "drawImage calls=0"
+    },
+    {
+      "test": "No getImageData during slider movement",
+      "result": "PASS",
+      "evidence": "getImageData calls=0"
+    },
+    {
+      "test": "No document horizontal overflow at 320px",
+      "result": "PASS",
+      "evidence": "scrollWidth=320, clientWidth=320"
+    },
+    {
+      "test": "No document horizontal overflow at 360px",
+      "result": "PASS",
+      "evidence": "scrollWidth=360, clientWidth=360"
+    },
+    {
+      "test": "No document horizontal overflow at 390px",
+      "result": "PASS",
+      "evidence": "scrollWidth=390, clientWidth=390"
+    },
+    {
+      "test": "No document horizontal overflow at 430px",
+      "result": "PASS",
+      "evidence": "scrollWidth=430, clientWidth=430"
+    },
+    {
+      "test": "No duplicate #interactiveBeforeAfterSection before any import",
+      "result": "PASS",
+      "evidence": "count=1"
+    },
+    {
+      "test": "No duplicate element IDs on page",
+      "result": "PASS",
+      "evidence": "total=224, unique=224"
+    },
+    {
+      "test": "No console/page errors on initial load",
+      "result": "PASS",
+      "evidence": "(none)"
+    },
+    {
+      "test": "Console errors across entire smoke test",
+      "result": "PASS",
+      "evidence": "(none)"
+    }
+  ]
+}

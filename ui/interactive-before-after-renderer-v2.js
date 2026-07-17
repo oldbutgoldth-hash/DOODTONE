@@ -50,7 +50,7 @@ function _safeArray(v) {
 }
 
 function badge(text, color) {
-  const safeColor = typeof color === 'string' && color ? color : 'var(--text-faint)';
+  const safeColor = typeof color === 'string' && color ? color : 'var(--text-dim)';
   return el('span', {
     style: `display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.04em;background:${safeColor}22;color:${safeColor};border:1px solid ${safeColor}44;overflow-wrap:anywhere`,
     text,
@@ -58,14 +58,14 @@ function badge(text, color) {
 }
 
 const STATE_COLOR = {
-  unavailable: 'var(--text-faint)',
-  waiting: 'var(--text-faint)',
-  preparing: 'var(--text-faint)',
+  unavailable: 'var(--text-dim)',
+  waiting: 'var(--text-dim)',
+  preparing: 'var(--text-dim)',
   ready: 'var(--success, green)',
   partial: 'var(--warn, orange)',
   blocked: 'var(--warn, orange)',
   failed: 'var(--danger, red)',
-  cancelled: 'var(--text-faint)',
+  cancelled: 'var(--text-dim)',
 };
 const STATE_LABEL = {
   unavailable: 'Unavailable',
@@ -150,7 +150,11 @@ export function ensureInteractiveBeforeAfterLayout(container) {
   // via the local `.iba-dragging` class below instead of a permanent
   // global `user-select: none`, so ordinary page text selection is
   // never affected outside an active drag.
-  const styleTag = el('style', { text: '.iba-viewport.iba-dragging{cursor:ew-resize;user-select:none;}' });
+  const styleTag = el('style', {
+    text: '.iba-viewport.iba-dragging{cursor:ew-resize;user-select:none;} '
+      + '#ibaHandle:focus-visible{outline:3px solid var(--accent, #4a9eff);outline-offset:2px;} '
+      + '#ibaRangeInput:focus-visible{outline:2px solid var(--accent, #4a9eff);outline-offset:2px;}',
+  });
   root.appendChild(styleTag);
 
   // Phase B: compact Legacy/V2/Alignment status summary — friendly
@@ -194,7 +198,7 @@ export function ensureInteractiveBeforeAfterLayout(container) {
   viewport.appendChild(el('div', { style: 'position:absolute;top:6px;left:6px;padding:2px 8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-weight:600;border-radius:2px;pointer-events:none', text: 'Legacy' }));
   viewport.appendChild(el('div', { style: 'position:absolute;top:6px;right:6px;padding:2px 8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-weight:600;border-radius:2px;pointer-events:none', text: 'Controlled V2' }));
 
-  const placeholder = el('div', { style: 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;text-align:center;font-size:11px;color:var(--text-faint);background:var(--surface-1)' });
+  const placeholder = el('div', { style: 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;text-align:center;font-size:11px;color:var(--text-dim);background:var(--surface-1)' });
   placeholder.id = 'ibaPlaceholder';
   placeholder.textContent = 'Waiting for the latest Legacy and V2 previews.';
   viewport.appendChild(placeholder);
@@ -202,25 +206,25 @@ export function ensureInteractiveBeforeAfterLayout(container) {
   root.appendChild(viewport);
 
   // Phase B: concise split guidance, always visible.
-  root.appendChild(el('div', { style: 'font-size:10px;color:var(--text-faint)', text: 'Drag the divider or use the slider below.' }));
+  root.appendChild(el('div', { style: 'font-size:10px;color:var(--text-dim)', text: 'Drag the divider or use the slider below.' }));
 
   // Accessible keyboard-operable range control (kept visible, not hidden).
   const rangeWrap = el('div', { style: 'display:flex;align-items:center;gap:8px' });
-  rangeWrap.appendChild(el('span', { style: 'font-size:10px;color:var(--text-faint);white-space:nowrap', text: '0% V2' }));
+  rangeWrap.appendChild(el('span', { style: 'font-size:10px;color:var(--text-dim);white-space:nowrap', text: '0% V2' }));
   const range = el('input', {
     style: 'flex:1;accent-color:var(--accent)',
     attrs: { type: 'range', min: '0', max: '100', step: '1', value: '50', 'aria-label': 'Comparison split between Legacy and Controlled V2 previews' },
   });
   range.id = 'ibaRangeInput';
   rangeWrap.appendChild(range);
-  rangeWrap.appendChild(el('span', { style: 'font-size:10px;color:var(--text-faint);white-space:nowrap', text: '100% Legacy' }));
+  rangeWrap.appendChild(el('span', { style: 'font-size:10px;color:var(--text-dim);white-space:nowrap', text: '100% Legacy' }));
   root.appendChild(rangeWrap);
 
   // Phase B: a small non-live visual percentage/direction readout —
   // updated on every state change but never itself an aria-live
   // region (per the phase's "do not update aria-live on every percent
   // movement" requirement).
-  const splitReadout = el('div', { style: 'font-size:10px;color:var(--text-faint)' });
+  const splitReadout = el('div', { style: 'font-size:10px;color:var(--text-dim)' });
   splitReadout.id = 'ibaSplitReadout';
   root.appendChild(splitReadout);
 
@@ -277,7 +281,7 @@ export function getInteractiveBeforeAfterElements(container) {
  */
 const TONE_COLOR = {
   success: 'var(--success, green)',
-  neutral: 'var(--text-faint)',
+  neutral: 'var(--text-dim)',
   danger: 'var(--danger, red)',
 };
 
@@ -474,12 +478,12 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
       ];
       rows.forEach(([label, value]) => {
         const row = el('div', { style: 'display:flex;justify-content:space-between;gap:8px' });
-        row.appendChild(el('span', { style: 'color:var(--text-faint)', text: label }));
+        row.appendChild(el('span', { style: 'color:var(--text-dim)', text: label }));
         row.appendChild(el('span', { style: 'color:var(--text-dim);overflow-wrap:anywhere;text-align:right', text: String(value) }));
         alignmentInfoEl.appendChild(row);
       });
       if (rawDisplayDimensionsNormalized === true) {
-        alignmentInfoEl.appendChild(el('div', { style: 'font-size:10px;color:var(--text-faint);font-style:italic;margin-top:2px', text: 'Display dimensions were normalized once for alignment; source preview canvases were not changed.' }));
+        alignmentInfoEl.appendChild(el('div', { style: 'font-size:10px;color:var(--text-dim);font-style:italic;margin-top:2px', text: 'Display dimensions were normalized once for alignment; source preview canvases were not changed.' }));
       }
     }
   }
