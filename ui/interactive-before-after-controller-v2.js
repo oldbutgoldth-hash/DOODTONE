@@ -168,20 +168,57 @@ function _copyCanvasToDisplay(sourceCanvas, displayCanvas, targetWidth, targetHe
  * never re-derived or altered here) and determines whether interaction
  * must be blocked. Missing evidence alone is never treated as an
  * anomaly — only explicit contradictory values are.
+ * FIX 8 (EPIC 2E-I-B-F): every field read exactly once through
+ * safeGet — a throwing getter on `safety` degrades to unknown
+ * evidence, never a crash.
  */
 function _hasSafetyAnomaly(safety) {
   if (!_isRecord(safety)) return false;
-  if (safety.selectedProductionSource === 'v2') return true;
-  if (safety.v2Contradictory === true) return true;
-  if (safety.allowExport === true) return true;
-  if (safety.allowProductionWrite === true) return true;
+  const rawSelectedSource = safeGet(safety, 'selectedProductionSource');
+  const rawContradictory = safeGet(safety, 'v2Contradictory');
+  const rawAllowExport = safeGet(safety, 'allowExport');
+  const rawAllowWrite = safeGet(safety, 'allowProductionWrite');
+  if (rawSelectedSource === 'v2') return true;
+  if (rawContradictory === true) return true;
+  if (rawAllowExport === true) return true;
+  if (rawAllowWrite === true) return true;
   return false;
 }
 
 function _hasMissingSafetyEvidence(safety) {
   if (!_isRecord(safety)) return true;
-  const source = safety.selectedProductionSource;
-  return (source !== 'legacy' && source !== 'v2') || safety.allowExport === null || safety.allowProductionWrite === null || safety.v2Contradictory === null;
+  const source = safeGet(safety, 'selectedProductionSource');
+  const rawAllowExport = safeGet(safety, 'allowExport');
+  const rawAllowWrite = safeGet(safety, 'allowProductionWrite');
+  const rawContradictory = safeGet(safety, 'v2Contradictory');
+  return (source !== 'legacy' && source !== 'v2') || rawAllowExport === null || rawAllowWrite === null || rawContradictory === null;
+}
+
+const SIDE_STATE_VALUES = ['rendered', 'failed', 'blocked', 'cancelled', 'unavailable', 'unknown'];
+// FIX 1 (EPIC 2E-I-B-F): normalizes any incoming side-state string to
+// one of the 6 canonical values — an unrecognized string never passes
+// through verbatim, it becomes "unknown".
+function _normalizeSideState(v) {
+  return SIDE_STATE_VALUES.includes(v) ? v : 'unknown';
+}
+
+function _triState(v) {
+  return v === true ? true : v === false ? false : null;
+}
+
+// Builds a friendly, non-raw status label for a side, per FIX 4/10 —
+// never exposes internal state strings directly, and never implies
+// success merely because adjustment evidence is missing.
+function _friendlySideStatus(name, rendered, normalizedState, effectTriState) {
+  if (rendered) {
+    if (effectTriState === false) return { text: `${name}: No supported adjustment`, tone: 'neutral' };
+    if (effectTriState === true) return { text: `${name}: Rendered`, tone: 'success' };
+    return { text: `${name}: Rendered · adjustment evidence unknown`, tone: 'neutral' };
+  }
+  if (normalizedState === 'failed') return { text: `${name}: Failed`, tone: 'danger' };
+  if (normalizedState === 'blocked') return { text: `${name}: Blocked`, tone: 'danger' };
+  if (normalizedState === 'cancelled') return { text: `${name}: Cancelled`, tone: 'neutral' };
+  return { text: `${name}: Unavailable`, tone: 'neutral' };
 }
 
 // Phase B: normalizes/dedupes a warning list into safe display
@@ -209,6 +246,176 @@ function _dedupeWarnings(list, limit = 6) {
     if (out.length >= limit) break;
   }
   return out;
+}
+
+/**
+ * FIX 7 (EPIC 2E-I-B-F): the single, authoritative state-priority
+ * function — used both by `ui/app.js` (BEFORE any canvas bind is even
+ * attempted, for Partial/Failed/Blocked/Preparing/Unavailable) and
+ * internally by this controller's `_computeInteractiveState()` (AFTER
+ * canvases have been copied, with real alignment data). App and
+ * Controller never maintain two separate copies of this priority
+ * logic.
+ *
+ * Priority (FIX 2): stale/cancelled → safety anomaly → both rendered
+ * & aligned (ready) → exactly one rendered (partial) → both explicitly
+ * failed (failed) → either explicitly blocked (blocked/preview-state)
+ * → still preparing (preparing) → otherwise unavailable.
+ *
+ * @param {{
+ *   stale: boolean,
+ *   legacySide: ({ rendered: boolean, state: string, visualAdjustmentsApplied: (boolean|null), warnings: any[] }|null),
+ *   v2Side: (same shape|null),
+ *   safety: ({ selectedProductionSource, allowExport, allowProductionWrite, v2Contradictory }|null),
+ *   alignment: (object|null),
+ *   splitPercent: number,
+ *   sourceGenerationId: any,
+ *   currentGenerationId: any,
+ * }} input
+ */
+export function deriveInteractiveBeforeAfterStateV2(input) {
+  const rec = _isRecord(input) ? input : {};
+  const stale = safeGet(rec, 'stale') === true;
+  const legacySide = _isRecord(safeGet(rec, 'legacySide')) ? rec.legacySide : null;
+  const v2Side = _isRecord(safeGet(rec, 'v2Side')) ? rec.v2Side : null;
+  const safety = safeGet(rec, 'safety');
+  const alignment = safeGet(rec, 'alignment') ?? null;
+  const rawSplit = safeGet(rec, 'splitPercent');
+  const splitPercent = Number.isFinite(rawSplit) ? rawSplit : 50;
+  const sourceGenerationId = safeGet(rec, 'sourceGenerationId') ?? null;
+  const currentGenerationId = safeGet(rec, 'currentGenerationId') ?? null;
+
+  const legacyRendered = safeGet(legacySide, 'rendered') === true;
+  const v2Rendered = safeGet(v2Side, 'rendered') === true;
+  const legacyState = _normalizeSideState(safeGet(legacySide, 'state'));
+  const v2State = _normalizeSideState(safeGet(v2Side, 'state'));
+  const legacyEffect = _triState(safeGet(legacySide, 'visualAdjustmentsApplied'));
+  const v2Effect = _triState(safeGet(v2Side, 'visualAdjustmentsApplied'));
+  const legacyWarnings = _dedupeWarnings(safeGet(legacySide, 'warnings'));
+  const v2Warnings = _dedupeWarnings(safeGet(v2Side, 'warnings'));
+
+  const legacyStatus = _friendlySideStatus('Legacy', legacyRendered, legacyState, legacyEffect);
+  const v2Status = _friendlySideStatus('Controlled V2', v2Rendered, v2State, v2Effect);
+  const baseMetadata = {
+    legacyVisualAdjustmentsApplied: legacyEffect, v2VisualAdjustmentsApplied: v2Effect,
+    safety: _isRecord(safety) ? safety : null, legacyStatus, v2Status,
+  };
+  const emptyAlignment = _computeAlignment(null, null);
+
+  // 1. stale/cancelled generation.
+  if (stale) {
+    return {
+      state: 'cancelled', blockedReason: null, splitPercent: 50,
+      legacyAvailable: false, v2Available: false, bothAvailable: false, interactive: false,
+      sourceGenerationId, currentGenerationId, alignment: alignment ?? emptyAlignment,
+      warnings: [], blockers: ['Interactive comparison was cancelled because a newer analysis is active.'],
+      metadata: baseMetadata,
+    };
+  }
+
+  // 2. critical safety anomaly — outranks EVERYTHING below, even
+  // before any canvas has been bound.
+  if (_hasSafetyAnomaly(safety)) {
+    return {
+      state: 'blocked', blockedReason: 'safety', splitPercent,
+      legacyAvailable: legacyRendered, v2Available: v2Rendered, bothAvailable: legacyRendered && v2Rendered, interactive: false,
+      sourceGenerationId, currentGenerationId, alignment: alignment ?? emptyAlignment,
+      warnings: _dedupeWarnings([...legacyWarnings, ...v2Warnings]),
+      blockers: ['Interactive comparison is blocked because production safety evidence reports an anomaly.'],
+      metadata: baseMetadata,
+    };
+  }
+
+  // 3. both rendered — ready, unless real alignment data says blocked.
+  if (legacyRendered && v2Rendered) {
+    if (alignment && alignment.sameAspectRatio === false) {
+      return {
+        state: 'blocked', blockedReason: 'alignment', splitPercent,
+        legacyAvailable: true, v2Available: true, bothAvailable: true, interactive: false,
+        sourceGenerationId, currentGenerationId, alignment,
+        warnings: _dedupeWarnings([...legacyWarnings, ...v2Warnings]),
+        blockers: ['Alignment blocked: preview geometry differs beyond the safe tolerance.'],
+        metadata: baseMetadata,
+      };
+    }
+    const legacyNoOp = legacyEffect === false;
+    const v2NoOp = v2Effect === false;
+    const effectWarnings = [];
+    if (legacyNoOp && v2NoOp) effectWarnings.push('Both previews contain no supported visual adjustments and may appear identical.');
+    else if (legacyNoOp || v2NoOp) effectWarnings.push('One preview contains no supported visual adjustment and may match the source image.');
+    const missingSafetyWarning = _hasMissingSafetyEvidence(safety) ? ['Production safety evidence is not fully confirmed.'] : [];
+    return {
+      state: 'ready', blockedReason: null, splitPercent,
+      legacyAvailable: true, v2Available: true, bothAvailable: true, interactive: true,
+      sourceGenerationId, currentGenerationId, alignment: alignment ?? emptyAlignment,
+      warnings: _dedupeWarnings([...effectWarnings, ...missingSafetyWarning, ...legacyWarnings, ...v2Warnings]),
+      blockers: [], metadata: baseMetadata,
+    };
+  }
+
+  // 4. exactly one side rendered — partial, with a friendly reason for
+  // the missing side (FIX 4).
+  if (legacyRendered !== v2Rendered) {
+    const missingLabel = legacyRendered
+      ? (v2State === 'failed' ? 'Controlled V2 preview failed.' : v2State === 'blocked' ? 'Controlled V2 preview blocked.' : 'Controlled V2 preview unavailable.')
+      : (legacyState === 'failed' ? 'Legacy preview failed.' : legacyState === 'blocked' ? 'Legacy preview blocked.' : 'Legacy preview unavailable.');
+    return {
+      state: 'partial', blockedReason: null, splitPercent: 50,
+      legacyAvailable: legacyRendered, v2Available: v2Rendered, bothAvailable: false, interactive: false,
+      sourceGenerationId: null, currentGenerationId, alignment: emptyAlignment,
+      warnings: _dedupeWarnings([...legacyWarnings, ...v2Warnings]),
+      blockers: [missingLabel],
+      metadata: baseMetadata,
+    };
+  }
+
+  // Neither side rendered from here on.
+  // 5. both sides explicitly failed.
+  if (legacyState === 'failed' && v2State === 'failed') {
+    return {
+      state: 'failed', blockedReason: null, splitPercent: 50,
+      legacyAvailable: false, v2Available: false, bothAvailable: false, interactive: false,
+      sourceGenerationId: null, currentGenerationId, alignment: emptyAlignment,
+      warnings: _dedupeWarnings([...legacyWarnings, ...v2Warnings]),
+      blockers: ['Interactive comparison could not be prepared. Existing analysis and production output were not changed.'],
+      metadata: baseMetadata,
+    };
+  }
+
+  // 6. one or both sides explicitly blocked.
+  if (legacyState === 'blocked' || v2State === 'blocked') {
+    return {
+      state: 'blocked', blockedReason: 'preview-state', splitPercent: 50,
+      legacyAvailable: false, v2Available: false, bothAvailable: false, interactive: false,
+      sourceGenerationId: null, currentGenerationId, alignment: emptyAlignment,
+      warnings: _dedupeWarnings([...legacyWarnings, ...v2Warnings]),
+      blockers: ['Interactive comparison is blocked because one preview did not pass its render requirements.'],
+      metadata: baseMetadata,
+    };
+  }
+
+  // 7. still preparing/rendering — evidence is genuinely unknown yet,
+  // never explicitly failed/blocked/unavailable.
+  if (legacyState === 'unknown' || v2State === 'unknown') {
+    return {
+      state: 'preparing', blockedReason: null, splitPercent: 50,
+      legacyAvailable: false, v2Available: false, bothAvailable: false, interactive: false,
+      sourceGenerationId: null, currentGenerationId, alignment: emptyAlignment,
+      warnings: [], blockers: [],
+      metadata: baseMetadata,
+    };
+  }
+
+  // 8. otherwise — genuinely unavailable (e.g. both sides explicitly
+  // report "unavailable"/"cancelled", no analysis has produced any
+  // evidence yet).
+  return {
+    state: 'unavailable', blockedReason: null, splitPercent: 50,
+    legacyAvailable: false, v2Available: false, bothAvailable: false, interactive: false,
+    sourceGenerationId: null, currentGenerationId, alignment: emptyAlignment,
+    warnings: [], blockers: [],
+    metadata: baseMetadata,
+  };
 }
 
 function _unavailableState(extra = {}) {
@@ -274,6 +481,11 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   // Comparison's own canonical evidence — never re-derived, never
   // written back anywhere.
   let safetyEvidence = null;
+  // FIX 7 (EPIC 2E-I-B-F): compact preview side status (state string +
+  // warnings), passed via updateSources()'s `previewStatus` — used
+  // only for UI-local status projection, never to alter pixel data.
+  let legacySideState = null;
+  let v2SideState = null;
 
   const hasRaf = typeof requestAnimationFrame === 'function';
   const hasCancelRaf = typeof cancelAnimationFrame === 'function';
@@ -357,79 +569,22 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   function _computeInteractiveState() {
     if (disposed) return _unavailableState({ warnings: [], blockers: ['Interactive Before/After controller has been disposed.'] });
 
-    const stale = _isStale();
-    if (stale) {
-      return _unavailableState({
-        state: 'cancelled',
-        sourceGenerationId,
-        currentGenerationId: _currentGeneration(),
-        blockers: ['Interactive comparison was cancelled because a newer analysis is active.'],
-      });
-    }
-
-    if (!legacyAvailable && !v2Available) {
-      return _unavailableState({ sourceGenerationId, currentGenerationId: _currentGeneration() });
-    }
-    if (legacyAvailable && !v2Available) {
-      return _unavailableState({
-        state: 'partial', legacyAvailable: true, v2Available: false,
-        sourceGenerationId, currentGenerationId: _currentGeneration(),
-        blockers: ['Interactive comparison is unavailable because only one preview rendered.'],
-      });
-    }
-    if (!legacyAvailable && v2Available) {
-      return _unavailableState({
-        state: 'partial', legacyAvailable: false, v2Available: true,
-        sourceGenerationId, currentGenerationId: _currentGeneration(),
-        blockers: ['Interactive comparison is unavailable because only one preview rendered.'],
-      });
-    }
-
-    // Both available — build shared no-op/effect warnings first (used
-    // by every remaining branch below).
-    const effectMetadata = { legacyVisualAdjustmentsApplied, v2VisualAdjustmentsApplied };
-    // FIX 4 (EPIC 2E-I-A-F): a no-op-preview warning is honest only
-    // when the evidence EXPLICITLY says false — missing (`null`)
-    // evidence must never be treated as false.
-    const legacyNoOp = legacyVisualAdjustmentsApplied === false;
-    const v2NoOp = v2VisualAdjustmentsApplied === false;
-    const effectWarnings = [];
-    if (legacyNoOp && v2NoOp) effectWarnings.push('Both previews contain no supported visual adjustments and may appear identical.');
-    else if (legacyNoOp || v2NoOp) effectWarnings.push('One preview contains no supported visual adjustment and may match the source image.');
-
-    // Phase B FIX: safety anomaly is checked BEFORE alignment — a
-    // critical safety contradiction must never be presented merely as
-    // a geometry problem.
-    if (_hasSafetyAnomaly(safetyEvidence)) {
-      return {
-        state: 'blocked', splitPercent, legacyAvailable: true, v2Available: true, bothAvailable: true,
-        interactive: false, sourceGenerationId, currentGenerationId: _currentGeneration(), alignment,
-        warnings: _dedupeWarnings(effectWarnings),
-        blockers: _dedupeWarnings(['Interactive comparison is blocked because production safety evidence reports an anomaly.']),
-        metadata: { ...effectMetadata, safety: safetyEvidence },
-      };
-    }
-
-    if (!alignment.sameAspectRatio) {
-      return {
-        state: 'blocked', splitPercent, legacyAvailable: true, v2Available: true, bothAvailable: true,
-        interactive: false, sourceGenerationId, currentGenerationId: _currentGeneration(), alignment,
-        warnings: _dedupeWarnings(effectWarnings),
-        blockers: _dedupeWarnings(['Preview geometry differs beyond the safe comparison tolerance.']),
-        metadata: { ...effectMetadata, safety: safetyEvidence },
-      };
-    }
-
-    // Phase B: missing (not anomalous) safety evidence never blocks —
-    // it only adds a neutral warning.
-    const missingSafetyWarning = _hasMissingSafetyEvidence(safetyEvidence) ? ['Production safety evidence is not fully confirmed.'] : [];
-
-    return {
-      state: 'ready', splitPercent, legacyAvailable: true, v2Available: true, bothAvailable: true,
-      interactive: true, sourceGenerationId, currentGenerationId: _currentGeneration(), alignment,
-      warnings: _dedupeWarnings([...effectWarnings, ...missingSafetyWarning]), blockers: [],
-      metadata: { ...effectMetadata, safety: safetyEvidence },
-    };
+    // FIX 7 (EPIC 2E-I-B-F): delegates to the single shared
+    // state-priority function — after a canvas bind attempt,
+    // `legacyAvailable`/`v2Available` (actual copy-success) take
+    // priority as the "rendered" signal, merged with any richer
+    // `legacySideState`/`v2SideState` (state string + warnings) the
+    // caller supplied via `updateSources()`'s `previewStatus`.
+    return deriveInteractiveBeforeAfterStateV2({
+      stale: _isStale(),
+      legacySide: { rendered: legacyAvailable, state: legacyAvailable ? 'rendered' : (safeGet(legacySideState, 'state') ?? 'unavailable'), visualAdjustmentsApplied: legacyVisualAdjustmentsApplied, warnings: safeGet(legacySideState, 'warnings') },
+      v2Side: { rendered: v2Available, state: v2Available ? 'rendered' : (safeGet(v2SideState, 'state') ?? 'unavailable'), visualAdjustmentsApplied: v2VisualAdjustmentsApplied, warnings: safeGet(v2SideState, 'warnings') },
+      safety: safetyEvidence,
+      alignment,
+      splitPercent,
+      sourceGenerationId,
+      currentGenerationId: _currentGeneration(),
+    });
   }
 
   function _refreshState() {
@@ -453,8 +608,17 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
    *
    * @param {{ legacySourceCanvas: (HTMLCanvasElement|null), v2SourceCanvas: (HTMLCanvasElement|null), generationId: (number|string|null), legacyVisualAdjustmentsApplied?: (boolean|null), v2VisualAdjustmentsApplied?: (boolean|null) }} input
    */
-  function updateSources({ legacySourceCanvas, v2SourceCanvas, generationId, legacyVisualAdjustmentsApplied: legacyEffectMeta, v2VisualAdjustmentsApplied: v2EffectMeta, safety } = {}) {
+  function updateSources({ legacySourceCanvas, v2SourceCanvas, generationId, legacyVisualAdjustmentsApplied: legacyEffectMeta, v2VisualAdjustmentsApplied: v2EffectMeta, safety, previewStatus } = {}) {
     if (disposed) return lastState;
+
+    // FIX 7 (EPIC 2E-I-B-F): store the compact preview-side status
+    // (state string + warnings) supplied by the caller — used only for
+    // UI-local status projection via the shared
+    // deriveInteractiveBeforeAfterStateV2() helper, never to alter
+    // pixel data or source validity.
+    const rawPreviewStatus = _isRecord(previewStatus) ? previewStatus : null;
+    legacySideState = { state: safeGet(rawPreviewStatus, 'legacyState'), warnings: safeGet(rawPreviewStatus, 'legacyWarnings') };
+    v2SideState = { state: safeGet(rawPreviewStatus, 'v2State'), warnings: safeGet(rawPreviewStatus, 'v2Warnings') };
 
     const proposedGenerationId = generationId ?? null;
     // Phase B: normalize the incoming safety evidence once here — a
@@ -706,10 +870,58 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     legacyVisualAdjustmentsApplied = null; // FIX 9: clear effect metadata too
     v2VisualAdjustmentsApplied = null;
     safetyEvidence = null; // Phase B: clear safety evidence too
+    legacySideState = null; // FIX 7: clear side-status too
+    v2SideState = null;
     splitPercent = 50;
     _applySplitToDom(splitPercent);
     _clearDisplayCanvases(); // FIX 9: dimensions reset to 0×0, releasing pixel storage
     return _refreshState();
+  }
+
+  /**
+   * FIX 7 (EPIC 2E-I-B-F): for the NON-ready path (Partial/Failed/
+   * Blocked/Preparing/Unavailable) — never touches canvases, never
+   * copies pixels, but uses the EXACT SAME shared
+   * deriveInteractiveBeforeAfterStateV2() priority function the
+   * controller itself uses internally, so `ui/app.js` never maintains
+   * a second, potentially-divergent copy of the state-priority rules.
+   * Also clears any previously-bound display canvases/source state,
+   * since a non-ready result must never keep showing stale Ready
+   * content.
+   *
+   * @param {{ legacySide: object, v2Side: object, safety: object, generationId: (number|string|null) }} input
+   */
+  function prepareState({ legacySide, v2Side, safety, generationId } = {}) {
+    if (disposed) return lastState;
+    _cancelPendingRaf();
+    _releaseActivePointerCapture();
+    sourceGenerationId = null;
+    legacyAvailable = false;
+    v2Available = false;
+    alignment = _computeAlignment(null, null);
+    legacyVisualAdjustmentsApplied = null;
+    v2VisualAdjustmentsApplied = null;
+    legacySideState = _isRecord(legacySide) ? legacySide : null;
+    v2SideState = _isRecord(v2Side) ? v2Side : null;
+    safetyEvidence = _isRecord(safety) ? safety : null;
+    splitPercent = 50;
+    _applySplitToDom(splitPercent);
+    _clearDisplayCanvases();
+
+    const proposedGenerationId = generationId ?? null;
+    const stale = hasGenerationProvider ? proposedGenerationId !== _currentGeneration() : false;
+    lastState = deriveInteractiveBeforeAfterStateV2({
+      stale,
+      legacySide: _isRecord(legacySide) ? legacySide : null,
+      v2Side: _isRecord(v2Side) ? v2Side : null,
+      safety: safetyEvidence,
+      alignment: null,
+      splitPercent: 50,
+      sourceGenerationId: proposedGenerationId,
+      currentGenerationId: _currentGeneration(),
+    });
+    _emitStateChange();
+    return lastState;
   }
 
   /** Removes all listeners, cancels pending rAF work, releases references, and becomes permanently unavailable. */
@@ -730,5 +942,5 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     return lastState;
   }
 
-  return { updateSources, setSplit, reset, clear, dispose, getState };
+  return { updateSources, prepareState, setSplit, reset, clear, dispose, getState };
 }

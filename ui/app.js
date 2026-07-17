@@ -607,6 +607,14 @@ function ensureReviewConsoleController() {
  * that `visualPreviewComparisonController.render()` already committed
  * pixels into.
  */
+const SIDE_STATE_STRINGS = ['rendered', 'failed', 'blocked', 'cancelled', 'unavailable', 'unknown'];
+// FIX 1 (EPIC 2E-I-B-F): normalizes a Visual Preview per-side render
+// outcome's raw `state` string to one of the 6 canonical values — an
+// unrecognized string is never passed through verbatim.
+function _normalizeSideStateString(v) {
+  return SIDE_STATE_STRINGS.includes(v) ? v : 'unknown';
+}
+
 function _syncInteractiveBeforeAfter(vprState, generationId) {
   const ibaSec = document.getElementById('interactiveBeforeAfterSection');
   const ibaInner = document.getElementById('interactiveBeforeAfterInner');
@@ -638,6 +646,11 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
         // controller's own staleness check stays correct even across
         // multiple Re-analyze cycles without needing to be recreated.
         generationProvider: () => analysisRenderGeneration,
+        // FIX 11 (EPIC 2E-I-B-F): this is the SOLE render path for
+        // every state transition — both updateSources() and
+        // prepareState() emit through this callback, so no separate
+        // manual renderInteractiveBeforeAfterStatus() call is ever
+        // needed after calling either of them below.
         onStateChange: (state) => renderInteractiveBeforeAfterStatus(ibaInner, state),
       });
     }
@@ -656,15 +669,31 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
     const rawAllowExport = safeGetVisualPreviewProperty(vprMeta, 'allowExport');
     const rawAllowWrite = safeGetVisualPreviewProperty(vprMeta, 'allowProductionWrite');
     const rawV2Contradictory = safeGetVisualPreviewProperty(vprMeta, 'v2Contradictory');
+    // FIX 1: preserve each side's actual outcome (state string +
+    // bounded warnings), never collapsed to a single "rendered"
+    // boolean — this is what lets Failed/Blocked/Preparing be
+    // distinguished from plain Unavailable downstream.
+    const rawLegacyState = safeGetVisualPreviewProperty(legacyResult, 'state');
+    const rawV2State = safeGetVisualPreviewProperty(v2Result, 'state');
+    const rawLegacyWarnings = safeGetVisualPreviewProperty(legacyResult, 'warnings');
+    const rawV2Warnings = safeGetVisualPreviewProperty(v2Result, 'warnings');
 
     const compact = {
       generationId,
-      legacy: { rendered: safeGetVisualPreviewProperty(legacyResult, 'rendered') === true },
-      v2: { rendered: safeGetVisualPreviewProperty(v2Result, 'rendered') === true },
+      legacy: {
+        rendered: safeGetVisualPreviewProperty(legacyResult, 'rendered') === true,
+        state: _normalizeSideStateString(rawLegacyState),
+        visualAdjustmentsApplied: (rawLegacyEffect === true || rawLegacyEffect === false) ? rawLegacyEffect : null,
+        warnings: Array.isArray(rawLegacyWarnings) ? rawLegacyWarnings.slice(0, 6) : [],
+      },
+      v2: {
+        rendered: safeGetVisualPreviewProperty(v2Result, 'rendered') === true,
+        state: _normalizeSideStateString(rawV2State),
+        visualAdjustmentsApplied: (rawV2Effect === true || rawV2Effect === false) ? rawV2Effect : null,
+        warnings: Array.isArray(rawV2Warnings) ? rawV2Warnings.slice(0, 6) : [],
+      },
       bothRendered: safeGetVisualPreviewProperty(vprState, 'bothRendered') === true,
       visualComparisonAvailable: safeGetVisualPreviewProperty(vprState, 'visualComparisonAvailable') === true,
-      legacyVisualAdjustmentsApplied: (rawLegacyEffect === true || rawLegacyEffect === false) ? rawLegacyEffect : null,
-      v2VisualAdjustmentsApplied: (rawV2Effect === true || rawV2Effect === false) ? rawV2Effect : null,
       // Phase B SAFETY INTEGRATION: mirrored, never altered, from
       // Visual Preview Comparison's own canonical evidence.
       safety: {
@@ -683,34 +712,31 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
     if (ready) {
       const legacySourceCanvas = document.getElementById('legacyVisualPreviewCanvasV2');
       const v2SourceCanvas = document.getElementById('controlledV2VisualPreviewCanvasV2');
-      const newState = interactiveBeforeAfterController.updateSources({
+      // FIX 11: updateSources() emits via onStateChange — no separate
+      // render call needed here.
+      interactiveBeforeAfterController.updateSources({
         legacySourceCanvas, v2SourceCanvas, generationId: compact.generationId,
-        legacyVisualAdjustmentsApplied: compact.legacyVisualAdjustmentsApplied,
-        v2VisualAdjustmentsApplied: compact.v2VisualAdjustmentsApplied,
+        legacyVisualAdjustmentsApplied: compact.legacy.visualAdjustmentsApplied,
+        v2VisualAdjustmentsApplied: compact.v2.visualAdjustmentsApplied,
         safety: compact.safety,
-      });
-      renderInteractiveBeforeAfterStatus(ibaInner, newState);
-    } else {
-      // Only one side rendered (or neither) — reflect Partial/blocked
-      // honestly rather than showing stale interactive content.
-      interactiveBeforeAfterController.clear();
-      const legacyRendered = compact.legacy.rendered;
-      const v2Rendered = compact.v2.rendered;
-      const partialState = {
-        state: (legacyRendered || v2Rendered) ? 'partial' : 'unavailable',
-        splitPercent: 50, legacyAvailable: legacyRendered, v2Available: v2Rendered, bothAvailable: false,
-        interactive: false, sourceGenerationId: null, currentGenerationId: analysisRenderGeneration,
-        alignment: {
-          sourceLegacyWidth: null, sourceLegacyHeight: null, sourceV2Width: null, sourceV2Height: null,
-          displayWidth: null, displayHeight: null,
-          sameAspectRatio: false, exactSourcePixelMatch: false, displayDimensionsNormalized: false,
-          aspectRatioRelativeDifference: null, aspectRatioTolerance: null,
+        previewStatus: {
+          legacyState: compact.legacy.state, v2State: compact.v2.state,
+          legacyWarnings: compact.legacy.warnings, v2Warnings: compact.v2.warnings,
         },
-        warnings: [],
-        blockers: (legacyRendered || v2Rendered) ? ['Interactive comparison is unavailable because only one preview rendered.'] : [],
-        metadata: { legacyVisualAdjustmentsApplied: null, v2VisualAdjustmentsApplied: null },
-      };
-      renderInteractiveBeforeAfterStatus(ibaInner, partialState);
+      });
+    } else {
+      // FIX 2 (EPIC 2E-I-B-F): use the SAME shared state-priority
+      // helper (via controller.prepareState()) that updateSources()
+      // itself uses internally — never a separately hand-built
+      // Partial/Unavailable object here, so safety anomalies,
+      // both-failed, and blocked-preview-state are all still
+      // correctly detected even though no canvas has been bound yet.
+      // FIX 11: prepareState() emits via onStateChange — no separate
+      // render call needed here.
+      interactiveBeforeAfterController.prepareState({
+        legacySide: compact.legacy, v2Side: compact.v2, safety: compact.safety,
+        generationId: compact.generationId,
+      });
     }
   } catch (ibaErr) {
     // FIX 5: a failure anywhere above must affect only Interactive

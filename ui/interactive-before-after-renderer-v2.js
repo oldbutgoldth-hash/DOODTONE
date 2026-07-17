@@ -81,6 +81,28 @@ function _normalizeState(v) {
   return Object.prototype.hasOwnProperty.call(STATE_LABEL, v) ? v : 'unavailable';
 }
 
+// FIX 9 (EPIC 2E-I-B-F): safe single-read property access for the
+// renderer boundary — a malformed/hostile `state` object with a
+// throwing getter must never crash rendering; degrades to a safe
+// fallback instead.
+function _safeGetR(object, key, fallback = undefined) {
+  try {
+    if (!object || typeof object !== 'object') return fallback;
+    return object[key];
+  } catch {
+    return fallback;
+  }
+}
+
+// FIX 6 (EPIC 2E-I-B-F): the Blocked message is chosen from the
+// controller's explicit `blockedReason` — never hard-coded as a
+// geometry mismatch regardless of the real cause.
+const BLOCKED_MESSAGE = {
+  safety: 'Interactive comparison is blocked because production safety evidence reports an anomaly.',
+  alignment: 'Alignment blocked: preview geometry differs beyond the safe tolerance.',
+  'preview-state': 'Interactive comparison is blocked because one preview did not pass its render requirements.',
+};
+
 const STATUS_MESSAGE = {
   ready: 'Interactive comparison is ready.',
   partial: 'Interactive comparison is unavailable because only one preview rendered.',
@@ -253,25 +275,53 @@ export function getInteractiveBeforeAfterElements(container) {
  * state object. Never touches the canvases, the split CSS variable, or
  * the clip-path — those remain the controller's own responsibility.
  */
+const TONE_COLOR = {
+  success: 'var(--success, green)',
+  neutral: 'var(--text-faint)',
+  danger: 'var(--danger, red)',
+};
+
 export function renderInteractiveBeforeAfterStatus(container, state) {
   if (!container) return;
   ensureInteractiveBeforeAfterLayout(container);
 
+  // FIX 9 (EPIC 2E-I-B-F): every field read exactly once, safely,
+  // here — never a repeated direct read of `state` scattered through
+  // the rest of this function. A malformed/hostile `state` object
+  // degrades safely to Unavailable, never a crash.
   const s = (state && typeof state === 'object') ? state : {};
-  const normalized = _normalizeState(s.state);
+  const rawState = _safeGetR(s, 'state');
+  const rawInteractive = _safeGetR(s, 'interactive');
+  const rawSplitPercent = _safeGetR(s, 'splitPercent');
+  const rawLegacyAvailable = _safeGetR(s, 'legacyAvailable');
+  const rawV2Available = _safeGetR(s, 'v2Available');
+  const rawAlignment = _safeGetR(s, 'alignment');
+  const rawMetadata = _safeGetR(s, 'metadata');
+  const rawWarnings = _safeGetR(s, 'warnings');
+  const rawBlockers = _safeGetR(s, 'blockers');
+  const rawBlockedReason = _safeGetR(s, 'blockedReason');
+
+  const normalized = _normalizeState(rawState);
+  const interactive = rawInteractive === true;
+  const legacyAvailable = rawLegacyAvailable === true;
+  const v2Available = rawV2Available === true;
+  const a = (rawAlignment && typeof rawAlignment === 'object') ? rawAlignment : null;
+  const meta = (rawMetadata && typeof rawMetadata === 'object') ? rawMetadata : {};
 
   const badgeEl = document.getElementById('ibaStatusBadge');
   if (badgeEl) badgeEl.replaceChildren(badge(STATE_LABEL[normalized], STATE_COLOR[normalized]));
 
   const statusLineEl = document.getElementById('ibaStatusLine');
-  // Phase B: Partial explicitly names which side is available/missing,
-  // per the phase's requirement ("state which side is available").
+  // Phase B: Partial explicitly names which side is available/missing.
+  // FIX 6: Blocked chooses its message from `blockedReason` — never a
+  // hard-coded geometry claim regardless of the real cause.
   let statusMessage = STATUS_MESSAGE[normalized] ?? STATUS_MESSAGE.unavailable;
   if (normalized === 'partial') {
-    const legacyOk = s.legacyAvailable === true;
-    statusMessage = legacyOk
+    statusMessage = legacyAvailable
       ? 'Partial preview: Legacy preview available, Controlled V2 preview unavailable.'
       : 'Partial preview: Controlled V2 preview available, Legacy preview unavailable.';
+  } else if (normalized === 'blocked') {
+    statusMessage = BLOCKED_MESSAGE[rawBlockedReason] ?? BLOCKED_MESSAGE['preview-state'];
   }
   if (statusLineEl) statusLineEl.textContent = statusMessage;
 
@@ -279,7 +329,6 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
   const viewportEl = document.getElementById('ibaViewport');
   const handleEl = document.getElementById('ibaHandle');
   const rangeEl = document.getElementById('ibaRangeInput');
-  const interactive = s.interactive === true;
   if (placeholderEl) placeholderEl.style.display = interactive ? 'none' : 'flex';
   if (placeholderEl && !interactive) placeholderEl.textContent = statusMessage;
   if (handleEl) handleEl.setAttribute('aria-disabled', interactive ? 'false' : 'true');
@@ -288,28 +337,36 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
 
   // Phase B: compact Legacy/V2/Alignment source status summary —
   // friendly labels, never raw internal state values.
+  // FIX 10 (EPIC 2E-I-B-F): "No supported adjustment" is never styled
+  // as success; success requires actually-rendered AND explicit `true`
+  // adjustment evidence. Missing (`null`) evidence uses neutral
+  // "Rendered · adjustment evidence unknown" wording, never green.
   const sourceStatusRowEl = document.getElementById('ibaSourceStatusRow');
   if (sourceStatusRowEl) {
     sourceStatusRowEl.replaceChildren();
-    const a = (s.alignment && typeof s.alignment === 'object') ? s.alignment : null;
-    const meta = (s.metadata && typeof s.metadata === 'object') ? s.metadata : {};
 
-    const legacyLabel = s.legacyAvailable === true
-      ? (meta.legacyVisualAdjustmentsApplied === false ? 'Legacy: No supported adjustment' : 'Legacy: Rendered')
-      : 'Legacy: Unavailable';
-    sourceStatusRowEl.appendChild(badge(legacyLabel, s.legacyAvailable === true ? 'var(--success, green)' : 'var(--text-faint)'));
+    function _sideBadgeInfo(name, available, effectTriState, unavailableLabel) {
+      if (available) {
+        if (effectTriState === false) return { text: `${name}: No supported adjustment`, tone: 'neutral' };
+        if (effectTriState === true) return { text: `${name}: Rendered`, tone: 'success' };
+        return { text: `${name}: Rendered · adjustment evidence unknown`, tone: 'neutral' };
+      }
+      return { text: `${name}: ${unavailableLabel}`, tone: 'neutral' };
+    }
 
-    const v2Label = s.v2Available === true
-      ? (meta.v2VisualAdjustmentsApplied === false ? 'Controlled V2: No supported adjustment' : 'Controlled V2: Rendered')
-      : (normalized === 'blocked' ? 'Controlled V2: Blocked' : 'Controlled V2: Unavailable');
-    sourceStatusRowEl.appendChild(badge(v2Label, s.v2Available === true ? 'var(--success, green)' : 'var(--text-faint)'));
+    const legacyEffect = meta.legacyVisualAdjustmentsApplied === true ? true : meta.legacyVisualAdjustmentsApplied === false ? false : null;
+    const v2Effect = meta.v2VisualAdjustmentsApplied === true ? true : meta.v2VisualAdjustmentsApplied === false ? false : null;
+    const legacyInfo = _sideBadgeInfo('Legacy', legacyAvailable, legacyEffect, normalized === 'failed' ? 'Failed' : 'Unavailable');
+    const v2Info = _sideBadgeInfo('Controlled V2', v2Available, v2Effect, normalized === 'blocked' ? 'Blocked' : normalized === 'failed' ? 'Failed' : 'Unavailable');
+    sourceStatusRowEl.appendChild(badge(legacyInfo.text, TONE_COLOR[legacyInfo.tone]));
+    sourceStatusRowEl.appendChild(badge(v2Info.text, TONE_COLOR[v2Info.tone]));
 
     if (a && a.sourceLegacyWidth !== null && a.sourceV2Width !== null) {
       let alignLabel, alignColor;
-      if (a.sameAspectRatio === false) { alignLabel = 'Alignment: Blocked geometry'; alignColor = 'var(--danger, red)'; }
-      else if (a.displayDimensionsNormalized === true) { alignLabel = 'Alignment: Normalized once'; alignColor = 'var(--text-dim)'; }
-      else if (a.exactSourcePixelMatch === true) { alignLabel = 'Alignment: Exact dimensions'; alignColor = 'var(--success, green)'; }
-      else { alignLabel = 'Alignment: Unknown'; alignColor = 'var(--text-faint)'; }
+      if (a.sameAspectRatio === false) { alignLabel = 'Alignment: Blocked geometry'; alignColor = TONE_COLOR.danger; }
+      else if (a.displayDimensionsNormalized === true) { alignLabel = 'Alignment: Normalized once'; alignColor = TONE_COLOR.neutral; }
+      else if (a.exactSourcePixelMatch === true) { alignLabel = 'Alignment: Exact dimensions'; alignColor = TONE_COLOR.success; }
+      else { alignLabel = 'Alignment: Unknown'; alignColor = TONE_COLOR.neutral; }
       sourceStatusRowEl.appendChild(badge(alignLabel, alignColor));
     }
   }
@@ -321,7 +378,7 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
   // from the controller's own internal per-frame split application).
   const splitReadoutEl = document.getElementById('ibaSplitReadout');
   if (splitReadoutEl) {
-    const pct = Number.isFinite(s.splitPercent) ? Math.round(s.splitPercent) : 50;
+    const pct = Number.isFinite(rawSplitPercent) ? Math.round(rawSplitPercent) : 50;
     let guidance;
     if (pct <= 0) guidance = 'Controlled V2 shown';
     else if (pct >= 100) guidance = 'Legacy shown';
@@ -342,8 +399,8 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
       seen.add(t);
       messagesEl.appendChild(el('div', { style: `font-size:11px;color:${color}`, text: t }));
     };
-    _safeArray(s.blockers).slice(0, 3).forEach(b => pushUnique(b, 'var(--danger, red)'));
-    _safeArray(s.warnings).slice(0, 3).forEach(w => pushUnique(w, 'var(--warn, orange)'));
+    _safeArray(rawBlockers).slice(0, 3).forEach(b => pushUnique(b, 'var(--danger, red)'));
+    _safeArray(rawWarnings).slice(0, 3).forEach(w => pushUnique(w, 'var(--warn, orange)'));
   }
 
   // FIX 10 (EPIC 2E-I-A-F): compact alignment technical metadata,
