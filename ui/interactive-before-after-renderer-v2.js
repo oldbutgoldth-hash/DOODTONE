@@ -123,8 +123,23 @@ export function ensureInteractiveBeforeAfterLayout(container) {
   }));
 
   // Comparison viewport: base layer (Legacy) + clipped overlay layer (V2) + divider/handle + labels.
+  // Phase B: `touch-action: none` remains scoped to this interaction
+  // surface only (never applied globally); `user-select` is handled
+  // via the local `.iba-dragging` class below instead of a permanent
+  // global `user-select: none`, so ordinary page text selection is
+  // never affected outside an active drag.
+  const styleTag = el('style', { text: '.iba-viewport.iba-dragging{cursor:ew-resize;user-select:none;}' });
+  root.appendChild(styleTag);
+
+  // Phase B: compact Legacy/V2/Alignment status summary — friendly
+  // labels only, never raw internal state values.
+  const sourceStatusRow = el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px;font-size:10px' });
+  sourceStatusRow.id = 'ibaSourceStatusRow';
+  root.appendChild(sourceStatusRow);
+
   const viewport = el('div', {
-    style: 'position:relative;width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:2px;overflow:hidden;touch-action:none;user-select:none;--comparison-split:50%',
+    cls: 'iba-viewport',
+    style: 'position:relative;width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:2px;overflow:hidden;touch-action:none;--comparison-split:50%',
   });
   viewport.id = 'ibaViewport';
 
@@ -164,17 +179,28 @@ export function ensureInteractiveBeforeAfterLayout(container) {
 
   root.appendChild(viewport);
 
+  // Phase B: concise split guidance, always visible.
+  root.appendChild(el('div', { style: 'font-size:10px;color:var(--text-faint)', text: 'Drag the divider or use the slider below.' }));
+
   // Accessible keyboard-operable range control (kept visible, not hidden).
   const rangeWrap = el('div', { style: 'display:flex;align-items:center;gap:8px' });
-  rangeWrap.appendChild(el('span', { style: 'font-size:10px;color:var(--text-faint);white-space:nowrap', text: '0%' }));
+  rangeWrap.appendChild(el('span', { style: 'font-size:10px;color:var(--text-faint);white-space:nowrap', text: '0% V2' }));
   const range = el('input', {
     style: 'flex:1;accent-color:var(--accent)',
     attrs: { type: 'range', min: '0', max: '100', step: '1', value: '50', 'aria-label': 'Comparison split between Legacy and Controlled V2 previews' },
   });
   range.id = 'ibaRangeInput';
   rangeWrap.appendChild(range);
-  rangeWrap.appendChild(el('span', { style: 'font-size:10px;color:var(--text-faint);white-space:nowrap', text: '100%' }));
+  rangeWrap.appendChild(el('span', { style: 'font-size:10px;color:var(--text-faint);white-space:nowrap', text: '100% Legacy' }));
   root.appendChild(rangeWrap);
+
+  // Phase B: a small non-live visual percentage/direction readout —
+  // updated on every state change but never itself an aria-live
+  // region (per the phase's "do not update aria-live on every percent
+  // movement" requirement).
+  const splitReadout = el('div', { style: 'font-size:10px;color:var(--text-faint)' });
+  splitReadout.id = 'ibaSplitReadout';
+  root.appendChild(splitReadout);
 
   const statusLine = el('div', { style: 'font-size:11px;color:var(--text-dim)', attrs: { 'aria-live': 'polite' } });
   statusLine.id = 'ibaStatusLine';
@@ -238,7 +264,16 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
   if (badgeEl) badgeEl.replaceChildren(badge(STATE_LABEL[normalized], STATE_COLOR[normalized]));
 
   const statusLineEl = document.getElementById('ibaStatusLine');
-  if (statusLineEl) statusLineEl.textContent = STATUS_MESSAGE[normalized] ?? STATUS_MESSAGE.unavailable;
+  // Phase B: Partial explicitly names which side is available/missing,
+  // per the phase's requirement ("state which side is available").
+  let statusMessage = STATUS_MESSAGE[normalized] ?? STATUS_MESSAGE.unavailable;
+  if (normalized === 'partial') {
+    const legacyOk = s.legacyAvailable === true;
+    statusMessage = legacyOk
+      ? 'Partial preview: Legacy preview available, Controlled V2 preview unavailable.'
+      : 'Partial preview: Controlled V2 preview available, Legacy preview unavailable.';
+  }
+  if (statusLineEl) statusLineEl.textContent = statusMessage;
 
   const placeholderEl = document.getElementById('ibaPlaceholder');
   const viewportEl = document.getElementById('ibaViewport');
@@ -246,22 +281,69 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
   const rangeEl = document.getElementById('ibaRangeInput');
   const interactive = s.interactive === true;
   if (placeholderEl) placeholderEl.style.display = interactive ? 'none' : 'flex';
-  if (placeholderEl && !interactive) placeholderEl.textContent = STATUS_MESSAGE[normalized] ?? STATUS_MESSAGE.unavailable;
+  if (placeholderEl && !interactive) placeholderEl.textContent = statusMessage;
   if (handleEl) handleEl.setAttribute('aria-disabled', interactive ? 'false' : 'true');
   if (rangeEl) rangeEl.disabled = !interactive;
   if (viewportEl) viewportEl.style.opacity = interactive || normalized === 'ready' ? '1' : '0.4';
 
+  // Phase B: compact Legacy/V2/Alignment source status summary —
+  // friendly labels, never raw internal state values.
+  const sourceStatusRowEl = document.getElementById('ibaSourceStatusRow');
+  if (sourceStatusRowEl) {
+    sourceStatusRowEl.replaceChildren();
+    const a = (s.alignment && typeof s.alignment === 'object') ? s.alignment : null;
+    const meta = (s.metadata && typeof s.metadata === 'object') ? s.metadata : {};
+
+    const legacyLabel = s.legacyAvailable === true
+      ? (meta.legacyVisualAdjustmentsApplied === false ? 'Legacy: No supported adjustment' : 'Legacy: Rendered')
+      : 'Legacy: Unavailable';
+    sourceStatusRowEl.appendChild(badge(legacyLabel, s.legacyAvailable === true ? 'var(--success, green)' : 'var(--text-faint)'));
+
+    const v2Label = s.v2Available === true
+      ? (meta.v2VisualAdjustmentsApplied === false ? 'Controlled V2: No supported adjustment' : 'Controlled V2: Rendered')
+      : (normalized === 'blocked' ? 'Controlled V2: Blocked' : 'Controlled V2: Unavailable');
+    sourceStatusRowEl.appendChild(badge(v2Label, s.v2Available === true ? 'var(--success, green)' : 'var(--text-faint)'));
+
+    if (a && a.sourceLegacyWidth !== null && a.sourceV2Width !== null) {
+      let alignLabel, alignColor;
+      if (a.sameAspectRatio === false) { alignLabel = 'Alignment: Blocked geometry'; alignColor = 'var(--danger, red)'; }
+      else if (a.displayDimensionsNormalized === true) { alignLabel = 'Alignment: Normalized once'; alignColor = 'var(--text-dim)'; }
+      else if (a.exactSourcePixelMatch === true) { alignLabel = 'Alignment: Exact dimensions'; alignColor = 'var(--success, green)'; }
+      else { alignLabel = 'Alignment: Unknown'; alignColor = 'var(--text-faint)'; }
+      sourceStatusRowEl.appendChild(badge(alignLabel, alignColor));
+    }
+  }
+
+  // Phase B: non-live split percentage + direction guidance — never
+  // itself an aria-live region, updated on every state change only
+  // (not spammed on every 1% pointer movement, since this function is
+  // only called from onStateChange / explicit render calls, never
+  // from the controller's own internal per-frame split application).
+  const splitReadoutEl = document.getElementById('ibaSplitReadout');
+  if (splitReadoutEl) {
+    const pct = Number.isFinite(s.splitPercent) ? Math.round(s.splitPercent) : 50;
+    let guidance;
+    if (pct <= 0) guidance = 'Controlled V2 shown';
+    else if (pct >= 100) guidance = 'Legacy shown';
+    else guidance = 'Legacy left · Controlled V2 right';
+    splitReadoutEl.textContent = `${pct}% — ${guidance}`;
+  }
+
   const messagesEl = document.getElementById('ibaMessages');
   if (messagesEl) {
     messagesEl.replaceChildren();
-    _safeArray(s.blockers).slice(0, 3).forEach(b => {
-      const t = _safeText(b);
-      if (t) messagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--danger, red)', text: t }));
-    });
-    _safeArray(s.warnings).slice(0, 3).forEach(w => {
-      const t = _safeText(w);
-      if (t) messagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: t }));
-    });
+    // Phase B: normalize + dedupe, bounded count, safe string
+    // extraction only — never a raw object, never a repeated
+    // approximation warning across multiple cards.
+    const seen = new Set();
+    const pushUnique = (text, color) => {
+      const t = _safeText(text);
+      if (!t || seen.has(t)) return;
+      seen.add(t);
+      messagesEl.appendChild(el('div', { style: `font-size:11px;color:${color}`, text: t }));
+    };
+    _safeArray(s.blockers).slice(0, 3).forEach(b => pushUnique(b, 'var(--danger, red)'));
+    _safeArray(s.warnings).slice(0, 3).forEach(w => pushUnique(w, 'var(--warn, orange)'));
   }
 
   // FIX 10 (EPIC 2E-I-A-F): compact alignment technical metadata,

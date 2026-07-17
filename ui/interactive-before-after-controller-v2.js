@@ -162,6 +162,55 @@ function _copyCanvasToDisplay(sourceCanvas, displayCanvas, targetWidth, targetHe
   }
 }
 
+/**
+ * Phase B safety integration: reads compact tri-state safety evidence
+ * (mirrored from Visual Preview Comparison's own canonical evidence,
+ * never re-derived or altered here) and determines whether interaction
+ * must be blocked. Missing evidence alone is never treated as an
+ * anomaly — only explicit contradictory values are.
+ */
+function _hasSafetyAnomaly(safety) {
+  if (!_isRecord(safety)) return false;
+  if (safety.selectedProductionSource === 'v2') return true;
+  if (safety.v2Contradictory === true) return true;
+  if (safety.allowExport === true) return true;
+  if (safety.allowProductionWrite === true) return true;
+  return false;
+}
+
+function _hasMissingSafetyEvidence(safety) {
+  if (!_isRecord(safety)) return true;
+  const source = safety.selectedProductionSource;
+  return (source !== 'legacy' && source !== 'v2') || safety.allowExport === null || safety.allowProductionWrite === null || safety.v2Contradictory === null;
+}
+
+// Phase B: normalizes/dedupes a warning list into safe display
+// strings, bounded in count and length — never a raw object, never
+// [object Object]/undefined/NaN.
+function _safeWarningText(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') { const t = value.trim(); return t ? (t.length > 300 ? `${t.slice(0, 300)}…` : t) : null; }
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    for (const key of ['message', 'warning', 'reason', 'text']) {
+      const v = safeGet(value, key);
+      if (typeof v === 'string' && v.trim()) return v.length > 300 ? `${v.slice(0, 300)}…` : v;
+    }
+  }
+  return null;
+}
+function _dedupeWarnings(list, limit = 6) {
+  const seen = new Set();
+  const out = [];
+  for (const item of Array.isArray(list) ? list : []) {
+    const t = _safeWarningText(item);
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 function _unavailableState(extra = {}) {
   return {
     state: 'unavailable',
@@ -221,6 +270,10 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   // inferred here.
   let legacyVisualAdjustmentsApplied = null;
   let v2VisualAdjustmentsApplied = null;
+  // Phase B: compact safety evidence mirrored from Visual Preview
+  // Comparison's own canonical evidence — never re-derived, never
+  // written back anywhere.
+  let safetyEvidence = null;
 
   const hasRaf = typeof requestAnimationFrame === 'function';
   const hasCancelRaf = typeof cancelAnimationFrame === 'function';
@@ -251,6 +304,8 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     activePointerTarget = null;
     activePointerId = null;
     isDragging = false;
+    // Phase B: local dragging class only — never a global `user-select: none`.
+    try { if (viewport && viewport.classList) viewport.classList.remove('iba-dragging'); } catch { /* best-effort */ }
   }
 
   const hasGenerationProvider = typeof generationProvider === 'function';
@@ -330,7 +385,8 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
       });
     }
 
-    // Both available — check alignment before declaring ready.
+    // Both available — build shared no-op/effect warnings first (used
+    // by every remaining branch below).
     const effectMetadata = { legacyVisualAdjustmentsApplied, v2VisualAdjustmentsApplied };
     // FIX 4 (EPIC 2E-I-A-F): a no-op-preview warning is honest only
     // when the evidence EXPLICITLY says false — missing (`null`)
@@ -338,23 +394,41 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     const legacyNoOp = legacyVisualAdjustmentsApplied === false;
     const v2NoOp = v2VisualAdjustmentsApplied === false;
     const effectWarnings = [];
-    if (legacyNoOp && v2NoOp) effectWarnings.push('Both previews were rendered without supported visual adjustments and may appear identical.');
-    else if (legacyNoOp || v2NoOp) effectWarnings.push('The two previews may appear identical because one side contains no supported visual adjustment.');
+    if (legacyNoOp && v2NoOp) effectWarnings.push('Both previews contain no supported visual adjustments and may appear identical.');
+    else if (legacyNoOp || v2NoOp) effectWarnings.push('One preview contains no supported visual adjustment and may match the source image.');
+
+    // Phase B FIX: safety anomaly is checked BEFORE alignment — a
+    // critical safety contradiction must never be presented merely as
+    // a geometry problem.
+    if (_hasSafetyAnomaly(safetyEvidence)) {
+      return {
+        state: 'blocked', splitPercent, legacyAvailable: true, v2Available: true, bothAvailable: true,
+        interactive: false, sourceGenerationId, currentGenerationId: _currentGeneration(), alignment,
+        warnings: _dedupeWarnings(effectWarnings),
+        blockers: _dedupeWarnings(['Interactive comparison is blocked because production safety evidence reports an anomaly.']),
+        metadata: { ...effectMetadata, safety: safetyEvidence },
+      };
+    }
 
     if (!alignment.sameAspectRatio) {
       return {
         state: 'blocked', splitPercent, legacyAvailable: true, v2Available: true, bothAvailable: true,
         interactive: false, sourceGenerationId, currentGenerationId: _currentGeneration(), alignment,
-        warnings: effectWarnings,
-        blockers: ['Interactive comparison is blocked because the previews cannot be aligned safely.'],
-        metadata: effectMetadata,
+        warnings: _dedupeWarnings(effectWarnings),
+        blockers: _dedupeWarnings(['Preview geometry differs beyond the safe comparison tolerance.']),
+        metadata: { ...effectMetadata, safety: safetyEvidence },
       };
     }
+
+    // Phase B: missing (not anomalous) safety evidence never blocks —
+    // it only adds a neutral warning.
+    const missingSafetyWarning = _hasMissingSafetyEvidence(safetyEvidence) ? ['Production safety evidence is not fully confirmed.'] : [];
 
     return {
       state: 'ready', splitPercent, legacyAvailable: true, v2Available: true, bothAvailable: true,
       interactive: true, sourceGenerationId, currentGenerationId: _currentGeneration(), alignment,
-      warnings: effectWarnings, blockers: [], metadata: effectMetadata,
+      warnings: _dedupeWarnings([...effectWarnings, ...missingSafetyWarning]), blockers: [],
+      metadata: { ...effectMetadata, safety: safetyEvidence },
     };
   }
 
@@ -379,10 +453,19 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
    *
    * @param {{ legacySourceCanvas: (HTMLCanvasElement|null), v2SourceCanvas: (HTMLCanvasElement|null), generationId: (number|string|null), legacyVisualAdjustmentsApplied?: (boolean|null), v2VisualAdjustmentsApplied?: (boolean|null) }} input
    */
-  function updateSources({ legacySourceCanvas, v2SourceCanvas, generationId, legacyVisualAdjustmentsApplied: legacyEffectMeta, v2VisualAdjustmentsApplied: v2EffectMeta } = {}) {
+  function updateSources({ legacySourceCanvas, v2SourceCanvas, generationId, legacyVisualAdjustmentsApplied: legacyEffectMeta, v2VisualAdjustmentsApplied: v2EffectMeta, safety } = {}) {
     if (disposed) return lastState;
 
     const proposedGenerationId = generationId ?? null;
+    // Phase B: normalize the incoming safety evidence once here — a
+    // hostile/malformed `safety` object is never spread verbatim into
+    // internal state.
+    const normalizedSafety = _isRecord(safety) ? {
+      selectedProductionSource: safety.selectedProductionSource === 'legacy' ? 'legacy' : safety.selectedProductionSource === 'v2' ? 'v2' : 'unknown',
+      allowExport: safety.allowExport === true ? true : safety.allowExport === false ? false : null,
+      allowProductionWrite: safety.allowProductionWrite === true ? true : safety.allowProductionWrite === false ? false : null,
+      v2Contradictory: safety.v2Contradictory === true ? true : safety.v2Contradictory === false ? false : null,
+    } : null;
 
     function _staleNow() {
       if (!hasGenerationProvider) return false;
@@ -420,6 +503,7 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     alignment = _computeAlignment(null, null);
     legacyVisualAdjustmentsApplied = null;
     v2VisualAdjustmentsApplied = null;
+    safetyEvidence = normalizedSafety;
     _clearDisplayCanvases();
 
     const legacyValidCanvas = _validateCanvasLike(legacySourceCanvas);
@@ -540,6 +624,7 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     isDragging = true;
     activePointerId = e.pointerId;
     activePointerTarget = e.target; // FIX 5: stored so capture can be released without needing an Event later
+    try { if (viewport && viewport.classList) viewport.classList.add('iba-dragging'); } catch { /* best-effort */ }
     try { if (e.target && typeof e.target.setPointerCapture === 'function') e.target.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
     e.preventDefault?.();
     _scheduleSplitFromClientX(e.clientX);
@@ -620,6 +705,7 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     alignment = _computeAlignment(null, null);
     legacyVisualAdjustmentsApplied = null; // FIX 9: clear effect metadata too
     v2VisualAdjustmentsApplied = null;
+    safetyEvidence = null; // Phase B: clear safety evidence too
     splitPercent = 50;
     _applySplitToDom(splitPercent);
     _clearDisplayCanvases(); // FIX 9: dimensions reset to 0×0, releasing pixel storage

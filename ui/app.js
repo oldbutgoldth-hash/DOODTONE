@@ -612,16 +612,18 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
   const ibaInner = document.getElementById('interactiveBeforeAfterInner');
   if (!ibaSec || !ibaInner) return;
 
-  // FIX 5 (EPIC 2E-I-A-F): every untrusted field on `vprState` is read
-  // exactly once through the existing safeGetVisualPreviewProperty
-  // helper and stored — never a repeated direct/optional-chained read
-  // afterward. A throwing getter anywhere on `vprState` degrades to a
-  // safe local "unavailable" Interactive Before/After result — it
-  // never breaks Visual Preview Comparison (which already rendered
-  // successfully by the time this runs) and never enters the main
-  // Analysis catch block, since this whole function is itself called
-  // from within the already-isolated Visual Preview Comparison
-  // try/catch boundary in runAnalysis().
+  // FIX 5 (EPIC 2E-I-A-F) / Phase B SAFE APP BOUNDARY: every untrusted
+  // field on `vprState` is read exactly once through the existing
+  // safeGetVisualPreviewProperty helper, normalized into a compact
+  // local object, and stored — never a repeated direct/optional-chained
+  // read afterward, and `vprState` itself is never mutated. A throwing
+  // getter anywhere on `vprState` degrades to a safe local
+  // "unavailable" Interactive Before/After result — it never breaks
+  // Visual Preview Comparison (which already rendered successfully by
+  // the time this runs) and never enters the main Analysis catch
+  // block, since this whole function is itself called from within the
+  // already-isolated Visual Preview Comparison try/catch boundary in
+  // runAnalysis().
   try {
     ibaSec.style.display = 'block';
 
@@ -640,38 +642,60 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
       });
     }
 
-    const bothRendered = safeGetVisualPreviewProperty(vprState, 'bothRendered') === true;
-    const visualComparisonAvailable = safeGetVisualPreviewProperty(vprState, 'visualComparisonAvailable') === true;
+    // Phase B: build the canonical compact normalized input ONCE —
+    // every untrusted vprState field read exactly one time here, never
+    // re-read afterward by the branches below.
+    const vprMeta = safeGetVisualPreviewProperty(vprState, 'metadata');
     const legacyResult = safeGetVisualPreviewProperty(vprState, 'legacy');
     const v2Result = safeGetVisualPreviewProperty(vprState, 'v2');
-    const legacyRendered = safeGetVisualPreviewProperty(legacyResult, 'rendered') === true;
-    const v2Rendered = safeGetVisualPreviewProperty(v2Result, 'rendered') === true;
     const legacyMeta = safeGetVisualPreviewProperty(legacyResult, 'metadata');
     const v2Meta = safeGetVisualPreviewProperty(v2Result, 'metadata');
     const rawLegacyEffect = safeGetVisualPreviewProperty(legacyMeta, 'visualAdjustmentsApplied');
     const rawV2Effect = safeGetVisualPreviewProperty(v2Meta, 'visualAdjustmentsApplied');
-    const legacyVisualAdjustmentsApplied = (rawLegacyEffect === true || rawLegacyEffect === false) ? rawLegacyEffect : null;
-    const v2VisualAdjustmentsApplied = (rawV2Effect === true || rawV2Effect === false) ? rawV2Effect : null;
+    const rawSelectedSource = safeGetVisualPreviewProperty(vprMeta, 'selectedProductionSource');
+    const rawAllowExport = safeGetVisualPreviewProperty(vprMeta, 'allowExport');
+    const rawAllowWrite = safeGetVisualPreviewProperty(vprMeta, 'allowProductionWrite');
+    const rawV2Contradictory = safeGetVisualPreviewProperty(vprMeta, 'v2Contradictory');
+
+    const compact = {
+      generationId,
+      legacy: { rendered: safeGetVisualPreviewProperty(legacyResult, 'rendered') === true },
+      v2: { rendered: safeGetVisualPreviewProperty(v2Result, 'rendered') === true },
+      bothRendered: safeGetVisualPreviewProperty(vprState, 'bothRendered') === true,
+      visualComparisonAvailable: safeGetVisualPreviewProperty(vprState, 'visualComparisonAvailable') === true,
+      legacyVisualAdjustmentsApplied: (rawLegacyEffect === true || rawLegacyEffect === false) ? rawLegacyEffect : null,
+      v2VisualAdjustmentsApplied: (rawV2Effect === true || rawV2Effect === false) ? rawV2Effect : null,
+      // Phase B SAFETY INTEGRATION: mirrored, never altered, from
+      // Visual Preview Comparison's own canonical evidence.
+      safety: {
+        selectedProductionSource: rawSelectedSource === 'legacy' ? 'legacy' : rawSelectedSource === 'v2' ? 'v2' : 'unknown',
+        allowExport: rawAllowExport === true ? true : rawAllowExport === false ? false : null,
+        allowProductionWrite: rawAllowWrite === true ? true : rawAllowWrite === false ? false : null,
+        v2Contradictory: rawV2Contradictory === true ? true : rawV2Contradictory === false ? false : null,
+      },
+    };
 
     // Per the phase's explicit integration rule: only ever bind sources
     // when the Visual Preview Comparison genuinely completed with both
     // sides rendered — never inferred from canvas presence/dimensions
     // alone.
-    const ready = bothRendered && visualComparisonAvailable;
+    const ready = compact.bothRendered && compact.visualComparisonAvailable;
     if (ready) {
       const legacySourceCanvas = document.getElementById('legacyVisualPreviewCanvasV2');
       const v2SourceCanvas = document.getElementById('controlledV2VisualPreviewCanvasV2');
-      // FIX 4 (EPIC 2E-I-A-F): pass tri-state preview-effect metadata
-      // through — never inferred, never mutating `vprState` itself.
       const newState = interactiveBeforeAfterController.updateSources({
-        legacySourceCanvas, v2SourceCanvas, generationId,
-        legacyVisualAdjustmentsApplied, v2VisualAdjustmentsApplied,
+        legacySourceCanvas, v2SourceCanvas, generationId: compact.generationId,
+        legacyVisualAdjustmentsApplied: compact.legacyVisualAdjustmentsApplied,
+        v2VisualAdjustmentsApplied: compact.v2VisualAdjustmentsApplied,
+        safety: compact.safety,
       });
       renderInteractiveBeforeAfterStatus(ibaInner, newState);
     } else {
       // Only one side rendered (or neither) — reflect Partial/blocked
       // honestly rather than showing stale interactive content.
       interactiveBeforeAfterController.clear();
+      const legacyRendered = compact.legacy.rendered;
+      const v2Rendered = compact.v2.rendered;
       const partialState = {
         state: (legacyRendered || v2Rendered) ? 'partial' : 'unavailable',
         splitPercent: 50, legacyAvailable: legacyRendered, v2Available: v2Rendered, bothAvailable: false,
@@ -680,6 +704,7 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
           sourceLegacyWidth: null, sourceLegacyHeight: null, sourceV2Width: null, sourceV2Height: null,
           displayWidth: null, displayHeight: null,
           sameAspectRatio: false, exactSourcePixelMatch: false, displayDimensionsNormalized: false,
+          aspectRatioRelativeDifference: null, aspectRatioTolerance: null,
         },
         warnings: [],
         blockers: (legacyRendered || v2Rendered) ? ['Interactive comparison is unavailable because only one preview rendered.'] : [],
