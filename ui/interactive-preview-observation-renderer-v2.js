@@ -43,6 +43,9 @@ const UNAVAILABLE_REASON_MESSAGE = {
   'not-ready': 'Observation is available after both previews are ready.',
 };
 const SAFETY_BLOCKED_MESSAGE = 'Observation is unavailable while the comparison is blocked by a safety anomaly.';
+// FIX 8 (EPIC 2E-J-A-F2): must match the controller's own
+// PROVIDER_UNCONFIRMED_WARNING text exactly, for priority matching.
+const PROVIDER_UNCONFIRMED_WARNING = 'Current generation could not be independently confirmed.';
 
 const SAFETY_NOTE = 'Observation only \u00B7 Legacy remains production \u00B7 XMP unchanged';
 const V2_REMINDER = 'Controlled V2 remains non-production.';
@@ -193,7 +196,7 @@ export function renderInteractivePreviewObservationV2(container, state) {
   });
   if (clearButton) clearButton.disabled = !enabled || rawObservation === null || rawObservation === undefined;
 
-  // FIX 6/7 (EPIC 2E-J-A-F): status message chosen from the ACTUAL
+  // FIX 6 (EPIC 2E-J-A-F): status message chosen from the ACTUAL
   // cause, never a single generic fallback. Priority: a specific
   // selected-observation message > the state-level message (ready/
   // cleared/disposed) > safety-blocked message > the honest
@@ -212,14 +215,35 @@ export function renderInteractivePreviewObservationV2(container, state) {
   }
   if (statusEl) statusEl.textContent = message;
 
-  // FIX 7: at most one primary warning, bounded and deduplicated
-  // against the status message (never repeats the same text in both
-  // elements). Priority: stale-generation warning > safety blocker >
-  // any other supplied warning.
+  // FIX 8 (EPIC 2E-J-A-F2): explicit warning priority — (1) an actual
+  // stale-generation mismatch, (2) a safety blocker, (3) the
+  // provider-confirmation-unavailable notice, (4) the honest
+  // unavailable reason, (5) nothing (normal selected/ready status needs
+  // no separate warning). Deduplicated against the status message text
+  // (never repeats the same text in both elements). The
+  // provider-unconfirmed notice is rendered in NEUTRAL/informational
+  // styling — never as an error/danger, and never labeled "stale".
   if (warningEl) {
     const candidates = _safeArray(rawWarnings).map((w) => _safeText(w)).filter(Boolean);
-    const primaryWarning = candidates.find((w) => w !== message) ?? null;
+    const isStaleWarning = (w) => w === UNAVAILABLE_REASON_MESSAGE.cancelled;
+    const isProviderUnconfirmed = (w) => w === PROVIDER_UNCONFIRMED_WARNING;
+
+    let primaryWarning = candidates.find(isStaleWarning) ?? null;
+    let warningTone = 'danger';
+    if (!primaryWarning && normalizedState === 'blocked') {
+      primaryWarning = null; // the safety-blocked cause is already the primary status message itself — no separate warning duplicate.
+    }
+    if (!primaryWarning) {
+      const providerNotice = candidates.find(isProviderUnconfirmed);
+      if (providerNotice) { primaryWarning = providerNotice; warningTone = 'neutral'; }
+    }
+    if (!primaryWarning) {
+      primaryWarning = candidates.find((w) => w !== message) ?? null;
+      warningTone = 'neutral';
+    }
+
     warningEl.textContent = primaryWarning ?? '';
+    warningEl.style.color = warningTone === 'danger' ? 'var(--warn, orange)' : 'var(--text-dim)';
   }
 
   if (safetyNoteEl) {
