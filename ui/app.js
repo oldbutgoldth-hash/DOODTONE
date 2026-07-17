@@ -53,6 +53,8 @@ import { createVisualPreviewComparisonControllerV2 } from './visual-preview-comp
 import { ensureVisualPreviewComparisonLayout, renderVisualPreviewComparison, clearVisualPreviewComparisonDisplay, buildRenderingPlaceholderState, buildPreparingAnalysisState } from './visual-preview-comparison-renderer-v2.js';
 import { createInteractiveBeforeAfterControllerV2 } from './interactive-before-after-controller-v2.js';
 import { ensureInteractiveBeforeAfterLayout, getInteractiveBeforeAfterElements, renderInteractiveBeforeAfterStatus, clearInteractiveBeforeAfterDisplay } from './interactive-before-after-renderer-v2.js';
+import { createInteractivePreviewObservationControllerV2 } from './interactive-preview-observation-controller-v2.js';
+import { ensureInteractivePreviewObservationLayout, renderInteractivePreviewObservationV2, clearInteractivePreviewObservationDisplay } from './interactive-preview-observation-renderer-v2.js';
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
@@ -130,6 +132,7 @@ let visualPreviewComparisonController = null;
 // EPIC 2E-I Phase A: lazy-initialized once the Interactive Before/After
 // section's skeleton exists in the DOM.
 let interactiveBeforeAfterController = null;
+let interactivePreviewObservationController = null;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 // The DC/React runtime streams and mounts the template asynchronously, so the
@@ -709,12 +712,13 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
     // sides rendered — never inferred from canvas presence/dimensions
     // alone.
     const ready = compact.bothRendered && compact.visualComparisonAvailable;
+    let ibaResultState = null;
     if (ready) {
       const legacySourceCanvas = document.getElementById('legacyVisualPreviewCanvasV2');
       const v2SourceCanvas = document.getElementById('controlledV2VisualPreviewCanvasV2');
       // FIX 11: updateSources() emits via onStateChange — no separate
       // render call needed here.
-      interactiveBeforeAfterController.updateSources({
+      ibaResultState = interactiveBeforeAfterController.updateSources({
         legacySourceCanvas, v2SourceCanvas, generationId: compact.generationId,
         legacyVisualAdjustmentsApplied: compact.legacy.visualAdjustmentsApplied,
         v2VisualAdjustmentsApplied: compact.v2.visualAdjustmentsApplied,
@@ -733,11 +737,18 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
       // correctly detected even though no canvas has been bound yet.
       // FIX 11: prepareState() emits via onStateChange — no separate
       // render call needed here.
-      interactiveBeforeAfterController.prepareState({
+      ibaResultState = interactiveBeforeAfterController.prepareState({
         legacySide: compact.legacy, v2Side: compact.v2, safety: compact.safety,
         generationId: compact.generationId,
       });
     }
+
+    // EPIC 2E-J Phase A: sync the Preview Observation layer's context
+    // from Interactive Before/After's OWN resolved state — compact
+    // primitives only, never the full analysis or Visual Preview
+    // object. Observation integration failures are caught locally
+    // below and must never affect Interactive Before/After itself.
+    _syncInteractivePreviewObservation(ibaResultState, compact.generationId);
   } catch (ibaErr) {
     // FIX 5: a failure anywhere above must affect only Interactive
     // Before/After — Visual Preview Comparison (rendered just before
@@ -745,6 +756,56 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
     console.warn('InteractiveBeforeAfter sync failed (Visual Preview Comparison unaffected):', ibaErr);
     if (interactiveBeforeAfterController) interactiveBeforeAfterController.clear();
     try { renderInteractiveBeforeAfterStatus(ibaInner, { state: 'failed', interactive: false, warnings: [], blockers: ['Interactive comparison could not be prepared. Existing analysis and production output were not changed.'] }); } catch { /* last-resort no-op */ }
+  }
+}
+
+/**
+ * EPIC 2E-J Phase A: safe integration glue for the Preview Observation
+ * layer. Reads Interactive Before/After's OWN resolved state (never the
+ * raw Visual Preview object) through single-read safe getters, and
+ * passes only a compact primitive context to the Observation
+ * controller. A failure here affects ONLY the Observation section —
+ * never Analysis, Visual Preview, Interactive Before/After, Mapping, or
+ * XMP.
+ */
+function _syncInteractivePreviewObservation(ibaState, generationId) {
+  const obsSec = document.getElementById('interactivePreviewObservationSection');
+  const obsInner = document.getElementById('interactivePreviewObservationInner');
+  if (!obsSec || !obsInner) return;
+
+  try {
+    obsSec.style.display = 'block';
+    const elements = ensureInteractivePreviewObservationLayout(obsInner);
+    if (!elements) return;
+
+    if (!interactivePreviewObservationController) {
+      interactivePreviewObservationController = createInteractivePreviewObservationControllerV2({
+        ...elements,
+        onStateChange: (s) => renderInteractivePreviewObservationV2(obsInner, s),
+      });
+    }
+
+    const rawState = safeGetVisualPreviewProperty(ibaState, 'state');
+    const rawInteractive = safeGetVisualPreviewProperty(ibaState, 'interactive');
+    const rawMetadata = safeGetVisualPreviewProperty(ibaState, 'metadata');
+    const rawSafety = safeGetVisualPreviewProperty(rawMetadata, 'safety');
+    const rawBlockedReason = safeGetVisualPreviewProperty(ibaState, 'blockedReason');
+    // Observation must be blocked whenever Interactive Before/After itself
+    // is blocked for a safety reason — never merely because the comparison
+    // happens to be geometry-blocked or preview-state-blocked (those are
+    // still "unavailable" for observation purposes, per this phase's
+    // explicit context requirements, not a safety anomaly in themselves).
+    const safetyBlocked = typeof rawState === 'string' && rawState === 'blocked' && rawBlockedReason === 'safety';
+
+    interactivePreviewObservationController.setContext({
+      generationId,
+      interactiveState: typeof rawState === 'string' ? rawState : null,
+      interactiveReady: rawInteractive === true,
+      safetyBlocked,
+    });
+  } catch (obsErr) {
+    console.warn('Preview Observation sync failed (Interactive Before/After unaffected):', obsErr);
+    if (interactivePreviewObservationController) interactivePreviewObservationController.reset();
   }
 }
 
@@ -789,6 +850,16 @@ async function runAnalysis() {
     const newIbaState = interactiveBeforeAfterController.clear();
     const ibaInnerEarly = document.getElementById('interactiveBeforeAfterInner');
     if (ibaInnerEarly) renderInteractiveBeforeAfterStatus(ibaInnerEarly, { ...newIbaState, state: 'preparing' });
+  }
+
+  // EPIC 2E-J Phase A: clear any Preview Observation immediately at the
+  // same point — covers BOTH Re-analyze and New image, since
+  // runAnalysis() is the single entry point for both. The observation
+  // must never be carried forward to a new generation/image; the
+  // controls disable again until the new Interactive comparison
+  // reaches Ready.
+  if (interactivePreviewObservationController) {
+    interactivePreviewObservationController.reset();
   }
 
   setAnalysisBox('loading', 'กำลังวิเคราะห์ histogram…');
@@ -1444,6 +1515,13 @@ function handleReset() {
   if (ibaSec) ibaSec.style.display = 'none';
   const ibaInner = document.getElementById('interactiveBeforeAfterInner');
   if (ibaInner) clearInteractiveBeforeAfterDisplay(ibaInner);
+  // EPIC 2E-J Phase A: same reset guarantee for Preview Observation —
+  // clear (not dispose), hide the section, reset the status display.
+  if (interactivePreviewObservationController) interactivePreviewObservationController.reset();
+  const obsSec = document.getElementById('interactivePreviewObservationSection');
+  if (obsSec) obsSec.style.display = 'none';
+  const obsInner = document.getElementById('interactivePreviewObservationInner');
+  if (obsInner) clearInteractivePreviewObservationDisplay(obsInner);
   const reviewInner = document.getElementById('reviewConsoleInner');
   if (reviewInner) reviewInner.innerHTML = '';
   // Reset active tab back to Overview

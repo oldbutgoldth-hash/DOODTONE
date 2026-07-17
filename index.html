@@ -554,6 +554,17 @@
             <div id="interactiveBeforeAfterSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
               <div id="interactiveBeforeAfterInner"></div>
             </div>
+
+            <!-- EPIC 2E-J Phase A: Preview Observation — a read-only,
+                 UI-local feedback layer sitting below Interactive
+                 Before/After. Records ONLY what the person notices
+                 about the two approximate browser previews; never a
+                 production decision, never written into finalStyleIntent,
+                 Mapping, or XMP. No persistence: disappears on
+                 Re-analyze/New image/Reset/reload by design. -->
+            <div id="interactivePreviewObservationSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
+              <div id="interactivePreviewObservationInner"></div>
+            </div>
           </div>
 
           <!-- ── Sliders panel ── -->
