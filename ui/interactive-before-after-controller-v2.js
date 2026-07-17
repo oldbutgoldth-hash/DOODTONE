@@ -194,6 +194,25 @@ function _hasMissingSafetyEvidence(safety) {
   return (source !== 'legacy' && source !== 'v2') || rawAllowExport === null || rawAllowWrite === null || rawContradictory === null;
 }
 
+// FIX 2/3 (EPIC 2E-I-B-F2): the single shared safety-normalization
+// helper — used identically by both updateSources() and
+// prepareState(), so a hostile/malformed `safety` object is normalized
+// exactly once (single-read via safeGet) regardless of which entry
+// point supplied it. Never preserves the arbitrary original object.
+function _normalizeSafetyEvidence(safety) {
+  if (!_isRecord(safety)) return null;
+  const rawSelectedSource = safeGet(safety, 'selectedProductionSource');
+  const rawAllowExport = safeGet(safety, 'allowExport');
+  const rawAllowWrite = safeGet(safety, 'allowProductionWrite');
+  const rawContradictory = safeGet(safety, 'v2Contradictory');
+  return {
+    selectedProductionSource: rawSelectedSource === 'legacy' ? 'legacy' : rawSelectedSource === 'v2' ? 'v2' : 'unknown',
+    allowExport: rawAllowExport === true ? true : rawAllowExport === false ? false : null,
+    allowProductionWrite: rawAllowWrite === true ? true : rawAllowWrite === false ? false : null,
+    v2Contradictory: rawContradictory === true ? true : rawContradictory === false ? false : null,
+  };
+}
+
 const SIDE_STATE_VALUES = ['rendered', 'failed', 'blocked', 'cancelled', 'unavailable', 'unknown'];
 // FIX 1 (EPIC 2E-I-B-F): normalizes any incoming side-state string to
 // one of the 6 canonical values — an unrecognized string never passes
@@ -276,14 +295,24 @@ function _dedupeWarnings(list, limit = 6) {
 export function deriveInteractiveBeforeAfterStateV2(input) {
   const rec = _isRecord(input) ? input : {};
   const stale = safeGet(rec, 'stale') === true;
-  const legacySide = _isRecord(safeGet(rec, 'legacySide')) ? rec.legacySide : null;
-  const v2Side = _isRecord(safeGet(rec, 'v2Side')) ? rec.v2Side : null;
-  const safety = safeGet(rec, 'safety');
-  const alignment = safeGet(rec, 'alignment') ?? null;
+  // FIX 1 (EPIC 2E-I-B-F2): each untrusted property read EXACTLY ONCE
+  // through safeGet, stored, then validated from the stored variable
+  // only — never a second direct read of the original property (which
+  // a throw-on-second-read hostile getter would defeat).
+  const rawLegacySide = safeGet(rec, 'legacySide');
+  const legacySide = _isRecord(rawLegacySide) ? rawLegacySide : null;
+  const rawV2Side = safeGet(rec, 'v2Side');
+  const v2Side = _isRecord(rawV2Side) ? rawV2Side : null;
+  const rawSafety = safeGet(rec, 'safety');
+  const safety = _normalizeSafetyEvidence(rawSafety);
+  const rawAlignment = safeGet(rec, 'alignment');
+  const alignment = rawAlignment ?? null;
   const rawSplit = safeGet(rec, 'splitPercent');
   const splitPercent = Number.isFinite(rawSplit) ? rawSplit : 50;
-  const sourceGenerationId = safeGet(rec, 'sourceGenerationId') ?? null;
-  const currentGenerationId = safeGet(rec, 'currentGenerationId') ?? null;
+  const rawSourceGenerationId = safeGet(rec, 'sourceGenerationId');
+  const sourceGenerationId = rawSourceGenerationId ?? null;
+  const rawCurrentGenerationId = safeGet(rec, 'currentGenerationId');
+  const currentGenerationId = rawCurrentGenerationId ?? null;
 
   const legacyRendered = safeGet(legacySide, 'rendered') === true;
   const v2Rendered = safeGet(v2Side, 'rendered') === true;
@@ -621,15 +650,11 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     v2SideState = { state: safeGet(rawPreviewStatus, 'v2State'), warnings: safeGet(rawPreviewStatus, 'v2Warnings') };
 
     const proposedGenerationId = generationId ?? null;
-    // Phase B: normalize the incoming safety evidence once here — a
-    // hostile/malformed `safety` object is never spread verbatim into
-    // internal state.
-    const normalizedSafety = _isRecord(safety) ? {
-      selectedProductionSource: safety.selectedProductionSource === 'legacy' ? 'legacy' : safety.selectedProductionSource === 'v2' ? 'v2' : 'unknown',
-      allowExport: safety.allowExport === true ? true : safety.allowExport === false ? false : null,
-      allowProductionWrite: safety.allowProductionWrite === true ? true : safety.allowProductionWrite === false ? false : null,
-      v2Contradictory: safety.v2Contradictory === true ? true : safety.v2Contradictory === false ? false : null,
-    } : null;
+    // FIX 2 (EPIC 2E-I-B-F2): normalize via the shared single-read
+    // helper — a hostile/malformed `safety` object is never spread
+    // verbatim into internal state, and every field is read exactly
+    // once through safeGet.
+    const normalizedSafety = _normalizeSafetyEvidence(safety);
 
     function _staleNow() {
       if (!hasGenerationProvider) return false;
@@ -903,7 +928,10 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     v2VisualAdjustmentsApplied = null;
     legacySideState = _isRecord(legacySide) ? legacySide : null;
     v2SideState = _isRecord(v2Side) ? v2Side : null;
-    safetyEvidence = _isRecord(safety) ? safety : null;
+    // FIX 3 (EPIC 2E-I-B-F2): normalize via the SAME shared helper
+    // updateSources() uses — never preserves the arbitrary original
+    // `safety` object/getters internally.
+    safetyEvidence = _normalizeSafetyEvidence(safety);
     splitPercent = 50;
     _applySplitToDom(splitPercent);
     _clearDisplayCanvases();

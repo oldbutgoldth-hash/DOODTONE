@@ -281,6 +281,20 @@ const TONE_COLOR = {
   danger: 'var(--danger, red)',
 };
 
+const VALID_TONES = ['success', 'neutral', 'danger', 'warning'];
+// FIX 6/7 (EPIC 2E-I-B-F2): validates a friendly status object from
+// the controller's metadata — bounded text length, tone restricted to
+// the 4 known values (unsupported tone becomes neutral). Returns null
+// if malformed/missing so the caller can fall back to local derivation.
+function _validateFriendlyStatus(statusObj) {
+  const rawText = _safeGetR(statusObj, 'text');
+  const rawTone = _safeGetR(statusObj, 'tone');
+  if (typeof rawText !== 'string' || !rawText.trim()) return null;
+  const text = rawText.length > 60 ? `${rawText.slice(0, 60)}…` : rawText;
+  const tone = VALID_TONES.includes(rawTone) ? rawTone : 'neutral';
+  return { text, tone };
+}
+
 export function renderInteractiveBeforeAfterStatus(container, state) {
   if (!container) return;
   ensureInteractiveBeforeAfterLayout(container);
@@ -305,8 +319,32 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
   const interactive = rawInteractive === true;
   const legacyAvailable = rawLegacyAvailable === true;
   const v2Available = rawV2Available === true;
+  // FIX 5 (EPIC 2E-I-B-F2): `a` is read from `rawAlignment` exactly
+  // once here — never re-read as `s.alignment` again later (e.g. in
+  // Technical details below, which now reuses this same variable).
   const a = (rawAlignment && typeof rawAlignment === 'object') ? rawAlignment : null;
   const meta = (rawMetadata && typeof rawMetadata === 'object') ? rawMetadata : {};
+  // FIX 4: every nested metadata/alignment field read exactly once
+  // through _safeGetR here, stored, then used everywhere below —
+  // never a second direct `meta.x`/`a.x` access.
+  const rawLegacyEffect = _safeGetR(meta, 'legacyVisualAdjustmentsApplied');
+  const rawV2Effect = _safeGetR(meta, 'v2VisualAdjustmentsApplied');
+  const rawLegacyStatus = _safeGetR(meta, 'legacyStatus');
+  const rawV2Status = _safeGetR(meta, 'v2Status');
+  const legacyEffect = rawLegacyEffect === true ? true : rawLegacyEffect === false ? false : null;
+  const v2Effect = rawV2Effect === true ? true : rawV2Effect === false ? false : null;
+
+  const rawSourceLegacyWidth = _safeGetR(a, 'sourceLegacyWidth');
+  const rawSourceLegacyHeight = _safeGetR(a, 'sourceLegacyHeight');
+  const rawSourceV2Width = _safeGetR(a, 'sourceV2Width');
+  const rawSourceV2Height = _safeGetR(a, 'sourceV2Height');
+  const rawDisplayWidth = _safeGetR(a, 'displayWidth');
+  const rawDisplayHeight = _safeGetR(a, 'displayHeight');
+  const rawSameAspectRatio = _safeGetR(a, 'sameAspectRatio');
+  const rawExactSourcePixelMatch = _safeGetR(a, 'exactSourcePixelMatch');
+  const rawDisplayDimensionsNormalized = _safeGetR(a, 'displayDimensionsNormalized');
+  const rawAspectRatioRelativeDifference = _safeGetR(a, 'aspectRatioRelativeDifference');
+  const rawAspectRatioTolerance = _safeGetR(a, 'aspectRatioTolerance');
 
   const badgeEl = document.getElementById('ibaStatusBadge');
   if (badgeEl) badgeEl.replaceChildren(badge(STATE_LABEL[normalized], STATE_COLOR[normalized]));
@@ -337,6 +375,11 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
 
   // Phase B: compact Legacy/V2/Alignment source status summary —
   // friendly labels, never raw internal state values.
+  // FIX 6 (EPIC 2E-I-B-F2): the controller's own `metadata.legacyStatus`
+  // / `metadata.v2Status` (built by `_friendlySideStatus()`) are now
+  // the AUTHORITATIVE source for these badges — local derivation below
+  // is only a fallback for when that friendly metadata is missing or
+  // malformed.
   // FIX 10 (EPIC 2E-I-B-F): "No supported adjustment" is never styled
   // as success; success requires actually-rendered AND explicit `true`
   // adjustment evidence. Missing (`null`) evidence uses neutral
@@ -345,7 +388,7 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
   if (sourceStatusRowEl) {
     sourceStatusRowEl.replaceChildren();
 
-    function _sideBadgeInfo(name, available, effectTriState, unavailableLabel) {
+    function _fallbackSideBadgeInfo(name, available, effectTriState, unavailableLabel) {
       if (available) {
         if (effectTriState === false) return { text: `${name}: No supported adjustment`, tone: 'neutral' };
         if (effectTriState === true) return { text: `${name}: Rendered`, tone: 'success' };
@@ -354,18 +397,23 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
       return { text: `${name}: ${unavailableLabel}`, tone: 'neutral' };
     }
 
-    const legacyEffect = meta.legacyVisualAdjustmentsApplied === true ? true : meta.legacyVisualAdjustmentsApplied === false ? false : null;
-    const v2Effect = meta.v2VisualAdjustmentsApplied === true ? true : meta.v2VisualAdjustmentsApplied === false ? false : null;
-    const legacyInfo = _sideBadgeInfo('Legacy', legacyAvailable, legacyEffect, normalized === 'failed' ? 'Failed' : 'Unavailable');
-    const v2Info = _sideBadgeInfo('Controlled V2', v2Available, v2Effect, normalized === 'blocked' ? 'Blocked' : normalized === 'failed' ? 'Failed' : 'Unavailable');
-    sourceStatusRowEl.appendChild(badge(legacyInfo.text, TONE_COLOR[legacyInfo.tone]));
-    sourceStatusRowEl.appendChild(badge(v2Info.text, TONE_COLOR[v2Info.tone]));
+    // FIX 7: an explicit failed/blocked side must never be presented
+    // merely as "Unavailable" — the fallback label reflects the real
+    // normalized overall state when the controller's friendly status
+    // metadata itself is unavailable.
+    const legacyFallbackLabel = normalized === 'failed' ? 'Failed' : normalized === 'blocked' ? 'Blocked' : 'Unavailable';
+    const v2FallbackLabel = normalized === 'failed' ? 'Failed' : normalized === 'blocked' ? 'Blocked' : 'Unavailable';
 
-    if (a && a.sourceLegacyWidth !== null && a.sourceV2Width !== null) {
+    const legacyInfo = _validateFriendlyStatus(rawLegacyStatus) ?? _fallbackSideBadgeInfo('Legacy', legacyAvailable, legacyEffect, legacyFallbackLabel);
+    const v2Info = _validateFriendlyStatus(rawV2Status) ?? _fallbackSideBadgeInfo('Controlled V2', v2Available, v2Effect, v2FallbackLabel);
+    sourceStatusRowEl.appendChild(badge(legacyInfo.text, TONE_COLOR[legacyInfo.tone] ?? TONE_COLOR.neutral));
+    sourceStatusRowEl.appendChild(badge(v2Info.text, TONE_COLOR[v2Info.tone] ?? TONE_COLOR.neutral));
+
+    if (a && rawSourceLegacyWidth !== null && rawSourceV2Width !== null) {
       let alignLabel, alignColor;
-      if (a.sameAspectRatio === false) { alignLabel = 'Alignment: Blocked geometry'; alignColor = TONE_COLOR.danger; }
-      else if (a.displayDimensionsNormalized === true) { alignLabel = 'Alignment: Normalized once'; alignColor = TONE_COLOR.neutral; }
-      else if (a.exactSourcePixelMatch === true) { alignLabel = 'Alignment: Exact dimensions'; alignColor = TONE_COLOR.success; }
+      if (rawSameAspectRatio === false) { alignLabel = 'Alignment: Blocked geometry'; alignColor = TONE_COLOR.danger; }
+      else if (rawDisplayDimensionsNormalized === true) { alignLabel = 'Alignment: Normalized once'; alignColor = TONE_COLOR.neutral; }
+      else if (rawExactSourcePixelMatch === true) { alignLabel = 'Alignment: Exact dimensions'; alignColor = TONE_COLOR.success; }
       else { alignLabel = 'Alignment: Unknown'; alignColor = TONE_COLOR.neutral; }
       sourceStatusRowEl.appendChild(badge(alignLabel, alignColor));
     }
@@ -410,17 +458,19 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
   const alignmentInfoEl = document.getElementById('ibaAlignmentInfo');
   if (alignmentInfoEl) {
     alignmentInfoEl.replaceChildren();
-    const a = (s.alignment && typeof s.alignment === 'object') ? s.alignment : null;
-    if (a && a.sourceLegacyWidth !== null && a.sourceV2Width !== null) {
+    // FIX 5 (EPIC 2E-I-B-F2): reuses `a`/the raw* variables captured
+    // ONCE at the top of this function — never a second read of
+    // `s.alignment` or its fields here.
+    if (a && rawSourceLegacyWidth !== null && rawSourceV2Width !== null) {
       const rows = [
-        ['Exact source pixel match', a.exactSourcePixelMatch === true ? 'Yes' : a.exactSourcePixelMatch === false ? 'No' : 'unknown'],
-        ['Same aspect ratio', a.sameAspectRatio === true ? 'Yes' : a.sameAspectRatio === false ? 'No' : 'unknown'],
-        ['Aspect-ratio difference', Number.isFinite(a.aspectRatioRelativeDifference) ? `${(a.aspectRatioRelativeDifference * 100).toFixed(3)}%` : 'unknown'],
-        ['Comparison tolerance', Number.isFinite(a.aspectRatioTolerance) ? `${(a.aspectRatioTolerance * 100).toFixed(3)}%` : 'unknown'],
-        ['Display dimensions normalized', a.displayDimensionsNormalized === true ? 'Yes' : a.displayDimensionsNormalized === false ? 'No' : 'unknown'],
-        ['Display resolution', (Number.isFinite(a.displayWidth) && Number.isFinite(a.displayHeight)) ? `${a.displayWidth}×${a.displayHeight}` : 'unavailable'],
-        ['Legacy source resolution', (Number.isFinite(a.sourceLegacyWidth) && Number.isFinite(a.sourceLegacyHeight)) ? `${a.sourceLegacyWidth}×${a.sourceLegacyHeight}` : 'unknown'],
-        ['V2 source resolution', (Number.isFinite(a.sourceV2Width) && Number.isFinite(a.sourceV2Height)) ? `${a.sourceV2Width}×${a.sourceV2Height}` : 'unknown'],
+        ['Exact source pixel match', rawExactSourcePixelMatch === true ? 'Yes' : rawExactSourcePixelMatch === false ? 'No' : 'unknown'],
+        ['Same aspect ratio', rawSameAspectRatio === true ? 'Yes' : rawSameAspectRatio === false ? 'No' : 'unknown'],
+        ['Aspect-ratio difference', Number.isFinite(rawAspectRatioRelativeDifference) ? `${(rawAspectRatioRelativeDifference * 100).toFixed(3)}%` : 'unknown'],
+        ['Comparison tolerance', Number.isFinite(rawAspectRatioTolerance) ? `${(rawAspectRatioTolerance * 100).toFixed(3)}%` : 'unknown'],
+        ['Display dimensions normalized', rawDisplayDimensionsNormalized === true ? 'Yes' : rawDisplayDimensionsNormalized === false ? 'No' : 'unknown'],
+        ['Display resolution', (Number.isFinite(rawDisplayWidth) && Number.isFinite(rawDisplayHeight)) ? `${rawDisplayWidth}×${rawDisplayHeight}` : 'unavailable'],
+        ['Legacy source resolution', (Number.isFinite(rawSourceLegacyWidth) && Number.isFinite(rawSourceLegacyHeight)) ? `${rawSourceLegacyWidth}×${rawSourceLegacyHeight}` : 'unknown'],
+        ['V2 source resolution', (Number.isFinite(rawSourceV2Width) && Number.isFinite(rawSourceV2Height)) ? `${rawSourceV2Width}×${rawSourceV2Height}` : 'unknown'],
       ];
       rows.forEach(([label, value]) => {
         const row = el('div', { style: 'display:flex;justify-content:space-between;gap:8px' });
@@ -428,7 +478,7 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
         row.appendChild(el('span', { style: 'color:var(--text-dim);overflow-wrap:anywhere;text-align:right', text: String(value) }));
         alignmentInfoEl.appendChild(row);
       });
-      if (a.displayDimensionsNormalized === true) {
+      if (rawDisplayDimensionsNormalized === true) {
         alignmentInfoEl.appendChild(el('div', { style: 'font-size:10px;color:var(--text-faint);font-style:italic;margin-top:2px', text: 'Display dimensions were normalized once for alignment; source preview canvases were not changed.' }));
       }
     }
