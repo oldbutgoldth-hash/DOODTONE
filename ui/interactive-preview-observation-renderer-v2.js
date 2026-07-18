@@ -180,7 +180,7 @@ export function ensureInteractivePreviewObservationLayout(container) {
   const reasonsWrap = el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px' });
   REASON_OPTIONS.forEach(({ value, label }) => {
     const reasonLabel = el('label', {
-      style: 'display:flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--text);min-height:36px',
+      style: 'display:flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--text);min-height:44px',
     });
     const input = el('input', { attrs: { type: 'checkbox', name: 'ipoReason', value, id: `ipoReason_${value}` } });
     input.style.cursor = 'pointer';
@@ -190,7 +190,7 @@ export function ensureInteractivePreviewObservationLayout(container) {
   });
   reasonFieldset.appendChild(reasonsWrap);
 
-  const reasonLimitEl = el('div', { style: 'font-size:10px;color:var(--text-dim)' });
+  const reasonLimitEl = el('div', { style: 'font-size:10px;color:var(--text-dim)', attrs: { 'aria-live': 'polite' } });
   reasonLimitEl.id = 'ipoReasonLimit';
   reasonFieldset.appendChild(reasonLimitEl);
 
@@ -202,7 +202,7 @@ export function ensureInteractivePreviewObservationLayout(container) {
   clearReasonsButton.id = 'ipoClearReasonsButton';
   reasonFieldset.appendChild(clearReasonsButton);
 
-  const reasonStatusEl = el('div', { style: 'font-size:10px;color:var(--text-dim)', attrs: { 'aria-live': 'polite' } });
+  const reasonStatusEl = el('div', { style: 'font-size:10px;color:var(--text-dim)' });
   reasonStatusEl.id = 'ipoReasonStatus';
   reasonFieldset.appendChild(reasonStatusEl);
 
@@ -442,6 +442,43 @@ export function getInteractivePreviewObservationSessionElements(container) {
  * summary object, never shows percentages when the denominator is
  * zero, never shows NaN/Infinity.
  */
+// FIX 10 (EPIC 2E-J-B-F): single-read, clamped-to-finite-non-negative-
+// integer projection of a count value — never a `Number.isFinite(_safeGetR(...)) ? s.field : 0`
+// double-read pattern.
+function _normalizeNonNegativeCount(value) {
+  return (Number.isFinite(value) && value >= 0) ? Math.floor(value) : 0;
+}
+
+const REASON_VALUE_TO_FIELD = {
+  'skin-tone': 'skinTone', 'white-balance': 'whiteBalance', 'highlight-detail': 'highlightDetail',
+  'shadow-detail': 'shadowDetail', contrast: 'contrast', 'color-balance': 'colorBalance',
+  saturation: 'saturation', 'natural-look': 'naturalLook', 'clarity-detail': 'clarityDetail', 'no-specific-reason': 'noSpecificReason',
+};
+
+// FIX 7/11 (EPIC 2E-J-B-F): a safe bounded projection of an untrusted
+// array, mirroring the controller/session modules' own helper — never
+// `.map()`/`.filter()` directly on caller-supplied input.
+function _safeBoundedArrayR(input, maxLen = 8) {
+  if (!Array.isArray(input)) return [];
+  let length;
+  try {
+    length = input.length;
+  } catch {
+    return [];
+  }
+  if (!Number.isFinite(length) || length <= 0) return [];
+  const bound = Math.min(Math.floor(length), maxLen);
+  const out = [];
+  for (let i = 0; i < bound; i++) {
+    try {
+      out.push(input[i]);
+    } catch {
+      /* hostile index getter skipped */
+    }
+  }
+  return out;
+}
+
 export function renderInteractivePreviewObservationSessionV2(container, summary) {
   if (!container) return;
   ensureInteractivePreviewObservationSessionLayout(container);
@@ -450,15 +487,18 @@ export function renderInteractivePreviewObservationSessionV2(container, summary)
   const secondaryEl = container.querySelector('#ipoSessionSecondary');
   const topReasonsEl = container.querySelector('#ipoSessionTopReasons');
 
-  const totalObserved = Number.isFinite(_safeGetR(s, 'totalObserved')) ? s.totalObserved : 0;
-  const activeObservations = Number.isFinite(_safeGetR(s, 'activeObservations')) ? s.activeObservations : 0;
-  const preferLegacy = Number.isFinite(_safeGetR(s, 'preferLegacy')) ? s.preferLegacy : 0;
-  const preferV2 = Number.isFinite(_safeGetR(s, 'preferV2')) ? s.preferV2 : 0;
-  const noVisibleDifference = Number.isFinite(_safeGetR(s, 'noVisibleDifference')) ? s.noVisibleDifference : 0;
-  const unsure = Number.isFinite(_safeGetR(s, 'unsure')) ? s.unsure : 0;
-  const cleared = Number.isFinite(_safeGetR(s, 'cleared')) ? s.cleared : 0;
-  const invalidated = Number.isFinite(_safeGetR(s, 'invalidated')) ? s.invalidated : 0;
-  const topReasons = _safeArray(_safeGetR(s, 'topReasons'));
+  // FIX 10: every field read exactly once via _safeGetR, then clamped
+  // — never a second direct access of the original object.
+  const totalObserved = _normalizeNonNegativeCount(_safeGetR(s, 'totalObserved'));
+  const activeObservations = _normalizeNonNegativeCount(_safeGetR(s, 'activeObservations'));
+  const preferLegacy = _normalizeNonNegativeCount(_safeGetR(s, 'preferLegacy'));
+  const preferV2 = _normalizeNonNegativeCount(_safeGetR(s, 'preferV2'));
+  const noVisibleDifference = _normalizeNonNegativeCount(_safeGetR(s, 'noVisibleDifference'));
+  const unsure = _normalizeNonNegativeCount(_safeGetR(s, 'unsure'));
+  const cleared = _normalizeNonNegativeCount(_safeGetR(s, 'cleared'));
+  const invalidated = _normalizeNonNegativeCount(_safeGetR(s, 'invalidated'));
+  const rawTopReasons = _safeGetR(s, 'topReasons');
+  const topReasons = _safeBoundedArrayR(rawTopReasons);
 
   if (metricsEl) {
     metricsEl.replaceChildren();
@@ -488,19 +528,20 @@ export function renderInteractivePreviewObservationSessionV2(container, summary)
 
   if (topReasonsEl) {
     topReasonsEl.replaceChildren();
-    if (topReasons.length > 0) {
-      const validEntries = topReasons
-        .map((entry) => {
-          const reason = _safeGetR(entry, 'reason');
-          const count = _safeGetR(entry, 'count');
-          const field = { 'skin-tone': 'skinTone', 'white-balance': 'whiteBalance', 'highlight-detail': 'highlightDetail', 'shadow-detail': 'shadowDetail', contrast: 'contrast', 'color-balance': 'colorBalance', saturation: 'saturation', 'natural-look': 'naturalLook', 'clarity-detail': 'clarityDetail', 'no-specific-reason': 'noSpecificReason' }[reason];
-          const label = field ? REASON_FIELD_LABEL[field] : null;
-          return (label && Number.isFinite(count)) ? `${label} (${count})` : null;
-        })
-        .filter(Boolean);
-      if (validEntries.length > 0) {
-        topReasonsEl.appendChild(el('div', { text: `Top reasons: ${validEntries.join(', ')}` }));
-      }
+    // FIX 11: each entry safe-read (reason, count) exactly once;
+    // malformed entries (unknown reason, non-finite/negative count) are
+    // silently rejected — never rendered as NaN/Infinity/[object Object].
+    const validEntries = [];
+    for (const entry of topReasons) {
+      const reason = _safeGetR(entry, 'reason');
+      const rawCount = _safeGetR(entry, 'count');
+      const field = typeof reason === 'string' ? REASON_VALUE_TO_FIELD[reason] : undefined;
+      const label = field ? REASON_FIELD_LABEL[field] : null;
+      const count = _normalizeNonNegativeCount(rawCount);
+      if (label && count > 0) validEntries.push(`${label} (${count})`);
+    }
+    if (validEntries.length > 0) {
+      topReasonsEl.appendChild(el('div', { text: `Top reasons: ${validEntries.join(', ')}` }));
     }
   }
 }

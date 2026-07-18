@@ -930,12 +930,24 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
     const obsStateForContext = interactivePreviewObservationController.getState();
     const obsMeta = safeGetVisualPreviewProperty(obsStateForContext, 'metadata');
     const rawGenerationConfirmed = safeGetVisualPreviewProperty(obsMeta, 'generationConfirmed');
-    const rawProviderConfigured = safeGetVisualPreviewProperty(obsMeta, 'providerConfigured');
-    // FIX: renderInteractivePreviewObservationContextV2 expects a
-    // tri-state `generationConfirmed` (true/false/null) — `false` means
-    // "context fallback" (a provider is configured but didn't actively
-    // confirm), `null` means "unavailable" (no provider at all).
-    const generationConfirmedForContext = rawGenerationConfirmed === true ? true : (rawProviderConfigured === true ? false : null);
+    const rawGenerationUsable = safeGetVisualPreviewProperty(obsMeta, 'generationUsable');
+    // FIX 12 (EPIC 2E-J-B-F): renderInteractivePreviewObservationContextV2
+    // expects a tri-state `generationConfirmed` (true/false/null) per
+    // this exact rule table — the PRIOR logic incorrectly labeled an
+    // active Provider/Context mismatch as "Context fallback" merely
+    // because a provider was configured; it must instead be
+    // "Unavailable" whenever generationUsable is false (a genuine
+    // mismatch or missing generation), never conflated with the
+    // legitimate fallback case (provider configured but gave no
+    // evidence this read, while the generation itself is still usable).
+    let generationConfirmedForContext;
+    if (rawGenerationConfirmed === true) {
+      generationConfirmedForContext = true; // Confirmed
+    } else if (rawGenerationUsable === true) {
+      generationConfirmedForContext = false; // Context fallback
+    } else {
+      generationConfirmedForContext = null; // Unavailable (mismatch or missing generation)
+    }
 
     // Strip the "Legacy: "/"Controlled V2: " prefix that Interactive
     // Before/After's own friendly badge text already includes — the

@@ -68,6 +68,36 @@ function normalizeObservationValue(value) {
   return VALID_OBSERVATIONS.includes(value) ? value : null;
 }
 
+// FIX 7 (EPIC 2E-J-B-F): a safe bounded projection of an untrusted
+// array — never `.slice()`, `for...of`, spread, or `.map()`/`.filter()`
+// directly on caller-supplied input, since a hostile `length` getter or
+// a hostile numeric-index getter could otherwise throw uncaught or
+// return unbounded data. Verifies it's genuinely an Array, safe-reads
+// `.length` exactly once, clamps to `maxLen`, and safe-reads each index
+// exactly once (skipping any index whose getter throws, never
+// crashing). Returns a brand-new plain array — the input is never
+// mutated and never referenced afterward.
+function _safeBoundedArray(input, maxLen = 32) {
+  if (!Array.isArray(input)) return [];
+  let length;
+  try {
+    length = input.length;
+  } catch {
+    return [];
+  }
+  if (!Number.isFinite(length) || length <= 0) return [];
+  const bound = Math.min(Math.floor(length), maxLen);
+  const out = [];
+  for (let i = 0; i < bound; i++) {
+    try {
+      out.push(input[i]);
+    } catch {
+      /* a hostile index getter is skipped, never crashes */
+    }
+  }
+  return out;
+}
+
 /** A single reason value: exact string match only, everything else null. */
 function normalizeReasonValue(value) {
   return VALID_REASONS.includes(value) ? value : null;
@@ -221,7 +251,7 @@ function deriveObservationStateV2(input) {
   // CURRENT selected observation for the CURRENT generation — the same
   // generation-association discipline as the observation itself.
   const rawReasons = safeGet(rec, 'reasons');
-  const reasons = normalizeReasons(rawReasons);
+  const reasons = normalizeReasons(_safeBoundedArray(rawReasons));
   const reasonsGenerationId = safeGet(rec, 'reasonsGenerationId') ?? null;
   const rawProviderResult = safeGet(rec, 'providerResult');
   const providerResult = _isRecord(rawProviderResult) ? rawProviderResult : { configured: false, available: false, generationId: null };
@@ -590,12 +620,30 @@ export function createInteractivePreviewObservationControllerV2(options) {
    * the current generation (mirrors the same generation-confirmation
    * discipline `selectObservation` itself uses).
    */
-  function _reasonsAcceptable() {
+  // FIX 1 (EPIC 2E-J-B-F): accepts an ALREADY-TAKEN provider snapshot —
+  // never calls _readProviderGeneration() itself. Every public reason
+  // operation takes exactly one snapshot and passes it through here,
+  // so a provider that changes value mid-operation can never produce
+  // two contradictory reads within the same call.
+  function _reasonsAcceptable(providerResult) {
     if (disposed) return false;
-    const providerResult = _readProviderGeneration();
     if (_providerMismatchesContext(providerResult)) return false;
     const liveState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult, reasons, reasonsGenerationId });
     return liveState.state === 'selected';
+  }
+
+  // FIX 2 (EPIC 2E-J-B-F): the shared mismatch-handling path for every
+  // reason operation — clears BOTH observation and reason memory
+  // (never reasons alone, since a stale generation invalidates the
+  // whole observation), derives the fresh stale/unavailable state using
+  // the SAME already-taken snapshot, shows the stale warning, and emits
+  // the transition. The caller must return immediately after this.
+  function _rejectReasonOperationAsStale(providerResult) {
+    const staleCleared = _clearObservationMemory();
+    _refreshWith(providerResult);
+    if (staleCleared) lastState = { ...lastState, warnings: [STALE_WARNING_MESSAGE] };
+    _emitIfChanged();
+    return lastState;
   }
 
   /**
@@ -607,8 +655,10 @@ export function createInteractivePreviewObservationControllerV2(options) {
    */
   function toggleReason(reason) {
     if (disposed) return lastState;
+    // ONE provider snapshot for this entire operation.
     const providerResult = _readProviderGeneration();
-    if (!_reasonsAcceptable()) return lastState;
+    if (_providerMismatchesContext(providerResult)) return _rejectReasonOperationAsStale(providerResult);
+    if (!_reasonsAcceptable(providerResult)) return lastState;
     const normalized = normalizeReasonValue(reason);
     if (normalized === null) return lastState;
 
@@ -645,12 +695,18 @@ export function createInteractivePreviewObservationControllerV2(options) {
    */
   function setReasons(reasonsInput) {
     if (disposed) return lastState;
+    // ONE provider snapshot for this entire operation.
     const providerResult = _readProviderGeneration();
-    if (!_reasonsAcceptable()) return lastState;
+    if (_providerMismatchesContext(providerResult)) return _rejectReasonOperationAsStale(providerResult);
+    if (!_reasonsAcceptable(providerResult)) return lastState;
     const generationId = context ? context.generationId : null;
     if (generationId === null) return lastState;
 
-    reasons = normalizeReasons(Array.isArray(reasonsInput) ? reasonsInput.slice() : []);
+    // FIX 7 (EPIC 2E-J-B-F): safe bounded projection of an untrusted
+    // array — never a raw `.slice()` on a potentially-hostile array
+    // (a hostile `length` getter or a hostile numeric-index getter
+    // could otherwise throw or return unbounded data).
+    reasons = normalizeReasons(_safeBoundedArray(reasonsInput));
     reasonsGenerationId = generationId;
     _refreshWith(providerResult);
     _emitIfChanged();
@@ -664,19 +720,9 @@ export function createInteractivePreviewObservationControllerV2(options) {
    */
   function clearReasons() {
     if (disposed) return lastState;
+    // ONE provider snapshot for this entire operation.
     const providerResult = _readProviderGeneration();
-    const mismatch = _providerMismatchesContext(providerResult);
-    if (mismatch) {
-      // A stale context takes priority — clearing reasons alone would
-      // be misleading when the whole observation is about to be
-      // invalidated anyway; let the normal stale-clearing path (which
-      // also clears reasons) handle it consistently.
-      const staleCleared = _clearObservationMemory();
-      _refreshWith(providerResult);
-      if (staleCleared) lastState = { ...lastState, warnings: [STALE_WARNING_MESSAGE] };
-      _emitIfChanged();
-      return lastState;
-    }
+    if (_providerMismatchesContext(providerResult)) return _rejectReasonOperationAsStale(providerResult);
     _clearReasonsMemory();
     _refreshWith(providerResult);
     _emitIfChanged();
