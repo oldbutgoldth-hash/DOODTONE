@@ -78,7 +78,17 @@ function normalizeObservationValue(value) {
 // crashing). Returns a brand-new plain array — the input is never
 // mutated and never referenced afterward.
 function _safeBoundedArray(input, maxLen = 32) {
-  if (!Array.isArray(input)) return [];
+  // FIX 7 (EPIC 2E-J-B-F2): the Array check itself is wrapped — a
+  // revoked or otherwise hostile Proxy can throw merely from
+  // `Array.isArray()` in rare engines/environments; degrade to an
+  // empty array rather than propagate an exception.
+  let isArr;
+  try {
+    isArr = Array.isArray(input);
+  } catch {
+    return [];
+  }
+  if (!isArr) return [];
   let length;
   try {
     length = input.length;
@@ -111,12 +121,21 @@ function normalizeReasonValue(value) {
  * `no-specific-reason` is dropped — matching the toggle-time behavior
  * where selecting a specific reason always clears the generic one).
  * Never mutates the input array.
+ *
+ * FIX 5 (EPIC 2E-J-B-F2): this function is EXPORTED and must defend
+ * itself — it never iterates caller input directly with `for...of`/
+ * spread/`.slice()`/`.map()`/`.filter()` (a hostile `Symbol.iterator`
+ * getter or a hostile numeric-index getter could otherwise throw
+ * uncaught). It projects a safe bounded plain array FIRST via
+ * `_safeBoundedArray()`, then normalizes only from that safe copy —
+ * callers may pass `normalizeReasons(rawInput)` directly without
+ * pre-projecting themselves.
  */
 function normalizeReasons(value) {
-  if (!Array.isArray(value)) return [];
+  const bounded = _safeBoundedArray(value);
   const seen = new Set();
   const out = [];
-  for (const item of value) {
+  for (const item of bounded) {
     const normalized = normalizeReasonValue(item);
     if (normalized === null || seen.has(normalized)) continue;
     seen.add(normalized);
@@ -384,9 +403,9 @@ export function createInteractivePreviewObservationControllerV2(options) {
   // skipped, never a crash. Deduplicated by target object identity;
   // the caller's original array is never mutated.
   const optionDescriptors = [];
-  if (Array.isArray(rawOptionInputs)) {
+  {
     const seen = new Set();
-    for (const item of rawOptionInputs.slice(0, 16)) {
+    for (const item of _safeBoundedArray(rawOptionInputs, 16)) {
       if (!item || typeof item !== 'object') continue;
       if (seen.has(item)) continue;
       const addEventListenerMethod = _safeMethod(item, 'addEventListener');
@@ -404,9 +423,9 @@ export function createInteractivePreviewObservationControllerV2(options) {
   // button use the exact same safe-capability-projection pattern as
   // the observation radios/Clear-observation button above.
   const reasonDescriptors = [];
-  if (Array.isArray(rawReasonInputs)) {
+  {
     const seenReasons = new Set();
-    for (const item of rawReasonInputs.slice(0, 16)) {
+    for (const item of _safeBoundedArray(rawReasonInputs, 16)) {
       if (!item || typeof item !== 'object') continue;
       if (seenReasons.has(item)) continue;
       const addEventListenerMethod = _safeMethod(item, 'addEventListener');

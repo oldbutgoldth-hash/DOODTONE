@@ -144,6 +144,19 @@ let interactivePreviewObservationSession = null;
 // session module, so repeated lifecycle callbacks for the SAME
 // generation never double-count an invalidation.
 let lastInvalidatedObservationGenerationId = null;
+// FIX 1 (EPIC 2E-J-B-F2): tracks which generation ACTUALLY owns the
+// current active Session record — never inferred from
+// `currentGenerationId` (which may already refer to a brand-new
+// generation by the time the Observation controller reports
+// unavailable/cleared for the OLD one).
+let activeObservationSessionGenerationId = null;
+// FIX 3 (EPIC 2E-J-B-F2): a compact signature (generation|observation|
+// reasons) used to detect a GENUINE change worth recording — a
+// metadata-only transition (provider-confirmation flicker, warning
+// text change) while the Observation remains "selected" must never
+// re-call recordObservation() and artificially advance the Session's
+// updatedSequence.
+let lastObservationSyncSignature = null;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 // The DC/React runtime streams and mounts the template asynchronously, so the
@@ -796,26 +809,53 @@ function _syncObservationSession(observationState) {
     if (state === 'selected') {
       const genId = safeGetVisualPreviewProperty(observationState, 'observationGenerationId');
       const observation = safeGetVisualPreviewProperty(observationState, 'observation');
-      const reasons = safeGetVisualPreviewProperty(observationState, 'reasons');
+      const rawReasons = safeGetVisualPreviewProperty(observationState, 'reasons');
+      const reasons = Array.isArray(rawReasons) ? rawReasons : [];
       if (genId !== null && genId !== undefined) {
-        interactivePreviewObservationSession.recordObservation({ generationId: genId, observation, reasons: Array.isArray(reasons) ? reasons : [] });
+        // FIX 3 (EPIC 2E-J-B-F2): only a GENUINE change (generation,
+        // observation value, or the actual reason set) is worth a new
+        // recordObservation() call — a metadata-only re-emit (provider
+        // confirmation flicker, warning text change) while remaining
+        // "selected" for the SAME generation/observation/reasons must
+        // never artificially advance the Session's updatedSequence.
+        const signature = `${String(genId)}|${String(observation)}|${reasons.slice().sort().join(',')}`;
+        if (signature !== lastObservationSyncSignature) {
+          interactivePreviewObservationSession.recordObservation({ generationId: genId, observation, reasons });
+          lastObservationSyncSignature = signature;
+        }
+        // FIX 1: this generation now genuinely owns the active Session
+        // record — track it so a LATER cleared/unavailable/blocked
+        // transition (which may report a DIFFERENT currentGenerationId
+        // by then) still targets the correct generation.
+        activeObservationSessionGenerationId = genId;
         lastInvalidatedObservationGenerationId = null; // this generation is active again — guard resets
       }
     } else if (state === 'cleared') {
-      const genId = safeGetVisualPreviewProperty(observationState, 'currentGenerationId');
-      if (genId !== null && genId !== undefined) interactivePreviewObservationSession.removeObservation(genId);
-    } else if (state === 'unavailable' || state === 'blocked') {
-      // A generation change, safety block, or the comparison leaving
-      // Ready invalidated any prior observation for this generation.
-      // Session-module-level idempotency (per-generation, checked
-      // there too) plus this app-level guard together ensure a single
-      // invalidation count per generation, even with repeated
-      // lifecycle callbacks.
-      const genId = safeGetVisualPreviewProperty(observationState, 'currentGenerationId');
-      if (genId !== null && genId !== undefined && lastInvalidatedObservationGenerationId !== genId) {
-        interactivePreviewObservationSession.invalidateGeneration(genId);
-        lastInvalidatedObservationGenerationId = genId;
+      // FIX 1/8: the generation whose Observation was just cleared is
+      // the one we were TRACKING as active — never the new
+      // `currentGenerationId` (which may already be different by the
+      // time this fires). Fall back to `currentGenerationId` only when
+      // no tracked active generation exists at all.
+      const rawCurrentGenId = safeGetVisualPreviewProperty(observationState, 'currentGenerationId');
+      const targetGenId = activeObservationSessionGenerationId ?? rawCurrentGenId;
+      if (targetGenId !== null && targetGenId !== undefined) {
+        interactivePreviewObservationSession.removeObservation(targetGenId);
       }
+      activeObservationSessionGenerationId = null;
+      lastObservationSyncSignature = null;
+    } else if (state === 'unavailable' || state === 'blocked') {
+      // FIX 1/2/8: invalidate the generation that ACTUALLY owned the
+      // prior active Observation (tracked separately) — never the
+      // newly-entered `currentGenerationId`, and never invalidate at
+      // all when there was no tracked active generation to begin with
+      // (a brand-new generation that never had an Observation must not
+      // be falsely counted as "invalidated").
+      if (activeObservationSessionGenerationId !== null && lastInvalidatedObservationGenerationId !== activeObservationSessionGenerationId) {
+        interactivePreviewObservationSession.invalidateGeneration(activeObservationSessionGenerationId);
+        lastInvalidatedObservationGenerationId = activeObservationSessionGenerationId;
+      }
+      activeObservationSessionGenerationId = null;
+      lastObservationSyncSignature = null;
     }
   } catch (sessionErr) {
     // A Session-module failure must never affect the Observation
@@ -855,6 +895,15 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
       sessionClearButton.addEventListener('click', () => {
         if (!interactivePreviewObservationSession) return;
         interactivePreviewObservationSession.clearSession();
+        // FIX 4 (EPIC 2E-J-B-F2): reset the app-level sync signature and
+        // active-generation tracker BEFORE re-recording — otherwise the
+        // signature would still match the just-selected Observation
+        // (which never actually changed) and _syncObservationSession()
+        // would incorrectly skip the recordObservation() call, leaving
+        // the freshly-cleared session with zero records even though a
+        // current selection is visible on screen.
+        lastObservationSyncSignature = null;
+        activeObservationSessionGenerationId = null;
         // Preferred documented behavior: immediately re-record the
         // current valid active Observation (if any) as the first
         // record of the freshly-cleared session, so the summary never

@@ -58,7 +58,13 @@ function _normalizeObservation(value) {
 // caller-supplied input. Safe-reads `.length` once, clamps to 32,
 // safe-reads each index once (skipping a hostile getter that throws).
 function _safeBoundedArray(input, maxLen = 32) {
-  if (!Array.isArray(input)) return [];
+  let isArr;
+  try {
+    isArr = Array.isArray(input);
+  } catch {
+    return [];
+  }
+  if (!isArr) return [];
   let length;
   try {
     length = input.length;

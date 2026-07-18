@@ -459,7 +459,13 @@ const REASON_VALUE_TO_FIELD = {
 // array, mirroring the controller/session modules' own helper — never
 // `.map()`/`.filter()` directly on caller-supplied input.
 function _safeBoundedArrayR(input, maxLen = 8) {
-  if (!Array.isArray(input)) return [];
+  let isArr;
+  try {
+    isArr = Array.isArray(input);
+  } catch {
+    return [];
+  }
+  if (!isArr) return [];
   let length;
   try {
     length = input.length;
