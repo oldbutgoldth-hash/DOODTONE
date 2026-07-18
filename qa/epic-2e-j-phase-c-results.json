@@ -1,0 +1,152 @@
+{
+  "suite": "EPIC 2E-J Phase C Observation smoke test",
+  "generatedAt": "2026-07-18T05:44:50.646Z",
+  "summary": {
+    "total": 28,
+    "pass": 28,
+    "fail": 0,
+    "notTested": 0
+  },
+  "results": [
+    {
+      "test": "Initial unavailable state",
+      "result": "PASS",
+      "evidence": "state=\"unavailable\""
+    },
+    {
+      "test": "Ready state reachable",
+      "result": "PASS",
+      "evidence": "state=\"ready\""
+    },
+    {
+      "test": "Select observation \"prefer-legacy\"",
+      "result": "PASS",
+      "evidence": "observation=\"prefer-legacy\""
+    },
+    {
+      "test": "Select observation \"prefer-v2\"",
+      "result": "PASS",
+      "evidence": "observation=\"prefer-v2\""
+    },
+    {
+      "test": "Select observation \"no-visible-difference\"",
+      "result": "PASS",
+      "evidence": "observation=\"no-visible-difference\""
+    },
+    {
+      "test": "Select observation \"unsure\"",
+      "result": "PASS",
+      "evidence": "observation=\"unsure\""
+    },
+    {
+      "test": "Five-reason limit reached",
+      "result": "PASS",
+      "evidence": "count=5, limitReached=true"
+    },
+    {
+      "test": "Sixth reason rejected",
+      "result": "PASS",
+      "evidence": "count=5"
+    },
+    {
+      "test": "No-specific-reason exclusivity",
+      "result": "PASS",
+      "evidence": "reasons=[\"no-specific-reason\"]"
+    },
+    {
+      "test": "Clear Reasons keeps Observation selected",
+      "result": "PASS",
+      "evidence": "reasons=0, observation=\"prefer-legacy\""
+    },
+    {
+      "test": "Clear Observation",
+      "result": "PASS",
+      "evidence": "observation=null"
+    },
+    {
+      "test": "Generation invalidation clears Observation",
+      "result": "PASS",
+      "evidence": "state=\"unavailable\", observation=null"
+    },
+    {
+      "test": "Stale selection does not revive",
+      "result": "PASS",
+      "evidence": "state=\"ready\", observation=null"
+    },
+    {
+      "test": "Session invalidated count",
+      "result": "PASS",
+      "evidence": "invalidated=1"
+    },
+    {
+      "test": "Session active count after new selection",
+      "result": "PASS",
+      "evidence": "active=1, unsure=1"
+    },
+    {
+      "test": "Session cleared count",
+      "result": "PASS",
+      "evidence": "cleared=2"
+    },
+    {
+      "test": "Session module clearSession clears history",
+      "result": "PASS",
+      "evidence": "totalObserved=0"
+    },
+    {
+      "test": "Provider unavailable produces neutral warning, stays usable",
+      "result": "PASS",
+      "evidence": "{\"state\":\"ready\",\"generationConfirmed\":false,\"warnings\":[\"Current generation could not be independently confirmed.\"]}"
+    },
+    {
+      "test": "Provider mismatch clears observation via getState",
+      "result": "PASS",
+      "evidence": "{\"state\":\"unavailable\",\"observation\":null}"
+    },
+    {
+      "test": "No duplicate element IDs",
+      "result": "PASS",
+      "evidence": "total=30, unique=30"
+    },
+    {
+      "test": "Keyboard focus reaches radio option",
+      "result": "PASS",
+      "evidence": "activeElement.id=\"ipoOption_prefer-legacy\""
+    },
+    {
+      "test": "No storage writes from Observation actions",
+      "result": "PASS",
+      "evidence": "{\"lsSame\":true,\"ssSame\":true}"
+    },
+    {
+      "test": "No Canvas drawImage calls from Observation actions",
+      "result": "PASS",
+      "evidence": "drawImage calls=0"
+    },
+    {
+      "test": "No network requests from Observation actions",
+      "result": "PASS",
+      "evidence": "requests fired=0"
+    },
+    {
+      "test": "No document horizontal overflow at 320px",
+      "result": "PASS",
+      "evidence": "scrollWidth=320, clientWidth=320"
+    },
+    {
+      "test": "No document horizontal overflow at 390px",
+      "result": "PASS",
+      "evidence": "scrollWidth=390, clientWidth=390"
+    },
+    {
+      "test": "No document horizontal overflow at 1440px",
+      "result": "PASS",
+      "evidence": "scrollWidth=1440, clientWidth=1440"
+    },
+    {
+      "test": "Console errors across entire smoke test",
+      "result": "PASS",
+      "evidence": "(none)"
+    }
+  ]
+}
