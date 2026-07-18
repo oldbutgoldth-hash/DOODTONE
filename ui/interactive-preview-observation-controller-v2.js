@@ -1,13 +1,14 @@
 /**
  * ui/interactive-preview-observation-controller-v2.js
  *
- * EPIC 2E-J Phase A (+ EPIC 2E-J-A-F, EPIC 2E-J-A-F2 correctness
- * patches) — a read-only, UI-local observation/feedback layer sitting
- * below the Interactive Before/After viewer. Records ONLY what the
- * person notices about the two approximate browser previews ("Prefer
- * Legacy" / "Prefer Controlled V2" / "No visible difference" /
- * "Unsure") — never a production decision, never an approval of
- * Controlled V2, never written into any core analysis object.
+ * EPIC 2E-J Phase A (+ EPIC 2E-J-A-F, EPIC 2E-J-A-F2, EPIC 2E-J-A-F3
+ * correctness patches) — a read-only, UI-local observation/feedback
+ * layer sitting below the Interactive Before/After viewer. Records
+ * ONLY what the person notices about the two approximate browser
+ * previews ("Prefer Legacy" / "Prefer Controlled V2" / "No visible
+ * difference" / "Unsure") — never a production decision, never an
+ * approval of Controlled V2, never written into any core analysis
+ * object.
  *
  * State ownership: this module owns ONLY the selected observation value,
  * its associated generation ID, in-memory timestamps, and UI-local
@@ -37,6 +38,15 @@ function safeGet(object, key, fallback = undefined) {
   } catch {
     return fallback;
   }
+}
+
+// FIX 6 (EPIC 2E-J-A-F3): safely reads a method off a target ONCE and
+// returns the callable (or null) — never re-reads the property again
+// later. A hostile getter that throws degrades to "no method
+// available" (the target is skipped), never a crash.
+function _safeMethod(target, methodName) {
+  const method = safeGet(target, methodName);
+  return typeof method === 'function' ? method : null;
 }
 
 function _isRecord(v) {
@@ -83,7 +93,7 @@ const UNAVAILABLE_REASON_MESSAGE = {
 };
 const SAFETY_BLOCKED_MESSAGE = 'Observation is unavailable while the comparison is blocked by a safety anomaly.';
 const STALE_WARNING_MESSAGE = 'The previous observation was cleared because a newer analysis is active.';
-// FIX 7 (EPIC 2E-J-A-F2): neutral, not an error — never labeled "stale".
+// Neutral, not an error — never labeled "stale".
 const PROVIDER_UNCONFIRMED_WARNING = 'Current generation could not be independently confirmed.';
 
 // Builds the compact, DOM-free state object returned by every public
@@ -102,12 +112,6 @@ function _buildState({ state, observation, observationGenerationId, currentGener
     metadata: {
       blockers: Array.isArray(blockers) ? blockers.slice(0, 4) : [],
       unavailableReason: unavailableReason ?? null,
-      // FIX 1 (EPIC 2E-J-A-F2): generation *usability* (can we act on
-      // this generation at all, falling back to context when the
-      // provider gives no evidence) is now explicitly separate from
-      // generation *confirmation* (the provider actively agreed with
-      // context this read) — a missing/throwing/unavailable provider
-      // must never be displayed or treated as "confirmed".
       contextGenerationId: contextGenerationId ?? null,
       providerGenerationId: providerGenerationId ?? null,
       providerConfigured: providerConfigured === true,
@@ -116,6 +120,28 @@ function _buildState({ state, observation, observationGenerationId, currentGener
       generationConfirmed: generationConfirmed === true,
     },
   };
+}
+
+// FIX 9 (EPIC 2E-J-A-F3): a compact, safe-primitives-only signature of
+// a state object, used to detect a MEANINGFUL transition (never
+// JSON.stringify of an arbitrary object, never exposes raw objects or
+// "[object Object]").
+function _stateSignature(state) {
+  const s = _isRecord(state) ? state : {};
+  const meta = _isRecord(s.metadata) ? s.metadata : {};
+  const safePart = (v) => {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
+    return '~'; // any other type (object/array/etc.) collapses to a fixed marker — never serialized directly
+  };
+  const firstWarning = Array.isArray(s.warnings) && s.warnings.length > 0 ? safePart(s.warnings[0]) : '';
+  const firstBlocker = Array.isArray(meta.blockers) && meta.blockers.length > 0 ? safePart(meta.blockers[0]) : '';
+  return [
+    safePart(s.state), safePart(s.observation), safePart(s.observationGenerationId),
+    safePart(meta.providerConfigured), safePart(meta.providerEvidenceAvailable),
+    safePart(meta.generationUsable), safePart(meta.generationConfirmed),
+    safePart(meta.unavailableReason), firstWarning, firstBlocker,
+  ].join('|');
 }
 
 /**
@@ -151,16 +177,12 @@ function deriveObservationStateV2(input) {
     return _buildState({ state: 'disposed', currentGenerationId: null, warnings: [], blockers: [] });
   }
 
-  // Each context field read exactly once via safeGet, stored, never
-  // re-read from `context` directly afterward.
   const generationId = safeGet(context, 'generationId') ?? null;
   const interactiveState = _normalizeInteractiveState(safeGet(context, 'interactiveState'));
   const interactiveReady = safeGet(context, 'interactiveReady') === true;
   const safetyBlockedFlag = safeGet(context, 'safetyBlocked') === true;
   const blockedReason = _normalizeBlockedReason(safeGet(context, 'blockedReason'));
 
-  // FIX 1 (EPIC 2E-J-A-F2): generationUsable/generationConfirmed
-  // computed per the phase's exact 4-case rule table.
   let generationUsable, generationConfirmed;
   const providerMismatch = providerConfigured && providerEvidenceAvailable && generationId !== null && providerGenerationId !== generationId;
   if (!providerConfigured) {
@@ -175,7 +197,6 @@ function deriveObservationStateV2(input) {
       generationConfirmed = generationId !== null;
     }
   } else {
-    // Configured but threw or returned no usable value THIS READ.
     generationUsable = generationId !== null;
     generationConfirmed = false;
   }
@@ -183,12 +204,6 @@ function deriveObservationStateV2(input) {
   const metaBase = { contextGenerationId: generationId, providerGenerationId, providerConfigured, providerEvidenceAvailable, generationUsable, generationConfirmed };
 
   if (providerMismatch) {
-    // A configured, working provider actively disagrees with context —
-    // this is a genuine stale-generation condition. A stale observation
-    // must never remain checked; clearing the in-memory fields
-    // themselves is the CALLER's responsibility, but the state we
-    // return here must never show a selection against an unconfirmed
-    // generation.
     return _buildState({
       state: 'unavailable', observationGenerationId: null, currentGenerationId: generationId,
       interactiveComparisonReady: false, safetyReadOnly: false, createdAt: null, updatedAt: null,
@@ -206,11 +221,6 @@ function deriveObservationStateV2(input) {
     });
   }
 
-  // Only an actual SAFETY anomaly ever produces the "blocked"
-  // Observation state — every other Interactive Before/After cause
-  // (alignment/preview-state/source/preparing/partial/failed/cancelled)
-  // remains "unavailable" with its own honest reason, never conflated
-  // with a safety anomaly.
   const isSafetyBlocked = safetyBlockedFlag || (interactiveState === 'blocked' && blockedReason === 'safety');
   if (isSafetyBlocked) {
     return _buildState({
@@ -223,12 +233,6 @@ function deriveObservationStateV2(input) {
   }
 
   const enabled = interactiveState === 'ready' && interactiveReady === true;
-
-  // FIX 7 (EPIC 2E-J-A-F2): when Context is genuinely Ready but a
-  // configured provider gave no usable evidence THIS READ, controls
-  // remain enabled using the Context fallback — `generationConfirmed`
-  // stays false and a neutral (never "stale"/error-styled) warning is
-  // surfaced.
   const providerUnconfirmedWarning = (enabled && providerConfigured && !providerEvidenceAvailable) ? [PROVIDER_UNCONFIRMED_WARNING] : [];
 
   if (!enabled) {
@@ -251,8 +255,6 @@ function deriveObservationStateV2(input) {
     });
   }
 
-  // Enabled — but a stale (previous-generation) selection must never be
-  // displayed or carried forward.
   if (observation !== null && observationGenerationId === generationId) {
     return _buildState({
       state: 'selected', observation, observationGenerationId, currentGenerationId: generationId,
@@ -277,32 +279,37 @@ function deriveObservationStateV2(input) {
  * @param {{ optionInputs: HTMLInputElement[], clearButton: HTMLElement, generationProvider: (()=>any)|null, onStateChange: ((state:object)=>void)|null }} options
  */
 export function createInteractivePreviewObservationControllerV2(options) {
-  // FIX 5 (EPIC 2E-J-A-F2): every options property is safely read
-  // exactly once here — a hostile getter (always-throwing or
-  // throw-on-second-read) on any of these must never crash controller
-  // creation.
   const isOptionsRecord = _isRecord(options);
   const rawOptionInputs = isOptionsRecord ? safeGet(options, 'optionInputs') : undefined;
   const rawClearButton = isOptionsRecord ? safeGet(options, 'clearButton') : undefined;
   const rawGenerationProvider = isOptionsRecord ? safeGet(options, 'generationProvider') : undefined;
   const rawOnStateChange = isOptionsRecord ? safeGet(options, 'onStateChange') : undefined;
 
-  // FIX 6 (EPIC 2E-J-A-F2): normalize optionInputs into a copied,
-  // bounded array containing only elements that genuinely support
-  // addEventListener, deduplicated by object identity — the caller's
-  // original array is never mutated, and no arbitrary array entry is
-  // retained as an event target.
-  const optionInputs = [];
+  // FIX 6/8 (EPIC 2E-J-A-F3): normalize optionInputs into a copied,
+  // bounded array of { target, addEventListenerMethod,
+  // removeEventListenerMethod } descriptors — the capability (a
+  // callable addEventListener) is projected ONCE here and never
+  // re-read from the original object again. A hostile getter that
+  // throws on `addEventListener` simply causes that entry to be
+  // skipped, never a crash. Deduplicated by target object identity;
+  // the caller's original array is never mutated.
+  const optionDescriptors = [];
   if (Array.isArray(rawOptionInputs)) {
     const seen = new Set();
     for (const item of rawOptionInputs.slice(0, 16)) {
-      if (!item || typeof item !== 'object' || typeof item.addEventListener !== 'function') continue;
+      if (!item || typeof item !== 'object') continue;
       if (seen.has(item)) continue;
+      const addEventListenerMethod = _safeMethod(item, 'addEventListener');
+      if (!addEventListenerMethod) continue; // no usable capability — skip, never crash
       seen.add(item);
-      optionInputs.push(item);
+      const removeEventListenerMethod = _safeMethod(item, 'removeEventListener');
+      optionDescriptors.push({ target: item, addEventListenerMethod, removeEventListenerMethod });
     }
   }
-  const clearButton = (rawClearButton && typeof rawClearButton === 'object') ? rawClearButton : null;
+  const clearButtonAddListener = (rawClearButton && typeof rawClearButton === 'object') ? _safeMethod(rawClearButton, 'addEventListener') : null;
+  const clearButtonRemoveListener = (rawClearButton && typeof rawClearButton === 'object') ? _safeMethod(rawClearButton, 'removeEventListener') : null;
+  const clearButtonTarget = clearButtonAddListener ? rawClearButton : null;
+
   const generationProvider = typeof rawGenerationProvider === 'function' ? rawGenerationProvider : null;
   const onStateChange = typeof rawOnStateChange === 'function' ? rawOnStateChange : null;
 
@@ -314,10 +321,9 @@ export function createInteractivePreviewObservationControllerV2(options) {
   let updatedAt = null;
 
   /**
-   * FIX 2 (EPIC 2E-J-A-F2): a structured provider read — never
-   * communicates provider state through null/undefined ambiguity
-   * alone. A throwing provider is NEVER treated as proof that context
-   * is current.
+   * A structured provider read — never communicates provider state
+   * through null/undefined ambiguity alone. A throwing provider is
+   * NEVER treated as proof that context is current.
    * @returns {{ configured: boolean, available: boolean, generationId: any }}
    */
   function _readProviderGeneration() {
@@ -331,26 +337,58 @@ export function createInteractivePreviewObservationControllerV2(options) {
     }
   }
 
-  let lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult: _readProviderGeneration() });
-
-  const listeners = [];
-  function _addListener(target, type, handler) {
-    if (!target || typeof target.addEventListener !== 'function') return;
-    target.addEventListener(type, handler);
-    listeners.push({ target, type, handler });
+  // FIX 1 (EPIC 2E-J-A-F3): the single centralized helper for clearing
+  // in-memory observation fields — used identically by every public
+  // method that needs to clear a stale/invalid observation, never
+  // duplicated inline.
+  function _clearObservationMemory() {
+    const hadObservation = observation !== null || observationGenerationId !== null || createdAt !== null || updatedAt !== null;
+    observation = null;
+    observationGenerationId = null;
+    createdAt = null;
+    updatedAt = null;
+    return hadObservation;
   }
 
-  function _emit() {
+  // FIX 1: the single centralized helper for detecting a genuine
+  // provider/context mismatch from one already-taken provider snapshot.
+  function _providerMismatchesContext(providerResult) {
+    const generationId = context ? context.generationId : null;
+    return providerResult.configured === true && providerResult.available === true && generationId !== null && providerResult.generationId !== generationId;
+  }
+
+  let lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult: _readProviderGeneration() });
+  let lastSignature = _stateSignature(lastState);
+
+  const listeners = [];
+  // FIX 7 (EPIC 2E-J-A-F3): registers a listener using the ALREADY
+  // PROJECTED callable method (never re-reading `target.addEventListener`
+  // again). Only records the listener if registration genuinely
+  // succeeds — a throwing addEventListener call is caught and the
+  // listener is simply not recorded (never crashes controller setup).
+  function _addListener(target, addEventListenerMethod, removeEventListenerMethod, type, handler) {
+    if (!target || !addEventListenerMethod) return false;
+    try {
+      addEventListenerMethod.call(target, type, handler);
+    } catch {
+      return false;
+    }
+    listeners.push({ target, type, handler, removeEventListenerMethod });
+    return true;
+  }
+
+  function _emitIfChanged() {
+    const signature = _stateSignature(lastState);
+    if (signature === lastSignature) return;
+    lastSignature = signature;
     if (onStateChange) {
       try { onStateChange(lastState); } catch { /* a hostile/throwing consumer must not break this controller */ }
     }
   }
 
-  // FIX 4 (EPIC 2E-J-A-F2): every public operation takes exactly ONE
-  // provider snapshot and reuses it throughout that single operation —
-  // never re-reading the provider multiple times within one call, which
-  // could otherwise produce internally contradictory state if the
-  // provider's value changes mid-operation.
+  // Every public operation takes exactly ONE provider snapshot and
+  // reuses it throughout that single operation — never re-reading the
+  // provider multiple times within one call.
   function _refreshWith(providerResult) {
     lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult });
     return lastState;
@@ -374,37 +412,37 @@ export function createInteractivePreviewObservationControllerV2(options) {
 
     const priorGenerationId = context ? context.generationId : null;
     const wasReady = context ? (context.interactiveState === 'ready' && context.interactiveReady === true) : false;
-    const newContext = {
+    context = {
       generationId: newGenerationId,
       interactiveState: newInteractiveState,
       interactiveReady: newInteractiveReady,
       safetyBlocked: newSafetyBlocked,
       blockedReason: newBlockedReason,
     };
-    context = newContext;
 
-    // An observation is valid only while the EXACT Ready comparison
-    // context remains valid — clear it immediately whenever the
-    // generation changes OR the same generation simply stops being
-    // Ready (Preparing/Partial/Failed/Blocked/Cancelled), never only on
-    // a generation-ID change.
+    // FIX 3 (EPIC 2E-J-A-F3): ONE provider snapshot for this entire
+    // operation.
+    const providerResult = _readProviderGeneration();
+
     const nowReady = newInteractiveState === 'ready' && newInteractiveReady === true;
     const generationChanged = priorGenerationId !== null && newGenerationId !== priorGenerationId;
     const leftReady = wasReady && !nowReady;
+    // FIX 3: a provider that actively disagrees with the NEW context
+    // must clear stale memory too — even when the context generation ID
+    // itself didn't change and remains "Ready" on paper, a provider
+    // mismatch means the context can no longer be trusted as current.
+    const providerMismatch = _providerMismatchesContext(providerResult);
+
     let staleCleared = false;
-    if (observation !== null && (generationChanged || leftReady)) {
-      observation = null;
-      observationGenerationId = null;
-      createdAt = null;
-      updatedAt = null;
-      staleCleared = true;
+    if (generationChanged || leftReady || providerMismatch) {
+      staleCleared = _clearObservationMemory();
     }
 
-    _refreshWith(_readProviderGeneration());
+    _refreshWith(providerResult);
     if (staleCleared) {
       lastState = { ...lastState, warnings: [STALE_WARNING_MESSAGE] };
     }
-    _emit();
+    _emitIfChanged();
     return lastState;
   }
 
@@ -416,11 +454,21 @@ export function createInteractivePreviewObservationControllerV2(options) {
     if (disposed) return lastState;
     // ONE provider snapshot for this entire operation.
     const providerResult = _readProviderGeneration();
-    // Re-derive the CURRENT enabled/disabled status from context/provider
-    // directly rather than trusting `lastState.state`, which may be the
-    // transient display value "cleared" left over from a just-completed
-    // clearObservation() call — that transient value must never block a
-    // fresh selection right afterward.
+
+    // FIX 2 (EPIC 2E-J-A-F3): a provider/context mismatch must clear
+    // stale memory IMMEDIATELY and return the freshly-derived
+    // stale/unavailable state — never merely returning the cached
+    // `lastState` (which previously left the old selection sitting in
+    // memory, able to silently reappear if the provider later returned
+    // to the original generation).
+    if (_providerMismatchesContext(providerResult)) {
+      const staleCleared = _clearObservationMemory();
+      _refreshWith(providerResult);
+      if (staleCleared) lastState = { ...lastState, warnings: [STALE_WARNING_MESSAGE] };
+      _emitIfChanged();
+      return lastState;
+    }
+
     const liveState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult });
     if (liveState.state !== 'ready' && liveState.state !== 'selected') return lastState; // not enabled
     const normalized = normalizeObservationValue(value);
@@ -428,13 +476,6 @@ export function createInteractivePreviewObservationControllerV2(options) {
 
     const generationId = context ? context.generationId : null;
     if (generationId === null) return lastState;
-    // Before accepting, verify the provider — when it actively gave
-    // evidence this read — agrees with the context generation. A
-    // provider that gave NO evidence (unconfigured, threw, or returned
-    // null/undefined) does not block acceptance: the selection is
-    // associated with context per FIX 7's fallback policy, with
-    // `generationConfirmed` honestly left false.
-    if (providerResult.configured && providerResult.available && providerResult.generationId !== generationId) return lastState;
 
     observation = normalized;
     observationGenerationId = generationId;
@@ -443,32 +484,31 @@ export function createInteractivePreviewObservationControllerV2(options) {
     updatedAt = now;
 
     _refreshWith(providerResult);
-    _emit();
+    _emitIfChanged();
     return lastState;
   }
 
   /**
    * Removes the current observation. Does not reset analysis, does not
    * rerender previews, does not affect split position or production.
-   * If the context is still genuinely Ready, this resolves to the
-   * transient "cleared" display state (controls remain enabled, ready
-   * for an immediate new selection). If the context is no longer Ready,
-   * this resolves to the ACTUAL unavailable state instead of forcing a
-   * misleading "cleared".
+   * FIX 5 (EPIC 2E-J-A-F3): if a provider mismatch is active, this
+   * resolves to the actual stale/unavailable state (stale warning takes
+   * priority) rather than forcing a misleading "cleared". If the
+   * context is still genuinely Ready and the provider is current, this
+   * resolves to the transient "cleared" display state as before.
    */
   function clearObservation() {
     if (disposed) return lastState;
     const providerResult = _readProviderGeneration(); // ONE snapshot for this operation
-    const hadObservation = observation !== null;
-    observation = null;
-    observationGenerationId = null;
-    createdAt = null;
-    updatedAt = null;
+    const mismatch = _providerMismatchesContext(providerResult);
+    const staleCleared = _clearObservationMemory();
     _refreshWith(providerResult);
-    if (hadObservation && lastState.state === 'ready') {
+    if (mismatch) {
+      lastState = { ...lastState, warnings: [STALE_WARNING_MESSAGE] };
+    } else if (staleCleared && lastState.state === 'ready') {
       lastState = { ...lastState, state: 'cleared' };
     }
-    _emit();
+    _emitIfChanged();
     return lastState;
   }
 
@@ -476,79 +516,71 @@ export function createInteractivePreviewObservationControllerV2(options) {
   function reset() {
     if (disposed) return lastState;
     context = null;
-    observation = null;
-    observationGenerationId = null;
-    createdAt = null;
-    updatedAt = null;
+    _clearObservationMemory();
     _refreshWith(_readProviderGeneration());
-    _emit();
+    _emitIfChanged();
     return lastState;
   }
 
-  /** Permanently disposes the controller: removes listeners, ignores all future updates. */
+  /** Permanently disposes the controller: removes listeners (using each listener's own stored remove method, never re-reading the target), ignores all future updates. */
   function dispose() {
     if (disposed) return;
     disposed = true;
-    for (const { target, type, handler } of listeners) {
-      try { target.removeEventListener(type, handler); } catch { /* best-effort */ }
+    for (const { target, type, handler, removeEventListenerMethod } of listeners) {
+      if (!removeEventListenerMethod) continue;
+      try { removeEventListenerMethod.call(target, type, handler); } catch { /* best-effort */ }
     }
     listeners.length = 0;
     context = null;
-    observation = null;
-    observationGenerationId = null;
+    _clearObservationMemory();
     lastState = deriveObservationStateV2({ disposed: true, context: null, observation: null, observationGenerationId: null, createdAt: null, updatedAt: null, providerResult: { configured: false, available: false, generationId: null } });
   }
 
   /**
-   * FIX 3 (EPIC 2E-J-A-F2): getState() re-reads the provider (ONE
+   * FIX 4 (EPIC 2E-J-A-F3): getState() re-reads the provider (ONE
    * snapshot) and re-derives before returning — never simply returning
    * a stale cached `lastState`. If the provider now disagrees with
-   * context, the observation is cleared immediately and a stale state
-   * is returned; a previously-Selected observation is NEVER returned as
-   * Selected once the provider reports a different generation.
-   * onStateChange is emitted only on a MEANINGFUL transition (the
-   * resolved state actually changed) — not on every ordinary getState()
-   * call, to avoid needless render churn from passive polling.
+   * context, observation MEMORY is cleared (via the same centralized
+   * helper, not merely hidden through derivation) and a stale state is
+   * returned; a previously-Selected observation is NEVER returned as
+   * Selected once the provider reports a different generation, and can
+   * never silently revive later.
+   * FIX 9: onStateChange is emitted only on a genuine state-signature
+   * change, not on every ordinary getState() call.
    */
   function getState() {
     if (disposed) return lastState;
-    const providerResult = _readProviderGeneration();
-    const previousStateLabel = lastState.state;
-    const previousObservation = lastState.observation;
-
-    const generationId = context ? context.generationId : null;
-    const mismatch = providerResult.configured && providerResult.available && generationId !== null && providerResult.generationId !== generationId;
-    if (mismatch && observation !== null) {
-      observation = null;
-      observationGenerationId = null;
-      createdAt = null;
-      updatedAt = null;
-    }
+    const providerResult = _readProviderGeneration(); // ONE snapshot
+    const mismatch = _providerMismatchesContext(providerResult);
+    let staleCleared = false;
+    if (mismatch) staleCleared = _clearObservationMemory();
 
     _refreshWith(providerResult);
-    if (mismatch) {
+    if (staleCleared) {
       lastState = { ...lastState, warnings: [STALE_WARNING_MESSAGE] };
     }
-
-    const meaningfulChange = lastState.state !== previousStateLabel || lastState.observation !== previousObservation;
-    if (meaningfulChange) _emit();
+    _emitIfChanged();
     return lastState;
   }
 
-  // Wire native radio inputs and the Clear button. Missing elements are
-  // handled safely — this controller works with zero DOM elements
-  // (state-only usage) for testability.
-  for (const input of optionInputs) {
-    _addListener(input, 'change', () => {
-      if (input.checked) selectObservation(input.value);
+  // Wire native radio inputs and the Clear button using the
+  // already-projected capability descriptors — never re-reading
+  // `target.addEventListener` at registration time.
+  for (const { target, addEventListenerMethod, removeEventListenerMethod } of optionDescriptors) {
+    _addListener(target, addEventListenerMethod, removeEventListenerMethod, 'change', () => {
+      if (target.checked) selectObservation(target.value);
     });
   }
-  _addListener(clearButton, 'click', () => clearObservation());
+  if (clearButtonTarget) {
+    _addListener(clearButtonTarget, clearButtonAddListener, clearButtonRemoveListener, 'click', () => clearObservation());
+  }
 
   // Emit the initial (unavailable) state immediately so the DOM is
   // synced from the very first render, rather than showing empty/
   // default HTML attribute values until the first setContext() call.
-  _emit();
+  if (onStateChange) {
+    try { onStateChange(lastState); } catch { /* hostile consumer must not break setup */ }
+  }
 
   return { setContext, selectObservation, clearObservation, reset, dispose, getState };
 }
