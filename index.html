@@ -565,6 +565,15 @@
             <div id="interactivePreviewObservationSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
               <div id="interactivePreviewObservationInner"></div>
             </div>
+
+            <!-- EPIC 2E-J Phase B: Session Observation Summary — an
+                 in-memory-only aggregate of Observations recorded
+                 during THIS page session. Never persisted, never
+                 synced, never written into finalStyleIntent, Mapping,
+                 or XMP. Disappears entirely on page reload. -->
+            <div id="interactivePreviewObservationSessionSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
+              <div id="interactivePreviewObservationSessionInner"></div>
+            </div>
           </div>
 
           <!-- ── Sliders panel ── -->

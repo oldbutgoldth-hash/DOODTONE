@@ -25,6 +25,13 @@
 const VALID_OBSERVATIONS = ['prefer-legacy', 'prefer-v2', 'no-visible-difference', 'unsure'];
 const NORMALIZED_INTERACTIVE_STATES = ['preparing', 'ready', 'partial', 'failed', 'blocked', 'cancelled', 'unavailable'];
 const VALID_BLOCKED_REASONS = ['safety', 'alignment', 'preview-state', 'source'];
+// EPIC 2E-J Phase B: reason tags — descriptive UI feedback only, never
+// a production instruction.
+const VALID_REASONS = [
+  'skin-tone', 'white-balance', 'highlight-detail', 'shadow-detail', 'contrast',
+  'color-balance', 'saturation', 'natural-look', 'clarity-detail', 'no-specific-reason',
+];
+const REASON_LIMIT = 5;
 
 // Safe single-read property access — a throwing getter degrades to the
 // fallback, never a crash. Used at every untrusted-input boundary in
@@ -59,6 +66,37 @@ function _isRecord(v) {
  */
 function normalizeObservationValue(value) {
   return VALID_OBSERVATIONS.includes(value) ? value : null;
+}
+
+/** A single reason value: exact string match only, everything else null. */
+function normalizeReasonValue(value) {
+  return VALID_REASONS.includes(value) ? value : null;
+}
+
+/**
+ * Deterministic normalization of a reasons array: rejects anything not
+ * exactly in VALID_REASONS, deduplicates, caps at REASON_LIMIT, and
+ * enforces `no-specific-reason` mutual exclusivity (if present
+ * alongside any other reason, the OTHER reasons win and
+ * `no-specific-reason` is dropped — matching the toggle-time behavior
+ * where selecting a specific reason always clears the generic one).
+ * Never mutates the input array.
+ */
+function normalizeReasons(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const item of value) {
+    const normalized = normalizeReasonValue(item);
+    if (normalized === null || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  if (out.length > 1 && out.includes('no-specific-reason')) {
+    const specific = out.filter((r) => r !== 'no-specific-reason');
+    return specific.slice(0, REASON_LIMIT);
+  }
+  return out.slice(0, REASON_LIMIT);
 }
 
 function _normalizeInteractiveState(value) {
@@ -98,7 +136,8 @@ const PROVIDER_UNCONFIRMED_WARNING = 'Current generation could not be independen
 
 // Builds the compact, DOM-free state object returned by every public
 // method and passed to onStateChange. Never includes any DOM element.
-function _buildState({ state, observation, observationGenerationId, currentGenerationId, interactiveComparisonReady, safetyReadOnly, createdAt, updatedAt, warnings, blockers, unavailableReason, contextGenerationId, providerGenerationId, providerConfigured, providerEvidenceAvailable, generationUsable, generationConfirmed }) {
+function _buildState({ state, observation, observationGenerationId, currentGenerationId, interactiveComparisonReady, safetyReadOnly, createdAt, updatedAt, warnings, blockers, unavailableReason, contextGenerationId, providerGenerationId, providerConfigured, providerEvidenceAvailable, generationUsable, generationConfirmed, reasons, reasonsGenerationId }) {
+  const safeReasons = Array.isArray(reasons) ? reasons.slice(0, REASON_LIMIT) : [];
   return {
     state,
     observation: observation ?? null,
@@ -109,6 +148,13 @@ function _buildState({ state, observation, observationGenerationId, currentGener
     createdAt: createdAt ?? null,
     updatedAt: updatedAt ?? null,
     warnings: Array.isArray(warnings) ? warnings.slice(0, 4) : [],
+    // EPIC 2E-J Phase B: reason tags — always a fresh copied array,
+    // never the internal mutable reference.
+    reasons: safeReasons,
+    reasonCount: safeReasons.length,
+    reasonLimit: REASON_LIMIT,
+    reasonLimitReached: safeReasons.length >= REASON_LIMIT,
+    reasonsGenerationId: reasonsGenerationId ?? null,
     metadata: {
       blockers: Array.isArray(blockers) ? blockers.slice(0, 4) : [],
       unavailableReason: unavailableReason ?? null,
@@ -136,11 +182,15 @@ function _stateSignature(state) {
   };
   const firstWarning = Array.isArray(s.warnings) && s.warnings.length > 0 ? safePart(s.warnings[0]) : '';
   const firstBlocker = Array.isArray(meta.blockers) && meta.blockers.length > 0 ? safePart(meta.blockers[0]) : '';
+  // EPIC 2E-J Phase B: reasons are already a normalized array of known
+  // string enum values (never arbitrary/unsafe content) — safe to join
+  // directly as part of the signature.
+  const reasonsSignature = Array.isArray(s.reasons) ? s.reasons.map(safePart).join(',') : '';
   return [
     safePart(s.state), safePart(s.observation), safePart(s.observationGenerationId),
     safePart(meta.providerConfigured), safePart(meta.providerEvidenceAvailable),
     safePart(meta.generationUsable), safePart(meta.generationConfirmed),
-    safePart(meta.unavailableReason), firstWarning, firstBlocker,
+    safePart(meta.unavailableReason), firstWarning, firstBlocker, reasonsSignature,
   ].join('|');
 }
 
@@ -167,6 +217,12 @@ function deriveObservationStateV2(input) {
   const observationGenerationId = safeGet(rec, 'observationGenerationId') ?? null;
   const createdAt = safeGet(rec, 'createdAt') ?? null;
   const updatedAt = safeGet(rec, 'updatedAt') ?? null;
+  // EPIC 2E-J Phase B: reasons are only ever valid attached to the
+  // CURRENT selected observation for the CURRENT generation — the same
+  // generation-association discipline as the observation itself.
+  const rawReasons = safeGet(rec, 'reasons');
+  const reasons = normalizeReasons(rawReasons);
+  const reasonsGenerationId = safeGet(rec, 'reasonsGenerationId') ?? null;
   const rawProviderResult = safeGet(rec, 'providerResult');
   const providerResult = _isRecord(rawProviderResult) ? rawProviderResult : { configured: false, available: false, generationId: null };
   const providerConfigured = safeGet(providerResult, 'configured') === true;
@@ -256,10 +312,12 @@ function deriveObservationStateV2(input) {
   }
 
   if (observation !== null && observationGenerationId === generationId) {
+    const validReasons = (reasonsGenerationId === generationId) ? reasons : [];
     return _buildState({
       state: 'selected', observation, observationGenerationId, currentGenerationId: generationId,
       interactiveComparisonReady: true, safetyReadOnly: false, createdAt, updatedAt,
       warnings: providerUnconfirmedWarning, blockers: [], unavailableReason: null, ...metaBase,
+      reasons: validReasons, reasonsGenerationId: (reasonsGenerationId === generationId) ? reasonsGenerationId : null,
     });
   }
 
@@ -282,6 +340,8 @@ export function createInteractivePreviewObservationControllerV2(options) {
   const isOptionsRecord = _isRecord(options);
   const rawOptionInputs = isOptionsRecord ? safeGet(options, 'optionInputs') : undefined;
   const rawClearButton = isOptionsRecord ? safeGet(options, 'clearButton') : undefined;
+  const rawReasonInputs = isOptionsRecord ? safeGet(options, 'reasonInputs') : undefined;
+  const rawClearReasonsButton = isOptionsRecord ? safeGet(options, 'clearReasonsButton') : undefined;
   const rawGenerationProvider = isOptionsRecord ? safeGet(options, 'generationProvider') : undefined;
   const rawOnStateChange = isOptionsRecord ? safeGet(options, 'onStateChange') : undefined;
 
@@ -310,6 +370,26 @@ export function createInteractivePreviewObservationControllerV2(options) {
   const clearButtonRemoveListener = (rawClearButton && typeof rawClearButton === 'object') ? _safeMethod(rawClearButton, 'removeEventListener') : null;
   const clearButtonTarget = clearButtonAddListener ? rawClearButton : null;
 
+  // EPIC 2E-J Phase B: reason-tag checkboxes and the Clear-reasons
+  // button use the exact same safe-capability-projection pattern as
+  // the observation radios/Clear-observation button above.
+  const reasonDescriptors = [];
+  if (Array.isArray(rawReasonInputs)) {
+    const seenReasons = new Set();
+    for (const item of rawReasonInputs.slice(0, 16)) {
+      if (!item || typeof item !== 'object') continue;
+      if (seenReasons.has(item)) continue;
+      const addEventListenerMethod = _safeMethod(item, 'addEventListener');
+      if (!addEventListenerMethod) continue;
+      seenReasons.add(item);
+      const removeEventListenerMethod = _safeMethod(item, 'removeEventListener');
+      reasonDescriptors.push({ target: item, addEventListenerMethod, removeEventListenerMethod });
+    }
+  }
+  const clearReasonsButtonAddListener = (rawClearReasonsButton && typeof rawClearReasonsButton === 'object') ? _safeMethod(rawClearReasonsButton, 'addEventListener') : null;
+  const clearReasonsButtonRemoveListener = (rawClearReasonsButton && typeof rawClearReasonsButton === 'object') ? _safeMethod(rawClearReasonsButton, 'removeEventListener') : null;
+  const clearReasonsButtonTarget = clearReasonsButtonAddListener ? rawClearReasonsButton : null;
+
   const generationProvider = typeof rawGenerationProvider === 'function' ? rawGenerationProvider : null;
   const onStateChange = typeof rawOnStateChange === 'function' ? rawOnStateChange : null;
 
@@ -319,6 +399,10 @@ export function createInteractivePreviewObservationControllerV2(options) {
   let observationGenerationId = null;
   let createdAt = null;
   let updatedAt = null;
+  // EPIC 2E-J Phase B: reason tags, associated with the SAME generation
+  // discipline as the observation itself.
+  let reasons = [];
+  let reasonsGenerationId = null;
 
   /**
    * A structured provider read — never communicates provider state
@@ -337,17 +421,29 @@ export function createInteractivePreviewObservationControllerV2(options) {
     }
   }
 
-  // FIX 1 (EPIC 2E-J-A-F3): the single centralized helper for clearing
-  // in-memory observation fields — used identically by every public
-  // method that needs to clear a stale/invalid observation, never
-  // duplicated inline.
+  // The single centralized helper for clearing in-memory observation
+  // fields — used identically by every public method that needs to
+  // clear a stale/invalid observation, never duplicated inline. Always
+  // clears reason tags too: reasons can never outlive the observation
+  // they describe.
   function _clearObservationMemory() {
-    const hadObservation = observation !== null || observationGenerationId !== null || createdAt !== null || updatedAt !== null;
+    const hadObservation = observation !== null || observationGenerationId !== null || createdAt !== null || updatedAt !== null || reasons.length > 0 || reasonsGenerationId !== null;
     observation = null;
     observationGenerationId = null;
     createdAt = null;
     updatedAt = null;
+    reasons = [];
+    reasonsGenerationId = null;
     return hadObservation;
+  }
+
+  // EPIC 2E-J Phase B: clears ONLY the reason tags — keeps the current
+  // Observation selected and its session association valid.
+  function _clearReasonsMemory() {
+    const hadReasons = reasons.length > 0 || reasonsGenerationId !== null;
+    reasons = [];
+    reasonsGenerationId = null;
+    return hadReasons;
   }
 
   // FIX 1: the single centralized helper for detecting a genuine
@@ -357,7 +453,7 @@ export function createInteractivePreviewObservationControllerV2(options) {
     return providerResult.configured === true && providerResult.available === true && generationId !== null && providerResult.generationId !== generationId;
   }
 
-  let lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult: _readProviderGeneration() });
+  let lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult: _readProviderGeneration(), reasons, reasonsGenerationId });
   let lastSignature = _stateSignature(lastState);
 
   const listeners = [];
@@ -390,7 +486,7 @@ export function createInteractivePreviewObservationControllerV2(options) {
   // reuses it throughout that single operation — never re-reading the
   // provider multiple times within one call.
   function _refreshWith(providerResult) {
-    lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult });
+    lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult, reasons, reasonsGenerationId });
     return lastState;
   }
 
@@ -469,7 +565,7 @@ export function createInteractivePreviewObservationControllerV2(options) {
       return lastState;
     }
 
-    const liveState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult });
+    const liveState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult, reasons, reasonsGenerationId });
     if (liveState.state !== 'ready' && liveState.state !== 'selected') return lastState; // not enabled
     const normalized = normalizeObservationValue(value);
     if (normalized === null) return lastState; // invalid value — silently ignored, never crashes
@@ -483,6 +579,105 @@ export function createInteractivePreviewObservationControllerV2(options) {
     if (createdAt === null) createdAt = now;
     updatedAt = now;
 
+    _refreshWith(providerResult);
+    _emitIfChanged();
+    return lastState;
+  }
+
+  /**
+   * EPIC 2E-J Phase B: whether reason tags may currently be accepted —
+   * only when the observation is genuinely selected AND associated with
+   * the current generation (mirrors the same generation-confirmation
+   * discipline `selectObservation` itself uses).
+   */
+  function _reasonsAcceptable() {
+    if (disposed) return false;
+    const providerResult = _readProviderGeneration();
+    if (_providerMismatchesContext(providerResult)) return false;
+    const liveState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult, reasons, reasonsGenerationId });
+    return liveState.state === 'selected';
+  }
+
+  /**
+   * Toggles a single reason tag on/off. Validates the current selected
+   * Observation, applies mutual-exclusion (`no-specific-reason` clears
+   * every other reason and vice versa), and enforces the 5-tag limit.
+   * A silently-rejected/invalid reason value is a safe no-op, never a
+   * crash. Emits only when state genuinely changes.
+   */
+  function toggleReason(reason) {
+    if (disposed) return lastState;
+    const providerResult = _readProviderGeneration();
+    if (!_reasonsAcceptable()) return lastState;
+    const normalized = normalizeReasonValue(reason);
+    if (normalized === null) return lastState;
+
+    const generationId = context ? context.generationId : null;
+    if (generationId === null) return lastState;
+    // Reasons attached to a DIFFERENT generation than the current one
+    // are never carried forward silently — start fresh for this
+    // generation if the stored reasons belonged to an earlier one.
+    if (reasonsGenerationId !== null && reasonsGenerationId !== generationId) { reasons = []; }
+
+    const currentlyPresent = reasons.includes(normalized);
+    let nextReasons;
+    if (currentlyPresent) {
+      nextReasons = reasons.filter((r) => r !== normalized);
+    } else if (normalized === 'no-specific-reason') {
+      nextReasons = ['no-specific-reason'];
+    } else {
+      if (reasons.length >= REASON_LIMIT && !reasons.includes(normalized)) return lastState; // at limit — additional unchecked tags stay disabled/no-op
+      const withoutGeneric = reasons.filter((r) => r !== 'no-specific-reason');
+      nextReasons = [...withoutGeneric, normalized].slice(0, REASON_LIMIT);
+    }
+
+    reasons = normalizeReasons(nextReasons);
+    reasonsGenerationId = generationId;
+    _refreshWith(providerResult);
+    _emitIfChanged();
+    return lastState;
+  }
+
+  /**
+   * Replaces the full reason-tag set in one call. Accepts an
+   * array-like input only; normalizes defensively (dedupe, max 5,
+   * mutual exclusivity); never mutates the caller's array.
+   */
+  function setReasons(reasonsInput) {
+    if (disposed) return lastState;
+    const providerResult = _readProviderGeneration();
+    if (!_reasonsAcceptable()) return lastState;
+    const generationId = context ? context.generationId : null;
+    if (generationId === null) return lastState;
+
+    reasons = normalizeReasons(Array.isArray(reasonsInput) ? reasonsInput.slice() : []);
+    reasonsGenerationId = generationId;
+    _refreshWith(providerResult);
+    _emitIfChanged();
+    return lastState;
+  }
+
+  /**
+   * Clears reason tags only — keeps the current Observation selected
+   * and its session association valid. Does not clear the main
+   * Observation.
+   */
+  function clearReasons() {
+    if (disposed) return lastState;
+    const providerResult = _readProviderGeneration();
+    const mismatch = _providerMismatchesContext(providerResult);
+    if (mismatch) {
+      // A stale context takes priority — clearing reasons alone would
+      // be misleading when the whole observation is about to be
+      // invalidated anyway; let the normal stale-clearing path (which
+      // also clears reasons) handle it consistently.
+      const staleCleared = _clearObservationMemory();
+      _refreshWith(providerResult);
+      if (staleCleared) lastState = { ...lastState, warnings: [STALE_WARNING_MESSAGE] };
+      _emitIfChanged();
+      return lastState;
+    }
+    _clearReasonsMemory();
     _refreshWith(providerResult);
     _emitIfChanged();
     return lastState;
@@ -574,6 +769,16 @@ export function createInteractivePreviewObservationControllerV2(options) {
   if (clearButtonTarget) {
     _addListener(clearButtonTarget, clearButtonAddListener, clearButtonRemoveListener, 'click', () => clearObservation());
   }
+  // EPIC 2E-J Phase B: reason checkboxes toggle via `change`, mirroring
+  // the observation radios above.
+  for (const { target, addEventListenerMethod, removeEventListenerMethod } of reasonDescriptors) {
+    _addListener(target, addEventListenerMethod, removeEventListenerMethod, 'change', () => {
+      toggleReason(target.value);
+    });
+  }
+  if (clearReasonsButtonTarget) {
+    _addListener(clearReasonsButtonTarget, clearReasonsButtonAddListener, clearReasonsButtonRemoveListener, 'click', () => clearReasons());
+  }
 
   // Emit the initial (unavailable) state immediately so the DOM is
   // synced from the very first render, rather than showing empty/
@@ -582,7 +787,7 @@ export function createInteractivePreviewObservationControllerV2(options) {
     try { onStateChange(lastState); } catch { /* hostile consumer must not break setup */ }
   }
 
-  return { setContext, selectObservation, clearObservation, reset, dispose, getState };
+  return { setContext, selectObservation, clearObservation, toggleReason, setReasons, clearReasons, reset, dispose, getState };
 }
 
-export { deriveObservationStateV2, normalizeObservationValue };
+export { deriveObservationStateV2, normalizeObservationValue, normalizeReasonValue, normalizeReasons, VALID_REASONS, REASON_LIMIT };

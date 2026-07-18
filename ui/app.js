@@ -54,7 +54,8 @@ import { ensureVisualPreviewComparisonLayout, renderVisualPreviewComparison, cle
 import { createInteractiveBeforeAfterControllerV2 } from './interactive-before-after-controller-v2.js';
 import { ensureInteractiveBeforeAfterLayout, getInteractiveBeforeAfterElements, renderInteractiveBeforeAfterStatus, clearInteractiveBeforeAfterDisplay } from './interactive-before-after-renderer-v2.js';
 import { createInteractivePreviewObservationControllerV2 } from './interactive-preview-observation-controller-v2.js';
-import { ensureInteractivePreviewObservationLayout, renderInteractivePreviewObservationV2, clearInteractivePreviewObservationDisplay } from './interactive-preview-observation-renderer-v2.js';
+import { ensureInteractivePreviewObservationLayout, renderInteractivePreviewObservationV2, clearInteractivePreviewObservationDisplay, renderInteractivePreviewObservationContextV2, ensureInteractivePreviewObservationSessionLayout, renderInteractivePreviewObservationSessionV2 } from './interactive-preview-observation-renderer-v2.js';
+import { createInteractivePreviewObservationSessionV2 } from './interactive-preview-observation-session-v2.js';
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
@@ -133,6 +134,16 @@ let visualPreviewComparisonController = null;
 // section's skeleton exists in the DOM.
 let interactiveBeforeAfterController = null;
 let interactivePreviewObservationController = null;
+// EPIC 2E-J Phase B: the session summary is created ONCE and persists
+// across Re-analyze/New image/Reset — only the current generation's
+// record is invalidated/cleared on those events, never the whole
+// session (per this phase's explicit "do not clear the whole session"
+// requirement).
+let interactivePreviewObservationSession = null;
+// Tracks which generation's invalidation has already been sent to the
+// session module, so repeated lifecycle callbacks for the SAME
+// generation never double-count an invalidation.
+let lastInvalidatedObservationGenerationId = null;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 // The DC/React runtime streams and mounts the template asynchronously, so the
@@ -768,15 +779,96 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
  * never Analysis, Visual Preview, Interactive Before/After, Mapping, or
  * XMP.
  */
+/**
+ * EPIC 2E-J Phase B: syncs the Session Observation Summary from a
+ * compact observation-state projection. Called from the Observation
+ * controller's own `onStateChange` — never reads the full mutable
+ * controller/session objects, only the safe primitives already present
+ * on the state object. Idempotent per generation via
+ * `lastInvalidatedObservationGenerationId` (module-level), so repeated
+ * lifecycle callbacks for the SAME generation never double-count an
+ * invalidation.
+ */
+function _syncObservationSession(observationState) {
+  if (!interactivePreviewObservationSession) return;
+  try {
+    const state = safeGetVisualPreviewProperty(observationState, 'state');
+    if (state === 'selected') {
+      const genId = safeGetVisualPreviewProperty(observationState, 'observationGenerationId');
+      const observation = safeGetVisualPreviewProperty(observationState, 'observation');
+      const reasons = safeGetVisualPreviewProperty(observationState, 'reasons');
+      if (genId !== null && genId !== undefined) {
+        interactivePreviewObservationSession.recordObservation({ generationId: genId, observation, reasons: Array.isArray(reasons) ? reasons : [] });
+        lastInvalidatedObservationGenerationId = null; // this generation is active again — guard resets
+      }
+    } else if (state === 'cleared') {
+      const genId = safeGetVisualPreviewProperty(observationState, 'currentGenerationId');
+      if (genId !== null && genId !== undefined) interactivePreviewObservationSession.removeObservation(genId);
+    } else if (state === 'unavailable' || state === 'blocked') {
+      // A generation change, safety block, or the comparison leaving
+      // Ready invalidated any prior observation for this generation.
+      // Session-module-level idempotency (per-generation, checked
+      // there too) plus this app-level guard together ensure a single
+      // invalidation count per generation, even with repeated
+      // lifecycle callbacks.
+      const genId = safeGetVisualPreviewProperty(observationState, 'currentGenerationId');
+      if (genId !== null && genId !== undefined && lastInvalidatedObservationGenerationId !== genId) {
+        interactivePreviewObservationSession.invalidateGeneration(genId);
+        lastInvalidatedObservationGenerationId = genId;
+      }
+    }
+  } catch (sessionErr) {
+    // A Session-module failure must never affect the Observation
+    // controls themselves.
+    console.warn('Observation session sync failed (Preview Observation unaffected):', sessionErr);
+  }
+}
+
 function _syncInteractivePreviewObservation(ibaState, generationId) {
   const obsSec = document.getElementById('interactivePreviewObservationSection');
   const obsInner = document.getElementById('interactivePreviewObservationInner');
   if (!obsSec || !obsInner) return;
+  const sessionSec = document.getElementById('interactivePreviewObservationSessionSection');
+  const sessionInner = document.getElementById('interactivePreviewObservationSessionInner');
 
   try {
     obsSec.style.display = 'block';
     const elements = ensureInteractivePreviewObservationLayout(obsInner);
     if (!elements) return;
+
+    let sessionClearButton = null;
+    if (sessionSec && sessionInner) {
+      sessionSec.style.display = 'block';
+      const sessionElements = ensureInteractivePreviewObservationSessionLayout(sessionInner);
+      sessionClearButton = sessionElements ? sessionElements.clearSessionButton : null;
+    }
+    // EPIC 2E-J Phase B: the session summary is created ONCE and
+    // persists for the lifetime of the page — it is never recreated or
+    // cleared by Re-analyze/New image/Reset (only the current
+    // generation's record is invalidated/cleared on those events).
+    if (!interactivePreviewObservationSession) {
+      interactivePreviewObservationSession = createInteractivePreviewObservationSessionV2();
+    }
+
+    if (sessionClearButton && sessionClearButton.dataset.ipoSessionClearWired !== '1') {
+      sessionClearButton.dataset.ipoSessionClearWired = '1';
+      sessionClearButton.addEventListener('click', () => {
+        if (!interactivePreviewObservationSession) return;
+        interactivePreviewObservationSession.clearSession();
+        // Preferred documented behavior: immediately re-record the
+        // current valid active Observation (if any) as the first
+        // record of the freshly-cleared session, so the summary never
+        // misleadingly shows zero while a current selection is
+        // visible on screen.
+        if (interactivePreviewObservationController) {
+          const currentObsState = interactivePreviewObservationController.getState();
+          _syncObservationSession(currentObsState);
+        }
+        if (sessionInner) {
+          try { renderInteractivePreviewObservationSessionV2(sessionInner, interactivePreviewObservationSession.getSummary()); } catch { /* best-effort */ }
+        }
+      });
+    }
 
     if (!interactivePreviewObservationController) {
       interactivePreviewObservationController = createInteractivePreviewObservationControllerV2({
@@ -785,7 +877,13 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
         // provider Interactive Before/After itself uses — never a
         // duplicate generation counter.
         generationProvider: () => analysisRenderGeneration,
-        onStateChange: (s) => renderInteractivePreviewObservationV2(obsInner, s),
+        onStateChange: (s) => {
+          renderInteractivePreviewObservationV2(obsInner, s);
+          _syncObservationSession(s);
+          if (sessionInner) {
+            try { renderInteractivePreviewObservationSessionV2(sessionInner, interactivePreviewObservationSession.getSummary()); } catch { /* session render failure must not break Observation itself */ }
+          }
+        },
       });
     }
 
@@ -811,6 +909,49 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
       // causes honestly, rather than collapsing every "blocked" cause
       // into the same generic message.
       blockedReason: typeof rawBlockedReason === 'string' ? rawBlockedReason : null,
+    });
+
+    // EPIC 2E-J Phase B: compact comparison context summary — friendly
+    // text only, never raw generation/state objects.
+    const rawLegacyStatus = safeGetVisualPreviewProperty(rawMetadata, 'legacyStatus');
+    const rawV2Status = safeGetVisualPreviewProperty(rawMetadata, 'v2Status');
+    const legacyStatusText = safeGetVisualPreviewProperty(rawLegacyStatus, 'text');
+    const v2StatusText = safeGetVisualPreviewProperty(rawV2Status, 'text');
+    const rawAlignment = safeGetVisualPreviewProperty(ibaState, 'alignment');
+    const alignSameRatio = safeGetVisualPreviewProperty(rawAlignment, 'sameAspectRatio');
+    const alignNormalized = safeGetVisualPreviewProperty(rawAlignment, 'displayDimensionsNormalized');
+    const alignExactMatch = safeGetVisualPreviewProperty(rawAlignment, 'exactSourcePixelMatch');
+    let alignmentStatusText;
+    if (alignSameRatio === false) alignmentStatusText = 'Blocked geometry';
+    else if (alignNormalized === true) alignmentStatusText = 'Normalized once';
+    else if (alignExactMatch === true) alignmentStatusText = 'Exact dimensions';
+    else alignmentStatusText = 'Unknown';
+
+    const obsStateForContext = interactivePreviewObservationController.getState();
+    const obsMeta = safeGetVisualPreviewProperty(obsStateForContext, 'metadata');
+    const rawGenerationConfirmed = safeGetVisualPreviewProperty(obsMeta, 'generationConfirmed');
+    const rawProviderConfigured = safeGetVisualPreviewProperty(obsMeta, 'providerConfigured');
+    // FIX: renderInteractivePreviewObservationContextV2 expects a
+    // tri-state `generationConfirmed` (true/false/null) — `false` means
+    // "context fallback" (a provider is configured but didn't actively
+    // confirm), `null` means "unavailable" (no provider at all).
+    const generationConfirmedForContext = rawGenerationConfirmed === true ? true : (rawProviderConfigured === true ? false : null);
+
+    // Strip the "Legacy: "/"Controlled V2: " prefix that Interactive
+    // Before/After's own friendly badge text already includes — the
+    // Context summary below adds its own "Legacy preview: "/
+    // "Controlled V2 preview: " label, so passing the raw badge text
+    // through unmodified would duplicate the source name.
+    const stripPrefix = (text, prefix) => (typeof text === 'string' && text.startsWith(prefix)) ? text.slice(prefix.length) : text;
+    const cleanLegacyStatus = stripPrefix(legacyStatusText, 'Legacy: ');
+    const cleanV2Status = stripPrefix(v2StatusText, 'Controlled V2: ');
+
+    renderInteractivePreviewObservationContextV2(obsInner, {
+      generationId,
+      legacyStatus: typeof cleanLegacyStatus === 'string' ? cleanLegacyStatus : 'Unknown',
+      v2Status: typeof cleanV2Status === 'string' ? cleanV2Status : 'Unknown',
+      alignmentStatus: alignmentStatusText,
+      generationConfirmed: generationConfirmedForContext,
     });
   } catch (obsErr) {
     console.warn('Preview Observation sync failed (Interactive Before/After unaffected):', obsErr);
@@ -868,7 +1009,21 @@ async function runAnalysis() {
   // controls disable again until the new Interactive comparison
   // reaches Ready.
   if (interactivePreviewObservationController) {
+    // EPIC 2E-J Phase B: capture the generation BEFORE reset() clears
+    // its own context — reset() sets currentGenerationId to null
+    // internally, so invalidating the Session record must use this
+    // captured value directly rather than reading it back afterward.
+    const priorObsState = interactivePreviewObservationController.getState();
+    const priorGenerationId = safeGetVisualPreviewProperty(priorObsState, 'currentGenerationId');
     interactivePreviewObservationController.reset();
+    if (interactivePreviewObservationSession && priorGenerationId !== null && priorGenerationId !== undefined && lastInvalidatedObservationGenerationId !== priorGenerationId) {
+      interactivePreviewObservationSession.invalidateGeneration(priorGenerationId);
+      lastInvalidatedObservationGenerationId = priorGenerationId;
+      const sessionInnerEarly = document.getElementById('interactivePreviewObservationSessionInner');
+      if (sessionInnerEarly) {
+        try { renderInteractivePreviewObservationSessionV2(sessionInnerEarly, interactivePreviewObservationSession.getSummary()); } catch { /* session render failure must not break Analysis */ }
+      }
+    }
   }
 
   setAnalysisBox('loading', 'กำลังวิเคราะห์ histogram…');
@@ -1526,11 +1681,30 @@ function handleReset() {
   if (ibaInner) clearInteractiveBeforeAfterDisplay(ibaInner);
   // EPIC 2E-J Phase A: same reset guarantee for Preview Observation —
   // clear (not dispose), hide the section, reset the status display.
-  if (interactivePreviewObservationController) interactivePreviewObservationController.reset();
+  if (interactivePreviewObservationController) {
+    // EPIC 2E-J Phase B: capture generation BEFORE reset() clears it,
+    // then invalidate ONLY the current generation's Session record —
+    // never the whole session (Reset must not wipe earlier session
+    // history).
+    const priorObsState = interactivePreviewObservationController.getState();
+    const priorGenerationId = safeGetVisualPreviewProperty(priorObsState, 'currentGenerationId');
+    interactivePreviewObservationController.reset();
+    if (interactivePreviewObservationSession && priorGenerationId !== null && priorGenerationId !== undefined && lastInvalidatedObservationGenerationId !== priorGenerationId) {
+      interactivePreviewObservationSession.invalidateGeneration(priorGenerationId);
+      lastInvalidatedObservationGenerationId = priorGenerationId;
+    }
+  }
   const obsSec = document.getElementById('interactivePreviewObservationSection');
   if (obsSec) obsSec.style.display = 'none';
   const obsInner = document.getElementById('interactivePreviewObservationInner');
   if (obsInner) clearInteractivePreviewObservationDisplay(obsInner);
+  // Session summary itself is intentionally NOT cleared/hidden here —
+  // it persists across Reset (only the current generation's record was
+  // invalidated above); re-render it with the updated summary.
+  const sessionInnerReset = document.getElementById('interactivePreviewObservationSessionInner');
+  if (sessionInnerReset && interactivePreviewObservationSession) {
+    try { renderInteractivePreviewObservationSessionV2(sessionInnerReset, interactivePreviewObservationSession.getSummary()); } catch { /* best-effort */ }
+  }
   const reviewInner = document.getElementById('reviewConsoleInner');
   if (reviewInner) reviewInner.innerHTML = '';
   // Reset active tab back to Overview

@@ -1,7 +1,8 @@
 /**
  * ui/interactive-preview-observation-renderer-v2.js
  *
- * EPIC 2E-J Phase A (+ EPIC 2E-J-A-F correctness patch) — pure DOM
+ * EPIC 2E-J Phase A (+ EPIC 2E-J-A-F/-F2/-F3 correctness patches,
+ * EPIC 2E-J Phase B reason tags/context/session extension) — pure DOM
  * builder/updater for the Preview Observation section. Holds no state
  * of its own; every render call is a pure function of the state object
  * it's given. Never uses innerHTML with untrusted content, never
@@ -14,6 +15,21 @@ const OBSERVATION_OPTIONS = [
   { value: 'no-visible-difference', label: 'No visible difference' },
   { value: 'unsure', label: 'Unsure' },
 ];
+
+// EPIC 2E-J Phase B: reason tags — descriptive UI feedback only.
+const REASON_OPTIONS = [
+  { value: 'skin-tone', label: 'Skin tone' },
+  { value: 'white-balance', label: 'White balance' },
+  { value: 'highlight-detail', label: 'Highlight detail' },
+  { value: 'shadow-detail', label: 'Shadow detail' },
+  { value: 'contrast', label: 'Contrast' },
+  { value: 'color-balance', label: 'Color balance' },
+  { value: 'saturation', label: 'Saturation' },
+  { value: 'natural-look', label: 'Natural look' },
+  { value: 'clarity-detail', label: 'Clarity / detail' },
+  { value: 'no-specific-reason', label: 'No specific reason' },
+];
+const REASON_LABEL_BY_VALUE = Object.fromEntries(REASON_OPTIONS.map((o) => [o.value, o.label]));
 
 const SELECTED_MESSAGE = {
   'prefer-legacy': 'Observation recorded: Legacy preview preferred.',
@@ -28,9 +44,8 @@ const STATE_MESSAGE = {
   disposed: 'Observation is unavailable.',
 };
 
-// FIX 6 (EPIC 2E-J-A-F): one honest message per real cause — never a
-// single generic "unavailable" message regardless of the actual
-// reason. Mirrors the controller's own UNAVAILABLE_REASON_MESSAGE map.
+// One honest message per real cause — never a single generic
+// "unavailable" message regardless of the actual reason.
 const UNAVAILABLE_REASON_MESSAGE = {
   preparing: 'Observation will be available when both previews finish rendering.',
   partial: 'Observation is unavailable because only one preview rendered.',
@@ -43,12 +58,16 @@ const UNAVAILABLE_REASON_MESSAGE = {
   'not-ready': 'Observation is available after both previews are ready.',
 };
 const SAFETY_BLOCKED_MESSAGE = 'Observation is unavailable while the comparison is blocked by a safety anomaly.';
-// FIX 8 (EPIC 2E-J-A-F2): must match the controller's own
-// PROVIDER_UNCONFIRMED_WARNING text exactly, for priority matching.
+// Must match the controller's own PROVIDER_UNCONFIRMED_WARNING text
+// exactly, for priority matching.
 const PROVIDER_UNCONFIRMED_WARNING = 'Current generation could not be independently confirmed.';
 
 const SAFETY_NOTE = 'Observation only \u00B7 Legacy remains production \u00B7 XMP unchanged';
 const V2_REMINDER = 'Controlled V2 remains non-production.';
+const REASON_DETAILS_NOTE = 'Observation details stay in this page session only and do not change production output.';
+const REASON_LIMIT_MESSAGE = 'You can select up to five reasons.';
+const SESSION_NOTE = 'This summary resets when the page reloads and does not affect Mapping, XMP, or production.';
+const SESSION_EMPTY_MESSAGE = 'No observations have been recorded in this page session.';
 
 // Safe single-read property access for the renderer boundary.
 function _safeGetR(object, key, fallback = undefined) {
@@ -80,6 +99,15 @@ function el(tag, { style, cls, text, attrs } = {}) {
   return e;
 }
 
+// A friendly, non-raw display of a generation ID. Only primitives are
+// shown directly; anything else (including a hostile/non-primitive
+// value) safely degrades to "Available" rather than being serialized.
+function _friendlyGenerationLabel(generationId) {
+  if (generationId === null || generationId === undefined) return 'None yet';
+  if (typeof generationId === 'string' || typeof generationId === 'number') return String(generationId);
+  return 'Available';
+}
+
 /**
  * Builds the section skeleton once. Idempotent — safe to call multiple
  * times; only builds on the first call for a given container.
@@ -92,17 +120,21 @@ export function ensureInteractivePreviewObservationLayout(container) {
 
   const root = el('div', { style: 'display:flex;flex-direction:column;gap:10px' });
 
-  // FIX 10 (EPIC 2E-J-A-F): scoped :focus-visible rules for the radio
-  // labels and the Clear button — the section had no explicit focus
-  // style at all before this patch.
+  // Scoped :focus-visible rules for the radio/checkbox labels and
+  // buttons.
   const styleTag = el('style', {
-    text: '#ipoFieldset label:focus-within{outline:2px solid var(--accent, #4a9eff);outline-offset:2px;} '
-      + '#ipoClearButton:focus-visible{outline:2px solid var(--accent, #4a9eff);outline-offset:2px;}',
+    text: '#ipoFieldset label:focus-within,#ipoReasonFieldset label:focus-within{outline:2px solid var(--accent, #4a9eff);outline-offset:2px;} '
+      + '#ipoClearButton:focus-visible,#ipoClearReasonsButton:focus-visible,#ipoClearSessionButton:focus-visible{outline:2px solid var(--accent, #4a9eff);outline-offset:2px;}',
   });
   root.appendChild(styleTag);
 
   root.appendChild(el('h4', { style: 'margin:0;font-size:13px;font-weight:600;color:var(--text)', text: 'Preview Observation' }));
   root.appendChild(el('p', { style: 'margin:0;font-size:11px;color:var(--text-dim)', text: 'Record what you notice in the approximate browser comparison' }));
+
+  // EPIC 2E-J Phase B: compact context summary.
+  const contextEl = el('div', { style: 'font-size:10px;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:10px;padding:8px;border:1px solid var(--border);border-radius:3px' });
+  contextEl.id = 'ipoContext';
+  root.appendChild(contextEl);
 
   const fieldset = el('fieldset', { style: 'border:1px solid var(--border);border-radius:3px;padding:12px;margin:0;display:flex;flex-direction:column;gap:8px' });
   fieldset.id = 'ipoFieldset';
@@ -136,14 +168,49 @@ export function ensureInteractivePreviewObservationLayout(container) {
   statusEl.id = 'ipoStatus';
   root.appendChild(statusEl);
 
-  // FIX 7 (EPIC 2E-J-A-F): a separate, bounded warning element — the
-  // renderer previously read `state.warnings` but never displayed them
-  // at all.
   const warningEl = el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', attrs: { 'aria-live': 'polite' } });
   warningEl.id = 'ipoWarning';
   root.appendChild(warningEl);
 
-  // FIX 10: text-faint (low contrast) replaced with text-dim.
+  // EPIC 2E-J Phase B: reason tags fieldset ("Why?").
+  const reasonFieldset = el('fieldset', { style: 'border:1px solid var(--border);border-radius:3px;padding:12px;margin:0;display:flex;flex-direction:column;gap:8px' });
+  reasonFieldset.id = 'ipoReasonFieldset';
+  reasonFieldset.appendChild(el('legend', { style: 'font-size:10.5px;color:var(--text-dim);padding:0 6px', text: 'Why?' }));
+
+  const reasonsWrap = el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px' });
+  REASON_OPTIONS.forEach(({ value, label }) => {
+    const reasonLabel = el('label', {
+      style: 'display:flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--text);min-height:36px',
+    });
+    const input = el('input', { attrs: { type: 'checkbox', name: 'ipoReason', value, id: `ipoReason_${value}` } });
+    input.style.cursor = 'pointer';
+    reasonLabel.appendChild(input);
+    reasonLabel.appendChild(el('span', { text: label }));
+    reasonsWrap.appendChild(reasonLabel);
+  });
+  reasonFieldset.appendChild(reasonsWrap);
+
+  const reasonLimitEl = el('div', { style: 'font-size:10px;color:var(--text-dim)' });
+  reasonLimitEl.id = 'ipoReasonLimit';
+  reasonFieldset.appendChild(reasonLimitEl);
+
+  const clearReasonsButton = el('button', {
+    style: 'align-self:flex-start;padding:6px 14px;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
+    text: 'Clear reasons',
+    attrs: { type: 'button' },
+  });
+  clearReasonsButton.id = 'ipoClearReasonsButton';
+  reasonFieldset.appendChild(clearReasonsButton);
+
+  const reasonStatusEl = el('div', { style: 'font-size:10px;color:var(--text-dim)', attrs: { 'aria-live': 'polite' } });
+  reasonStatusEl.id = 'ipoReasonStatus';
+  reasonFieldset.appendChild(reasonStatusEl);
+
+  root.appendChild(reasonFieldset);
+
+  const detailsNoteEl = el('div', { style: 'font-size:10px;color:var(--text-dim)', text: REASON_DETAILS_NOTE });
+  root.appendChild(detailsNoteEl);
+
   const safetyNoteEl = el('div', { style: 'font-size:10px;color:var(--text-dim)', text: SAFETY_NOTE });
   safetyNoteEl.id = 'ipoSafetyNote';
   root.appendChild(safetyNoteEl);
@@ -159,14 +226,16 @@ export function getInteractivePreviewObservationElements(container) {
   return {
     optionInputs: Array.from(container.querySelectorAll('input[name="ipoObservation"]')),
     clearButton: container.querySelector('#ipoClearButton') || null,
+    reasonInputs: Array.from(container.querySelectorAll('input[name="ipoReason"]')),
+    clearReasonsButton: container.querySelector('#ipoClearReasonsButton') || null,
   };
 }
 
 /**
  * Renders the current observation state into the DOM. Pure function of
  * `state` — never reads anything from the controller directly.
- * FIX 3 (EPIC 2E-J-A-F): every projected field read exactly once via
- * `_safeGetR`, stored, then reused — never a second direct access.
+ * Every projected field read exactly once via `_safeGetR`, stored, then
+ * reused — never a second direct access.
  */
 export function renderInteractivePreviewObservationV2(container, state) {
   if (!container) return;
@@ -178,9 +247,12 @@ export function renderInteractivePreviewObservationV2(container, state) {
   const rawWarnings = _safeGetR(s, 'warnings');
   const rawMetadata = _safeGetR(s, 'metadata');
   const rawUnavailableReason = _safeGetR(rawMetadata, 'unavailableReason');
+  const rawReasons = _safeGetR(s, 'reasons');
+  const rawReasonLimitReached = _safeGetR(s, 'reasonLimitReached');
 
   const normalizedState = typeof rawState === 'string' ? rawState : 'unavailable';
   const enabled = normalizedState === 'ready' || normalizedState === 'selected' || normalizedState === 'cleared';
+  const hasSelection = normalizedState === 'selected' && typeof rawObservation === 'string';
 
   const fieldset = container.querySelector('#ipoFieldset');
   const optionInputs = Array.from(container.querySelectorAll('input[name="ipoObservation"]'));
@@ -188,6 +260,11 @@ export function renderInteractivePreviewObservationV2(container, state) {
   const statusEl = container.querySelector('#ipoStatus');
   const warningEl = container.querySelector('#ipoWarning');
   const safetyNoteEl = container.querySelector('#ipoSafetyNote');
+  const reasonFieldset = container.querySelector('#ipoReasonFieldset');
+  const reasonInputs = Array.from(container.querySelectorAll('input[name="ipoReason"]'));
+  const reasonLimitEl = container.querySelector('#ipoReasonLimit');
+  const clearReasonsButton = container.querySelector('#ipoClearReasonsButton');
+  const reasonStatusEl = container.querySelector('#ipoReasonStatus');
 
   if (fieldset) fieldset.disabled = !enabled;
   optionInputs.forEach((input) => {
@@ -196,11 +273,6 @@ export function renderInteractivePreviewObservationV2(container, state) {
   });
   if (clearButton) clearButton.disabled = !enabled || rawObservation === null || rawObservation === undefined;
 
-  // FIX 6 (EPIC 2E-J-A-F): status message chosen from the ACTUAL
-  // cause, never a single generic fallback. Priority: a specific
-  // selected-observation message > the state-level message (ready/
-  // cleared/disposed) > safety-blocked message > the honest
-  // unavailableReason message.
   let message;
   if (normalizedState === 'selected' && typeof rawObservation === 'string' && SELECTED_MESSAGE[rawObservation]) {
     message = SELECTED_MESSAGE[rawObservation];
@@ -215,12 +287,10 @@ export function renderInteractivePreviewObservationV2(container, state) {
   }
   if (statusEl) statusEl.textContent = message;
 
-  // FIX 8 (EPIC 2E-J-A-F2): explicit warning priority — (1) an actual
-  // stale-generation mismatch, (2) a safety blocker, (3) the
-  // provider-confirmation-unavailable notice, (4) the honest
-  // unavailable reason, (5) nothing (normal selected/ready status needs
-  // no separate warning). Deduplicated against the status message text
-  // (never repeats the same text in both elements). The
+  // Explicit warning priority — (1) an actual stale-generation
+  // mismatch, (2) a safety blocker, (3) the provider-confirmation-
+  // unavailable notice, (4) the honest unavailable reason, (5) nothing.
+  // Deduplicated against the status message text. The
   // provider-unconfirmed notice is rendered in NEUTRAL/informational
   // styling — never as an error/danger, and never labeled "stale".
   if (warningEl) {
@@ -231,7 +301,7 @@ export function renderInteractivePreviewObservationV2(container, state) {
     let primaryWarning = candidates.find(isStaleWarning) ?? null;
     let warningTone = 'danger';
     if (!primaryWarning && normalizedState === 'blocked') {
-      primaryWarning = null; // the safety-blocked cause is already the primary status message itself — no separate warning duplicate.
+      primaryWarning = null;
     }
     if (!primaryWarning) {
       const providerNotice = candidates.find(isProviderUnconfirmed);
@@ -253,10 +323,184 @@ export function renderInteractivePreviewObservationV2(container, state) {
     }
     safetyNoteEl.textContent = note;
   }
+
+  // EPIC 2E-J Phase B: reason tags — enabled only when an Observation is
+  // genuinely selected for the current generation.
+  const reasonsList = _safeArray(rawReasons).filter((r) => typeof r === 'string');
+  const reasonLimitReached = rawReasonLimitReached === true;
+  const reasonsEnabled = hasSelection;
+
+  if (reasonFieldset) reasonFieldset.disabled = !reasonsEnabled;
+  reasonInputs.forEach((input) => {
+    const isChecked = reasonsEnabled && reasonsList.includes(input.value);
+    input.checked = isChecked;
+    // At the limit, unchecked boxes become disabled (checked ones stay
+    // removable); when not enabled at all, everything is disabled.
+    input.disabled = !reasonsEnabled || (reasonLimitReached && !isChecked);
+  });
+  if (reasonLimitEl) reasonLimitEl.textContent = reasonsEnabled && reasonLimitReached ? REASON_LIMIT_MESSAGE : '';
+  if (clearReasonsButton) clearReasonsButton.disabled = !reasonsEnabled || reasonsList.length === 0;
+  if (reasonStatusEl) {
+    reasonStatusEl.textContent = reasonsEnabled && reasonsList.length > 0
+      ? `Selected: ${reasonsList.map((r) => REASON_LABEL_BY_VALUE[r] ?? r).join(', ')}`
+      : '';
+  }
 }
 
 /** Resets the section's display to the unavailable/empty state without destroying the skeleton. */
 export function clearInteractivePreviewObservationDisplay(container) {
   if (!container || container.dataset.ipoLayoutBuilt !== '1') return;
-  renderInteractivePreviewObservationV2(container, { state: 'unavailable', observation: null, warnings: [], metadata: { blockers: [], unavailableReason: 'not-ready' } });
+  renderInteractivePreviewObservationV2(container, { state: 'unavailable', observation: null, warnings: [], metadata: { blockers: [], unavailableReason: 'not-ready' }, reasons: [], reasonLimitReached: false });
+}
+
+/**
+ * EPIC 2E-J Phase B: renders the compact Context summary inside the
+ * Preview Observation section. Pure function of a compact context
+ * projection — never exposes a raw generation object or full timestamp.
+ * @param {{ generationId: any, legacyStatus: string, v2Status: string, alignmentStatus: string, generationConfirmed: (boolean|null) }} contextInfo
+ */
+export function renderInteractivePreviewObservationContextV2(container, contextInfo) {
+  const contextEl = container ? container.querySelector('#ipoContext') : null;
+  if (!contextEl) return;
+  const c = (contextInfo && typeof contextInfo === 'object') ? contextInfo : {};
+  const generationId = _safeGetR(c, 'generationId');
+  const legacyStatus = _safeText(_safeGetR(c, 'legacyStatus')) ?? 'Unknown';
+  const v2Status = _safeText(_safeGetR(c, 'v2Status')) ?? 'Unknown';
+  const alignmentStatus = _safeText(_safeGetR(c, 'alignmentStatus')) ?? 'Unknown';
+  const rawConfirmed = _safeGetR(c, 'generationConfirmed');
+  const confirmedLabel = rawConfirmed === true ? 'Confirmed' : rawConfirmed === false ? 'Context fallback' : 'Unavailable';
+
+  contextEl.replaceChildren();
+  const rows = [
+    ['Comparison generation', _friendlyGenerationLabel(generationId)],
+    ['Legacy preview', legacyStatus],
+    ['Controlled V2 preview', v2Status],
+    ['Alignment', alignmentStatus],
+    ['Generation confirmation', confirmedLabel],
+    ['Observation session', 'In-memory only'],
+  ];
+  rows.forEach(([label, value]) => {
+    const item = el('span', {});
+    item.appendChild(el('span', { style: 'color:var(--text-dim)', text: `${label}: ` }));
+    item.appendChild(el('span', { style: 'color:var(--text)', text: value }));
+    contextEl.appendChild(item);
+  });
+}
+
+// ── Session Observation Summary ──────────────────────────────────────
+
+const REASON_FIELD_LABEL = {
+  skinTone: 'Skin tone', whiteBalance: 'White balance', highlightDetail: 'Highlight detail',
+  shadowDetail: 'Shadow detail', contrast: 'Contrast', colorBalance: 'Color balance',
+  saturation: 'Saturation', naturalLook: 'Natural look', clarityDetail: 'Clarity / detail', noSpecificReason: 'No specific reason',
+};
+
+/** Builds the Session Observation Summary section skeleton once. Idempotent. */
+export function ensureInteractivePreviewObservationSessionLayout(container) {
+  if (!container) return null;
+  if (container.dataset.ipoSessionLayoutBuilt === '1') {
+    return getInteractivePreviewObservationSessionElements(container);
+  }
+
+  const root = el('div', { style: 'display:flex;flex-direction:column;gap:8px' });
+  root.appendChild(el('h4', { style: 'margin:0;font-size:12.5px;font-weight:600;color:var(--text)', text: 'Session Observation Summary' }));
+  root.appendChild(el('p', { style: 'margin:0;font-size:10.5px;color:var(--text-dim)', text: 'Current page session only' }));
+  root.appendChild(el('div', { style: 'font-size:10px;color:var(--text-dim)', text: SESSION_NOTE }));
+
+  const metricsEl = el('div', { style: 'display:flex;flex-wrap:wrap;gap:10px;font-size:10.5px' });
+  metricsEl.id = 'ipoSessionMetrics';
+  root.appendChild(metricsEl);
+
+  const secondaryEl = el('div', { style: 'display:flex;flex-wrap:wrap;gap:10px;font-size:10px;color:var(--text-dim)' });
+  secondaryEl.id = 'ipoSessionSecondary';
+  root.appendChild(secondaryEl);
+
+  const topReasonsEl = el('div', { style: 'font-size:10px;color:var(--text-dim)' });
+  topReasonsEl.id = 'ipoSessionTopReasons';
+  root.appendChild(topReasonsEl);
+
+  const clearSessionButton = el('button', {
+    style: 'align-self:flex-start;padding:6px 14px;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
+    text: 'Clear session summary',
+    attrs: { type: 'button' },
+  });
+  clearSessionButton.id = 'ipoClearSessionButton';
+  root.appendChild(clearSessionButton);
+
+  container.replaceChildren(root);
+  container.dataset.ipoSessionLayoutBuilt = '1';
+  return getInteractivePreviewObservationSessionElements(container);
+}
+
+export function getInteractivePreviewObservationSessionElements(container) {
+  if (!container) return null;
+  return { clearSessionButton: container.querySelector('#ipoClearSessionButton') || null };
+}
+
+/**
+ * Renders a session summary snapshot. Pure function — never mutates the
+ * summary object, never shows percentages when the denominator is
+ * zero, never shows NaN/Infinity.
+ */
+export function renderInteractivePreviewObservationSessionV2(container, summary) {
+  if (!container) return;
+  ensureInteractivePreviewObservationSessionLayout(container);
+  const s = (summary && typeof summary === 'object') ? summary : {};
+  const metricsEl = container.querySelector('#ipoSessionMetrics');
+  const secondaryEl = container.querySelector('#ipoSessionSecondary');
+  const topReasonsEl = container.querySelector('#ipoSessionTopReasons');
+
+  const totalObserved = Number.isFinite(_safeGetR(s, 'totalObserved')) ? s.totalObserved : 0;
+  const activeObservations = Number.isFinite(_safeGetR(s, 'activeObservations')) ? s.activeObservations : 0;
+  const preferLegacy = Number.isFinite(_safeGetR(s, 'preferLegacy')) ? s.preferLegacy : 0;
+  const preferV2 = Number.isFinite(_safeGetR(s, 'preferV2')) ? s.preferV2 : 0;
+  const noVisibleDifference = Number.isFinite(_safeGetR(s, 'noVisibleDifference')) ? s.noVisibleDifference : 0;
+  const unsure = Number.isFinite(_safeGetR(s, 'unsure')) ? s.unsure : 0;
+  const cleared = Number.isFinite(_safeGetR(s, 'cleared')) ? s.cleared : 0;
+  const invalidated = Number.isFinite(_safeGetR(s, 'invalidated')) ? s.invalidated : 0;
+  const topReasons = _safeArray(_safeGetR(s, 'topReasons'));
+
+  if (metricsEl) {
+    metricsEl.replaceChildren();
+    if (totalObserved === 0) {
+      metricsEl.appendChild(el('div', { style: 'color:var(--text-dim)', text: SESSION_EMPTY_MESSAGE }));
+    } else {
+      const pct = (n) => (activeObservations > 0 ? `${Math.round((n / activeObservations) * 100)}%` : '');
+      const metric = (label, value, percentLabel) => {
+        const box = el('div', { style: 'color:var(--text)' });
+        const text = percentLabel ? `${label}: ${value}${percentLabel ? ` (${percentLabel})` : ''}` : `${label}: ${value}`;
+        box.textContent = text;
+        metricsEl.appendChild(box);
+      };
+      metric('Observed', totalObserved, null);
+      metric('Prefer Legacy', preferLegacy, pct(preferLegacy));
+      metric('Prefer V2', preferV2, pct(preferV2));
+      metric('No visible difference', noVisibleDifference, pct(noVisibleDifference));
+      metric('Unsure', unsure, pct(unsure));
+    }
+  }
+
+  if (secondaryEl) {
+    secondaryEl.replaceChildren();
+    secondaryEl.appendChild(el('span', { text: `Cleared: ${cleared}` }));
+    secondaryEl.appendChild(el('span', { text: `Invalidated: ${invalidated}` }));
+  }
+
+  if (topReasonsEl) {
+    topReasonsEl.replaceChildren();
+    if (topReasons.length > 0) {
+      const validEntries = topReasons
+        .map((entry) => {
+          const reason = _safeGetR(entry, 'reason');
+          const count = _safeGetR(entry, 'count');
+          const field = { 'skin-tone': 'skinTone', 'white-balance': 'whiteBalance', 'highlight-detail': 'highlightDetail', 'shadow-detail': 'shadowDetail', contrast: 'contrast', 'color-balance': 'colorBalance', saturation: 'saturation', 'natural-look': 'naturalLook', 'clarity-detail': 'clarityDetail', 'no-specific-reason': 'noSpecificReason' }[reason];
+          const label = field ? REASON_FIELD_LABEL[field] : null;
+          return (label && Number.isFinite(count)) ? `${label} (${count})` : null;
+        })
+        .filter(Boolean);
+      if (validEntries.length > 0) {
+        topReasonsEl.appendChild(el('div', { text: `Top reasons: ${validEntries.join(', ')}` }));
+      }
+    }
+  }
 }
