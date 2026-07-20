@@ -1,19 +1,22 @@
 # 19 — EPIC 2E-J Phase C: Observation QA, Privacy Review & UX Validation
 
+*(Revised by EPIC 2E-J-C-F — mobile containment, full integration
+evidence, and single-decision closeout patch)*
+
 ## 1. Scope
 
 Focused QA, privacy, and UX validation for the complete Preview
 Observation + Session Summary workflow shipped across EPIC 2E-J Phase A
 (and its A-F/A-F2/A-F3 correctness patches) and Phase B (and its
-B-F/B-F2 correctness patches). This report judges correctness, privacy,
-data minimization, production isolation, accessibility, and resilience —
-never Lightroom/Adobe Camera Raw parity, which the Observation feature
-makes no claim about.
+B-F/B-F2 correctness patches), closed out with this patch's mobile
+layout root-cause investigation and expanded evidence. This report
+judges correctness, privacy, data minimization, production isolation,
+accessibility, and resilience — never Lightroom/Adobe Camera Raw
+parity, which the Observation feature makes no claim about.
 
 ## 2. Version Tested
 
-AI Workflow **v1.1.9 (EPIC 2E-I)** — unchanged in this phase, per
-instruction.
+AI Workflow **v1.1.9 (EPIC 2E-I)** — unchanged, per instruction.
 
 ## 3. Files Audited
 
@@ -25,214 +28,251 @@ instruction.
 
 ## 4. Test Environment
 
-Headless Chromium via Playwright (automated viewport emulation), direct
-Node.js unit tests for controller/session-module logic, and direct
-project-wide `grep` code search for privacy/production-isolation review.
-**No real physical mobile device, no real screen-reader software.**
+Headless Chromium via Playwright (real automated viewport emulation and
+real DOM keyboard/pointer events against the actual `index.html`), plus
+direct Node.js unit tests for controller/session-module logic, plus
+direct project-wide `grep` code search for privacy/production-isolation
+review. **No real physical mobile device, no real screen-reader
+software.**
 
-## 5. Observation Workflow Results
+## 5. Mobile Clipping — Root Cause and Fix
 
-The full 32-step primary workflow (Section "PRIMARY USER WORKFLOW QA" in
-the phase brief) was exercised via a combination of the reproducible
-automated smoke test (`qa/epic-2e-j-phase-c-observation-smoke-test.mjs`)
-and direct Node-level controller unit tests, since the live analysis
-pipeline never reaches Interactive "Ready" under this project's current
-Render Plan (Controlled V2 has no concrete adjustment data — a
-pre-existing, documented limitation carried forward from every prior
-EPIC 2E-J patch).
+**Finding: the mobile clipping visible in this report's original
+320px/390px screenshots was a defect in this report's own QA test
+harness, not in production code.** Investigation traced it to a missing
+`margin: 0` reset on `<body>` in the ad-hoc screenshot harness used to
+generate the original evidence — the real `index.html` already
+correctly resets `html, body { margin: 0; padding: 0; }` (line 11).
+Verified conclusively by driving the real Observation controller/
+renderer/session inside the actual `index.html` page (not a standalone
+harness) and measuring every relevant element's `getBoundingClientRect()`
+against the viewport at all 7 required widths (320/360/390/430/768/
+1024/1440px): **zero clipped children at every width, with a 1px
+tolerance**, both in a single-Observation-selected state and in a
+worst-case state (5 Reasons selected, multi-record Session Summary with
+percentages and top-reasons text). No production CSS was changed by
+this finding — there was no genuine mobile-layout defect to fix. New,
+correctly-captured screenshots have replaced the flawed originals under
+`qa-screenshots/epic-2e-j/`.
 
-| Step | Result | Evidence |
+## 6. Element-Level Responsive Results
+
+| Viewport | Result | Evidence |
 |---|---|---|
-| All 4 Observation options selectable | PASS | Smoke test: all 4 values correctly reflected in `state.observation` |
-| One Reason → five Reasons → sixth rejected | PASS | Smoke test: `reasonLimitReached: true` at 5, 6th attempt left count at 5 |
-| Remove one, add another | PASS | Direct unit test (prior patch series), re-verified unaffected |
-| Change Observation within same generation preserves Reasons | PASS | Direct unit test: `["skin-tone"]` preserved across Prefer Legacy → Prefer V2 |
-| No-specific-reason exclusivity both directions | PASS | Smoke test + direct unit test: selecting it clears all others; selecting any specific reason clears it |
-| Clear Reasons keeps Observation | PASS | Smoke test: `reasons: []`, `observation: "prefer-legacy"` after `clearReasons()` |
-| Clear Observation clears Reasons | PASS | Direct unit test (prior patch), re-verified |
-| Re-analyze invalidates old Observation, new generation not falsely invalidated | PASS | Direct browser-harness test replicating the exact `_syncObservationSession` logic now in `app.js`: after gen1→gen2 handoff, `activeObservations: 0, invalidated: 1`, `totalObserved` stayed 1 (gen2 never counted) |
-| Stale selection never revives | PASS | Smoke test: after provider mismatch then recovery, `state: "ready"`, `observation: null` |
-| Session Summary counts | PASS | See Section 8 |
-| Session Clear + current re-record | PASS | Verified via code path re-inspection (the fix from EPIC 2E-J-B-F2 resetting the sync signature before re-recording); not independently re-exercised as a new live test in this phase since it was already fixed and verified in the immediately-preceding patch |
-| Reset clears current Observation | PASS | Full live E2E: confirmed `interactivePreviewObservationSection` hidden after Reset |
+| 320px | PASS | `docScrollW=320`, zero clipped children (Observation fieldset, Reason fieldset, Context row, Session metrics/secondary row, all radio/checkbox labels, all 3 Clear buttons individually checked) |
+| 360px | PASS | same |
+| 390px | PASS | same |
+| 430px | PASS | same |
+| 768px | PASS | same |
+| 1024px | PASS | same |
+| 1440px | PASS | same |
 
-## 6. Reason-Tag Results
+This is now a **permanent, automated** part of
+`qa/epic-2e-j-phase-c-observation-smoke-test.mjs` (not a one-time
+screenshot check) — `document.scrollWidth` alone was deliberately not
+relied upon, per this patch's own instruction that it is insufficient.
 
-All 10 exact technical values verified via `normalizeReasons()` direct
-unit tests: `skin-tone`, `white-balance`, `highlight-detail`,
-`shadow-detail`, `contrast`, `color-balance`, `saturation`,
-`natural-look`, `clarity-detail`, `no-specific-reason`. Zero/one/multiple
-reasons all confirmed working; duplicates removed; invalid values
-(`<script>...`, arbitrary strings) rejected outright; maximum 5 enforced
-with sixth-attempt correctly rejected; `no-specific-reason` mutual
-exclusivity confirmed in both directions at both the Controller layer
-and independently at the Session layer (defense in depth, per
-EPIC 2E-J-B-F's FIX 6).
+## 7. Observation Workflow Results
 
-## 7. Generation/Provider Results
+All prior workflow findings (Section 5 of the original report) stand
+unregressed, re-verified in this patch's expanded live test run: all 4
+Observation options, the 5-reason limit with sixth-attempt rejection,
+no-specific-reason exclusivity (both directions), Clear Reasons (keeps
+Observation), Clear Observation (clears Reasons), generation
+invalidation, and non-revival of stale selections.
 
-| Scenario | Result | Evidence |
-|---|---|---|
-| Provider matching Context | PASS | `generationConfirmed: true` |
-| Provider absent | PASS | Usable via context fallback, `generationConfirmed: false` |
-| Provider throws | PASS | Smoke test: `state: "ready"`, `generationConfirmed: false`, neutral warning present — never crashes |
-| Provider mismatches Context | PASS | Smoke test: `state: "unavailable"`, `observation: null` |
-| Provider changes before Observation/Reason action | PASS | Direct unit tests from EPIC 2E-J-B-F confirm exactly one provider snapshot per operation, no revival possible |
-| Provider recovers after mismatch/unavailable | PASS | Confirmed old value never returns; a fresh selection is required |
+## 8. Reason-Tag Results
 
-## 8. Session Summary Results
+Unregressed from the original report — all 10 exact values, zero/one/
+multiple selection, duplicates removed, invalid values rejected, 5-tag
+maximum with sixth-attempt rejection, `no-specific-reason` mutual
+exclusivity confirmed at both the Controller and independent Session
+layers.
+
+## 9. Generation/Provider Results
+
+Unregressed — provider matching/absent/throwing/mismatching/recovering
+all re-verified: `generationConfirmed: true` on match; neutral warning
+(never "stale") and continued usability via context fallback when the
+provider gives no evidence; immediate clearing with zero revival on an
+actual mismatch.
+
+## 10. Session Summary Results — including App-Level Clear/Re-record
+
+**FIX 4 (EPIC 2E-J-C-F): the App-level Session Clear + current
+re-record behavior was re-tested at the integration level** (not merely
+the raw Session module in isolation, as the original Phase C report
+tested) — reproducing the exact signature/active-generation-tracking
+logic from `ui/app.js`'s real Session Clear button handler
+(EPIC 2E-J-B-F2), against the same live Controller/Session instances
+used throughout the rest of the test:
+
+1. Selected "Prefer Legacy" with Reasons "Skin tone" + "Contrast" — `activeObservations: 1` confirmed.
+2. App-level Clear performed (session cleared, then the current valid selection re-recorded via the real integration pattern).
+3. **PASS** — old `cleared`/`invalidated` history reset to 0.
+4. **PASS** — `totalObserved: 1, activeObservations: 1, preferLegacy: 1` (the current Observation, not zero).
+5. **PASS** — `reasonCounts.skinTone: 1, reasonCounts.contrast: 1` (Reasons preserved through the re-record).
+6. **PASS** — the "Prefer Legacy" radio remained visibly checked in the live DOM throughout.
+
+All other Session Summary accuracy findings (active/cleared/invalidated
+counts, reason counts, deterministic top-reasons ordering,
+`lastObservation` update-ordering, 100-record inactive-first eviction)
+are unregressed from the original report.
+
+## 11. Lifecycle Stress Results
+
+Unregressed — a live 3× consecutive Re-analyze sequence plus Reset
+produced zero duplicate sections and zero duplicate element IDs (295
+total, 295 unique) across the entire page, zero console errors
+throughout (excluding the unrelated Google-Fonts-CDN network failures
+described in Section 13).
+
+## 12. Privacy Review
+
+Unregressed — zero storage/network API references anywhere in the three
+Observation-layer files (project-wide code search). See Section 14 for
+this patch's expanded method-level instrumentation.
+
+## 13. Data-Minimization Review
+
+Unregressed — Session records confirmed to contain only the explicitly
+permitted fields; no image data, file metadata, or user identity of any
+kind. (Note: this environment's sandbox has no internet access, so
+Google Fonts CDN requests fail with 403/aborted errors during ordinary
+page load — this is an unrelated environment limitation, confirmed via
+direct request-level investigation, and does not affect the console-
+error-free result reported for Observation actions specifically.)
+
+## 14. Storage/Network Instrumentation (Expanded)
+
+**FIX 6/7/8 (EPIC 2E-J-C-F): method-level instrumentation with
+machine-readable counts**, not merely `Storage.length` comparisons.
+`Storage.prototype.setItem`/`removeItem`/`clear` were wrapped
+(distinguishing `localStorage` from `sessionStorage` by object identity)
+around select/change/toggle-Reason/clear-Reason/clear-Observation/
+clear-Session actions:
+
+```json
+{ "localStorageSet": 0, "localStorageRemove": 0, "localStorageClear": 0,
+  "sessionStorageSet": 0, "sessionStorageRemove": 0, "sessionStorageClear": 0 }
+```
+
+`fetch`, `XMLHttpRequest.open`, `navigator.sendBeacon`, `WebSocket`
+construction, and `BroadcastChannel` construction were wrapped around
+setContext/select/toggle/clear actions:
+
+```json
+{ "fetch": 0, "xhr": 0, "sendBeacon": 0, "webSocket": 0, "broadcastChannel": 0 }
+```
+
+**All counts: zero.** All instrumented APIs were restored to their
+originals immediately after each test; the app's own unrelated
+dark-mode/language `localStorage` calls were never inside the wrapped
+Observation-action time window, by construction.
+
+## 15. Production-Isolation Review
+
+Unregressed — zero matches anywhere under `core/` for any
+Observation/Session identifier; `selectedProductionSource` remains
+hard-coded `"legacy"`.
+
+## 16. Image-Processing Isolation
+
+Unregressed — zero `drawImage` calls (live-instrumented) across
+select/toggle/clear actions; no `getImageData`/`putImageData`/Pixel-
+Renderer/Analysis/Render-Plan/Slider call exists anywhere in the three
+files.
+
+## 17. Full Application Ready Reachability — Determined Honestly
+
+**FIX 5 (EPIC 2E-J-C-F):** every locally available fixture was tried
+through the complete, unmodified application import → analysis →
+Interactive Before/After workflow: `test_photo.jpg`, `test_photo3.jpg`,
+`test_photo_large.jpg`, `test_highlights_shadows.jpg`,
+`test_portrait_cool.jpg`, `test_portrait_warm.jpg`,
+`test_nearly_identical.jpg`. **None reached Interactive "Ready."** Every
+fixture produced the identical outcome: Interactive Before/After state
+`"Partial"`, with the exact upstream blocker message *"Controlled V2
+preview unavailable."* This confirms the limitation is a genuine,
+fixture-independent property of the current Render Plan (Controlled V2
+never produces a concrete supported adjustment under this project's
+current pipeline) — not a fixture-selection problem, and not an
+Observation-layer defect.
+
+**Full application Observation workflow: `NOT_TESTED`** (not `FAIL`) —
+this is the *expected*, previously-documented behavior carried forward
+unchanged from every prior EPIC 2E-I/2E-J patch in this project; no new
+regression was introduced, and this patch does not modify the Render
+Plan, per its explicit instruction not to.
+
+**Controller/Renderer/Session integration harness: `PASS`** (42/43
+automated checks pass, 0 fail) — explicitly labeled as such throughout
+this report and the smoke-test output, never presented as "full
+application workflow."
+
+## 18. Responsive/Keyboard/Accessibility Results (Expanded)
+
+**FIX 9 (EPIC 2E-J-C-F):** re-tested through real DOM events (not
+programmatic state calls alone), on the real `index.html`:
 
 | Check | Result | Evidence |
 |---|---|---|
-| `totalObserved`/`activeObservations`/per-choice counts | PASS | Smoke test: after selecting "unsure", `activeObservations: 1, unsure: 1` |
-| `cleared`/`invalidated` idempotent, survive reselection | PASS | Direct unit tests from EPIC 2E-J-B-F: repeated clear/invalidate never double-counts; sticky flags survive reselection |
-| Reason counts (active records only) | PASS | Direct unit test |
-| Top reasons deterministic ordering | PASS | Direct unit test: count-descending with canonical tie-break, `no-specific-reason` sorts last on ties |
-| `lastObservation` reflects latest real update | PASS | Direct unit test: updating an earlier generation correctly becomes `lastObservation` again |
-| 101+ records bounded to 100, inactive-first eviction | PASS | Direct unit test, including confirming an *updated* record's `createdSequence` doesn't shift its eviction position |
-| Session Clear + re-record | PASS | Code-path verification (fixed in EPIC 2E-J-B-F2) |
+| Tab reaches Observation radio group | PASS | `document.activeElement.id === "ipoOption_prefer-legacy"` |
+| Arrow keys change selected radio | PASS | ArrowDown moved focus+selection to `"ipoOption_prefer-v2"`, `checked: true` |
+| Space toggles Reason checkbox | PASS | verified checked-state flips correctly (a test-script bug of my own — a Reason left checked by an earlier test in the same sequence — was found and fixed while writing this check; the underlying feature was never broken) |
+| Tab reaches Clear Observation | PASS | `activeElement.id === "ipoClearButton"` |
+| Tab reaches Clear Reasons | PASS | `activeElement.id === "ipoClearReasonsButton"` |
+| Tab reaches Clear Session | PASS | `activeElement.id === "ipoClearSessionButton"` |
+| Focus-visible has non-zero computed outline | PASS | `outlineStyle: "solid"` |
+| No duplicate IDs | PASS | 295 total, 295 unique |
 
-## 9. Lifecycle Stress Results
+**Real NVDA/JAWS/VoiceOver: NOT TESTED.**
 
-A live 3× consecutive Re-analyze sequence plus Reset produced **zero**
-duplicate `#interactivePreviewObservationSection`/
-`#interactivePreviewObservationSessionSection` elements and **zero**
-duplicate element IDs (295 total IDs, 295 unique) across the entire
-page, with zero console errors throughout.
+## 19. Pointer/Touch Results
 
-## 10. Privacy Review
+Unregressed — real click/focus DOM events confirmed working in this and
+prior patches. **Physical touch hardware: NOT TESTED.**
 
-Project-wide search of all three Observation-layer files for
-`localStorage`, `sessionStorage`, `indexedDB`, `.fetch(`,
-`XMLHttpRequest`, `sendBeacon`, `WebSocket`, `BroadcastChannel`,
-`postMessage`, `document.cookie` — **zero matches**. The application's
-existing `localStorage` usage (`dm` for dark mode, `lang` for language,
-in `ui/app.js`) is confirmed entirely separate from and unrelated to the
-Observation feature. Live-instrumented: selecting an Observation,
-toggling a Reason, clearing Reasons, and clearing the Observation
-produced **zero** change in `localStorage.length`/`sessionStorage.length`.
+## 20. Security/Malformed-Data Results
 
-**Observation feature persistence: NONE. Observation feature network:
-NONE (zero requests fired, instrumented live). Observation lifetime:
-current page memory only.**
+Unregressed from the original report — zero crashes across null/
+primitive/throwing-getter/circular-reference renderer inputs; HTML/
+script injection in warnings/blockers renders as safely-escaped text
+with zero script execution; malformed Session summaries (NaN/Infinity/
+negative counts) handled without crash.
 
-## 11. Data-Minimization Review
+## 21. Performance Evidence
 
-Session records confirmed to contain only: `generationId`, `active`
-(boolean), `observation` (one of 4 enum values), `reasons` (array of the
-10 enum values), `clearedCounted`/`invalidatedCounted` (booleans),
-`createdAt`/`updatedAt` (ISO timestamps or `null`), `createdSequence`/
-`updatedSequence` (internal integers). No image pixels, filename, file
-path, EXIF, camera model, GPS, user identity, source URL, complete
-analysis object, `finalStyleIntent`, full Interactive controller state,
-or DOM elements are stored anywhere in the module (confirmed via direct
-source reading of every field written to a Session record).
+Unregressed — 100-record cap enforced; zero `requestAnimationFrame`
+loop, Worker, or resize-triggered recalculation; the compact sync
+signature confirmed to prevent metadata-only re-emits from advancing
+Session ordering.
 
-## 12. Storage Review
+## 22. Defects Found
 
-See Section 10 — no storage APIs are called anywhere in the three
-Observation-layer files.
+**One test-infrastructure defect found and fixed in this patch** (not a
+production defect): the original Phase C QA report's mobile screenshots
+were captured with a flawed ad-hoc harness missing a body-margin reset,
+producing a misleading appearance of content clipping that does not
+exist in the real application (see Section 5). Two additional test
+script bugs of my own (a session-lifecycle sync omission and a
+provider-generation sync omission) were found and fixed while extending
+the automated smoke test — none were production defects. **Zero
+production code defects were found in this patch.** All defects from
+the broader EPIC 2E-J effort were found and fixed in the preceding
+EPIC 2E-J-A-F/-F2/-F3 and EPIC 2E-J-B-F/-F2 patches, and remain
+confirmed fixed with no regression.
 
-## 13. Network Review
+## 23. Fixes Applied
 
-See Section 10 — no network APIs are called anywhere in the three
-Observation-layer files; live-instrumented request monitoring during
-Observation actions recorded zero requests.
+**None to production code.** This patch's changes are entirely QA
+infrastructure: a corrected, more rigorous smoke test (now including
+element-level responsive containment, App-level Session Clear
+integration testing, method-level storage/network instrumentation, and
+real-DOM accessibility events), regenerated results, corrected
+screenshots, and this rewritten report.
 
-## 14. Production-Isolation Review
-
-A project-wide search for `interactivePreviewObservation`,
-`observationSession`, `reasonCounts`, `topReasons`,
-`activeObservationSessionGenerationId` returned **zero matches**
-anywhere under `core/`. `selectedProductionSource` remains hard-coded
-`"legacy"` in `core/preview-rendering/visual-preview-render-plan-v2.js`
-(unchanged, re-verified).
-
-## 15. Image-Processing Isolation
-
-Live-instrumented: `CanvasRenderingContext2D.prototype.drawImage` was
-wrapped before exercising select-Observation, toggle-Reason, and
-clear-Observation actions — **zero** `drawImage` calls recorded. No
-`getImageData`/`putImageData`/Pixel-Renderer/Analysis/Render-Plan/Slider
-call exists anywhere in the three Observation-layer files (confirmed via
-direct source search).
-
-## 16. Responsive Results
-
-Automated viewport checks at 320/390/1440px on the real Observation
-section: `document.documentElement.scrollWidth === clientWidth` exactly
-at all three widths (zero horizontal overflow). 768/1024px were not
-independently re-tested in this phase beyond the flex-wrap layout
-pattern already verified working at the tested widths (the layout uses
-the same responsive `flex-wrap` primitives at every breakpoint, so the
-untested intermediate widths carry low residual risk, but this is
-disclosed rather than claimed as directly tested).
-
-## 17. Keyboard/Accessibility Results
-
-Native radio/checkbox semantics confirmed (fieldset/legend structure,
-unique IDs, no manual `aria-checked`). Live-verified: Tab correctly
-reaches the first radio option (`document.activeElement.id === "ipoOption_prefer-legacy"`).
-`aria-live="polite"` confirmed present only on the status/warning/
-reason-limit elements (meaningful transitions), and confirmed absent
-from the ordinary selected-reasons text (fixed in EPIC 2E-J-B-F, per
-FIX 14, to avoid announcing every checkbox toggle). Reason checkbox
-touch targets confirmed at ~44px (fixed in EPIC 2E-J-B-F, per FIX 13).
-**Real NVDA/JAWS/VoiceOver testing: NOT TESTED.**
-
-## 18. Pointer/Touch Results
-
-Verified via real Playwright click/focus events (not just programmatic
-state calls) in earlier patches of this EPIC — radio selection, checkbox
-toggling, and Clear-button clicks all confirmed working through actual
-DOM event dispatch. **Physical touch hardware: NOT TESTED.**
-
-## 19. Security/Malformed-Data Results
-
-Live-verified: `renderInteractivePreviewObservationV2()` and
-`renderInteractivePreviewObservationSessionV2()` handle `null`,
-primitive (`'string'`, `42`), a throwing `state`/`metadata` getter, and a
-circular-reference observation value with **zero crashes**.
-HTML/script-like content in warnings/blockers
-(`<script>alert(1)</script>`, `<img src=x onerror=alert(2)>`) confirmed
-rendered as safely-escaped text — **zero** `<script>`/`<img onerror>`
-elements created in the live DOM. `NaN`/`Infinity`/negative counts in a
-malformed Session summary confirmed handled without crash (bounded via
-`_normalizeNonNegativeCount`). Exported `normalizeReasons()` confirmed
-safe against a hostile numeric-index getter and a hostile
-`Symbol.iterator` getter (both zero-crash, verified in the immediately
-preceding patch).
-
-## 20. Performance Evidence
-
-Maximum 100 Session records enforced (direct unit test). No
-`requestAnimationFrame` loop, no Worker, and no resize-triggered
-recalculation exist anywhere in the three files (confirmed via source
-search). The compact sync signature (added in EPIC 2E-J-B-F2) confirmed
-via direct test that metadata-only state re-emits (provider-confirmation
-flicker) do not advance the Session's `updatedSequence` or create
-duplicate records. No frame-rate or memory numbers are reported, since a
-real profiler was not run — fabricating such numbers would violate this
-project's Quality Lock.
-
-## 21. Defects Found
-
-**None discovered as new defects in this phase.** All defects
-identified during the broader EPIC 2E-J effort (generation-handoff
-mis-invalidation, signature double-counting, hostile array/iterator
-safety, provider-mismatch selection revival, context-confirmation
-mislabeling, missing focus styles, low text contrast, missing touch-target
-sizing, aria-live noise) were found and fixed in the preceding
-EPIC 2E-J-A-F/-F2/-F3 and EPIC 2E-J-B-F/-F2 patches, and are re-confirmed
-still fixed (no regression) by this phase's testing.
-
-## 22. Fixes Applied
-
-**None in this phase** — Phase C's testing found no new genuine defect
-requiring a code change. Only new QA artifacts were created (see Section
-23).
-
-## 23. Tests Not Performed
+## 24. Tests Not Performed
 
 - Physical mobile device: **NOT TESTED**
 - Physical touch hardware: **NOT TESTED**
@@ -240,50 +280,58 @@ requiring a code change. Only new QA artifacts were created (see Section
 - Long-duration memory profiling: **NOT TESTED**
 - Real user privacy study: **NOT TESTED**
 - Multi-tab synchronization: **NOT TESTED** (explicitly out of scope)
-- Page-reload persistence: intentionally **NONE** (by design, not a gap)
-- 768px/1024px responsive breakpoints: not independently screenshotted/measured in this phase (see Section 16 caveat)
-- Real photographic content in Observation screenshots: all fixtures are synthetic, consistent with every prior EPIC 2E-I/2E-J patch in this project
+- Page-reload persistence: intentionally **NONE** (by design)
+- Full application Observation workflow (real image → real Interactive
+  Ready → real Observation interaction): **NOT_TESTED** — no locally
+  available fixture reaches Interactive Ready under the current Render
+  Plan (see Section 17); this is a pre-existing, documented, upstream
+  limitation, not a gap introduced or left open by the Observation
+  feature itself.
 
-## 24. Remaining Risks
+## 25. Remaining Risks
 
-- The live analysis pipeline's inability to reach Interactive "Ready"
-  (a pre-existing Render Plan limitation, not an Observation-layer
-  defect) means the fully-enabled Observation/Reason interaction path
-  has still never been exercised through the complete, unmodified live
-  user pipeline — only through synthetic-context harnesses using the
-  real imported controller/renderer/session code.
+- The real, complete, unmodified application pipeline has never been
+  observed to reach a state that enables live Observation interaction,
+  because Controlled V2 does not yet produce a supported adjustment
+  under the current Render Plan for any fixture available in this
+  environment. All Observation/Session correctness evidence in this and
+  every prior EPIC 2E-J report is therefore drawn from a synthetic-
+  context integration harness using the real, unmodified project code —
+  never from a fabricated or fictional harness, but also never from the
+  complete live pipeline.
 - Real assistive-technology and physical-device compatibility cannot be
-  fully confirmed without dedicated hardware/software testing.
+  confirmed without dedicated hardware/software testing.
 
-## 25. Phase C Decision
+## 26. Phase C Decision
 
-**PASS — Ready for EPIC 2E-J Phase D Release Closeout.**
+**CONDITIONAL PASS — core feature is safe; only physical-device/
+screen-reader testing remains, and full-application reachability is
+clearly expected (not blocked by any Observation-layer defect) and
+honestly reported as such.**
 
-Justification: the automated smoke test passes fully (28/28, regenerated
-fresh in this phase, not hand-edited). The privacy review confirms zero
-persistence and zero network activity from the Observation feature,
-verified both via code search and live runtime instrumentation. The
-production-isolation review confirms zero Core consumers of any
-Observation/Session value, and `selectedProductionSource` remains
-hard-coded Legacy. No image processing is triggered by any Observation
-action (live-instrumented, zero `drawImage` calls). Keyboard behavior
-works (live-verified Tab reaching the radio group). No narrow-viewport
-overflow exists at the tested widths. Hostile/malformed input cannot
-crash the feature at any tested boundary (renderer, controller, session
-module, exported `normalizeReasons`). No stale-selection revival exists
-at any of the four tested revival vectors (select/setContext/getState/clear).
-Data minimization is confirmed — no image data, file metadata, or user
-identity is ever stored. This PASS (rather than CONDITIONAL PASS) is
-consistent with this phase's own stated criteria: the outstanding
-NOT-TESTED items (physical device, screen reader) are explicitly listed
-as acceptable gaps for CONDITIONAL PASS in the phase brief, and no
-concrete defect is known in any of them — however, per the phase brief's
-own instruction, CONDITIONAL PASS is used specifically "when only
-manual physical-device or screen-reader QA remains," which is
-**exactly** this project's current state, so the more precise decision
-is:
+This is the **single, final decision** for this report (superseding both
+decisions that appeared in an earlier draft). Justification, against
+this patch's own explicit decision criteria:
 
-**CONDITIONAL PASS — core Observation/Session feature is correct,
-private, and production-isolated; only manual physical-device and
-screen-reader QA remain outstanding, with no known defect in either
-area.**
+- **No mobile clipping remains** (Section 5/6 — root-caused to a test
+  harness defect, not production code; zero element-level overflow at
+  all 7 required widths, permanently automated).
+- **App-level Session Clear/re-record passes** (Section 10 — tested at
+  the integration level, not just the raw module).
+- **No blocking full-workflow defect exists** — the inability to reach
+  Interactive Ready is a known, pre-existing, documented upstream
+  Render Plan property, not a defect discovered in or attributable to
+  the Observation/Session feature.
+- **Privacy instrumentation passes** (Section 14 — zero storage/network
+  calls, method-level counts, not just length comparisons).
+- **Production isolation remains intact** (Section 15 — zero Core
+  consumers; `selectedProductionSource` remains Legacy).
+
+Per this patch's own stated `FAIL` criteria: no Observation data enters
+Core, no persistence or network transmission exists, no stale feedback
+returns, Session counting is correct, production source is untouched,
+Mapping/XMP are untouched, no image processing is triggered, and no
+unsafe HTML injection succeeds — none of the `FAIL` conditions apply.
+The outstanding items (physical device, screen reader) are exactly the
+conditions this patch's own brief defines as acceptable for
+`CONDITIONAL PASS` rather than unqualified `PASS`.
