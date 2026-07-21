@@ -160,16 +160,42 @@ async function main() {
 
       if (observationEnabled && !firstReadyFixture) {
         firstReadyFixture = fixture;
-        // Step 7A-F2 screenshots — captured for the genuine first Ready fixture only.
-        await page.screenshot({ path: path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f2', 'first-ready-fixture.png') });
-        // Every currently-reachable Ready fixture in this codebase is an
-        // Identity Preview (the V2 adjustment model has no concrete
+        // Step 7A-F2 screenshots — captured for the genuine first Ready
+        // fixture only, using bounded section clips (not an unrelated
+        // full viewport) per FIX 5.
+        //
+        // first-ready-fixture.png: Interactive Before/After section
+        // through the enabled Observation controls.
+        await page.evaluate(() => { const el = document.getElementById('interactiveBeforeAfterSection'); if (el) el.scrollIntoView({ block: 'start' }); });
+        await page.waitForTimeout(200);
+        const ibaBox = await page.evaluate(() => document.getElementById('interactiveBeforeAfterSection')?.getBoundingClientRect());
+        const obsBox = await page.evaluate(() => document.getElementById('interactivePreviewObservationSection')?.getBoundingClientRect());
+        if (ibaBox && obsBox) {
+          const clipTop = Math.max(0, ibaBox.y);
+          const clipHeight = Math.min((obsBox.y + obsBox.height) - clipTop, 1400 - clipTop);
+          await page.screenshot({ path: path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f2', 'first-ready-fixture.png'), clip: { x: 0, y: clipTop, width: 1440, height: Math.max(clipHeight, 100) } });
+        } else {
+          await page.screenshot({ path: path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f2', 'first-ready-fixture.png') });
+        }
+        screenshotsGenerated.push('full-app-f2/first-ready-fixture.png');
+
+        // identity-preview-ready.png: Visual Preview Comparison section
+        // — carries the no-supported-adjustment/Identity wording and
+        // the "Legacy remains Production" non-production wording.
+        // Every currently-reachable Ready fixture in this codebase is
+        // an Identity Preview (the V2 adjustment model has no concrete
         // supported adjustments anywhere yet — see Step 4-6's Identity
-        // Preview policy) — captured whenever the Render Plan itself
-        // reports renderable, rather than depending on a field the
-        // Interactive controller's exposed state may not populate.
+        // Preview policy).
         if (snapshot?.renderPlan?.v2Renderable === true) {
-          await page.screenshot({ path: path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f2', 'identity-preview-ready.png') });
+          await page.evaluate(() => { const el = document.getElementById('visualPreviewComparisonSection'); if (el) el.scrollIntoView({ block: 'start' }); });
+          await page.waitForTimeout(200);
+          const vprBox = await page.evaluate(() => document.getElementById('visualPreviewComparisonSection')?.getBoundingClientRect());
+          if (vprBox) {
+            await page.screenshot({ path: path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f2', 'identity-preview-ready.png'), clip: { x: 0, y: Math.max(0, vprBox.y), width: 1440, height: Math.min(vprBox.height, 1400) } });
+          } else {
+            await page.screenshot({ path: path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f2', 'identity-preview-ready.png') });
+          }
+          screenshotsGenerated.push('full-app-f2/identity-preview-ready.png');
         }
       }
 
@@ -191,23 +217,21 @@ async function main() {
     const sampleSnapshot = liveEvidenceRecords[0]?.snapshot;
     if (sampleSnapshot?.previewSandbox?.exists) {
       const s = sampleSnapshot;
-      console.log('\n=== FIX 3: Confidence contribution breakdown (from live evidence) ===');
+      console.log('\n=== Confidence contribution breakdown (from live evidence) ===');
       console.log(`  testGate.confidence:           ${s.testGate.confidence} (exists=${s.testGate.exists})`);
       console.log(`  overlaySimulation.confidence:  ${s.overlaySimulation.confidence} (exists=${s.overlaySimulation.exists})`);
       console.log(`  legacySafetyOverlay.confidence:${s.legacySafetyOverlay.confidence} (exists=${s.legacySafetyOverlay.exists})`);
       console.log(`  shadowCompare.confidence:      ${s.shadowCompare.confidence} (exists=${s.shadowCompare.exists})`);
       console.log(`  Sandbox reported confidence:   ${s.previewSandbox.confidence} (required 0.72)`);
-      console.log(`  Sandbox failedGateIds:         ${JSON.stringify(s.previewSandbox.failedGateIds)}`);
-      console.log('  PROVEN CAUSE (H - structural sequencing limitation, verified against source):');
-      console.log('  The real Legacy preset (mapStyleFingerprintToLightroom output) does not exist yet');
-      console.log('  when the Preview Sandbox is built inside _buildDecision() in decision-engine/index.js.');
-      console.log('  The codebase\'s own comment near line 184-190 confirms this exact limitation was');
-      console.log('  already solved for Side-by-Side Comparison by building it OUTSIDE _buildDecision(),');
-      console.log('  after `mapped` exists. The Preview Sandbox has not received the same treatment yet.');
-      console.log('  Fixing this requires moving Sandbox/Test-Gate/Human-Review construction out of');
-      console.log('  _buildDecision() into buildFinalPreset() - a structural refactor beyond a simple');
-      console.log('  wiring correction, with real regression risk, outside this patch\'s scope.');
-      console.log('  No Core file was modified to force this; Step 7A remains FAIL, honestly.');
+      console.log(`  Sandbox reported safety score: ${s.previewSandbox.safetyScore} (required 0.75)`);
+      console.log(`  Legacy context availability:   ${s.previewSandbox.legacyContextAvailability} / sourceType=${s.previewSandbox.legacyContextSourceType}`);
+      console.log(`  Sandbox failedGateIds:         ${JSON.stringify(s.previewSandbox.failedGateIds)} (empty = no remaining Sandbox gate blocker)`);
+      console.log(`  Interactive state:             ${s.interactive.state}`);
+      console.log(`  Observation enabled:           ${s.observation.enabled}`);
+      console.log('  CURRENT STATUS (Step 7A-F2): authoritative post-mapping Legacy context is');
+      console.log('  now detected (legacy-preset, not the pre-mapping partial fallback) — the');
+      console.log('  structural sequencing defect identified in Step 7A-F1 was resolved in Step');
+      console.log('  7A-F2 by rebuilding the Preview Sandbox after the real Legacy preset exists.');
     }
 
     // Step 7A-F2 specific decision: "PASS — Live Preview Pipeline
@@ -220,13 +244,13 @@ async function main() {
     const step7aF2ReadyRecord = fixtureRecords.find((r) => r.legacyContextAvailability === true && r.legacyContextSourceType === 'legacy-preset' && r.controlledV2PreviewState === 'rendered' && r.interactiveState === 'ready' && r.observationEnabled === true);
     record('Step 7A-F2 decision: PASS — Live Preview Pipeline Reachable', step7aF2ReadyRecord ? 'PASS' : 'FAIL', step7aF2ReadyRecord ? `fixture=${step7aF2ReadyRecord.fixture}` : 'no fixture reached full authoritative-context Ready in this run');
 
-    record('Full Application Acceptance: at least one fixture reaches Ready', firstReadyFixture ? 'PASS' : 'FAIL', firstReadyFixture ? `first ready fixture=${firstReadyFixture}` : 'NO fixture reached Ready. See FIX 3 confidence breakdown above for the proven cause (a structural sequencing limitation, not a wiring bug, not a threshold, not a fixture-selection problem).');
+    record('Full Application Acceptance: at least one fixture reaches Ready', firstReadyFixture ? 'PASS' : 'FAIL', firstReadyFixture ? `first ready fixture=${firstReadyFixture}` : 'NO fixture reached Ready in this run — see the per-fixture pipeline records and confidence breakdown above for the specific blocker(s) observed this run.');
 
     if (firstReadyFixture) {
-      record('Actual Observation UI workflow', 'NOT_TESTED', 'Not reached in this run');
-      record('Actual Session Clear button test', 'NOT_TESTED', 'Not reached in this run');
-      record('Generation handoff test', 'NOT_TESTED', 'Not reached in this run');
-      record('Identity Preview UI honesty', 'NOT_TESTED', 'Not reached in this run');
+      record('Actual Observation UI workflow', 'NOT_TESTED', 'NOT_TESTED — deferred to Step 7A-F3');
+      record('Actual Session Clear button test', 'NOT_TESTED', 'NOT_TESTED — deferred to Step 7A-F3');
+      record('Generation handoff test', 'NOT_TESTED', 'NOT_TESTED — deferred to Step 7A-F3');
+      record('Identity Preview UI honesty', 'NOT_TESTED', 'NOT_TESTED — deferred to Step 7A-F3');
     } else {
       record('Actual Observation UI workflow', 'NOT_TESTED', 'Observation controls never became enabled through the real application in this run.');
       record('Actual Session Clear button test', 'NOT_TESTED', 'Same reason.');
@@ -252,7 +276,7 @@ async function main() {
     const snapshotForXmp = await lastPage.evaluate(() => (window.__LUMIXA_QA__ ? window.__LUMIXA_QA__.getPreviewPipelineSnapshot() : null));
     record('XMP export source confirmed Legacy (via QA snapshot)', (snapshotForXmp?.previewSandbox?.selectedOutputSource === 'legacy' || snapshotForXmp?.previewSandbox?.selectedOutputSource === null) ? 'PASS' : 'FAIL', `selectedOutputSource=${snapshotForXmp?.previewSandbox?.selectedOutputSource}`);
     record('XMP captured before any Observation interaction', xmpBefore !== null ? 'PASS' : 'FAIL', `length=${xmpBefore?.length ?? 'null'}`);
-    record('Observation-to-XMP comparison (before vs after Observation interaction)', 'NOT_TESTED', 'Observation was never enabled through the real application in this run.');
+    record('Observation-to-XMP comparison (before vs after Observation interaction)', 'NOT_TESTED', 'NOT_TESTED — Observation interaction deferred to Step 7A-F3');
     await lastPage.close();
 
   } finally {

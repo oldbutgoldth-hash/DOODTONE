@@ -16,7 +16,7 @@
 import { buildControlledOverlayTestGateV2 } from '../core/lightroom-mapping-engine/mapping-v2-overlay-test-gate.js';
 import { buildControlledOverlayPreviewSandboxV2 } from '../core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js';
 import { buildVisualPreviewRenderPlanV2 } from '../core/preview-rendering/visual-preview-render-plan-v2.js';
-import { _projectHumanReviewStateV2 } from '../core/decision-engine/index.js';
+import { _projectHumanReviewStateV2, _safeNormalizeErrorText } from '../core/decision-engine/index.js';
 import { LIGHTROOM_MAPPING_V2_FLAGS } from '../core/lightroom-mapping-engine/mapping-v2-flags.js';
 
 const results = [];
@@ -418,7 +418,54 @@ record('G: canWriteProduction=false', sandboxD7f2?.canWriteProduction === false,
 record('G: canExportPreview=false', sandboxD7f2?.canExportPreview === false, `value=${sandboxD7f2?.canExportPreview}`);
 record('G: allowControlledOverlayTest=false', LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest === false, `value=${LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest}`);
 
-// ── Summary ──
+// ── Step 7A-F2-F: safe-error normalizer + provisional-field removal ──
+console.log('');
+console.log('=== Step 7A-F2-F: Safe error normalizer + provisional-object removal ===');
+
+record('Safe error normalizer: null -> no crash, safe text', _safeNormalizeErrorText(null) === 'Unknown error (no error value provided).', _safeNormalizeErrorText(null));
+record('Safe error normalizer: string -> passthrough', _safeNormalizeErrorText('plain string error') === 'plain string error', _safeNormalizeErrorText('plain string error'));
+record('Safe error normalizer: Error -> message extracted', _safeNormalizeErrorText(new Error('genuine error')) === 'genuine error', _safeNormalizeErrorText(new Error('genuine error')));
+
+const throwingMessageGetter = {};
+Object.defineProperty(throwingMessageGetter, 'message', { get() { throw new Error('evil getter'); } });
+let crashedNormalizer = false;
+let throwingGetterResult = null;
+try { throwingGetterResult = _safeNormalizeErrorText(throwingMessageGetter); } catch { crashedNormalizer = true; }
+record('Safe error normalizer: throwing message getter -> no crash', !crashedNormalizer, `crashed=${crashedNormalizer}, result=${JSON.stringify(throwingGetterResult)}`);
+
+const longMessageResult = _safeNormalizeErrorText(new Error('x'.repeat(500)));
+record('Safe error normalizer: excessively long message -> bounded to ~200 chars', longMessageResult.length <= 201, `length=${longMessageResult.length}`);
+record('Safe error normalizer: no stack trace ever included', !longMessageResult.includes('.js:') && !longMessageResult.includes('    at '), 'verified no stack-trace markers');
+
+// Verify no provisional fields exist on finalStyleIntent in normal operation.
+const resultProvisionalCheck = buildFinalPreset({});
+const fsiKeys = Object.keys(resultProvisionalCheck._decision.finalStyleIntent);
+const hasProvisionalField = fsiKeys.some((k) => /provisional/i.test(k));
+record('No provisional-object field exists on finalStyleIntent', !hasProvisionalField, hasProvisionalField ? `found: ${fsiKeys.filter((k) => /provisional/i.test(k)).join(', ')}` : 'none found');
+
+// Production Mapping remains identical regardless of authoritative rebuild outcome (re-verified post-patch).
+const resultPostPatchWithout = buildFinalPreset({});
+const resultPostPatchWith = buildFinalPreset({ controlledPreviewReviewStateV2: allApproved() });
+const unionKeysPostPatch = new Set([...Object.keys(resultPostPatchWithout), ...Object.keys(resultPostPatchWith)]);
+let productionIdenticalPostPatch = true;
+for (const key of unionKeysPostPatch) {
+  if (metadataKeys.has(key)) continue;
+  if (JSON.stringify(resultPostPatchWithout[key]) !== JSON.stringify(resultPostPatchWith[key])) productionIdenticalPostPatch = false;
+}
+record('Production Mapping remains identical (re-verified post Step 7A-F2-F)', productionIdenticalPostPatch, productionIdenticalPostPatch ? 'all fields identical' : 'DIFFERENCE FOUND');
+
+// FIX 7: partial/full mock-vs-live honesty — label mock values honestly,
+// assert the proven invariant rather than claiming exact live reproduction.
+console.log('');
+console.log('=== FIX 7: Partial/full context invariant (mock values are REPRESENTATIVE, not exact live reproductions) ===');
+console.log(`  Mock: partial=${sandboxPartial.confidence}, full=${sandboxFull.confidence} (live fixture: partial≈0.597, full≈0.747 — different evidence inputs, same qualitative effect)`);
+const confidenceDelta = sandboxFull.confidence - sandboxPartial.confidence;
+const safetyDelta = sandboxFull.safetyScore - sandboxPartial.safetyScore;
+record('FIX 7: full Legacy context increases confidence (proven invariant, not an exact-value claim)', confidenceDelta > 0.10, `delta=${confidenceDelta.toFixed(3)} (expected ≈0.15 per the Sandbox formula's 30% Legacy-availability weight × 0.5 factor swing)`);
+record('FIX 7: full Legacy context increases safety score (proven invariant)', safetyDelta > 0.02, `delta=${safetyDelta.toFixed(3)} (expected ≈0.05 per the Sandbox formula's 10% Legacy-availability weight × 0.5 factor swing)`);
+record('FIX 7: full context can cross the unchanged 0.72 threshold with valid evidence', sandboxFull.confidence >= 0.72 && sandboxPartial.confidence < 0.72, `partial=${sandboxPartial.confidence} (below), full=${sandboxFull.confidence} (at/above) — threshold itself (0.72) never touched`);
+
+
 const pass = results.filter((r) => r.result === 'PASS').length;
 const fail = results.filter((r) => r.result === 'FAIL').length;
 console.log(`\n${pass}/${results.length} PASS, ${fail} FAIL`);

@@ -175,46 +175,28 @@ export function buildFinalPreset(inputs) {
     fingerprint, decision, stats, basic, wb, hsl, calibration, grading, toneCurves,
   });
 
-  // ── EPIC 2E-J-C-F2 Step 7A-F2: AUTHORITATIVE post-mapping Preview
-  // Sandbox + Review State rebuild ──────────────────────────────────
+  // ── EPIC 2E-J-C-F2 Step 7A-F2 (+ Step 7A-F2-F safety/evidence patch):
+  // AUTHORITATIVE post-mapping Preview Sandbox + Review State rebuild ──
   //
-  // PROVEN ROOT CAUSE: the Preview Sandbox and Review State built
-  // inside `_buildDecision()` above are necessarily PROVISIONAL —
+  // PROVEN ROOT CAUSE (RESOLVED): the Preview Sandbox and Review State
+  // built inside `_buildDecision()` above are necessarily PROVISIONAL —
   // `mapped` (the real, concrete Production Legacy preset) does not
   // exist yet at that point, so those provisional objects only ever
   // receive `legacyStyleBudget` (never `legacyPreset`), yielding
   // `legacyAvailabilityFactor: 0.5` ("partial") instead of `1.0`
-  // ("full") in the Sandbox's own confidence/safety formulas — costing
-  // ~0.15 confidence and ~0.05 safety, live-verified across all four
-  // Step 7A-F1 fixtures. This block corrects that sequencing defect by
-  // rebuilding BOTH objects now that `mapped` genuinely exists, using
-  // the exact same current pipeline evidence, and OVERWRITES
-  // `decision.finalStyleIntent`'s provisional Sandbox/Review-State
-  // with these authoritative ones before Side-by-Side Comparison,
-  // Visual Preview Render Plan, Interactive Before/After, or
-  // Observation ever read them. No downstream preview stage may
-  // consume the provisional (pre-mapping) objects after this point.
+  // ("full") in the Sandbox's own confidence/safety formulas. This
+  // block corrects that sequencing defect by rebuilding BOTH objects
+  // now that `mapped` genuinely exists, using the exact same current
+  // pipeline evidence, and OVERWRITES `decision.finalStyleIntent`'s
+  // provisional Sandbox/Review-State with these authoritative ones
+  // before Side-by-Side Comparison, Visual Preview Render Plan,
+  // Interactive Before/After, or Observation ever read them.
   //
-  // FIX 3: the provisional objects remain briefly reachable via
-  // `_provisionalPreMappingPreviewSandboxV2`/`_provisionalPreMappingReviewStateV2`
-  // for backward-compatible introspection ONLY — never read by any
-  // downstream preview/UI stage in this codebase, and never restoring
-  // stale Review data (the authoritative rebuild re-projects Human
-  // Review from the ORIGINAL caller-supplied `controlledPreviewReviewStateV2`
-  // via the same conservative `_projectHumanReviewStateV2`, never from
-  // the provisional Sandbox's own state, so no lifecycle counter or
-  // Human Review decision is duplicated).
-  //
-  // FIX 4 (safe failure): both authoritative objects are built into
-  // local variables FIRST; if the rebuild throws, Production Mapping
-  // (`mapped`) is completely untouched, `selectedOutputSource` stays
-  // Legacy, Preview correctly stays blocked/unavailable (the
-  // provisional pre-mapping Sandbox — itself always safely
-  // unrenderable/blocked by design — is kept as the fallback), and
-  // only a safe, normalized error string is recorded — never a raw
-  // object or stack trace.
-  decision.finalStyleIntent._provisionalPreMappingPreviewSandboxV2 = decision.finalStyleIntent.controlledOverlayPreviewSandboxV2 ?? null;
-  decision.finalStyleIntent._provisionalPreMappingReviewStateV2 = decision.finalStyleIntent.controlledPreviewReviewStateV2 ?? null;
+  // FIX 1 (Step 7A-F2-F): the provisional Sandbox/Review-State that
+  // `_buildDecision()` already built are simply left as-is on
+  // `finalStyleIntent` unless/until overwritten below — never copied
+  // into any extra local or enumerable field, since nothing in this
+  // codebase reads such a copy and FIX 2 below never falls back to it.
   try {
     const authoritativeHumanReviewState = _projectHumanReviewStateV2(controlledPreviewReviewStateV2);
     const authoritativeSandbox = buildControlledOverlayPreviewSandboxV2({
@@ -250,12 +232,23 @@ export function buildFinalPreset(inputs) {
       captureCapability: decision.finalStyleIntent.captureCapabilityEstimate,
     });
     // Only commit once BOTH rebuilds succeed — overwrite the
-    // provisional objects with the authoritative ones.
+    // provisional objects with the authoritative ones. No provisional
+    // metadata field remains on finalStyleIntent either way.
     decision.finalStyleIntent.controlledOverlayPreviewSandboxV2 = authoritativeSandbox;
     decision.finalStyleIntent.controlledPreviewReviewStateV2 = authoritativeReviewState;
   } catch (e) {
-    decision.finalStyleIntent.authoritativePreviewSandboxError = `Authoritative post-mapping Preview Sandbox rebuild failed safely (production unaffected, provisional pre-mapping Sandbox retained as fallback): ${e.message}`;
-    // Provisional objects (assigned above) remain in place as the safe fallback — never silently promoted to "authoritative".
+    // FIX 2 (Step 7A-F2-F): safe failure must ACTUALLY block Preview —
+    // never silently fall back to the provisional (pre-mapping)
+    // Sandbox, which could in principle still be renderable. On any
+    // rebuild failure, the canonical Sandbox becomes explicitly `null`
+    // (Preview stays unavailable/blocked downstream, by every existing
+    // stage's own null-safe handling), Review State is left as
+    // whatever `_buildDecision()` already produced (never promoted to
+    // "authoritative"), and only a short, safe, normalized error
+    // string is recorded — never a raw object, throwing getter output,
+    // or stack trace.
+    decision.finalStyleIntent.controlledOverlayPreviewSandboxV2 = null;
+    decision.finalStyleIntent.authoritativePreviewSandboxError = _safeNormalizeErrorText(e);
   }
 
   // ── EPIC 2E-G Phase B: Side-by-Side Preview Comparison V2 (integration
@@ -526,6 +519,34 @@ function _classifyReviewItem(status, reviewed, reviewerDecision) {
   // unknown status/malformed fields) is conservatively PENDING — never
   // silently upgraded.
   return 'pending';
+}
+
+/**
+ * FIX 2 (EPIC 2E-J-C-F2 Step 7A-F2-F): safely normalizes an arbitrary,
+ * untrusted `catch` value into a short, safe diagnostic string. Never
+ * throws itself, regardless of what is passed — including a hostile
+ * object with a throwing `.message` getter, a revoked Proxy, `null`/
+ * `undefined`, a bare string or number, or a genuine `Error`. Never
+ * includes a stack trace. Bounded to ~200 characters.
+ */
+function _safeNormalizeErrorText(err) {
+  let text;
+  try {
+    if (err === null || err === undefined) text = 'Unknown error (no error value provided).';
+    else if (typeof err === 'string') text = err;
+    else if (typeof err === 'number' || typeof err === 'boolean') text = String(err);
+    else if (err instanceof Error) text = typeof err.message === 'string' ? err.message : 'Error object with no readable message.';
+    else if (typeof err === 'object') {
+      try { text = typeof err.message === 'string' ? err.message : 'Non-Error object thrown; no readable message.'; }
+      catch { text = 'Non-Error object thrown; message property could not be safely read.'; }
+    } else {
+      text = 'Unrecognized error value.';
+    }
+  } catch {
+    text = 'Error value could not be safely normalized.';
+  }
+  if (typeof text !== 'string') text = 'Error value could not be safely normalized.';
+  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
 }
 
 function _projectHumanReviewStateV2(existingReviewState) {
@@ -2807,4 +2828,4 @@ function _buildDebugTrace({ decision, fingerprint, mapped, stats, wb, cast }) {
 // Exported for the EPIC 2E-J-C-F2 Step 3 focused smoke test only — the
 // main production path (buildFinalPreset) still uses this internally
 // via the same reference; exporting it does not change any behavior.
-export { _projectHumanReviewStateV2 };
+export { _projectHumanReviewStateV2, _safeNormalizeErrorText };

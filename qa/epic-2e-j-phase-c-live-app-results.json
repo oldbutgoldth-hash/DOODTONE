@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J-C-F2 Step 7A (+ Step 7A-F1) - Full Application Ready Reachability",
-  "generatedAt": "2026-07-21T07:33:02.056Z",
+  "generatedAt": "2026-07-21T07:49:39.417Z",
   "summary": {
     "total": 14,
     "pass": 9,
@@ -80,6 +80,8 @@
   ],
   "consoleErrors": [],
   "screenshotsGenerated": [
+    "full-app-f2/first-ready-fixture.png",
+    "full-app-f2/identity-preview-ready.png",
     "actual-ready-state-neutral-balanced.png",
     "actual-ready-state-warm-portrait-synthetic.png",
     "actual-ready-state-cool-shadow-synthetic.png",
@@ -119,22 +121,22 @@
     {
       "test": "Actual Observation UI workflow",
       "result": "NOT_TESTED",
-      "evidence": "Not reached in this run"
+      "evidence": "NOT_TESTED — deferred to Step 7A-F3"
     },
     {
       "test": "Actual Session Clear button test",
       "result": "NOT_TESTED",
-      "evidence": "Not reached in this run"
+      "evidence": "NOT_TESTED — deferred to Step 7A-F3"
     },
     {
       "test": "Generation handoff test",
       "result": "NOT_TESTED",
-      "evidence": "Not reached in this run"
+      "evidence": "NOT_TESTED — deferred to Step 7A-F3"
     },
     {
       "test": "Identity Preview UI honesty",
       "result": "NOT_TESTED",
-      "evidence": "Not reached in this run"
+      "evidence": "NOT_TESTED — deferred to Step 7A-F3"
     },
     {
       "test": "Console errors (only confirmed font-host failures excluded)",
@@ -154,7 +156,7 @@
     {
       "test": "Observation-to-XMP comparison (before vs after Observation interaction)",
       "result": "NOT_TESTED",
-      "evidence": "Observation was never enabled through the real application in this run."
+      "evidence": "NOT_TESTED — Observation interaction deferred to Step 7A-F3"
     }
   ],
   "decision": "FAIL"
