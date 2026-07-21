@@ -209,7 +209,7 @@ async function main() {
       await page.waitForTimeout(200);
       const screenshotName = `actual-${interactiveStateNormalized}-state-${fixture}`;
       await page.screenshot({ path: path.join(SCREENSHOT_DIR, screenshotName) });
-      screenshotsGenerated.push(screenshotName);
+      screenshotsGenerated.push(`full-app/${screenshotName}`);
 
       await page.close();
     }

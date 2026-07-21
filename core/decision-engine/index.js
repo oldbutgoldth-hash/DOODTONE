@@ -237,18 +237,13 @@ export function buildFinalPreset(inputs) {
     decision.finalStyleIntent.controlledOverlayPreviewSandboxV2 = authoritativeSandbox;
     decision.finalStyleIntent.controlledPreviewReviewStateV2 = authoritativeReviewState;
   } catch (e) {
-    // FIX 2 (Step 7A-F2-F): safe failure must ACTUALLY block Preview —
-    // never silently fall back to the provisional (pre-mapping)
-    // Sandbox, which could in principle still be renderable. On any
-    // rebuild failure, the canonical Sandbox becomes explicitly `null`
-    // (Preview stays unavailable/blocked downstream, by every existing
-    // stage's own null-safe handling), Review State is left as
-    // whatever `_buildDecision()` already produced (never promoted to
-    // "authoritative"), and only a short, safe, normalized error
-    // string is recorded — never a raw object, throwing getter output,
-    // or stack trace.
-    decision.finalStyleIntent.controlledOverlayPreviewSandboxV2 = null;
-    decision.finalStyleIntent.authoritativePreviewSandboxError = _safeNormalizeErrorText(e);
+    // FIX 2 (Step 7A-F2-F/-G): safe failure must ACTUALLY block Preview
+    // — never silently fall back to the provisional (pre-mapping)
+    // Sandbox, which could in principle still be renderable. Delegates
+    // to the shared, focused-testable `_applyAuthoritativePreviewFailureStateV2`
+    // helper (clears BOTH canonical fields, records a safe bounded
+    // error string) — the exact same helper the QA smoke test exercises.
+    _applyAuthoritativePreviewFailureStateV2(decision.finalStyleIntent, e);
   }
 
   // ── EPIC 2E-G Phase B: Side-by-Side Preview Comparison V2 (integration
@@ -547,6 +542,40 @@ function _safeNormalizeErrorText(err) {
   }
   if (typeof text !== 'string') text = 'Error value could not be safely normalized.';
   return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+}
+
+/**
+ * FIX 2 (EPIC 2E-J-C-F2 Step 7A-F2-G): the single, shared, focused-
+ * testable commit-failure handler for the authoritative post-mapping
+ * Preview Sandbox/Review-State rebuild. Both the real production catch
+ * block and the QA smoke test call this exact same function.
+ *
+ * On any rebuild failure:
+ * - clears BOTH canonical fields to `null` (never leaves a provisional
+ *   Review State beside a null Sandbox, and never falls back to the
+ *   possibly-renderable provisional pre-mapping Sandbox)
+ * - records a short, safe, bounded error string via `_safeNormalizeErrorText`
+ * - never throws itself, even when `finalStyleIntent` is `null`,
+ *   `undefined`, or a non-object
+ *
+ * @param {object|null|undefined} finalStyleIntent
+ * @param {*} error - the raw, untrusted caught value
+ * @returns {{ applied: boolean }} - `applied: false` only when
+ *   `finalStyleIntent` itself was not a safely-writable object
+ */
+function _applyAuthoritativePreviewFailureStateV2(finalStyleIntent, error) {
+  const safeErrorText = _safeNormalizeErrorText(error);
+  try {
+    if (!finalStyleIntent || typeof finalStyleIntent !== 'object') return { applied: false };
+    finalStyleIntent.controlledOverlayPreviewSandboxV2 = null;
+    finalStyleIntent.controlledPreviewReviewStateV2 = null;
+    finalStyleIntent.authoritativePreviewSandboxError = safeErrorText;
+    return { applied: true };
+  } catch {
+    // Even an unexpected write failure (e.g. a frozen/hostile object)
+    // must never throw out of this helper.
+    return { applied: false };
+  }
 }
 
 function _projectHumanReviewStateV2(existingReviewState) {
@@ -1084,14 +1113,18 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
 
   // ── EPIC 2E-D: Controlled Overlay Test Gate ───────────────────────────────
   // Answers "is the overlay simulation safe enough to enter a controlled
-  // TEST mode?" — NOT production activation. With no `flags` override,
-  // this resolves to the safe defaults (allowControlledOverlayTest=false,
-  // allowOverlayTestPresetPreview=false); `canWriteProduction` is
-  // additionally HARD-CODED false inside the module itself — verified
-  // this stays false even when every other flag is forced true. Attached
-  // to finalStyleIntent, never read by mapStyleFingerprintToLightroom
-  // below, wrapped in try/catch as defense-in-depth — same pattern as
-  // EPIC 2A-2E-C above.
+  // TEST mode?" — NOT production activation. Current flag state (as of
+  // EPIC 2E-J-C-F2 Step 2's deliberate, scoped preview-only exception):
+  // `allowControlledOverlayTest=false` (Controlled Test remains fully
+  // disabled) and `allowOverlayTestPresetPreview=true` (preview-only
+  // preset visibility is enabled — this governs only whether the
+  // isolated, non-production browser preview may be shown, never
+  // Controlled Test itself). `canWriteProduction` remains additionally
+  // HARD-CODED false inside the module itself regardless of any flag —
+  // verified this stays false even when every other flag is forced
+  // true. Attached to finalStyleIntent, never read by
+  // mapStyleFingerprintToLightroom below, wrapped in try/catch as
+  // defense-in-depth — same pattern as EPIC 2A-2E-C above.
   try {
     finalStyleIntent.controlledOverlayTestGateV2 = buildControlledOverlayTestGateV2({
       finalStyleIntent, decision: { styleBudget }, legacyStyleBudget: styleBudget,
@@ -1192,7 +1225,7 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
     });
   } catch (e) {
     finalStyleIntent.controlledOverlayPreviewSandboxV2 = null;
-    finalStyleIntent.controlledOverlayPreviewSandboxV2Error = `Overlay preview sandbox failed safely (production unaffected): ${e.message}`;
+    finalStyleIntent.controlledOverlayPreviewSandboxV2Error = `Overlay preview sandbox failed safely (production unaffected): ${_safeNormalizeErrorText(e)}`;
   }
 
   // ── EPIC 2E-F Phase B, patched EPIC 2E-F-B-F: Controlled Preview Review State ──
@@ -1244,7 +1277,7 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
     });
   } catch (e) {
     finalStyleIntent.controlledPreviewReviewStateV2 = null;
-    finalStyleIntent.controlledPreviewReviewStateV2Error = `Preview review state failed safely (production unaffected): ${e.message}`;
+    finalStyleIntent.controlledPreviewReviewStateV2Error = `Preview review state failed safely (production unaffected): ${_safeNormalizeErrorText(e)}`;
   }
 
   return {
@@ -2828,4 +2861,37 @@ function _buildDebugTrace({ decision, fingerprint, mapped, stats, wb, cast }) {
 // Exported for the EPIC 2E-J-C-F2 Step 3 focused smoke test only — the
 // main production path (buildFinalPreset) still uses this internally
 // via the same reference; exporting it does not change any behavior.
-export { _projectHumanReviewStateV2, _safeNormalizeErrorText };
+export { _projectHumanReviewStateV2, _safeNormalizeErrorText, _applyAuthoritativePreviewFailureStateV2 };
+
+/**
+ * FIX 3 (EPIC 2E-J-C-F2 Step 7A-F2F2): focused test seam for the
+ * authoritative post-mapping Preview Sandbox commit transaction.
+ * Exported for QA only — Production calls it via the real builder
+ * functions already wired in `buildFinalPreset()` above.
+ *
+ * Accepts injectable `buildSandbox`/`buildReviewState` functions so the
+ * QA smoke test can inject a throwing builder without any runtime flag,
+ * URL parameter, localStorage change, or mutation of exported application
+ * state. Normal production behavior is completely unaffected since
+ * production never calls this export directly — it only calls the private
+ * inline try/catch already present in `buildFinalPreset()`.
+ *
+ * @param {{ finalStyleIntent: object, buildSandbox: function, buildReviewState: function, sandboxInputs: object, reviewInputs: object }} params
+ * @returns {{ committed: boolean, error: string|null }} — never throws
+ */
+export function _runAuthoritativePreviewRebuildTransactionV2({ finalStyleIntent, buildSandbox, buildReviewState, sandboxInputs = {}, reviewInputs = {} }) {
+  try {
+    const authSandbox = buildSandbox(sandboxInputs);
+    const authReviewState = buildReviewState({ ...reviewInputs, controlledOverlayPreviewSandboxV2: authSandbox });
+    // Only commit once BOTH succeed.
+    finalStyleIntent.controlledOverlayPreviewSandboxV2 = authSandbox;
+    finalStyleIntent.controlledPreviewReviewStateV2 = authReviewState;
+    return { committed: true, error: null };
+  } catch (e) {
+    // Delegates to the exact same shared failure-state helper the real
+    // production catch block uses — both canonical fields to null, safe
+    // normalized error string recorded, no provisional fallback.
+    _applyAuthoritativePreviewFailureStateV2(finalStyleIntent, e);
+    return { committed: false, error: finalStyleIntent?.authoritativePreviewSandboxError ?? _safeNormalizeErrorText(e) };
+  }
+}

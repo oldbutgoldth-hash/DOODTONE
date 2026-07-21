@@ -16,7 +16,7 @@
 import { buildControlledOverlayTestGateV2 } from '../core/lightroom-mapping-engine/mapping-v2-overlay-test-gate.js';
 import { buildControlledOverlayPreviewSandboxV2 } from '../core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js';
 import { buildVisualPreviewRenderPlanV2 } from '../core/preview-rendering/visual-preview-render-plan-v2.js';
-import { _projectHumanReviewStateV2, _safeNormalizeErrorText } from '../core/decision-engine/index.js';
+import { _projectHumanReviewStateV2, _safeNormalizeErrorText, _runAuthoritativePreviewRebuildTransactionV2, _applyAuthoritativePreviewFailureStateV2 } from '../core/decision-engine/index.js';
 import { LIGHTROOM_MAPPING_V2_FLAGS } from '../core/lightroom-mapping-engine/mapping-v2-flags.js';
 
 const results = [];
@@ -464,6 +464,83 @@ const safetyDelta = sandboxFull.safetyScore - sandboxPartial.safetyScore;
 record('FIX 7: full Legacy context increases confidence (proven invariant, not an exact-value claim)', confidenceDelta > 0.10, `delta=${confidenceDelta.toFixed(3)} (expected ≈0.15 per the Sandbox formula's 30% Legacy-availability weight × 0.5 factor swing)`);
 record('FIX 7: full Legacy context increases safety score (proven invariant)', safetyDelta > 0.02, `delta=${safetyDelta.toFixed(3)} (expected ≈0.05 per the Sandbox formula's 10% Legacy-availability weight × 0.5 factor swing)`);
 record('FIX 7: full context can cross the unchanged 0.72 threshold with valid evidence', sandboxFull.confidence >= 0.72 && sandboxPartial.confidence < 0.72, `partial=${sandboxPartial.confidence} (below), full=${sandboxFull.confidence} (at/above) — threshold itself (0.72) never touched`);
+
+// ── Step 7A-F2-G: canonical safe-failure regression lock ──
+console.log('');
+console.log('=== Step 7A-F2-G: Canonical safe-failure regression (_applyAuthoritativePreviewFailureStateV2) ===');
+
+function makeDeliberatelyRenderableFinalStyleIntent() {
+  return {
+    controlledOverlayPreviewSandboxV2: { canGeneratePreview: true, simulatedPreviewPreset: { available: true } },
+    controlledPreviewReviewStateV2: { approvalState: 'approved' },
+  };
+}
+
+const hostileErrorCases = [
+  ['genuine Error', new Error('deliberate rebuild failure')],
+  ['null', null],
+  ['throwing message getter', (() => { const o = {}; Object.defineProperty(o, 'message', { get() { throw new Error('evil'); } }); return o; })()],
+];
+// Revoked Proxy handled separately (Proxy.revocable), since it must be constructed then revoked.
+const { proxy: revokedProxyErr, revoke: revokeErrProxy } = Proxy.revocable({}, {});
+revokeErrProxy();
+hostileErrorCases.push(['revoked Proxy', revokedProxyErr]);
+
+for (const [label, errValue] of hostileErrorCases) {
+  const fsi = makeDeliberatelyRenderableFinalStyleIntent();
+  let crashed = false;
+  let result;
+  try { result = _applyAuthoritativePreviewFailureStateV2(fsi, errValue); } catch { crashed = true; }
+  record(`Failure helper (${label}): no crash`, !crashed, `crashed=${crashed}`);
+  record(`Failure helper (${label}): canonical Sandbox cleared to null`, fsi.controlledOverlayPreviewSandboxV2 === null, `value=${JSON.stringify(fsi.controlledOverlayPreviewSandboxV2)}`);
+  record(`Failure helper (${label}): canonical Review State cleared to null`, fsi.controlledPreviewReviewStateV2 === null, `value=${JSON.stringify(fsi.controlledPreviewReviewStateV2)}`);
+  record(`Failure helper (${label}): bounded safe error string recorded`, typeof fsi.authoritativePreviewSandboxError === 'string' && fsi.authoritativePreviewSandboxError.length <= 201, `error="${fsi.authoritativePreviewSandboxError}"`);
+  const noStackTrace = !String(fsi.authoritativePreviewSandboxError).includes('.js:') && !String(fsi.authoritativePreviewSandboxError).includes('    at ');
+  record(`Failure helper (${label}): no stack trace leaked`, noStackTrace, 'verified no stack-trace markers');
+  const fsiKeysAfter = Object.keys(fsi);
+  record(`Failure helper (${label}): no provisional field added`, !fsiKeysAfter.some((k) => /provisional/i.test(k)), fsiKeysAfter.join(', '));
+}
+
+// Excessively long error message.
+const fsiLongMsg = makeDeliberatelyRenderableFinalStyleIntent();
+_applyAuthoritativePreviewFailureStateV2(fsiLongMsg, new Error('x'.repeat(500)));
+record('Failure helper (excessively long message): bounded to ~200 chars', fsiLongMsg.authoritativePreviewSandboxError.length <= 201, `length=${fsiLongMsg.authoritativePreviewSandboxError.length}`);
+
+// null/non-object finalStyleIntent must not throw.
+let crashedNullFsi = false;
+try { _applyAuthoritativePreviewFailureStateV2(null, new Error('x')); } catch { crashedNullFsi = true; }
+record('Failure helper (null finalStyleIntent): no crash', !crashedNullFsi, `crashed=${crashedNullFsi}`);
+
+// Downstream: build the Render Plan from the failed (nulled) state — must be unrenderable, no Identity Preview.
+const fsiForDownstream = makeDeliberatelyRenderableFinalStyleIntent();
+_applyAuthoritativePreviewFailureStateV2(fsiForDownstream, new Error('deliberate failure for downstream test'));
+const renderPlanAfterFailure = buildVisualPreviewRenderPlanV2({ controlledOverlayPreviewSandboxV2: fsiForDownstream.controlledOverlayPreviewSandboxV2 });
+record('Downstream Render Plan unrenderable after authoritative failure', renderPlanAfterFailure.v2RenderPlan.renderable === false, `renderable=${renderPlanAfterFailure.v2RenderPlan.renderable}`);
+const noIdentityAfterFailure = !renderPlanAfterFailure.v2RenderPlan.reasons.some((r) => /identity/i.test(r));
+record('Downstream Render Plan: no Identity Preview produced after failure', noIdentityAfterFailure, JSON.stringify(renderPlanAfterFailure.v2RenderPlan.reasons));
+
+// FIX 4: Production Mapping regression — buildFinalPreset called NORMALLY
+// (never triggering the failure path via Production inputs) before/after
+// this patch, union-key comparison.
+const { buildFinalPreset: buildFinalPresetF2G } = await import('../core/decision-engine/index.js');
+const f2gWithout = buildFinalPresetF2G({});
+const f2gWith = buildFinalPresetF2G({ controlledPreviewReviewStateV2: allApproved() });
+const f2gUnionKeys = new Set([...Object.keys(f2gWithout), ...Object.keys(f2gWith)]);
+let f2gProductionIdentical = true;
+for (const key of f2gUnionKeys) {
+  if (metadataKeys.has(key)) continue;
+  const inW = Object.prototype.hasOwnProperty.call(f2gWithout, key);
+  const inR = Object.prototype.hasOwnProperty.call(f2gWith, key);
+  if (inW !== inR) { f2gProductionIdentical = false; continue; }
+  if (JSON.stringify(f2gWithout[key]) !== JSON.stringify(f2gWith[key])) f2gProductionIdentical = false;
+}
+record('FIX 4: Production Mapping regression (normal execution, not failure-triggered)', f2gProductionIdentical, f2gProductionIdentical ? 'all fields identical, no key added/removed' : 'DIFFERENCE FOUND');
+
+// Regression: normal successful buildFinalPreset (all-approved) still works after this patch.
+const f2gSandboxD = f2gWith._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2;
+record('Regression: normal successful rebuild still commits (all-approved -> canGeneratePreview)', f2gSandboxD?.canGeneratePreview === true, `canGeneratePreview=${f2gSandboxD?.canGeneratePreview}`);
+record('Regression: selectedOutputSource=legacy (post Step 7A-F2-G)', f2gSandboxD?.selectedOutputSource === 'legacy', `value=${f2gSandboxD?.selectedOutputSource}`);
+record('Regression: allowControlledOverlayTest=false (post Step 7A-F2-G)', LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest === false, `value=${LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest}`);
 
 
 const pass = results.filter((r) => r.result === 'PASS').length;
