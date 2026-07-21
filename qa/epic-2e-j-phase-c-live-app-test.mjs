@@ -166,7 +166,21 @@ async function main() {
       };
       fixtureRecords.push(fixtureRecord);
       liveEvidenceRecords.push({ fixture, snapshot });
-      record(`[${fixture}] Per-fixture pipeline record`, 'PASS', JSON.stringify(fixtureRecord));
+
+      // FIX 2 (Step 7A-F3-F): the per-fixture result is COMPUTED from
+      // the actual captured evidence — never hard-coded 'PASS'. Every
+      // one of the 7 required conditions must genuinely hold.
+      const fixtureFailedFields = [];
+      if (fixtureRecord.analysisCompleted !== true) fixtureFailedFields.push(`analysisCompleted=${fixtureRecord.analysisCompleted}`);
+      if (fixtureRecord.legacyPreviewState !== 'rendered') fixtureFailedFields.push(`legacyPreviewState=${fixtureRecord.legacyPreviewState}`);
+      if (fixtureRecord.controlledV2PreviewState !== 'rendered') fixtureFailedFields.push(`controlledV2PreviewState=${fixtureRecord.controlledV2PreviewState}`);
+      if (fixtureRecord.canGeneratePreview !== true) fixtureFailedFields.push(`canGeneratePreview=${fixtureRecord.canGeneratePreview}`);
+      if (fixtureRecord.interactiveState !== 'ready') fixtureFailedFields.push(`interactiveState=${fixtureRecord.interactiveState}`);
+      if (fixtureRecord.observationEnabled !== true) fixtureFailedFields.push(`observationEnabled=${fixtureRecord.observationEnabled}`);
+      if (fixtureRecord.blockers.length !== 0) fixtureFailedFields.push(`blockers=${JSON.stringify(fixtureRecord.blockers)}`);
+      const fixturePasses = fixtureFailedFields.length === 0;
+      fixtureRecord.result = fixturePasses ? 'PASS' : 'FAIL';
+      record(`[${fixture}] Per-fixture pipeline record`, fixturePasses, fixturePasses ? JSON.stringify(fixtureRecord) : `FAILED FIELDS: ${fixtureFailedFields.join(', ')} — full record: ${JSON.stringify(fixtureRecord)}`);
       if (observationEnabled && !firstReadyFixture) firstReadyFixture = fixture;
 
       for (const rf of requestFailures) { if (!/fonts\.googleapis\.com|fonts\.gstatic\.com/i.test(rf.url)) consoleErrors.push({ fixture, type: 'requestfailed', ...rf }); }
@@ -318,22 +332,45 @@ async function main() {
 
       // ── Side-effect check: no Canvas/Analysis/Slider mutation from Observation actions ──
       const sliderBefore = await page.evaluate(() => document.querySelector('#interactiveBeforeAfterInner input[type="range"]')?.value ?? null);
-      const canvasDrawCount = await page.evaluate(() => {
-        window.__drawCount = 0;
-        const orig = CanvasRenderingContext2D.prototype.drawImage;
-        CanvasRenderingContext2D.prototype.drawImage = function (...args) { window.__drawCount++; return orig.apply(this, args); };
-        return true;
+      const canvasDimsBefore = await page.evaluate(() => {
+        const canvases = Array.from(document.querySelectorAll('#interactiveBeforeAfterInner canvas, #visualPreviewComparisonInner canvas'));
+        return canvases.map((c) => ({ width: c.width, height: c.height }));
+      });
+      // FIX 3: instrument all three canvas-mutation methods, not just drawImage.
+      await page.evaluate(() => {
+        window.__canvasCallCounts = { drawImage: 0, getImageData: 0, putImageData: 0 };
+        window.__origCanvasMethods = {
+          drawImage: CanvasRenderingContext2D.prototype.drawImage,
+          getImageData: CanvasRenderingContext2D.prototype.getImageData,
+          putImageData: CanvasRenderingContext2D.prototype.putImageData,
+        };
+        CanvasRenderingContext2D.prototype.drawImage = function (...args) { window.__canvasCallCounts.drawImage++; return window.__origCanvasMethods.drawImage.apply(this, args); };
+        CanvasRenderingContext2D.prototype.getImageData = function (...args) { window.__canvasCallCounts.getImageData++; return window.__origCanvasMethods.getImageData.apply(this, args); };
+        CanvasRenderingContext2D.prototype.putImageData = function (...args) { window.__canvasCallCounts.putImageData++; return window.__origCanvasMethods.putImageData.apply(this, args); };
       });
       const genBeforeSideEffect = await qaSnapshot(page).then((snap) => snap?.analysisGeneration);
       await page.click('#ipoOption_prefer-v2');
       await page.click('#ipoReason_highlight-detail');
       await page.click('#ipoClearReasonsButton');
       await page.waitForTimeout(200);
-      const drawCallsDuringActions = await page.evaluate(() => window.__drawCount);
+      const canvasCallCounts = await page.evaluate(() => window.__canvasCallCounts);
+      const canvasDimsAfter = await page.evaluate(() => {
+        const canvases = Array.from(document.querySelectorAll('#interactiveBeforeAfterInner canvas, #visualPreviewComparisonInner canvas'));
+        return canvases.map((c) => ({ width: c.width, height: c.height }));
+      });
+      // Restore the original Canvas methods after the action window — never alters Runtime behavior beyond this instrumentation.
+      await page.evaluate(() => {
+        CanvasRenderingContext2D.prototype.drawImage = window.__origCanvasMethods.drawImage;
+        CanvasRenderingContext2D.prototype.getImageData = window.__origCanvasMethods.getImageData;
+        CanvasRenderingContext2D.prototype.putImageData = window.__origCanvasMethods.putImageData;
+      });
       const genAfterSideEffect = await qaSnapshot(page).then((snap) => snap?.analysisGeneration);
       const sliderAfter = await page.evaluate(() => document.querySelector('#interactiveBeforeAfterInner input[type="range"]')?.value ?? null);
       record('No Analysis rerun from Observation actions (analysisGeneration unchanged)', genAfterSideEffect === genBeforeSideEffect, `before=${genBeforeSideEffect}, after=${genAfterSideEffect}`);
-      record('No Canvas drawImage calls from Observation actions', drawCallsDuringActions === 0, `drawImage calls=${drawCallsDuringActions}`);
+      record('No Canvas drawImage calls from Observation actions', canvasCallCounts.drawImage === 0, `drawImage calls=${canvasCallCounts.drawImage}`);
+      record('No Canvas getImageData calls from Observation actions', canvasCallCounts.getImageData === 0, `getImageData calls=${canvasCallCounts.getImageData}`);
+      record('No Canvas putImageData calls from Observation actions', canvasCallCounts.putImageData === 0, `putImageData calls=${canvasCallCounts.putImageData}`);
+      record('Preview Canvas width/height unchanged by Observation actions', JSON.stringify(canvasDimsBefore) === JSON.stringify(canvasDimsAfter), `before=${JSON.stringify(canvasDimsBefore)}, after=${JSON.stringify(canvasDimsAfter)}`);
       record('Interactive slider value unchanged by Observation actions', sliderAfter === sliderBefore, `before=${sliderBefore}, after=${sliderAfter}`);
       await page.click('#ipoOption_prefer-legacy');
       await page.click('#ipoReason_skin-tone');
@@ -371,7 +408,11 @@ async function main() {
       record('Generation handoff: Generation 1 invalidated exactly once', sAfterHandoff?.sessionSummary?.invalidated === 1, `invalidated=${sAfterHandoff?.sessionSummary?.invalidated}`);
       record('Generation handoff: no radio selected automatically', radioSelectedAfterHandoff === false, `anySelected=${radioSelectedAfterHandoff}`);
       record('Generation handoff: no Reason selected automatically', reasonSelectedAfterHandoff === false, `anySelected=${reasonSelectedAfterHandoff}`);
-      record('Generation handoff: old Generation id does not return', sAfterHandoff?.observation?.observationGenerationId !== genIdBeforeHandoff || sAfterHandoff?.observation?.selectedValue === null, `before=${genIdBeforeHandoff}, afterObs=${JSON.stringify(sAfterHandoff?.observation)}`);
+      const handoffSelectedValueNull = sAfterHandoff?.observation?.selectedValue === null;
+      const handoffReasonsEmpty = Array.isArray(sAfterHandoff?.observation?.reasons) && sAfterHandoff.observation.reasons.length === 0;
+      const handoffGenIdClearedOrDifferent = sAfterHandoff?.observation?.observationGenerationId === null || sAfterHandoff?.observation?.observationGenerationId !== genIdBeforeHandoff;
+      const handoffInvalidatedExactlyOne = sAfterHandoff?.sessionSummary?.invalidated === 1;
+      record('Generation handoff: old Generation id does not return (all conditions, not just one)', handoffSelectedValueNull && handoffReasonsEmpty && handoffGenIdClearedOrDifferent && handoffInvalidatedExactlyOne, `selectedValueNull=${handoffSelectedValueNull}, reasonsEmpty=${handoffReasonsEmpty}, genIdClearedOrDifferent=${handoffGenIdClearedOrDifferent}, invalidatedExactlyOne=${handoffInvalidatedExactlyOne}, before=${genIdBeforeHandoff}, afterObs=${JSON.stringify(sAfterHandoff?.observation)}`);
       await page.screenshot({ path: path.join(F3_SCREENSHOT_DIR, 'generation-handoff-cleared.png') });
       screenshotsGenerated.push('full-app-f3/generation-handoff-cleared.png');
 
@@ -407,16 +448,26 @@ async function main() {
   const failCount = results.filter((r) => r.result === 'FAIL').length;
   const notTestedCount = results.filter((r) => r.result === 'NOT_TESTED').length;
 
-  // FINAL STEP 7A ACCEPTANCE: PASS requires every category below to
-  // genuinely pass — never based on Ready alone.
+  // FIX 1 (Step 7A-F3-F): FAIL-CLOSED final decision. PASS requires
+  // ALL of:
+  //   - failCount === 0 (any executed FAIL — console error, Analysis
+  //     rerun, Canvas side effect, slider mutation, XMP difference,
+  //     per-fixture failure, or anything else — forces FAIL)
+  //   - notTestedCount === 0 (no deferred/incomplete category)
+  //   - at least one fixture genuinely reached Ready
+  //   - every required functional category's specific checks passed
+  // This does NOT rely on test-name-prefix filtering alone — failCount
+  // and notTestedCount are computed across the ENTIRE result set, so a
+  // FAIL or NOT_TESTED anywhere (even outside the named categories)
+  // still forces the overall decision to FAIL.
   const requiredPassPrefixes = [
     'Full Application Acceptance', 'Actual Observation radio', 'Actual Reason checkboxes',
     'Reasons preserved', 'Clear Reasons:', 'Clear Observation:', 'Actual Session Clear:',
     'Generation handoff:', 'XMP exact comparison:', 'Identity Preview UI honesty',
   ];
   const relevantResults = results.filter((r) => requiredPassPrefixes.some((p) => r.test.startsWith(p)));
-  const allRelevantPass = relevantResults.length > 0 && relevantResults.every((r) => r.result === 'PASS');
-  const finalDecision = allRelevantPass ? 'PASS' : 'FAIL';
+  const namedCategoriesPass = relevantResults.length > 0 && relevantResults.every((r) => r.result === 'PASS');
+  const finalDecision = (failCount === 0 && notTestedCount === 0 && !!firstReadyFixture && namedCategoriesPass) ? 'PASS' : 'FAIL';
 
   const output = {
     suite: 'EPIC 2E-J-C-F2 Step 7A (complete, incl. F3) - Full Application Reachability + Actual UI Workflow',
