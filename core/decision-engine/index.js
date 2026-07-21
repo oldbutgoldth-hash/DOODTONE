@@ -892,6 +892,48 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
       styleDNA: finalStyleIntent.photographerStyle?.top?.styleDNA,
       styleFeasibility: finalStyleIntent.styleFeasibilityEstimate,
       captureCapability: finalStyleIntent.captureCapabilityEstimate,
+      // FIX (EPIC 2E-J-C-F2 root-cause correction #2): a genuine wiring
+      // gap — this call never passed the CALLER-SUPPLIED, already-
+      // completed review state through, even though this same function
+      // receives it as `existingControlledPreviewReviewStateV2` and
+      // used it (further below) only to seed the NEXT review-state
+      // object via `createPreviewReviewStateV2`. This meant the
+      // `human-review-complete` gate inside the Sandbox could never see
+      // a completed review, even after a real person genuinely
+      // completed every checklist item through the real Review Console
+      // UI and triggered Re-analyze — the Sandbox was rebuilt from
+      // scratch on every call with no memory of that completed review.
+      // Passing it through here does not weaken the gate in any way:
+      // the Sandbox still independently re-validates every required
+      // item's `status === 'passed'` itself; an incomplete, failed, or
+      // absent review still correctly yields `canGeneratePreview: false`.
+      // FIX (EPIC 2E-J-C-F2 root-cause correction #2, continued): the
+      // caller-supplied review state's `reviewItems` is an ARRAY of
+      // `{id, status, ...}` objects (see mapping-v2-preview-review-state.js's
+      // `_buildReviewState` return shape) — but the Sandbox's own
+      // `humanReviewState` parameter expects a flat map of
+      // `{[itemId]: 'passed'|'failed'}` (see this file's
+      // `_buildHumanReviewChecklist` doc comment). Passing the raw
+      // object through (as an earlier version of this fix did) was
+      // therefore a field-SHAPE mismatch, not just a missing wire — the
+      // Sandbox's `reviewState?.[id]` lookup always returned `undefined`
+      // against an array. This performs the safe, read-only, defensive
+      // translation the two shapes actually require; it does not
+      // relax the Sandbox's own independent re-validation in any way —
+      // an item this map doesn't mark 'passed' still correctly stays
+      // 'pending', and a genuinely 'failed' item is passed through
+      // as 'failed', never silently dropped or upgraded.
+      humanReviewState: (() => {
+        const items = existingControlledPreviewReviewStateV2?.reviewItems;
+        if (!Array.isArray(items)) return null;
+        const map = {};
+        for (const item of items) {
+          if (item && typeof item.id === 'string' && (item.status === 'passed' || item.status === 'failed')) {
+            map[item.id] = item.status;
+          }
+        }
+        return map;
+      })(),
       // No `flags` override — always resolves to the safe defaults.
     });
   } catch (e) {

@@ -362,15 +362,38 @@ function _buildV2RenderPlan(sandbox) {
   if (!preset) reasons.push('No V2 Sandbox simulated preview preset was supplied — V2 render plan is unavailable.');
   else if (!presetAvailable) reasons.push('V2 simulated preview preset exists but is not currently available (Sandbox not eligible) — nothing to render yet.');
   else if (contradictoryEvidence) { reasons.push('V2 preview evidence is contradictory (appliedToProduction or exportEligible reports true) — blocking V2 rendering as a safety precaution.'); warnings.push('V2 preview evidence contradicts the expected non-production guarantees — this should never happen upstream; treat with caution.'); }
-  else reasons.push('V2 simulated preview preset is available and confirmed non-production, but contains no concrete signed adjustment values to render in Phase A.');
+  else reasons.push('V2 simulated preview preset is available and confirmed non-production; it contains no concrete signed adjustment values in Phase A, so the isolated preview renders as a valid identity (no visual change) preview rather than being blocked as unavailable.');
 
   const available = !!preset;
   const adjustmentModel = _buildV2AdjustmentModel(sandbox);
-  // renderable requires: available data, non-production confirmed, no
-  // contradictory evidence, AND at least one supported (concrete)
-  // adjustment — the last condition is never met in Phase A (see file
-  // header), so this is always false today, honestly.
-  const renderable = available && presetAvailable && !contradictoryEvidence && adjustmentModel.supportedAdjustments.length > 0;
+  // FIX (EPIC 2E-J-C-F2 root-cause correction): `renderable` previously
+  // additionally required `adjustmentModel.supportedAdjustments.length > 0`,
+  // which — per this file's own header documentation — can NEVER be
+  // true today, because `simulatedPreviewPreset` genuinely contains
+  // only abstract 0-1 risk-mitigation intensities, never concrete
+  // signed Lightroom values, at every upstream layer (verified across
+  // styleBudgetIntelligence, the Mapping V2 Planner, and the Budget-to-
+  // Lightroom Translator — all three are explicitly "SHADOW-ONLY,
+  // abstract 0-1 only" by deliberate design). That extra condition was
+  // therefore not distinguishing "valid but zero-adjustment" from
+  // "invalid/missing" — it was unconditionally blocking every
+  // otherwise-valid Sandbox result.
+  //
+  // Corrected rule (matches this project's own valid-identity-preview
+  // policy): a Sandbox result that is available, confirmed non-
+  // production, and free of contradictory evidence is a VALID V2
+  // result — genuinely having zero concrete adjustments to apply is a
+  // real, honest identity-preview case, not invalid or missing data.
+  // `available: false` (no Sandbox supplied) and `!presetAvailable`
+  // (Sandbox itself reports not-yet-eligible) remain correctly
+  // unrenderable; `contradictoryEvidence` remains a hard safety block.
+  // The isolated preview renderer (ui/isolated-visual-preview-renderer-v2.js)
+  // already correctly reports `visualAdjustmentsApplied: false` and an
+  // honest "rendered without supported visual adjustments" reason for
+  // exactly this case — nothing was fabricated to reach this fix; the
+  // downstream renderer's own zero-adjustment handling was already
+  // complete and simply unreachable until this flag was corrected.
+  const renderable = available && presetAvailable && !contradictoryEvidence;
 
   if (adjustmentModel.unsupportedAdjustments.length) warnings.push(`Unsupported/unavailable V2 adjustments: ${adjustmentModel.unsupportedAdjustments.join(', ')}.`);
 
