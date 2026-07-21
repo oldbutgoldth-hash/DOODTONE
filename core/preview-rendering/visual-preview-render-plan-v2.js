@@ -10,9 +10,6 @@
  *
  * This is PLAN CONSTRUCTION ONLY:
  * - creates no canvas, no pixels, no DOM
- * - is not wired into the main pipeline (decision-engine/index.js is
- *   NOT modified by this file's existence — a future Phase B will do
- *   that integration)
  * - never changes the project version
  * - never writes XMP, never touches preset-engine/xmp-validator
  * - never activates Production Write or Mapping V2
@@ -37,12 +34,28 @@
  * (e.g. "reduce aggressive shift", "suppress risky direction", "cap
  * intensity") with only an abstract 0-1 *intensity* (how strongly to
  * mitigate), never a direction/magnitude a pixel transform could
- * actually apply (e.g. "+0.3 exposure"). Because of this, the V2
- * render plan's `adjustmentModel` honestly reports EVERY adjustment as
- * unsupported in Phase A — `v2RenderPlan.renderable` is therefore
- * `false` in every currently-reachable scenario, not because the
- * renderer is incomplete, but because there is no concrete signed
- * adjustment data yet to render. This is documented, not hidden.
+ * actually apply (e.g. "+0.3 exposure"). Because of this, the V2 render
+ * plan's `adjustmentModel` honestly reports EVERY adjustment as
+ * unsupported — there is no concrete signed adjustment data to render.
+ *
+ * UPDATED (EPIC 2E-J-C-F2, Steps 1-4): this NO LONGER means
+ * `v2RenderPlan.renderable` is always `false`. When the Sandbox
+ * genuinely reports an available, non-production, non-contradictory
+ * result — via the isolated, preview-only path enabled by
+ * `allowOverlayTestPresetPreview`/`allowOverlayPreviewGeneration`, with
+ * `canPreviewOverlayPreset` eligibility (deliberately decoupled from the
+ * still-disabled `allowControlledOverlayTest`/`canEnterControlledTest`),
+ * and a genuinely completed Human Review — a valid, honest, zero-
+ * adjustment IDENTITY PREVIEW is reachable: `renderable: true`,
+ * `visualAdjustmentsApplied: false`, `appliedAdjustments: []`, and an
+ * explicit reason/warning stating no pixel was changed and this does
+ * not indicate Production activation. Missing, unavailable, malformed,
+ * safety-blocked, or contradictory Sandbox data still correctly yields
+ * `renderable: false` — an Identity Preview is never fabricated from
+ * incomplete or invalid evidence. Production Write and Export remain
+ * hard-coded `false` throughout, and Legacy Mapping remains the
+ * exclusive Production/XMP path regardless of this Plan's `renderable`
+ * value. This is documented, not hidden.
  */
 
 // ── Legacy preset field → normalized adjustment mapping ──────────────────────
@@ -362,7 +375,15 @@ function _buildV2RenderPlan(sandbox) {
   if (!preset) reasons.push('No V2 Sandbox simulated preview preset was supplied — V2 render plan is unavailable.');
   else if (!presetAvailable) reasons.push('V2 simulated preview preset exists but is not currently available (Sandbox not eligible) — nothing to render yet.');
   else if (contradictoryEvidence) { reasons.push('V2 preview evidence is contradictory (appliedToProduction or exportEligible reports true) — blocking V2 rendering as a safety precaution.'); warnings.push('V2 preview evidence contradicts the expected non-production guarantees — this should never happen upstream; treat with caution.'); }
-  else reasons.push('V2 simulated preview preset is available and confirmed non-production; it contains no concrete signed adjustment values in Phase A, so the isolated preview renders as a valid identity (no visual change) preview rather than being blocked as unavailable.');
+  else {
+    reasons.push('V2 simulated preview preset is available and confirmed non-production; it contains no concrete signed adjustment values in Phase A, so the isolated preview renders as a valid identity (visually unchanged) preview rather than being blocked as unavailable.');
+    // FIX 4 (EPIC 2E-J-C-F2 Step 4): explicit, standalone honesty
+    // statement — an Identity Preview being reachable is never, in
+    // itself, evidence of (or a step toward) Production activation.
+    // Legacy remains the sole Production Mapping/XMP path regardless
+    // of this Render Plan's `renderable` value.
+    warnings.push('An available, valid, zero-adjustment Controlled V2 result renders as an honest Identity Preview (visually unchanged from the source) — this does not change any pixel, and does not indicate or enable Production activation. Legacy Mapping remains the exclusive Production/XMP path.');
+  }
 
   const available = !!preset;
   const adjustmentModel = _buildV2AdjustmentModel(sandbox);

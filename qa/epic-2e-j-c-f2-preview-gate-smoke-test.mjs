@@ -206,6 +206,111 @@ record('12: canExportPreview = false', sandboxT10.canExportPreview === false, `v
 record('12: allowControlledOverlayTest = false', LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest === false, `value=${LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest}`);
 record('12: selectedOutputSource = legacy', sandboxT10.selectedOutputSource === 'legacy', `value=${sandboxT10.selectedOutputSource}`);
 
+// ── FIX 6 (EPIC 2E-J-C-F2 Step 4-6): Identity Preview honesty + actual buildFinalPreset integration ──
+console.log('');
+console.log('=== Step 4-6: Identity Preview honesty + buildFinalPreset integration ===');
+
+const { buildFinalPreset } = await import('../core/decision-engine/index.js');
+const { applyPreviewPixelTransformV2 } = await import('../ui/isolated-visual-preview-renderer-v2.js');
+
+// Test A: ACTUAL buildFinalPreset call (not a manually duplicated
+// module call) — every checklist ID carries one pending duplicate and
+// one passed duplicate.
+const mixedReviewA = { reviewItems: REQUIRED_IDS.flatMap((id) => [
+  { id, status: 'pending', reviewed: false, reviewerDecision: 'undecided' },
+  { id, status: 'passed', reviewed: true, reviewerDecision: 'approve' },
+]) };
+const resultA = buildFinalPreset({ controlledPreviewReviewStateV2: mixedReviewA });
+const sandboxA = resultA._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2;
+const missingA = sandboxA?.previewGateChecks?.filter((g) => g.required && !g.passed).map((g) => g.id) ?? [];
+record('A: buildFinalPreset duplicate integration — Sandbox exists', !!sandboxA, `sandbox exists=${!!sandboxA}`);
+record('A: buildFinalPreset duplicate integration — human-review-complete missing', missingA.includes('human-review-complete'), `missingRequirements=${JSON.stringify(missingA)}`);
+record('A: buildFinalPreset duplicate integration — canGeneratePreview=false', sandboxA?.canGeneratePreview === false, `canGeneratePreview=${sandboxA?.canGeneratePreview}`);
+
+// Test B: ACTUAL buildFinalPreset call with all ten genuinely approved.
+// Empty synthetic analysis input may leave another genuine evidence
+// gate (e.g. confidence) unmet — reported honestly, never fabricated.
+const allApprovedB = { reviewItems: REQUIRED_IDS.map((id) => ({ id, status: 'passed', reviewed: true, reviewerDecision: 'approve' })) };
+const resultB = buildFinalPreset({ controlledPreviewReviewStateV2: allApprovedB });
+const sandboxB = resultB._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2;
+const missingB = sandboxB?.previewGateChecks?.filter((g) => g.required && !g.passed).map((g) => ({ id: g.id, reason: g.reason })) ?? [];
+console.log(`  [INFO] B: buildFinalPreset approved integration — Sandbox state: canGeneratePreview=${sandboxB?.canGeneratePreview}, confidence=${sandboxB?.confidence}, safetyScore=${sandboxB?.safetyScore}, selectedOutputSource=${sandboxB?.selectedOutputSource}, missingRequirements=${JSON.stringify(missingB)}`);
+record('B: buildFinalPreset approved integration — human-review-complete itself no longer blocks', !missingB.some((g) => g.id === 'human-review-complete'), `missingRequirements=${JSON.stringify(missingB.map((g) => g.id))}`);
+record('B: buildFinalPreset approved integration — selectedOutputSource=legacy', sandboxB?.selectedOutputSource === 'legacy', `value=${sandboxB?.selectedOutputSource}`);
+
+// Test C: direct complete-evidence Identity Preview.
+const testGateC = buildControlledOverlayTestGateV2({ legacyOverlaySimulationV2, legacySafetyOverlayV2, lightroomSafetyClampV2, lightroomShadowCompareReportV2, legacyPreset });
+const humanReviewStateC = _projectHumanReviewStateV2(allApproved());
+const sandboxC = buildControlledOverlayPreviewSandboxV2({ legacyOverlaySimulationV2, legacySafetyOverlayV2, lightroomSafetyClampV2, lightroomShadowCompareReportV2, legacyPreset, controlledOverlayTestGateV2: testGateC, humanReviewState: humanReviewStateC });
+const renderPlanC = buildVisualPreviewRenderPlanV2({ controlledOverlayPreviewSandboxV2: sandboxC });
+record('C: Sandbox canGeneratePreview=true', sandboxC.canGeneratePreview === true, `value=${sandboxC.canGeneratePreview}`);
+record('C: simulatedPreviewPreset.available=true', sandboxC.simulatedPreviewPreset?.available === true, `value=${sandboxC.simulatedPreviewPreset?.available}`);
+record('C: Render Plan renderable=true', renderPlanC.v2RenderPlan.renderable === true, `value=${renderPlanC.v2RenderPlan.renderable}`);
+const identityReasonPresent = renderPlanC.v2RenderPlan.reasons.some((r) => /identity/i.test(r)) || renderPlanC.v2RenderPlan.warnings.some((w) => /identity/i.test(w));
+record('C: Identity Preview reason/warning present', identityReasonPresent, JSON.stringify(renderPlanC.v2RenderPlan.reasons));
+record('C: canWriteProduction=false', sandboxC.canWriteProduction === false, `value=${sandboxC.canWriteProduction}`);
+record('C: canExportPreview=false', sandboxC.canExportPreview === false, `value=${sandboxC.canExportPreview}`);
+record('C: selectedOutputSource=legacy', sandboxC.selectedOutputSource === 'legacy', `value=${sandboxC.selectedOutputSource}`);
+
+// Test D: missing Sandbox entirely.
+const renderPlanD = buildVisualPreviewRenderPlanV2({});
+record('D: missing Sandbox -> renderable=false', renderPlanD.v2RenderPlan.renderable === false, `value=${renderPlanD.v2RenderPlan.renderable}`);
+record('D: missing Sandbox -> not Identity Preview', !renderPlanD.v2RenderPlan.reasons.some((r) => /identity/i.test(r)), JSON.stringify(renderPlanD.v2RenderPlan.reasons));
+
+// Test E: Sandbox present but unavailable.
+const renderPlanE = buildVisualPreviewRenderPlanV2({ controlledOverlayPreviewSandboxV2: { simulatedPreviewPreset: { available: false } } });
+record('E: Sandbox unavailable -> renderable=false', renderPlanE.v2RenderPlan.renderable === false, `value=${renderPlanE.v2RenderPlan.renderable}`);
+record('E: Sandbox unavailable -> not Identity Preview', !renderPlanE.v2RenderPlan.reasons.some((r) => /identity/i.test(r)), JSON.stringify(renderPlanE.v2RenderPlan.reasons));
+
+// Test F: malformed simulated preset (not an object).
+let crashedF = false;
+let renderPlanF;
+try { renderPlanF = buildVisualPreviewRenderPlanV2({ controlledOverlayPreviewSandboxV2: { simulatedPreviewPreset: 'not-an-object' } }); } catch { crashedF = true; }
+record('F: malformed simulated preset -> no crash', !crashedF, `crashed=${crashedF}`);
+record('F: malformed simulated preset -> renderable=false', renderPlanF?.v2RenderPlan.renderable === false, `value=${renderPlanF?.v2RenderPlan.renderable}`);
+
+// Test G: safety blocker (hard stop active) — Sandbox itself cannot generate preview.
+const unsafeClamp = { hardStops: [{ reason: 'test hard stop' }], overStackAnalysis: { severity: 'low' }, globalSafetyScore: 0.9 };
+const testGateG = buildControlledOverlayTestGateV2({ legacyOverlaySimulationV2, legacySafetyOverlayV2, lightroomSafetyClampV2: unsafeClamp, lightroomShadowCompareReportV2, legacyPreset });
+const sandboxG = buildControlledOverlayPreviewSandboxV2({ legacyOverlaySimulationV2, legacySafetyOverlayV2, lightroomSafetyClampV2: unsafeClamp, lightroomShadowCompareReportV2, legacyPreset, controlledOverlayTestGateV2: testGateG, humanReviewState: _projectHumanReviewStateV2(allApproved()) });
+const renderPlanG = buildVisualPreviewRenderPlanV2({ controlledOverlayPreviewSandboxV2: sandboxG });
+record('G: hard stop -> Sandbox canGeneratePreview=false', sandboxG.canGeneratePreview === false, `value=${sandboxG.canGeneratePreview}`);
+record('G: hard stop -> Render Plan renderable=false', renderPlanG.v2RenderPlan.renderable === false, `value=${renderPlanG.v2RenderPlan.renderable}`);
+
+// Test H: contradictory Production evidence.
+const renderPlanH = buildVisualPreviewRenderPlanV2({ controlledOverlayPreviewSandboxV2: { simulatedPreviewPreset: { available: true, appliedToProduction: true } } });
+record('H: contradictory evidence -> renderable=false', renderPlanH.v2RenderPlan.renderable === false, `value=${renderPlanH.v2RenderPlan.renderable}`);
+record('H: contradictory evidence -> blocker identifies it', renderPlanH.v2RenderPlan.reasons.some((r) => /contradictory/i.test(r)), JSON.stringify(renderPlanH.v2RenderPlan.reasons));
+
+// Test I: genuine supported adjustment, via the isolated renderer's own
+// contract (colorGrading with a non-zero shadowSat/highlightSat) — not
+// adding a new supported-adjustment field, just exercising the one the
+// Render Plan/renderer contract already supports.
+const imgWidth = 2, imgHeight = 2;
+const imgData = new Uint8ClampedArray(imgWidth * imgHeight * 4).fill(128);
+for (let i = 3; i < imgData.length; i += 4) imgData[i] = 255;
+const transformResultI = applyPreviewPixelTransformV2({ data: imgData, width: imgWidth, height: imgHeight }, { colorGrading: { shadowSat: 0.3, highlightSat: 0.2 } });
+record('I: genuine supported adjustment -> transformed=true', transformResultI.transformed === true, `transformed=${transformResultI.transformed}`);
+record('I: genuine supported adjustment -> appliedAdjustments non-empty', transformResultI.appliedAdjustments.length > 0, JSON.stringify(transformResultI.appliedAdjustments));
+
+// Test L: Production Mapping regression — identical Basic/WB/HSL/
+// Color-Grading/Calibration/Tone-Curve fields with vs. without Review
+// state, using the canonical buildFinalPreset output shape (not a
+// hand-picked subset).
+const resultWithoutReview = buildFinalPreset({});
+const resultWithReview = buildFinalPreset({ controlledPreviewReviewStateV2: allApprovedB });
+const metadataKeys = new Set(['_decision', '_mappingTrace']);
+let productionMappingIdentical = true;
+const differences = [];
+for (const key of Object.keys(resultWithoutReview)) {
+  if (metadataKeys.has(key)) continue;
+  if (JSON.stringify(resultWithoutReview[key]) !== JSON.stringify(resultWithReview[key])) {
+    productionMappingIdentical = false;
+    differences.push(key);
+  }
+}
+record('L: Production Mapping fields identical with/without Review state', productionMappingIdentical, differences.length ? `differing fields: ${differences.join(', ')}` : 'all fields identical');
+
 // ── Summary ──
 const pass = results.filter((r) => r.result === 'PASS').length;
 const fail = results.filter((r) => r.result === 'FAIL').length;
