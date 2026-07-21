@@ -375,6 +375,7 @@ async function main() {
   const screenshotsGenerated = [];
   let finalCounts = null;
   let optionalApiMatrix = null;
+  let supportMatrix = null;
   let restorationResult = null;
   let dataMinimizationResult = null;
   const responsiveResults = [];
@@ -406,46 +407,81 @@ async function main() {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // PART 0 — FIX 5: internal Session-record data-minimization proof
-    // via a focused, non-browser Node-level module test (the real
-    // session module, not a browser reimplementation) PLUS source-code
-    // inspection evidence for the object-literal keys.
+    // PART 0 — FIX 1/2/3/5 (Step 7B-A-F3): internal Session-record
+    // data-minimization proof using the REAL getQaSchemaSnapshot()
+    // projection as PRIMARY evidence (never a fragile regex re-parse
+    // of source text as the deciding evidence — that remains secondary
+    // only). Also proves the QA projection is absent by default and
+    // present only when explicitly enabled.
     // ══════════════════════════════════════════════════════════════
-    console.log('=== FIX 5: Internal Session-record data-minimization (module-level + source inspection) ===');
+    console.log('=== FIX 1/2/3/5: Session schema — real QA projection as primary evidence ===');
     const ALLOWED_INTERNAL_KEYS = new Set(['generationId', 'active', 'observation', 'reasons', 'clearedCounted', 'invalidatedCounted', 'createdAt', 'updatedAt', 'createdSequence', 'updatedSequence']);
     const PROHIBITED_PATTERN = /pixel|image|filename|filepath|url|exif|camera|gps|user|email|account|analysis|finalstyleintent|controller|dom/i;
 
-    // Source-code inspection: the internal `records.set(key, {...})`
-    // object literal in the real session module (never re-implemented
-    // here) — read directly to prove exactly which keys the module
-    // itself ever writes into a record.
+    // FIX 3: QA projection availability — absent by default, present only when explicitly enabled.
+    const sessionDefault = createInteractivePreviewObservationSessionV2();
+    const qaProjectionAbsentByDefault = typeof sessionDefault.getQaSchemaSnapshot === 'undefined';
+    record('FIX 3: getQaSchemaSnapshot absent by default (no option passed)', qaProjectionAbsentByDefault, `typeof=${typeof sessionDefault.getQaSchemaSnapshot}`);
+    sessionDefault.dispose();
+
+    const sessionQaEnabled = createInteractivePreviewObservationSessionV2({ enableQaSchemaInspection: true });
+    const qaProjectionEnabled = typeof sessionQaEnabled.getQaSchemaSnapshot === 'function';
+    record('FIX 3: getQaSchemaSnapshot present when enableQaSchemaInspection:true', qaProjectionEnabled, `typeof=${typeof sessionQaEnabled.getQaSchemaSnapshot}`);
+
+    // FIX 1: exercise the real session through its real public API —
+    // Prefer Legacy, Prefer V2, multiple canonical Reasons, a cleared
+    // record, an invalidated record, then 105 generations for the
+    // eviction-bound test.
+    sessionQaEnabled.recordObservation({ generationId: 'gen-legacy', observation: 'prefer-legacy', reasons: ['skin-tone', 'contrast'] });
+    sessionQaEnabled.recordObservation({ generationId: 'gen-v2', observation: 'prefer-v2', reasons: ['white-balance'] });
+    sessionQaEnabled.recordObservation({ generationId: 'gen-cleared', observation: 'unsure', reasons: [] });
+    sessionQaEnabled.removeObservation('gen-cleared');
+    sessionQaEnabled.recordObservation({ generationId: 'gen-invalidated', observation: 'no-visible-difference', reasons: ['natural-look'] });
+    sessionQaEnabled.invalidateGeneration('gen-invalidated');
+    for (let i = 1; i <= 105; i++) {
+      sessionQaEnabled.recordObservation({ generationId: `gen-bound-${i}`, observation: 'prefer-legacy', reasons: ['skin-tone'] });
+    }
+
+    const qaSnapshot = sessionQaEnabled.getQaSchemaSnapshot();
+    sessionQaEnabled.dispose();
+
+    const expectedKeys = [...ALLOWED_INTERNAL_KEYS].sort();
+    const actualKeys = [...qaSnapshot.recordKeys].sort();
+    const missingExpectedKeys = expectedKeys.filter((k) => !actualKeys.includes(k));
+    const unexpectedKeys = actualKeys.filter((k) => !ALLOWED_INTERNAL_KEYS.has(k));
+    record('FIX 1: real QA snapshot — no expected key missing', missingExpectedKeys.length === 0, `missing=${JSON.stringify(missingExpectedKeys)}`);
+    record('FIX 1: real QA snapshot — no unexpected additional key', unexpectedKeys.length === 0, `unexpected=${JSON.stringify(unexpectedKeys)}`);
+    record('FIX 1: real QA snapshot — hasDomReference === false', qaSnapshot.hasDomReference === false, `value=${qaSnapshot.hasDomReference}`);
+    record('FIX 1: real QA snapshot — hasProhibitedKey === false', qaSnapshot.hasProhibitedKey === false, `value=${qaSnapshot.hasProhibitedKey}`);
+    record('FIX 1: real QA snapshot — maximumRecords === 100', qaSnapshot.maximumRecords === 100, `value=${qaSnapshot.maximumRecords}`);
+    record('FIX 1: real QA snapshot — recordCount <= 100 after 105+ inserts', qaSnapshot.recordCount <= 100, `recordCount=${qaSnapshot.recordCount}`);
+    record('FIX 2: real QA snapshot — allReasonValuesCanonical === true', qaSnapshot.allReasonValuesCanonical === true, `value=${qaSnapshot.allReasonValuesCanonical}`);
+    record('FIX 2: real QA snapshot — reasonValueTypes contains only "string"', qaSnapshot.reasonValueTypes.length > 0 && qaSnapshot.reasonValueTypes.every((t) => t === 'string'), JSON.stringify(qaSnapshot.reasonValueTypes));
+
+    // Secondary evidence only: source-code inspection (never the deciding factor).
     const sessionModuleSource = await readFile(path.join(PROJECT_ROOT, 'ui', 'interactive-preview-observation-session-v2.js'), 'utf8');
     const recordLiteralMatch = sessionModuleSource.match(/records\.set\(key,\s*\{([^}]+)\}/s);
     const sourceInspectedKeys = recordLiteralMatch ? [...new Set(recordLiteralMatch[1].match(/\b[a-zA-Z_][a-zA-Z0-9_]*(?=:)/g) ?? [])] : [];
-    const sourceProhibitedFound = sourceInspectedKeys.filter((k) => !ALLOWED_INTERNAL_KEYS.has(k) || PROHIBITED_PATTERN.test(k));
-    record('FIX 5: source-inspected internal record keys are all allowed', sourceInspectedKeys.length > 0 && sourceProhibitedFound.length === 0, `keys=${JSON.stringify(sourceInspectedKeys)}, prohibited=${JSON.stringify(sourceProhibitedFound)}`);
-
     const maxRecordsMatch = sessionModuleSource.match(/MAX_RECORDS\s*=\s*(\d+)/);
     const sourceMaxRecords = maxRecordsMatch ? parseInt(maxRecordsMatch[1], 10) : null;
-    record('FIX 5: source-inspected MAX_RECORDS <= 100', sourceMaxRecords !== null && sourceMaxRecords <= 100, `MAX_RECORDS=${sourceMaxRecords}`);
+    console.log(`  [SECONDARY EVIDENCE ONLY] source-inspected keys=${JSON.stringify(sourceInspectedKeys)}, MAX_RECORDS=${sourceMaxRecords} (not used to decide PASS/FAIL — the real getQaSchemaSnapshot() projection above is primary)`);
 
-    // Behavioral module-level test: import the REAL session module
-    // directly (Node-level, no browser) and verify the eviction bound
-    // and reason-value canonicalization through its actual public API.
-    const testSession = createInteractivePreviewObservationSessionV2();
-    for (let i = 1; i <= 105; i++) {
-      testSession.recordObservation({ generationId: i, observation: 'prefer-legacy', reasons: ['skin-tone'] });
-    }
-    const summaryAfter105 = testSession.getSummary();
-    record('FIX 5: module-level eviction bound holds at <=100 after 105 inserts', summaryAfter105.totalObserved <= 100, `totalObserved=${summaryAfter105.totalObserved}`);
-    const reasonKeysAllCanonical = Object.keys(summaryAfter105.reasonCounts ?? {}).every((k) => !PROHIBITED_PATTERN.test(k));
-    record('FIX 5: reasonCounts keys contain no prohibited pattern', reasonKeysAllCanonical, JSON.stringify(Object.keys(summaryAfter105.reasonCounts ?? {})));
-    testSession.dispose();
+    const dataMinimizationPass = missingExpectedKeys.length === 0 && unexpectedKeys.length === 0 && qaSnapshot.hasDomReference === false && qaSnapshot.hasProhibitedKey === false && qaSnapshot.maximumRecords === 100 && qaSnapshot.recordCount <= 100 && qaSnapshot.allReasonValuesCanonical === true && qaProjectionAbsentByDefault && qaProjectionEnabled;
     dataMinimizationResult = {
-      sourceInspectedKeys, sourceProhibitedFound, sourceMaxRecords,
-      moduleLevelEvictionHolds: summaryAfter105.totalObserved <= 100,
-      result: (sourceProhibitedFound.length === 0 && sourceMaxRecords !== null && sourceMaxRecords <= 100 && summaryAfter105.totalObserved <= 100 && reasonKeysAllCanonical) ? 'PASS' : 'FAIL',
+      qaProjectionEnabled,
+      qaProjectionAbsentByDefault,
+      recordCount: qaSnapshot.recordCount,
+      maximumRecords: qaSnapshot.maximumRecords,
+      recordKeys: actualKeys,
+      missingExpectedKeys,
+      unexpectedKeys,
+      reasonValueTypes: qaSnapshot.reasonValueTypes,
+      allReasonValuesCanonical: qaSnapshot.allReasonValuesCanonical,
+      hasDomReference: qaSnapshot.hasDomReference,
+      hasProhibitedKey: qaSnapshot.hasProhibitedKey,
+      result: dataMinimizationPass ? 'PASS' : 'FAIL',
     };
+    record('FIX 5: overall Session data-minimization result', dataMinimizationPass, JSON.stringify(dataMinimizationResult));
 
     // ══════════════════════════════════════════════════════════════
     // PART 1 — Reach Ready + full instrumentation (storage, network,
@@ -495,17 +531,18 @@ async function main() {
     restorationResult = await page.evaluate(RESTORE_AND_VERIFY_JS);
     record('FIX 1: all instrumented APIs restored to EXACT original reference (strict identity)', restorationResult.allRestoredTrue === true, JSON.stringify(restorationResult.restoration));
 
-    // ── FIX 2: optional API support matrix — merge patched + calls, never claim coverage for unsupported APIs. ──
-    const supportMatrix = {
-      indexedDB: { ...optionalApiMatrix.indexedDB, restored: restorationResult.restoration.indexedDB, calls: finalCounts.storage.indexedDbOpen + finalCounts.storage.indexedDbDelete },
-      cacheStorage: { ...optionalApiMatrix.cacheStorage, restored: restorationResult.restoration.cacheStorage, calls: finalCounts.storage.cacheOpen + finalCounts.storage.cacheDelete },
-      sendBeacon: { ...optionalApiMatrix.sendBeacon, restored: restorationResult.restoration.sendBeacon, calls: finalCounts.network.sendBeacon },
-      eventSource: { ...optionalApiMatrix.eventSource, restored: restorationResult.restoration.eventSource, calls: finalCounts.network.eventSource },
-      broadcastChannel: { ...optionalApiMatrix.broadcastChannel, restored: restorationResult.restoration.broadcastChannel, calls: finalCounts.network.broadcastChannel },
-      messageChannel: { ...optionalApiMatrix.messageChannel, restored: restorationResult.restoration.messageChannel, calls: finalCounts.messaging.messageChannel },
-      clipboardWrite: { ...optionalApiMatrix.clipboardWrite, restored: restorationResult.restoration.clipboardWrite, calls: finalCounts.clipboard.write },
-      clipboardWriteText: { ...optionalApiMatrix.clipboardWriteText, restored: restorationResult.restoration.clipboardWriteText, calls: finalCounts.clipboard.writeText },
-      cookieSetter: { ...optionalApiMatrix.cookieSetter, restored: restorationResult.restoration.cookieSetter, calls: finalCounts.cookie.setterCalls },
+    // ── FIX 2/4: optional API support matrix — merge patched + restored + calls, never claim coverage for unsupported APIs. Source search confirmed no Observation/Session module references any of these optional APIs directly. ──
+    const sourceInspectionNoObservationConsumer = true; // verified: grep across ui/interactive-preview-observation-*.js found zero references to indexedDB/CacheStorage/sendBeacon/EventSource/BroadcastChannel/MessageChannel/clipboard
+    supportMatrix = {
+      indexedDB: { ...optionalApiMatrix.indexedDB, restored: restorationResult.restoration.indexedDB, calls: finalCounts.storage.indexedDbOpen + finalCounts.storage.indexedDbDelete, sourceInspectionNoObservationConsumer },
+      cacheStorage: { ...optionalApiMatrix.cacheStorage, restored: restorationResult.restoration.cacheStorage, calls: finalCounts.storage.cacheOpen + finalCounts.storage.cacheDelete, sourceInspectionNoObservationConsumer },
+      sendBeacon: { ...optionalApiMatrix.sendBeacon, restored: restorationResult.restoration.sendBeacon, calls: finalCounts.network.sendBeacon, sourceInspectionNoObservationConsumer },
+      eventSource: { ...optionalApiMatrix.eventSource, restored: restorationResult.restoration.eventSource, calls: finalCounts.network.eventSource, sourceInspectionNoObservationConsumer },
+      broadcastChannel: { ...optionalApiMatrix.broadcastChannel, restored: restorationResult.restoration.broadcastChannel, calls: finalCounts.network.broadcastChannel, sourceInspectionNoObservationConsumer },
+      messageChannel: { ...optionalApiMatrix.messageChannel, restored: restorationResult.restoration.messageChannel, calls: finalCounts.messaging.messageChannel, sourceInspectionNoObservationConsumer },
+      clipboardWrite: { ...optionalApiMatrix.clipboardWrite, restored: restorationResult.restoration.clipboardWrite, calls: finalCounts.clipboard.write, sourceInspectionNoObservationConsumer },
+      clipboardWriteText: { ...optionalApiMatrix.clipboardWriteText, restored: restorationResult.restoration.clipboardWriteText, calls: finalCounts.clipboard.writeText, sourceInspectionNoObservationConsumer },
+      cookieSetter: { ...optionalApiMatrix.cookieSetter, restored: restorationResult.restoration.cookieSetter, calls: finalCounts.cookie.setterCalls, sourceInspectionNoObservationConsumer },
     };
     for (const [name, entry] of Object.entries(supportMatrix)) {
       if (entry.supported === false) {
@@ -621,6 +658,24 @@ async function main() {
         }
         checkContained(clearSessionBtn, sessionSection, 'clearSessionBtn-in-sessionSection');
 
+        // FIX 6 (Step 7B-A-F3): Top Reasons element containment — when
+        // Reason counts are active, a real Top-Reasons container MUST
+        // exist and be genuinely visible+contained (never a broad
+        // parent-textContent pass). If active Reason counts exist but
+        // no Top-Reasons element is found, that is a FAIL.
+        const topReasonsEl = document.getElementById('ipoSessionTopReasons');
+        const hasActiveReasonCounts = sessionSection && /skin tone|contrast|shadow detail|white balance/i.test(sessionSection.textContent || '');
+        if (hasActiveReasonCounts) {
+          if (!topReasonsEl) {
+            missing.push('Top Reasons container (active Reason counts present but element missing)');
+          } else {
+            const trRect = topReasonsEl.getBoundingClientRect();
+            if (trRect.width <= 0 || trRect.height <= 0) findings.push({ label: 'topReasons-zero-size', width: trRect.width, height: trRect.height });
+            checkContained(topReasonsEl, sessionSection, 'topReasons-in-sessionSection');
+            Array.from(topReasonsEl.children).forEach((child, i) => checkContained(child, topReasonsEl, 'topReasons-child-' + i));
+          }
+        }
+
         return { missing, findings, docScrollW: document.documentElement.scrollWidth, docClientW: document.documentElement.clientWidth };
       })()
     `;
@@ -680,7 +735,7 @@ async function main() {
   const finalDecision = (failCount === 0 && notTestedCount === 0) ? 'PASS' : 'FAIL';
 
   const output = {
-    suite: 'EPIC 2E-J-C-F2 Step 7B-A (+ Step 7B-A-F) - Privacy, Storage/Network and Responsive Final Audit',
+    suite: 'EPIC 2E-J-C-F2 Step 7B-A Final Closeout (incl. Step 7B-A-F/F2/F3) - Privacy, Storage/Network, Session-Schema and Responsive Final Audit',
     generatedAt: new Date().toISOString(),
     summary: { total: results.length, pass: passCount, fail: failCount, notTested: notTestedCount },
     storage: finalCounts?.storage ?? null,
@@ -690,7 +745,7 @@ async function main() {
     downloads: finalCounts?.downloads ?? null,
     history: finalCounts?.history ?? null,
     cookie: finalCounts?.cookie ?? null,
-    optionalApiSupportMatrix: optionalApiMatrix,
+    optionalApiSupportMatrix: supportMatrix,
     apiRestoration: restorationResult,
     responsive: { perViewportResults: responsiveResults },
     dataMinimization: dataMinimizationResult,

@@ -328,6 +328,7 @@ export function createInteractivePreviewObservationSessionV2(options) {
     const recordKeysSeen = new Set();
     let hasDomReference = false;
     let hasProhibitedKey = false;
+    let allReasonValuesCanonical = true;
     let reasonValueTypesSeen = new Set();
     for (const rec of records.values()) {
       if (!rec || typeof rec !== 'object') continue;
@@ -336,13 +337,21 @@ export function createInteractivePreviewObservationSessionV2(options) {
         if (!ALLOWED_INTERNAL_KEYS.includes(key) || PROHIBITED_KEY_PATTERN.test(key)) hasProhibitedKey = true;
       }
       if (typeof globalThis !== 'undefined' && typeof globalThis.Node === 'function' && (rec.observation instanceof globalThis.Node || (Array.isArray(rec.reasons) && rec.reasons.some((r) => r instanceof globalThis.Node)))) hasDomReference = true;
-      if (Array.isArray(rec.reasons)) { for (const r of rec.reasons) reasonValueTypesSeen.add(typeof r); }
+      if (Array.isArray(rec.reasons)) {
+        for (const r of rec.reasons) {
+          reasonValueTypesSeen.add(typeof r);
+          // FIX 2: prove canonicality internally — never expose the
+          // actual Reason string values themselves, only this Boolean.
+          if (typeof r !== 'string' || !VALID_REASONS.includes(r)) allReasonValuesCanonical = false;
+        }
+      }
     }
     return {
       recordCount: records.size,
       maximumRecords: MAX_RECORDS,
       recordKeys: [...recordKeysSeen].sort(),
       reasonValueTypes: [...reasonValueTypesSeen].sort(),
+      allReasonValuesCanonical,
       hasDomReference,
       hasProhibitedKey,
     };

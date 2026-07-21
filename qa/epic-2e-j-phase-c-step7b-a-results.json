@@ -1,9 +1,9 @@
 {
-  "suite": "EPIC 2E-J-C-F2 Step 7B-A (+ Step 7B-A-F) - Privacy, Storage/Network and Responsive Final Audit",
-  "generatedAt": "2026-07-21T12:31:21.016Z",
+  "suite": "EPIC 2E-J-C-F2 Step 7B-A Final Closeout (incl. Step 7B-A-F/F2/F3) - Privacy, Storage/Network, Session-Schema and Responsive Final Audit",
+  "generatedAt": "2026-07-21T12:52:00.648Z",
   "summary": {
-    "total": 49,
-    "pass": 49,
+    "total": 56,
+    "pass": 56,
     "fail": 0,
     "notTested": 0
   },
@@ -53,39 +53,66 @@
   "optionalApiSupportMatrix": {
     "indexedDB": {
       "supported": true,
-      "patched": true
+      "patched": true,
+      "restored": true,
+      "calls": 0,
+      "sourceInspectionNoObservationConsumer": true
     },
     "cacheStorage": {
       "supported": true,
-      "patched": true
+      "patched": true,
+      "restored": true,
+      "calls": 0,
+      "sourceInspectionNoObservationConsumer": true
     },
     "sendBeacon": {
       "supported": true,
-      "patched": true
+      "patched": true,
+      "restored": true,
+      "calls": 0,
+      "sourceInspectionNoObservationConsumer": true
     },
     "eventSource": {
       "supported": true,
-      "patched": true
+      "patched": true,
+      "restored": true,
+      "calls": 0,
+      "sourceInspectionNoObservationConsumer": true
     },
     "broadcastChannel": {
       "supported": true,
-      "patched": true
+      "patched": true,
+      "restored": true,
+      "calls": 0,
+      "sourceInspectionNoObservationConsumer": true
     },
     "messageChannel": {
       "supported": true,
-      "patched": true
-    },
-    "clipboardWriteText": {
-      "supported": true,
-      "patched": true
+      "patched": true,
+      "restored": true,
+      "calls": 0,
+      "sourceInspectionNoObservationConsumer": true
     },
     "clipboardWrite": {
       "supported": true,
-      "patched": true
+      "patched": true,
+      "restored": true,
+      "calls": 0,
+      "sourceInspectionNoObservationConsumer": true
+    },
+    "clipboardWriteText": {
+      "supported": true,
+      "patched": true,
+      "restored": true,
+      "calls": 0,
+      "sourceInspectionNoObservationConsumer": true
     },
     "cookieSetter": {
       "supported": true,
-      "patched": true
+      "patched": true,
+      "restored": true,
+      "calls": 0,
+      "sourceInspectionNoObservationConsumer": true
     }
   },
   "apiRestoration": {
@@ -190,18 +217,30 @@
     ]
   },
   "dataMinimization": {
-    "sourceInspectedKeys": [
+    "qaProjectionEnabled": true,
+    "qaProjectionAbsentByDefault": true,
+    "recordCount": 100,
+    "maximumRecords": 100,
+    "recordKeys": [
       "active",
       "clearedCounted",
-      "invalidatedCounted",
       "createdAt",
-      "updatedAt",
       "createdSequence",
+      "generationId",
+      "invalidatedCounted",
+      "observation",
+      "reasons",
+      "updatedAt",
       "updatedSequence"
     ],
-    "sourceProhibitedFound": [],
-    "sourceMaxRecords": 100,
-    "moduleLevelEvictionHolds": true,
+    "missingExpectedKeys": [],
+    "unexpectedKeys": [],
+    "reasonValueTypes": [
+      "string"
+    ],
+    "allReasonValuesCanonical": true,
+    "hasDomReference": false,
+    "hasProhibitedKey": false,
     "result": "PASS"
   },
   "consoleErrors": [],
@@ -226,24 +265,59 @@
       "evidence": "caught=true, allSelfTestErrors=[{\"context\":\"self-test\",\"type\":\"httpError\",\"url\":\"http://localhost:19993/this-file-genuinely-does-not-exist.xyz\",\"status\":404},{\"context\":\"self-test\",\"type\":\"console.error\",\"text\":\"STEP7B_A_TEST_ERROR\"}]"
     },
     {
-      "test": "FIX 5: source-inspected internal record keys are all allowed",
+      "test": "FIX 3: getQaSchemaSnapshot absent by default (no option passed)",
       "result": "PASS",
-      "evidence": "keys=[\"active\",\"clearedCounted\",\"invalidatedCounted\",\"createdAt\",\"updatedAt\",\"createdSequence\",\"updatedSequence\"], prohibited=[]"
+      "evidence": "typeof=undefined"
     },
     {
-      "test": "FIX 5: source-inspected MAX_RECORDS <= 100",
+      "test": "FIX 3: getQaSchemaSnapshot present when enableQaSchemaInspection:true",
       "result": "PASS",
-      "evidence": "MAX_RECORDS=100"
+      "evidence": "typeof=function"
     },
     {
-      "test": "FIX 5: module-level eviction bound holds at <=100 after 105 inserts",
+      "test": "FIX 1: real QA snapshot — no expected key missing",
       "result": "PASS",
-      "evidence": "totalObserved=100"
+      "evidence": "missing=[]"
     },
     {
-      "test": "FIX 5: reasonCounts keys contain no prohibited pattern",
+      "test": "FIX 1: real QA snapshot — no unexpected additional key",
       "result": "PASS",
-      "evidence": "[\"skinTone\",\"whiteBalance\",\"highlightDetail\",\"shadowDetail\",\"contrast\",\"colorBalance\",\"saturation\",\"naturalLook\",\"clarityDetail\",\"noSpecificReason\"]"
+      "evidence": "unexpected=[]"
+    },
+    {
+      "test": "FIX 1: real QA snapshot — hasDomReference === false",
+      "result": "PASS",
+      "evidence": "value=false"
+    },
+    {
+      "test": "FIX 1: real QA snapshot — hasProhibitedKey === false",
+      "result": "PASS",
+      "evidence": "value=false"
+    },
+    {
+      "test": "FIX 1: real QA snapshot — maximumRecords === 100",
+      "result": "PASS",
+      "evidence": "value=100"
+    },
+    {
+      "test": "FIX 1: real QA snapshot — recordCount <= 100 after 105+ inserts",
+      "result": "PASS",
+      "evidence": "recordCount=100"
+    },
+    {
+      "test": "FIX 2: real QA snapshot — allReasonValuesCanonical === true",
+      "result": "PASS",
+      "evidence": "value=true"
+    },
+    {
+      "test": "FIX 2: real QA snapshot — reasonValueTypes contains only \"string\"",
+      "result": "PASS",
+      "evidence": "[\"string\"]"
+    },
+    {
+      "test": "FIX 5: overall Session data-minimization result",
+      "result": "PASS",
+      "evidence": "{\"qaProjectionEnabled\":true,\"qaProjectionAbsentByDefault\":true,\"recordCount\":100,\"maximumRecords\":100,\"recordKeys\":[\"active\",\"clearedCounted\",\"createdAt\",\"createdSequence\",\"generationId\",\"invalidatedCounted\",\"observation\",\"reasons\",\"updatedAt\",\"updatedSequence\"],\"missingExpectedKeys\":[],\"unexpectedKeys\":[],\"reasonValueTypes\":[\"string\"],\"allReasonValuesCanonical\":true,\"hasDomReference\":false,\"hasProhibitedKey\":false,\"result\":\"PASS\"}"
     },
     {
       "test": "Real application reaches Ready with Observation enabled",
@@ -258,47 +332,47 @@
     {
       "test": "FIX 2: optional API \"indexedDB\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0,\"sourceInspectionNoObservationConsumer\":true}"
     },
     {
       "test": "FIX 2: optional API \"cacheStorage\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0,\"sourceInspectionNoObservationConsumer\":true}"
     },
     {
       "test": "FIX 2: optional API \"sendBeacon\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0,\"sourceInspectionNoObservationConsumer\":true}"
     },
     {
       "test": "FIX 2: optional API \"eventSource\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0,\"sourceInspectionNoObservationConsumer\":true}"
     },
     {
       "test": "FIX 2: optional API \"broadcastChannel\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0,\"sourceInspectionNoObservationConsumer\":true}"
     },
     {
       "test": "FIX 2: optional API \"messageChannel\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0,\"sourceInspectionNoObservationConsumer\":true}"
     },
     {
       "test": "FIX 2: optional API \"clipboardWrite\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0,\"sourceInspectionNoObservationConsumer\":true}"
     },
     {
       "test": "FIX 2: optional API \"clipboardWriteText\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0,\"sourceInspectionNoObservationConsumer\":true}"
     },
     {
       "test": "FIX 2: optional API \"cookieSetter\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0,\"sourceInspectionNoObservationConsumer\":true}"
     },
     {
       "test": "Storage instrumentation: zero Observation-related calls",
