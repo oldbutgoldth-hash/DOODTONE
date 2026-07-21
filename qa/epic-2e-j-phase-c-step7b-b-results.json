@@ -1,0 +1,181 @@
+{
+  "suite": "EPIC 2E-J-C-F2 Step 7B-B - Keyboard, Accessibility, Security and Final Phase C Closeout",
+  "generatedAt": "2026-07-21T16:05:37.943Z",
+  "summary": {
+    "total": 29,
+    "pass": 28,
+    "fail": 0,
+    "notTested": 1
+  },
+  "contrastResults": [
+    {
+      "label": "Status message",
+      "ratio": 7.43
+    },
+    {
+      "label": "Safety note",
+      "ratio": 7.43
+    },
+    {
+      "label": "Clear Observation button",
+      "ratio": 6.95
+    },
+    {
+      "label": "Clear Reasons button",
+      "ratio": 6.95
+    },
+    {
+      "label": "Clear Session button",
+      "ratio": 6.95
+    }
+  ],
+  "consoleErrors": [],
+  "results": [
+    {
+      "test": "Real application reaches Ready with Observation enabled",
+      "result": "PASS",
+      "evidence": "completed=true, observationEnabled=true"
+    },
+    {
+      "test": "Tab reaches Observation radio group naturally (real Tab presses)",
+      "result": "PASS",
+      "evidence": "focusedId=ipoOption_prefer-legacy"
+    },
+    {
+      "test": "ArrowDown moves between native radios",
+      "result": "PASS",
+      "evidence": "{\"id\":\"ipoOption_prefer-v2\",\"checked\":true}"
+    },
+    {
+      "test": "ArrowRight moves between native radios",
+      "result": "PASS",
+      "evidence": "{\"id\":\"ipoOption_no-visible-difference\",\"checked\":true}"
+    },
+    {
+      "test": "Exactly one radio remains checked after Arrow navigation",
+      "result": "PASS",
+      "evidence": "oneChecked=true"
+    },
+    {
+      "test": "Tab exits radio group and reaches Reason checkboxes in DOM order",
+      "result": "PASS",
+      "evidence": "focusedId=ipoReason_skin-tone"
+    },
+    {
+      "test": "Space toggles a Reason checkbox",
+      "result": "PASS",
+      "evidence": "id=ipoReason_skin-tone, checked=true"
+    },
+    {
+      "test": "Tab reaches Clear Reasons button",
+      "result": "PASS",
+      "evidence": "reached=true, sequence=[\"ipoReason_white-balance\",\"ipoReason_highlight-detail\",\"ipoReason_shadow-detail\",\"ipoReason_contrast\",\"ipoReason_color-balance\",\"ipoReason_saturation\",\"ipoReason_natural-look\",\"ipoReason_clarity-detail\",\"ipoReason_no-specific-reason\",\"ipoClearReasonsButton\",\"ipoClearSessionButton\"]"
+    },
+    {
+      "test": "Tab reaches Clear Observation button",
+      "result": "PASS",
+      "evidence": "reached=true, sequence=[\"ipoReason_white-balance\",\"ipoReason_highlight-detail\",\"ipoReason_shadow-detail\",\"ipoReason_contrast\",\"ipoReason_color-balance\",\"ipoReason_saturation\",\"ipoReason_natural-look\",\"ipoReason_clarity-detail\",\"ipoReason_no-specific-reason\",\"ipoClearReasonsButton\",\"ipoClearSessionButton\"]"
+    },
+    {
+      "test": "Tab reaches Clear Session button",
+      "result": "PASS",
+      "evidence": "reached=true, sequence=[\"ipoReason_white-balance\",\"ipoReason_highlight-detail\",\"ipoReason_shadow-detail\",\"ipoReason_contrast\",\"ipoReason_color-balance\",\"ipoReason_saturation\",\"ipoReason_natural-look\",\"ipoReason_clarity-detail\",\"ipoReason_no-specific-reason\",\"ipoClearReasonsButton\",\"ipoClearSessionButton\"]"
+    },
+    {
+      "test": "Shift+Tab reverses navigation",
+      "result": "PASS",
+      "evidence": "before=ipoClearSessionButton, after=ipoClearReasonsButton"
+    },
+    {
+      "test": "No keyboard trap after Clear Session (focus keeps advancing)",
+      "result": "PASS",
+      "evidence": "sequence=[\"presetName\",\"BUTTON[0]\",\"BUTTON[1]\",\"BUTTON[2]\",\"BUTTON[3]\",\"BUTTON[4]\",\"BUTTON[5]\",\"BUTTON[6]\"]"
+    },
+    {
+      "test": "Disabled sixth Reason cannot be toggled at five-Reason limit",
+      "result": "PASS",
+      "evidence": "disabled=true"
+    },
+    {
+      "test": "Selected Reasons remain removable at the five-Reason limit",
+      "result": "PASS",
+      "evidence": "removable=true"
+    },
+    {
+      "test": "All interactive controls show a visible, non-zero focus indicator",
+      "result": "PASS",
+      "evidence": "all pass"
+    },
+    {
+      "test": "Accessibility structure (fieldset/legend/native-inputs/labels/unique-IDs/accessible-names)",
+      "result": "PASS",
+      "evidence": "radios=4, checkboxes=10, liveRegions=10"
+    },
+    {
+      "test": "Main Observation status uses polite live region",
+      "result": "PASS",
+      "evidence": "statusIsPolite=true"
+    },
+    {
+      "test": "Contrast: Status message meets 4.5:1 (WCAG AA normal text)",
+      "result": "PASS",
+      "evidence": "ratio=7.43:1, fg=rgb(185, 165, 130), bg=rgb(28, 23, 18)"
+    },
+    {
+      "test": "Contrast: Safety note meets 4.5:1 (WCAG AA normal text)",
+      "result": "PASS",
+      "evidence": "ratio=7.43:1, fg=rgb(185, 165, 130), bg=rgb(28, 23, 18)"
+    },
+    {
+      "test": "Contrast: Clear Observation button meets 4.5:1 (WCAG AA normal text)",
+      "result": "PASS",
+      "evidence": "ratio=6.95:1, fg=rgb(185, 165, 130), bg=rgb(36, 29, 22)"
+    },
+    {
+      "test": "Contrast: Clear Reasons button meets 4.5:1 (WCAG AA normal text)",
+      "result": "PASS",
+      "evidence": "ratio=6.95:1, fg=rgb(185, 165, 130), bg=rgb(36, 29, 22)"
+    },
+    {
+      "test": "Contrast: Clear Session button meets 4.5:1 (WCAG AA normal text)",
+      "result": "PASS",
+      "evidence": "ratio=6.95:1, fg=rgb(185, 165, 130), bg=rgb(36, 29, 22)"
+    },
+    {
+      "test": "All touch targets approximately >=44px (radio/reason labels, Clear buttons)",
+      "result": "PASS",
+      "evidence": "all 17 targets pass"
+    },
+    {
+      "test": "Physical touch hardware",
+      "result": "NOT_TESTED",
+      "evidence": "genuine physical touch hardware was not used"
+    },
+    {
+      "test": "Observation renderer: no uncaught exception on any malformed/hostile state",
+      "result": "PASS",
+      "evidence": "11 cases tested, zero crashes"
+    },
+    {
+      "test": "Session summary renderer: no uncaught exception on any malformed/hostile summary",
+      "result": "PASS",
+      "evidence": "6 cases tested, zero crashes"
+    },
+    {
+      "test": "HTML/script injection: no script/event-handler execution or raw injection in renderer output",
+      "result": "PASS",
+      "evidence": "5 payloads tested, all safely handled"
+    },
+    {
+      "test": "Security source audit: zero non-comment dangerous-API consumers in Observation/Session modules",
+      "result": "PASS",
+      "evidence": "zero matches outside comments"
+    },
+    {
+      "test": "Production isolation: zero Observation/Session identifiers found in core/",
+      "result": "PASS",
+      "evidence": "zero matches in core/"
+    }
+  ],
+  "decision": "CONDITIONAL_PASS"
+}

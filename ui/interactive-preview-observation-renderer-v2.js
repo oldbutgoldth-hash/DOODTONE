@@ -86,8 +86,30 @@ function _safeText(value, maxLen = 240) {
   return t.length > maxLen ? `${t.slice(0, maxLen)}…` : t;
 }
 
-function _safeArray(value) {
-  return Array.isArray(value) ? value : [];
+// FIX (Step 7B-B, genuine defect found and proven via hostile-input
+// testing): previously this only checked `Array.isArray()` and
+// returned the caller's array UNCHANGED — a hostile array with a
+// throwing index getter would still crash later when `.filter()`/
+// `.includes()` iterated it (both access every index natively). This
+// now performs a genuine safe, bounded projection: verifies
+// `Array.isArray` itself defensively, safe-reads `.length` once,
+// clamps to a reasonable bound, and safe-reads each numeric index with
+// a per-index try/catch — never `for...of`/spread on the caller's
+// array (which would invoke a possibly-hostile `Symbol.iterator`).
+// Returns a brand-new plain array; the input is never mutated.
+function _safeArray(value, maxLen = 32) {
+  let isArr;
+  try { isArr = Array.isArray(value); } catch { return []; }
+  if (!isArr) return [];
+  let length;
+  try { length = value.length; } catch { return []; }
+  if (!Number.isFinite(length) || length <= 0) return [];
+  const bound = Math.min(Math.floor(length), maxLen);
+  const out = [];
+  for (let i = 0; i < bound; i++) {
+    try { out.push(value[i]); } catch { /* hostile index getter skipped, never crashes */ }
+  }
+  return out;
 }
 
 function el(tag, { style, cls, text, attrs } = {}) {
@@ -155,7 +177,7 @@ export function ensureInteractivePreviewObservationLayout(container) {
   fieldset.appendChild(optionsWrap);
 
   const clearButton = el('button', {
-    style: 'align-self:flex-start;padding:6px 14px;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
+    style: 'align-self:flex-start;padding:6px 14px;min-height:44px;display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
     text: 'Clear observation',
     attrs: { type: 'button' },
   });
@@ -195,7 +217,7 @@ export function ensureInteractivePreviewObservationLayout(container) {
   reasonFieldset.appendChild(reasonLimitEl);
 
   const clearReasonsButton = el('button', {
-    style: 'align-self:flex-start;padding:6px 14px;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
+    style: 'align-self:flex-start;padding:6px 14px;min-height:44px;display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
     text: 'Clear reasons',
     attrs: { type: 'button' },
   });
@@ -420,7 +442,7 @@ export function ensureInteractivePreviewObservationSessionLayout(container) {
   root.appendChild(topReasonsEl);
 
   const clearSessionButton = el('button', {
-    style: 'align-self:flex-start;padding:6px 14px;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
+    style: 'align-self:flex-start;padding:6px 14px;min-height:44px;display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
     text: 'Clear session summary',
     attrs: { type: 'button' },
   });
