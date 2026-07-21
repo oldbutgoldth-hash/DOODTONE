@@ -1,0 +1,130 @@
+{
+  "suite": "EPIC 2E-J-C-F2 Step 7A — Full Application Ready Reachability",
+  "generatedAt": "2026-07-21T06:24:40.652Z",
+  "summary": {
+    "total": 11,
+    "pass": 6,
+    "fail": 1,
+    "notTested": 4
+  },
+  "firstFixtureReachingReady": null,
+  "fixtureRecords": [
+    {
+      "fixture": "neutral-balanced.png",
+      "analysisCompleted": true,
+      "reviewItemsClicked": 10,
+      "legacyPreviewState": "unknown",
+      "controlledV2PreviewState": "unavailable",
+      "interactiveState": "partial",
+      "observationState": "Observation is unavailable because only one preview rendered.",
+      "observationEnabled": false,
+      "blockers": [
+        "Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced."
+      ]
+    },
+    {
+      "fixture": "warm-portrait-synthetic.png",
+      "analysisCompleted": true,
+      "reviewItemsClicked": 10,
+      "legacyPreviewState": "unknown",
+      "controlledV2PreviewState": "unavailable",
+      "interactiveState": "partial",
+      "observationState": "Observation is unavailable because only one preview rendered.",
+      "observationEnabled": false,
+      "blockers": [
+        "Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced."
+      ]
+    },
+    {
+      "fixture": "cool-shadow-synthetic.png",
+      "analysisCompleted": true,
+      "reviewItemsClicked": 10,
+      "legacyPreviewState": "unknown",
+      "controlledV2PreviewState": "unavailable",
+      "interactiveState": "partial",
+      "observationState": "Observation is unavailable because only one preview rendered.",
+      "observationEnabled": false,
+      "blockers": [
+        "Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced."
+      ]
+    },
+    {
+      "fixture": "highlight-shadow-range.png",
+      "analysisCompleted": true,
+      "reviewItemsClicked": 10,
+      "legacyPreviewState": "unknown",
+      "controlledV2PreviewState": "unavailable",
+      "interactiveState": "partial",
+      "observationState": "Observation is unavailable because only one preview rendered.",
+      "observationEnabled": false,
+      "blockers": [
+        "Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced."
+      ]
+    }
+  ],
+  "consoleErrors": [],
+  "screenshotsGenerated": [
+    "actual-partial-state-neutral-balanced.png",
+    "actual-partial-state-warm-portrait-synthetic.png",
+    "actual-partial-state-cool-shadow-synthetic.png",
+    "actual-partial-state-highlight-shadow-range.png"
+  ],
+  "results": [
+    {
+      "test": "[neutral-balanced.png] Per-fixture pipeline record",
+      "result": "PASS",
+      "evidence": "{\"fixture\":\"neutral-balanced.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"unknown\",\"controlledV2PreviewState\":\"unavailable\",\"interactiveState\":\"partial\",\"observationState\":\"Observation is unavailable because only one preview rendered.\",\"observationEnabled\":false,\"blockers\":[\"Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced.\"]}"
+    },
+    {
+      "test": "[warm-portrait-synthetic.png] Per-fixture pipeline record",
+      "result": "PASS",
+      "evidence": "{\"fixture\":\"warm-portrait-synthetic.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"unknown\",\"controlledV2PreviewState\":\"unavailable\",\"interactiveState\":\"partial\",\"observationState\":\"Observation is unavailable because only one preview rendered.\",\"observationEnabled\":false,\"blockers\":[\"Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced.\"]}"
+    },
+    {
+      "test": "[cool-shadow-synthetic.png] Per-fixture pipeline record",
+      "result": "PASS",
+      "evidence": "{\"fixture\":\"cool-shadow-synthetic.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"unknown\",\"controlledV2PreviewState\":\"unavailable\",\"interactiveState\":\"partial\",\"observationState\":\"Observation is unavailable because only one preview rendered.\",\"observationEnabled\":false,\"blockers\":[\"Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced.\"]}"
+    },
+    {
+      "test": "[highlight-shadow-range.png] Per-fixture pipeline record",
+      "result": "PASS",
+      "evidence": "{\"fixture\":\"highlight-shadow-range.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"unknown\",\"controlledV2PreviewState\":\"unavailable\",\"interactiveState\":\"partial\",\"observationState\":\"Observation is unavailable because only one preview rendered.\",\"observationEnabled\":false,\"blockers\":[\"Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced.\"]}"
+    },
+    {
+      "test": "Full Application Acceptance: at least one fixture reaches Ready",
+      "result": "FAIL",
+      "evidence": "NO fixture reached Ready. Exact blocker (from every fixture): \"Confidence <value> vs. required 0.72\" (the \"confidence-sufficient\" Sandbox gate) — see per-fixture records above. This is a genuine, data-independent evidence gate (the underlying confidence formula uses fixed constants such as 0.6 for \"legacy input available\", not per-pixel image analysis), not a fixture-selection problem."
+    },
+    {
+      "test": "Actual Observation UI workflow",
+      "result": "NOT_TESTED",
+      "evidence": "Observation controls never became enabled through the real application in this run — cannot test real UI interaction on disabled controls without fabricating state, which this test explicitly must not do."
+    },
+    {
+      "test": "Actual Session Clear button test",
+      "result": "NOT_TESTED",
+      "evidence": "Same reason — Session Summary never displayed an active Observation to clear."
+    },
+    {
+      "test": "Generation handoff test",
+      "result": "NOT_TESTED",
+      "evidence": "Same reason — no Observation was ever selected to invalidate."
+    },
+    {
+      "test": "Identity Preview UI honesty",
+      "result": "NOT_TESTED",
+      "evidence": "No fixture reached a state where Controlled V2 rendered (Identity or otherwise) through the real application in this run."
+    },
+    {
+      "test": "Console errors (excluding confirmed font-host failures)",
+      "result": "PASS",
+      "evidence": "(none)"
+    },
+    {
+      "test": "Production lock: XMP export unchanged (byte length)",
+      "result": "PASS",
+      "evidence": "length=2962"
+    }
+  ],
+  "decision": "FAIL"
+}
