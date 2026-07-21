@@ -1,9 +1,9 @@
 {
   "suite": "EPIC 2E-J-C-F2 Step 7B-A (+ Step 7B-A-F) - Privacy, Storage/Network and Responsive Final Audit",
-  "generatedAt": "2026-07-21T11:33:35.385Z",
+  "generatedAt": "2026-07-21T12:31:21.016Z",
   "summary": {
-    "total": 47,
-    "pass": 47,
+    "total": 49,
+    "pass": 49,
     "fail": 0,
     "notTested": 0
   },
@@ -106,6 +106,11 @@
       "createObjectURL": true,
       "anchorClick": true,
       "history": true,
+      "cookieDescriptorShape": {
+        "hadOwnPropertyBefore": false,
+        "hasOwnPropertyAfter": false,
+        "restoredCorrectly": true
+      },
       "cookieSetter": true
     },
     "allRestoredTrue": true
@@ -211,6 +216,16 @@
   ],
   "results": [
     {
+      "test": "FIX 4: self-test — injected console.error is captured by attachPageAudit/finalize",
+      "result": "PASS",
+      "evidence": "caught=true"
+    },
+    {
+      "test": "FIX 4: self-test — genuine local 404 is captured (never excluded like a font host)",
+      "result": "PASS",
+      "evidence": "caught=true, allSelfTestErrors=[{\"context\":\"self-test\",\"type\":\"httpError\",\"url\":\"http://localhost:19993/this-file-genuinely-does-not-exist.xyz\",\"status\":404},{\"context\":\"self-test\",\"type\":\"console.error\",\"text\":\"STEP7B_A_TEST_ERROR\"}]"
+    },
+    {
       "test": "FIX 5: source-inspected internal record keys are all allowed",
       "result": "PASS",
       "evidence": "keys=[\"active\",\"clearedCounted\",\"invalidatedCounted\",\"createdAt\",\"updatedAt\",\"createdSequence\",\"updatedSequence\"], prohibited=[]"
@@ -238,52 +253,52 @@
     {
       "test": "FIX 1: all instrumented APIs restored to EXACT original reference (strict identity)",
       "result": "PASS",
-      "evidence": "{\"localStorageMethods\":true,\"indexedDB\":true,\"cacheStorage\":true,\"fetch\":true,\"xhr\":true,\"sendBeacon\":true,\"webSocket\":true,\"eventSource\":true,\"broadcastChannel\":true,\"postMessage\":true,\"messageChannel\":true,\"clipboardWriteText\":true,\"clipboardWrite\":true,\"createObjectURL\":true,\"anchorClick\":true,\"history\":true,\"cookieSetter\":true}"
+      "evidence": "{\"localStorageMethods\":true,\"indexedDB\":true,\"cacheStorage\":true,\"fetch\":true,\"xhr\":true,\"sendBeacon\":true,\"webSocket\":true,\"eventSource\":true,\"broadcastChannel\":true,\"postMessage\":true,\"messageChannel\":true,\"clipboardWriteText\":true,\"clipboardWrite\":true,\"createObjectURL\":true,\"anchorClick\":true,\"history\":true,\"cookieDescriptorShape\":{\"hadOwnPropertyBefore\":false,\"hasOwnPropertyAfter\":false,\"restoredCorrectly\":true},\"cookieSetter\":true}"
     },
     {
-      "test": "FIX 2: optional API \"indexedDB\" instrumented, zero Observation-related calls",
+      "test": "FIX 2: optional API \"indexedDB\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
     },
     {
-      "test": "FIX 2: optional API \"cacheStorage\" instrumented, zero Observation-related calls",
+      "test": "FIX 2: optional API \"cacheStorage\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
     },
     {
-      "test": "FIX 2: optional API \"sendBeacon\" instrumented, zero Observation-related calls",
+      "test": "FIX 2: optional API \"sendBeacon\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
     },
     {
-      "test": "FIX 2: optional API \"eventSource\" instrumented, zero Observation-related calls",
+      "test": "FIX 2: optional API \"eventSource\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
     },
     {
-      "test": "FIX 2: optional API \"broadcastChannel\" instrumented, zero Observation-related calls",
+      "test": "FIX 2: optional API \"broadcastChannel\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
     },
     {
-      "test": "FIX 2: optional API \"messageChannel\" instrumented, zero Observation-related calls",
+      "test": "FIX 2: optional API \"messageChannel\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
     },
     {
-      "test": "FIX 2: optional API \"clipboardWrite\" instrumented, zero Observation-related calls",
+      "test": "FIX 2: optional API \"clipboardWrite\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
     },
     {
-      "test": "FIX 2: optional API \"clipboardWriteText\" instrumented, zero Observation-related calls",
+      "test": "FIX 2: optional API \"clipboardWriteText\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
     },
     {
-      "test": "FIX 2: optional API \"cookieSetter\" instrumented, zero Observation-related calls",
+      "test": "FIX 2: optional API \"cookieSetter\" patched+restored+zero calls (all verified, not assumed)",
       "result": "PASS",
-      "evidence": "{\"supported\":true,\"patched\":true,\"calls\":0}"
+      "evidence": "{\"supported\":true,\"patched\":true,\"restored\":true,\"calls\":0}"
     },
     {
       "test": "Storage instrumentation: zero Observation-related calls",

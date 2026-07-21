@@ -115,9 +115,14 @@ function _safeNow() {
 }
 
 /**
- * @param {{}} options currently unused, reserved for future extension.
+ * @param {{ enableQaSchemaInspection?: boolean }} [options] - when
+ *   `enableQaSchemaInspection` is explicitly `true`, an additional
+ *   `getQaSchemaSnapshot()` method is exposed for QA use only (see
+ *   below). Absent or `false`, the method does not exist at all —
+ *   never even a no-op stub.
  */
-export function createInteractivePreviewObservationSessionV2(_options) {
+export function createInteractivePreviewObservationSessionV2(options) {
+  const qaSchemaInspectionEnabled = options?.enableQaSchemaInspection === true;
   // Insertion-ordered map keyed by generationId (stringified safely) —
   // each entry holds at most ONE record per generation.
   const records = new Map();
@@ -307,7 +312,45 @@ export function createInteractivePreviewObservationSessionV2(_options) {
     records.clear();
   }
 
-  return { recordObservation, removeObservation, invalidateGeneration, clearSession, getSummary, dispose };
+  const ALLOWED_INTERNAL_KEYS = ['generationId', 'active', 'observation', 'reasons', 'clearedCounted', 'invalidatedCounted', 'createdAt', 'updatedAt', 'createdSequence', 'updatedSequence'];
+  const PROHIBITED_KEY_PATTERN = /pixel|image|filename|filepath|url|exif|camera|gps|user|email|account|analysis|finalstyleintent|controller|dom/i;
+
+  /**
+   * QA-ONLY (never exposed unless `enableQaSchemaInspection: true` was
+   * passed to the factory). Inspects the REAL internal `records` Map
+   * directly — never a regex re-parse of source text — and returns
+   * only safe, schema-level information: key NAMES and TYPES, counts,
+   * and boolean flags. Never returns actual `generationId`/
+   * `observation`/`reasons` VALUES, timestamps, internal record
+   * objects, or any mutable reference.
+   */
+  function getQaSchemaSnapshot() {
+    const recordKeysSeen = new Set();
+    let hasDomReference = false;
+    let hasProhibitedKey = false;
+    let reasonValueTypesSeen = new Set();
+    for (const rec of records.values()) {
+      if (!rec || typeof rec !== 'object') continue;
+      for (const key of Object.keys(rec)) {
+        recordKeysSeen.add(key);
+        if (!ALLOWED_INTERNAL_KEYS.includes(key) || PROHIBITED_KEY_PATTERN.test(key)) hasProhibitedKey = true;
+      }
+      if (typeof globalThis !== 'undefined' && typeof globalThis.Node === 'function' && (rec.observation instanceof globalThis.Node || (Array.isArray(rec.reasons) && rec.reasons.some((r) => r instanceof globalThis.Node)))) hasDomReference = true;
+      if (Array.isArray(rec.reasons)) { for (const r of rec.reasons) reasonValueTypesSeen.add(typeof r); }
+    }
+    return {
+      recordCount: records.size,
+      maximumRecords: MAX_RECORDS,
+      recordKeys: [...recordKeysSeen].sort(),
+      reasonValueTypes: [...reasonValueTypesSeen].sort(),
+      hasDomReference,
+      hasProhibitedKey,
+    };
+  }
+
+  const publicApi = { recordObservation, removeObservation, invalidateGeneration, clearSession, getSummary, dispose };
+  if (qaSchemaInspectionEnabled) publicApi.getQaSchemaSnapshot = getQaSchemaSnapshot;
+  return publicApi;
 }
 
 export { VALID_REASONS };

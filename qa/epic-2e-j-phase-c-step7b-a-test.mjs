@@ -164,9 +164,11 @@ const INSTALL_INSTRUMENTATION_JS = `
     if (window.indexedDB) {
       orig.indexedDbOpen = indexedDB.open;
       orig.indexedDbDelete = indexedDB.deleteDatabase;
-      indexedDB.open = function (...args) { counts.storage.indexedDbOpen++; return orig.indexedDbOpen.call(indexedDB, ...args); };
-      indexedDB.deleteDatabase = function (...args) { counts.storage.indexedDbDelete++; return orig.indexedDbDelete.call(indexedDB, ...args); };
-      optional.indexedDB.patched = true;
+      const wrappedOpen = function (...args) { counts.storage.indexedDbOpen++; return orig.indexedDbOpen.call(indexedDB, ...args); };
+      const wrappedDelete = function (...args) { counts.storage.indexedDbDelete++; return orig.indexedDbDelete.call(indexedDB, ...args); };
+      indexedDB.open = wrappedOpen;
+      indexedDB.deleteDatabase = wrappedDelete;
+      optional.indexedDB.patched = indexedDB.open === wrappedOpen && indexedDB.deleteDatabase === wrappedDelete;
     }
 
     // FIX 1: CacheStorage — exact unbound reference.
@@ -174,9 +176,11 @@ const INSTALL_INSTRUMENTATION_JS = `
     if (typeof caches !== 'undefined') {
       orig.cacheOpen = caches.open;
       orig.cacheDelete = caches.delete;
-      caches.open = function (...args) { counts.storage.cacheOpen++; return orig.cacheOpen.call(caches, ...args); };
-      caches.delete = function (...args) { counts.storage.cacheDelete++; return orig.cacheDelete.call(caches, ...args); };
-      optional.cacheStorage.patched = true;
+      const wrappedCacheOpen = function (...args) { counts.storage.cacheOpen++; return orig.cacheOpen.call(caches, ...args); };
+      const wrappedCacheDelete = function (...args) { counts.storage.cacheDelete++; return orig.cacheDelete.call(caches, ...args); };
+      caches.open = wrappedCacheOpen;
+      caches.delete = wrappedCacheDelete;
+      optional.cacheStorage.patched = caches.open === wrappedCacheOpen && caches.delete === wrappedCacheDelete;
     }
 
     orig.fetch = window.fetch;
@@ -189,31 +193,32 @@ const INSTALL_INSTRUMENTATION_JS = `
     optional.sendBeacon = { supported: !!navigator.sendBeacon, patched: false };
     if (navigator.sendBeacon) {
       orig.sendBeacon = navigator.sendBeacon;
-      navigator.sendBeacon = function (...args) { counts.network.sendBeacon++; return orig.sendBeacon.call(navigator, ...args); };
-      optional.sendBeacon.patched = true;
+      const wrappedSendBeacon = function (...args) { counts.network.sendBeacon++; return orig.sendBeacon.call(navigator, ...args); };
+      navigator.sendBeacon = wrappedSendBeacon;
+      optional.sendBeacon.patched = navigator.sendBeacon === wrappedSendBeacon;
     }
 
     orig.WebSocket = window.WebSocket;
     window.WebSocket = function (...args) { counts.network.webSocket++; return new orig.WebSocket(...args); };
 
     optional.eventSource = { supported: !!window.EventSource, patched: false };
-    if (window.EventSource) { orig.EventSource = window.EventSource; window.EventSource = function (...args) { counts.network.eventSource++; return new orig.EventSource(...args); }; optional.eventSource.patched = true; }
+    if (window.EventSource) { orig.EventSource = window.EventSource; const wrappedES = function (...args) { counts.network.eventSource++; return new orig.EventSource(...args); }; window.EventSource = wrappedES; optional.eventSource.patched = window.EventSource === wrappedES; }
 
     optional.broadcastChannel = { supported: !!window.BroadcastChannel, patched: false };
-    if (window.BroadcastChannel) { orig.BroadcastChannel = window.BroadcastChannel; window.BroadcastChannel = function (...args) { counts.messaging.broadcastChannel = (counts.messaging.broadcastChannel||0)+1; counts.network.broadcastChannel++; return new orig.BroadcastChannel(...args); }; optional.broadcastChannel.patched = true; }
+    if (window.BroadcastChannel) { orig.BroadcastChannel = window.BroadcastChannel; const wrappedBC = function (...args) { counts.messaging.broadcastChannel = (counts.messaging.broadcastChannel||0)+1; counts.network.broadcastChannel++; return new orig.BroadcastChannel(...args); }; window.BroadcastChannel = wrappedBC; optional.broadcastChannel.patched = window.BroadcastChannel === wrappedBC; }
 
     // FIX 1: postMessage — exact unbound reference.
     orig.postMessage = window.postMessage;
     window.postMessage = function (...args) { counts.messaging.postMessage++; return orig.postMessage.apply(window, args); };
 
     optional.messageChannel = { supported: !!window.MessageChannel, patched: false };
-    if (window.MessageChannel) { orig.MessageChannel = window.MessageChannel; window.MessageChannel = function (...args) { counts.messaging.messageChannel++; return new orig.MessageChannel(...args); }; optional.messageChannel.patched = true; }
+    if (window.MessageChannel) { orig.MessageChannel = window.MessageChannel; const wrappedMC = function (...args) { counts.messaging.messageChannel++; return new orig.MessageChannel(...args); }; window.MessageChannel = wrappedMC; optional.messageChannel.patched = window.MessageChannel === wrappedMC; }
 
     optional.clipboardWriteText = { supported: !!(navigator.clipboard && navigator.clipboard.writeText), patched: false };
     optional.clipboardWrite = { supported: !!(navigator.clipboard && navigator.clipboard.write), patched: false };
     if (navigator.clipboard) {
-      if (navigator.clipboard.writeText) { orig.clipWriteText = navigator.clipboard.writeText; navigator.clipboard.writeText = function (...args) { counts.clipboard.writeText++; return orig.clipWriteText.call(navigator.clipboard, ...args); }; optional.clipboardWriteText.patched = true; }
-      if (navigator.clipboard.write) { orig.clipWrite = navigator.clipboard.write; navigator.clipboard.write = function (...args) { counts.clipboard.write++; return orig.clipWrite.call(navigator.clipboard, ...args); }; optional.clipboardWrite.patched = true; }
+      if (navigator.clipboard.writeText) { orig.clipWriteText = navigator.clipboard.writeText; const wrappedWT = function (...args) { counts.clipboard.writeText++; return orig.clipWriteText.call(navigator.clipboard, ...args); }; navigator.clipboard.writeText = wrappedWT; optional.clipboardWriteText.patched = navigator.clipboard.writeText === wrappedWT; }
+      if (navigator.clipboard.write) { orig.clipWrite = navigator.clipboard.write; const wrappedW = function (...args) { counts.clipboard.write++; return orig.clipWrite.call(navigator.clipboard, ...args); }; navigator.clipboard.write = wrappedW; optional.clipboardWrite.patched = navigator.clipboard.write === wrappedW; }
     }
 
     orig.createObjectURL = URL.createObjectURL;
@@ -234,17 +239,27 @@ const INSTALL_INSTRUMENTATION_JS = `
     history.go = function (...args) { counts.history.go++; return orig.go.apply(history, args); };
 
     // FIX 4: native cookie setter instrumentation via property descriptor.
+    // FIX 1 (Step 7B-A-F2): capture the EXACT original shape before
+    // patching — whether an own property already existed on
+    // \`document\`, and the prototype descriptor used by normal lookup
+    // — so restoration can put things back exactly as found, never
+    // leaving a copied prototype descriptor behind as a stray own
+    // property.
     optional.cookieSetter = { supported: false, patched: false };
     try {
-      const desc = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie') || Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie');
-      if (desc && desc.set && desc.get) {
-        orig.cookieDescriptor = desc;
+      const hadOwnProperty = Object.prototype.hasOwnProperty.call(document, 'cookie');
+      const ownDescBefore = hadOwnProperty ? Object.getOwnPropertyDescriptor(document, 'cookie') : null;
+      const protoDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie') || Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie');
+      if (protoDesc && protoDesc.set && protoDesc.get) {
+        window.__step7bCookieShapeBefore = { hadOwnProperty, ownDescBefore: ownDescBefore ? { configurable: ownDescBefore.configurable, enumerable: ownDescBefore.enumerable, getter: ownDescBefore.get, setter: ownDescBefore.set } : null };
+        orig.cookieProtoDescriptor = protoDesc;
         Object.defineProperty(document, 'cookie', {
           configurable: true,
-          get() { return desc.get.call(document); },
-          set(v) { counts.cookie.setterCalls++; return desc.set.call(document, v); },
+          get() { return protoDesc.get.call(document); },
+          set(v) { counts.cookie.setterCalls++; return protoDesc.set.call(document, v); },
         });
-        optional.cookieSetter = { supported: true, patched: true };
+        const patchedDesc = Object.getOwnPropertyDescriptor(document, 'cookie');
+        optional.cookieSetter = { supported: true, patched: typeof patchedDesc?.set === 'function' && patchedDesc.get !== protoDesc.get };
       }
     } catch (e) { optional.cookieSetter = { supported: false, patched: false, error: String(e && e.message || e) }; }
 
@@ -313,11 +328,42 @@ const RESTORE_AND_VERIFY_JS = `
     history.go = orig.go;
     restoration.history = history.pushState === orig.pushState && history.replaceState === orig.replaceState && history.back === orig.back && history.forward === orig.forward && history.go === orig.go;
 
-    if (orig.cookieDescriptor) {
-      try { Object.defineProperty(document, 'cookie', orig.cookieDescriptor); restoration.cookieSetter = true; } catch (e) { restoration.cookieSetter = false; }
+    if (orig.cookieProtoDescriptor) {
+      const shapeBefore = window.__step7bCookieShapeBefore;
+      let restoredCorrectly = false;
+      try {
+        if (shapeBefore.hadOwnProperty) {
+          // An own property existed before — restore that EXACT descriptor.
+          Object.defineProperty(document, 'cookie', shapeBefore.ownDescBefore);
+        } else {
+          // No own property existed before — DELETE the temporary own
+          // property entirely, so lookup falls back to the prototype
+          // descriptor again (never leave a copied prototype descriptor
+          // behind as a stray own property).
+          delete document.cookie;
+        }
+        const hasOwnAfter = Object.prototype.hasOwnProperty.call(document, 'cookie');
+        const ownDescAfter = hasOwnAfter ? Object.getOwnPropertyDescriptor(document, 'cookie') : null;
+        const protoDescAfter = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie') || Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie');
+        if (shapeBefore.hadOwnProperty) {
+          restoredCorrectly = hasOwnAfter === true
+            && ownDescAfter.get === shapeBefore.ownDescBefore.getter
+            && ownDescAfter.set === shapeBefore.ownDescBefore.setter
+            && ownDescAfter.configurable === shapeBefore.ownDescBefore.configurable
+            && ownDescAfter.enumerable === shapeBefore.ownDescBefore.enumerable;
+        } else {
+          restoredCorrectly = hasOwnAfter === false
+            && protoDescAfter.get === orig.cookieProtoDescriptor.get
+            && protoDescAfter.set === orig.cookieProtoDescriptor.set;
+        }
+        restoration.cookieDescriptorShape = { hadOwnPropertyBefore: shapeBefore.hadOwnProperty, hasOwnPropertyAfter: hasOwnAfter, restoredCorrectly };
+      } catch (e) { restoration.cookieDescriptorShape = { restoredCorrectly: false, error: String(e && e.message || e) }; }
+      restoration.cookieSetter = restoredCorrectly;
     }
 
-    return { restoration, allRestoredTrue: Object.values(restoration).every((v) => v === true) };
+    const booleanRestorationValues = Object.entries(restoration).filter(([k]) => k !== 'cookieDescriptorShape').map(([, v]) => v);
+    const cookieShapeOk = !restoration.cookieDescriptorShape || restoration.cookieDescriptorShape.restoredCorrectly === true;
+    return { restoration, allRestoredTrue: booleanRestorationValues.every((v) => v === true) && cookieShapeOk };
   })()
 `;
 
@@ -334,6 +380,31 @@ async function main() {
   const responsiveResults = [];
 
   try {
+    // ══════════════════════════════════════════════════════════════
+    // FIX 4 (Step 7B-A-F2): page-audit SELF-TEST — proves the audit
+    // mechanism itself actually catches errors, using a disposable
+    // page never counted toward the real audit run below.
+    // ══════════════════════════════════════════════════════════════
+    console.log('=== FIX 4: page-audit self-test (mechanism verification only, not part of the real audit) ===');
+    {
+      const selfTestErrors = [];
+      const selfTestPage = await browser.newPage();
+      const selfTestAudit = attachPageAudit(selfTestPage, 'self-test', selfTestErrors);
+      await selfTestPage.goto(`http://localhost:${PORT}/index.html`);
+      await selfTestPage.waitForTimeout(300);
+      await selfTestPage.evaluate(() => console.error('STEP7B_A_TEST_ERROR'));
+      // Genuine local 404 — a real missing-resource request, not a font host.
+      await selfTestPage.evaluate(() => fetch('/this-file-genuinely-does-not-exist.xyz').catch(() => {}));
+      await selfTestPage.waitForTimeout(300);
+      selfTestAudit.finalize();
+      const injectedErrorCaught = selfTestErrors.some((e) => e.type === 'console.error' && e.text === 'STEP7B_A_TEST_ERROR');
+      const genuine404Caught = selfTestErrors.some((e) => e.type === 'httpError' && e.status === 404);
+      record('FIX 4: self-test — injected console.error is captured by attachPageAudit/finalize', injectedErrorCaught, `caught=${injectedErrorCaught}`);
+      record('FIX 4: self-test — genuine local 404 is captured (never excluded like a font host)', genuine404Caught, `caught=${genuine404Caught}, allSelfTestErrors=${JSON.stringify(selfTestErrors)}`);
+      await selfTestPage.close();
+      // selfTestErrors is intentionally discarded here — never merged into the real audit's consoleErrors.
+    }
+
     // ══════════════════════════════════════════════════════════════
     // PART 0 — FIX 5: internal Session-record data-minimization proof
     // via a focused, non-browser Node-level module test (the real
@@ -426,21 +497,22 @@ async function main() {
 
     // ── FIX 2: optional API support matrix — merge patched + calls, never claim coverage for unsupported APIs. ──
     const supportMatrix = {
-      indexedDB: { ...optionalApiMatrix.indexedDB, calls: finalCounts.storage.indexedDbOpen + finalCounts.storage.indexedDbDelete },
-      cacheStorage: { ...optionalApiMatrix.cacheStorage, calls: finalCounts.storage.cacheOpen + finalCounts.storage.cacheDelete },
-      sendBeacon: { ...optionalApiMatrix.sendBeacon, calls: finalCounts.network.sendBeacon },
-      eventSource: { ...optionalApiMatrix.eventSource, calls: finalCounts.network.eventSource },
-      broadcastChannel: { ...optionalApiMatrix.broadcastChannel, calls: finalCounts.network.broadcastChannel },
-      messageChannel: { ...optionalApiMatrix.messageChannel, calls: finalCounts.messaging.messageChannel },
-      clipboardWrite: { ...optionalApiMatrix.clipboardWrite, calls: finalCounts.clipboard.write },
-      clipboardWriteText: { ...optionalApiMatrix.clipboardWriteText, calls: finalCounts.clipboard.writeText },
-      cookieSetter: { ...optionalApiMatrix.cookieSetter, calls: finalCounts.cookie.setterCalls },
+      indexedDB: { ...optionalApiMatrix.indexedDB, restored: restorationResult.restoration.indexedDB, calls: finalCounts.storage.indexedDbOpen + finalCounts.storage.indexedDbDelete },
+      cacheStorage: { ...optionalApiMatrix.cacheStorage, restored: restorationResult.restoration.cacheStorage, calls: finalCounts.storage.cacheOpen + finalCounts.storage.cacheDelete },
+      sendBeacon: { ...optionalApiMatrix.sendBeacon, restored: restorationResult.restoration.sendBeacon, calls: finalCounts.network.sendBeacon },
+      eventSource: { ...optionalApiMatrix.eventSource, restored: restorationResult.restoration.eventSource, calls: finalCounts.network.eventSource },
+      broadcastChannel: { ...optionalApiMatrix.broadcastChannel, restored: restorationResult.restoration.broadcastChannel, calls: finalCounts.network.broadcastChannel },
+      messageChannel: { ...optionalApiMatrix.messageChannel, restored: restorationResult.restoration.messageChannel, calls: finalCounts.messaging.messageChannel },
+      clipboardWrite: { ...optionalApiMatrix.clipboardWrite, restored: restorationResult.restoration.clipboardWrite, calls: finalCounts.clipboard.write },
+      clipboardWriteText: { ...optionalApiMatrix.clipboardWriteText, restored: restorationResult.restoration.clipboardWriteText, calls: finalCounts.clipboard.writeText },
+      cookieSetter: { ...optionalApiMatrix.cookieSetter, restored: restorationResult.restoration.cookieSetter, calls: finalCounts.cookie.setterCalls },
     };
     for (const [name, entry] of Object.entries(supportMatrix)) {
       if (entry.supported === false) {
         record(`FIX 2: optional API "${name}" unsupported in this browser — recorded honestly, not claimed as tested`, 'NOT_APPLICABLE', JSON.stringify(entry));
       } else {
-        record(`FIX 2: optional API "${name}" instrumented, zero Observation-related calls`, entry.calls === 0, JSON.stringify(entry));
+        const genuinelyOk = entry.patched === true && entry.restored === true && entry.calls === 0;
+        record(`FIX 2: optional API "${name}" patched+restored+zero calls (all verified, not assumed)`, genuinelyOk, JSON.stringify(entry));
       }
     }
 
@@ -506,8 +578,25 @@ async function main() {
         const clearObsBtn = req(document.getElementById('ipoClearButton'), 'Clear Observation button');
         const clearSessionBtn = req(document.getElementById('ipoClearSessionButton'), 'Clear Session button');
         // Privacy note: any element whose text mentions privacy/production-safety wording within the Observation/Session sections.
-        const privacyNoteFound = (obsSection && /page session only|does not change production/i.test(obsSection.textContent || '')) || (sessionSection && /page session only|does not change production/i.test(sessionSection.textContent || ''));
-        if (!privacyNoteFound) missing.push('Privacy note (page-session-only / production-safety wording)');
+        // FIX 6 (Step 7B-A-F2): locate the ACTUAL Privacy-note element by
+        // exact text match (never a broad parent textContent search),
+        // then verify it is genuinely visible: non-none display,
+        // non-hidden visibility, non-zero opacity, non-zero bounding
+        // rect, contained within its parent and the viewport.
+        const PRIVACY_NOTE_TEXT = 'Observation details stay in this page session only and do not change production output.';
+        const privacyNoteEl = Array.from(document.querySelectorAll('#interactivePreviewObservationInner div, #interactivePreviewObservationInner p'))
+          .find((el) => el.textContent && el.textContent.trim() === PRIVACY_NOTE_TEXT);
+        let privacyNoteFound = false;
+        if (privacyNoteEl) {
+          const style = getComputedStyle(privacyNoteEl);
+          const rect = privacyNoteEl.getBoundingClientRect();
+          const genuinelyVisible = style.display !== 'none' && style.visibility !== 'hidden' && parseFloat(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
+          if (genuinelyVisible) {
+            privacyNoteFound = true;
+            checkContained(privacyNoteEl, obsSection, 'privacyNote-in-obsSection');
+          }
+        }
+        if (!privacyNoteFound) missing.push('Privacy note (exact-text element, genuinely visible)');
 
         radioLabels.forEach((l, i) => checkContained(l, ipoFieldset, 'obs-label-' + radioValues[i]));
         reasonLabels.forEach((l, i) => checkContained(l, ipoReasonFieldset, 'reason-label-' + reasonValues[i]));
@@ -519,7 +608,16 @@ async function main() {
         checkContained(clearObsBtn, obsSection, 'clearObsBtn-in-obsSection');
         if (sessionSection && sessionMetrics) {
           checkContained(sessionMetrics, sessionSection, 'sessionMetrics-in-sessionSection');
-          document.querySelectorAll('#ipoSessionMetrics > div').forEach((el, i) => checkContained(el, sessionMetrics, 'session-metric-card-' + i));
+          document.querySelectorAll('#ipoSessionMetrics > div').forEach((card, i) => {
+            checkContained(card, sessionMetrics, 'session-metric-card-' + i);
+            // FIX 7: a card itself being contained is not sufficient
+            // when its own text overflows — check every child element
+            // (label/value) against the CARD, plus a non-zero visible
+            // rectangle for the card's own text content.
+            const cardRect = card.getBoundingClientRect();
+            if (cardRect.width <= 0 || cardRect.height <= 0) findings.push({ label: 'session-metric-card-' + i + '-zero-size', width: cardRect.width, height: cardRect.height });
+            Array.from(card.children).forEach((child, j) => checkContained(child, card, 'session-metric-card-' + i + '-child-' + j));
+          });
         }
         checkContained(clearSessionBtn, sessionSection, 'clearSessionBtn-in-sessionSection');
 
@@ -546,6 +644,13 @@ async function main() {
       const containmentPass = result.findings.length === 0 && result.docScrollW <= result.docClientW;
       record(`FIX 7: complete element containment at ${width}px`, containmentPass, containmentPass ? `docScrollW=${result.docScrollW}, no overflow` : JSON.stringify(result.findings));
 
+      // FIX 3 (Step 7B-A-F2): correct deterministic order — wait for
+      // network/console events to settle, THEN finalize the audit
+      // (correlating any "Failed to load resource" console messages
+      // against confirmed font-host failures), THEN evaluate
+      // vpErrors.length, THEN record, THEN copy into the global list.
+      await vp.waitForTimeout(300);
+      vpAudit.finalize();
       const viewportPagePass = vpErrors.length === 0;
       record(`FIX 8: no console/resource error at ${width}px`, viewportPagePass, viewportPagePass ? '(none)' : JSON.stringify(vpErrors));
       consoleErrors.push(...vpErrors);
@@ -555,7 +660,6 @@ async function main() {
       if (width <= 430) { await vp.screenshot({ path: path.join(SCREENSHOT_DIR, `mobile-${width}px.png`), fullPage: true }); screenshotsGenerated.push(`full-app-7b-a/mobile-${width}px.png`); }
       else if (width === 768) { await vp.screenshot({ path: path.join(SCREENSHOT_DIR, 'tablet-768px.png'), fullPage: true }); screenshotsGenerated.push('full-app-7b-a/tablet-768px.png'); }
       else if (width === 1440) { await vp.evaluate(() => { const el = document.getElementById('interactivePreviewObservationSection'); if (el) el.scrollIntoView(); }); await vp.waitForTimeout(200); await vp.screenshot({ path: path.join(SCREENSHOT_DIR, 'desktop-1440px.png') }); screenshotsGenerated.push('full-app-7b-a/desktop-1440px.png'); }
-      vpAudit.finalize();
       await vp.close();
     }
 
