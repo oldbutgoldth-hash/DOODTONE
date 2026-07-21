@@ -10,12 +10,26 @@
  * Lightroom Mapping as the exclusive path to XMP export — exactly as
  * required by EPIC 2E-A's "default answer must be No" goal.
  *
- * Nothing in this project currently sets these flags to anything other
- * than their defaults — there is no UI, no environment variable, no
- * config file wiring them to `true`. Changing production behavior would
- * require a deliberate future code change to this file (or an explicit
- * override object passed into `buildLightroomControlledActivationV2`),
- * never an accidental one.
+ * Every PRODUCTION-impacting flag (`enableControlledActivation`,
+ * `allowProductionOverride`, `allowOverlayTestProductionWrite`,
+ * `allowOverlayPreviewExport`, `allowOverlayPreviewProductionWrite`,
+ * `allowOverlayPreviewPresetMutation`, `allowControlledOverlayTest`)
+ * still defaults to `false` and is never set elsewhere in this project —
+ * changing any of THOSE would require a deliberate future code change
+ * to this file (or an explicit override object passed into
+ * `buildLightroomControlledActivationV2`), never an accidental one.
+ *
+ * EPIC 2E-J-C-F2 Step 2 EXCEPTION (deliberate, scoped, documented):
+ * exactly two flags — `allowOverlayTestPresetPreview` and
+ * `allowOverlayPreviewGeneration` — are now enabled by default so the
+ * isolated, non-production BROWSER PREVIEW can be generated. Neither
+ * flag affects export, production write, preset mutation, or Controlled
+ * Test eligibility in any way: `canExportPreview`/`canWriteProduction`
+ * remain separately hard-coded `false` at the Sandbox's own output
+ * layer regardless of these flags, `allowControlledOverlayTest` remains
+ * `false`, and every other independent safety gate (no hard stops, no
+ * critical over-stack, sufficient confidence/safety score, a completed
+ * and genuinely-passed Human Review) still applies unchanged.
  */
 
 export const LIGHTROOM_MAPPING_V2_FLAGS = {
@@ -79,8 +93,18 @@ export const LIGHTROOM_MAPPING_V2_FLAGS = {
   // could let overlay output reach a preset preview or production write
   // defaults false, same discipline as every other EPIC 2E flag set.
   enableControlledOverlayTestGate: true,       // safe to default on — evaluating the gate never touches production by itself
-  allowControlledOverlayTest: false,           // whether a controlled test may actually run — never by default
-  allowOverlayTestPresetPreview: false,        // whether overlay output may be previewed as a preset — never by default
+  allowControlledOverlayTest: false,           // whether a controlled test may actually run — never by default (Controlled Test remains stronger than browser Preview and is NOT enabled by this or any preview-only change)
+  // EPIC 2E-J-C-F2 Step 2: deliberately enabled to allow overlay output to
+  // be shown as an isolated, non-production BROWSER PREVIEW only. This
+  // does not permit export, production write, or preset mutation — those
+  // remain separately hard-coded `false` at the Sandbox's own output
+  // layer regardless of this flag (canExportPreview/canWriteProduction),
+  // and are further independently re-verified never to leak into XMP or
+  // Legacy Mapping. Still gated behind Sandbox safety checks (no hard
+  // stops, no critical over-stack, sufficient confidence/safety score)
+  // and a completed, genuinely-passed Human Review — this flag alone
+  // does not bypass any of those.
+  allowOverlayTestPresetPreview: true,         // preview-only — export/production-write remain hard-coded false regardless
   allowOverlayTestProductionWrite: false,      // whether a test may write production output — never by default, not even in a "test"
   requireOverlaySimulationForTest: true,
   requireLegacySafetyOverlayForTest: true,
@@ -124,7 +148,16 @@ export const LIGHTROOM_MAPPING_V2_FLAGS = {
   // unused by any other file via grep) — do not add new logic that
   // reads the deprecated names.
   enableOverlayPreviewSandbox: true,          // canonical — same safe-to-default-on rationale as its EPIC 2E-E predecessor
-  allowOverlayPreviewGeneration: false,       // canonical — whether a real preview object may actually be generated (never by default)
+  // EPIC 2E-J-C-F2 Step 2: deliberately enabled — same preview-only
+  // rationale as `allowOverlayTestPresetPreview` above. This governs
+  // only whether a real (in-memory, non-production) preview OBJECT may
+  // be generated at all; `canExportPreview`/`canWriteProduction` remain
+  // separately hard-coded `false` inside the Sandbox regardless of this
+  // flag, and the Sandbox still independently requires every other
+  // safety gate (no hard stops, no critical over-stack, sufficient
+  // confidence/safety score, completed Human Review) before it will
+  // actually produce one.
+  allowOverlayPreviewGeneration: true,        // preview-only — export/production-write remain hard-coded false regardless
   allowOverlayPreviewExport: false,           // canonical — whether the preview may be exported at all (never by default, and hard-coded false regardless in this EPIC)
   requireHumanReviewForPreview: true,         // canonical — a structured, honestly-tracked human review checklist gates preview generation
   minOverlayPreviewConfidence: 0.72,

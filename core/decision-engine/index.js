@@ -327,6 +327,125 @@ export function buildFinalPreset(inputs) {
 
 // ─── Adaptive decision building ─────────────────────────────────────────────
 
+// ── FIX 3 (EPIC 2E-J-C-F2 Step 3): safe Human Review → Preview Sandbox projection ──
+
+const VALID_REVIEWER_DECISIONS = ['approve', 'reject', 'needs-adjustment', 'undecided'];
+const REQUIRED_REVIEW_ITEM_IDS = new Set([
+  'legacy-output-preserved', 'source-image-reviewed', 'skin-tones-reviewed',
+  'highlights-reviewed', 'shadows-reviewed', 'white-balance-reviewed',
+  'color-stacking-reviewed', 'rollback-confirmed', 'preview-non-production-confirmed',
+  'export-path-unchanged',
+]);
+
+/** Single safe-read of one property — a throwing getter degrades to `fallback`, never crashes. */
+function _safeReadReviewField(obj, key, fallback = undefined) {
+  try {
+    if (!obj || typeof obj !== 'object') return fallback;
+    return obj[key];
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Safe bounded projection of an untrusted array — the Review array is
+ * an external boundary and is never iterated directly with
+ * `for...of`/spread/`.slice()`/`.map()`. Verifies `Array.isArray` (itself
+ * wrapped, in case of a revoked/hostile Proxy), safe-reads `.length`
+ * once, clamps to `maxLen`, and safe-reads each numeric index once
+ * (skipping a hostile getter that throws). Never touches
+ * `Symbol.iterator`. Returns a brand-new plain array; the input is
+ * never mutated or referenced afterward.
+ */
+function _safeBoundedArrayForReview(input, maxLen = 32) {
+  let isArr;
+  try { isArr = Array.isArray(input); } catch { return []; }
+  if (!isArr) return [];
+  let length;
+  try { length = input.length; } catch { return []; }
+  if (!Number.isFinite(length) || length <= 0) return [];
+  const bound = Math.min(Math.floor(length), maxLen);
+  const out = [];
+  for (let i = 0; i < bound; i++) {
+    try { out.push(input[i]); } catch { /* hostile index getter skipped, never crashes */ }
+  }
+  return out;
+}
+
+/**
+ * Safely, defensively projects a caller-supplied review state (with a
+ * `reviewItems` array of `{id, status, reviewed, reviewerDecision}`
+ * objects — see mapping-v2-preview-review-state.js's `_buildReviewState`
+ * return shape) into the flat map `{[itemId]: 'passed'|'failed'}` the
+ * Preview Sandbox's `humanReviewState` parameter expects.
+ *
+ * PASS rule: an item projects as `"passed"` ONLY when ALL of:
+ *   - status === "passed"
+ *   - reviewed === true
+ *   - reviewerDecision is not "reject"
+ *   - reviewerDecision is not "needs-adjustment"
+ *
+ * FAILED rule: an item projects as `"failed"` when EITHER:
+ *   - status === "failed"
+ *   - reviewerDecision === "reject"
+ *
+ * Everything else (unreviewed, missing/unrecognized decision,
+ * needs-adjustment, pending, unknown status, malformed input, unknown
+ * checklist id) is left OUT of the map entirely — the Sandbox's own
+ * checklist then correctly defaults that item to "pending", never
+ * silently upgraded to passed. `reviewerDecision` is normalized against
+ * an exact allow-list only — never inferred from labels/text, never
+ * `.toString()`'d.
+ *
+ * DUPLICATE RULE: if the same checklist id appears more than once
+ * (malformed/hostile input), conservative precedence applies — a
+ * "failed" entry always wins and can never be overwritten by a later
+ * "passed" duplicate for the same id; a "passed" entry can only ever
+ * fill a genuinely empty slot.
+ *
+ * Never trusts the external array/item shape directly (bounded safe
+ * array projection, single safe read per field, hostile getters
+ * degrade to "skip this item" rather than throwing). Never mutates the
+ * input. Unknown checklist ids are rejected — this never creates a new
+ * Review category.
+ */
+function _projectHumanReviewStateV2(existingReviewState) {
+  const rawItems = _safeReadReviewField(existingReviewState, 'reviewItems');
+  const items = _safeBoundedArrayForReview(rawItems, 32);
+  const map = {};
+  for (const rawItem of items) {
+    if (!rawItem || typeof rawItem !== 'object') continue; // null/primitive entries skipped
+    const id = _safeReadReviewField(rawItem, 'id');
+    if (typeof id !== 'string' || !REQUIRED_REVIEW_ITEM_IDS.has(id)) continue; // unknown/malformed key skipped — never a new category
+    const status = _safeReadReviewField(rawItem, 'status');
+    const reviewed = _safeReadReviewField(rawItem, 'reviewed');
+    const rawDecision = _safeReadReviewField(rawItem, 'reviewerDecision');
+    const reviewerDecision = VALID_REVIEWER_DECISIONS.includes(rawDecision) ? rawDecision : null;
+
+    const isFailed = status === 'failed' || reviewerDecision === 'reject';
+    // PENDING RULE (test case G): a MISSING/unrecognized reviewerDecision
+    // must not be treated as passed either, even when status/reviewed
+    // both look complete — an explicit, recognized decision is required.
+    const isPassed = !isFailed && status === 'passed' && reviewed === true
+      && reviewerDecision !== null && reviewerDecision !== 'needs-adjustment';
+
+    let projected = null;
+    if (isFailed) projected = 'failed';
+    else if (isPassed) projected = 'passed';
+    // else: pending/uncertain — left out of the map entirely, never upgraded
+
+    if (projected === null) continue;
+
+    // Duplicate precedence: failed always wins and is never overwritten;
+    // a 'passed' entry only ever fills a genuinely empty slot.
+    const existing = map[id];
+    if (existing === 'failed') continue;
+    if (projected === 'failed') { map[id] = 'failed'; continue; }
+    if (existing === undefined) map[id] = projected;
+  }
+  return map;
+}
+
 function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast, mode, styleRecognition, referenceColorIntelligence = null, existingControlledPreviewReviewStateV2 = null }) {
   const category    = scene?.category ?? stats?.category ?? 'General';
   const sceneConf    = scene?.confidence ?? 0.5;
@@ -923,17 +1042,16 @@ function _buildDecision({ fingerprint, stats, basic, wb, skin, hsl, scene, cast,
       // an item this map doesn't mark 'passed' still correctly stays
       // 'pending', and a genuinely 'failed' item is passed through
       // as 'failed', never silently dropped or upgraded.
-      humanReviewState: (() => {
-        const items = existingControlledPreviewReviewStateV2?.reviewItems;
-        if (!Array.isArray(items)) return null;
-        const map = {};
-        for (const item of items) {
-          if (item && typeof item.id === 'string' && (item.status === 'passed' || item.status === 'failed')) {
-            map[item.id] = item.status;
-          }
-        }
-        return map;
-      })(),
+      // FIX 3 (EPIC 2E-J-C-F2 Step 3): the projection above previously
+      // treated any `item.status === 'passed'` as passed, even when
+      // `item.reviewed !== true` or `reviewerDecision` was `'reject'`/
+      // `'needs-adjustment'` — silently upgrading an incomplete or
+      // actively-rejected review to "complete". This safe, defensive,
+      // read-only projection enforces the full pass/fail/pending rule
+      // set and never trusts caller input directly (bounded array
+      // projection, single-read per field, no `for...of`/spread/
+      // `.slice()`/`.map()` on the raw external array).
+      humanReviewState: _projectHumanReviewStateV2(existingControlledPreviewReviewStateV2),
       // No `flags` override — always resolves to the safe defaults.
     });
   } catch (e) {
@@ -2570,3 +2688,8 @@ function _buildDebugTrace({ decision, fingerprint, mapped, stats, wb, cast }) {
     ].filter(Boolean),
   };
 }
+
+// Exported for the EPIC 2E-J-C-F2 Step 3 focused smoke test only — the
+// main production path (buildFinalPreset) still uses this internally
+// via the same reference; exporting it does not change any behavior.
+export { _projectHumanReviewStateV2 };

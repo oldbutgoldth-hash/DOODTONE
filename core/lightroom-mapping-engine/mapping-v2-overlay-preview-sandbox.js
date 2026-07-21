@@ -166,7 +166,15 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
 
   // EPIC 2E-E-F: "test gate indicates controlled-test eligibility" is a
   // REQUIRED, explicit signal — not inferred from mere existence.
-  const testGateEligible = testGate?.canEnterControlledTest === true || testGate?.testEligibility?.eligible === true;
+  // FIX 2 (EPIC 2E-J-C-F2 Step 2): a browser Preview requires only
+  // PREVIEW-safe eligibility, not the stronger Controlled Test
+  // permission — using `canEnterControlledTest` here incorrectly
+  // coupled the two. `canPreviewOverlayPreset` is the Test Gate's own
+  // canonical preview-eligibility field (gated on
+  // `allowOverlayTestPresetPreview` plus a real Overlay Simulation
+  // existing) — this does NOT require or imply `allowControlledOverlayTest`,
+  // which remains `false` and unaffected by this change.
+  const testGateEligible = testGate?.canPreviewOverlayPreset === true || testGate?.testEligibility?.eligible === true;
 
   const missingCount = [!testGate, !simulation, !overlay, !safety].filter(Boolean).length;
 
@@ -204,7 +212,7 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
     _gate({ id: 'production-write-disabled', label: 'Production write disabled', required: true, passed: flags.allowOverlayPreviewProductionWrite !== true, status: flags.allowOverlayPreviewProductionWrite ? 'failed' : 'passed', reason: flags.allowOverlayPreviewProductionWrite ? 'Production write flag is ENABLED — write still hard-blocked at the output level regardless.' : 'Production write correctly disabled (default).' }),
     _gate({ id: 'preset-mutation-disabled', label: 'Preset mutation disabled', required: true, passed: flags.allowOverlayPreviewPresetMutation !== true, status: flags.allowOverlayPreviewPresetMutation ? 'failed' : 'passed', reason: flags.allowOverlayPreviewPresetMutation ? 'Preset mutation flag is ENABLED — this module never mutates input objects regardless.' : 'Preset mutation correctly disabled (default).' }),
     _gate({ id: 'test-gate-exists', label: 'Controlled Overlay Test Gate exists', required: flags.requireControlledOverlayTestGateForPreview, passed: !!testGate, status: testGate ? 'passed' : 'unavailable', reason: testGate ? 'Controlled Overlay Test Gate V2 is available.' : 'Controlled Overlay Test Gate V2 is missing.' }),
-    _gate({ id: 'test-gate-eligible', label: 'Test gate indicates controlled-test eligibility', required: true, passed: testGateEligible, status: testGateEligible ? 'passed' : (testGate ? 'failed' : 'unavailable'), reason: testGate ? `Test gate canEnterControlledTest=${testGate.canEnterControlledTest}, eligibility level=${testGate.testEligibility?.level ?? 'unknown'}.` : 'No test gate available to check eligibility.' }),
+    _gate({ id: 'test-gate-eligible', label: 'Test gate indicates preview eligibility', required: true, passed: testGateEligible, status: testGateEligible ? 'passed' : (testGate ? 'failed' : 'unavailable'), reason: testGate ? `Test gate canPreviewOverlayPreset=${testGate.canPreviewOverlayPreset}, eligibility level=${testGate.testEligibility?.level ?? 'unknown'}.` : 'No test gate available to check eligibility.' }),
     _gate({ id: 'simulation-exists', label: 'Overlay Simulation exists', required: flags.requireOverlaySimulationForPreview, passed: !!simulation, status: simulation ? 'passed' : 'unavailable', reason: simulation ? 'Overlay Simulation V2 is available.' : 'Overlay Simulation V2 is missing.' }),
     _gate({ id: 'overlay-exists', label: 'Legacy Safety Overlay exists', required: flags.requireLegacySafetyOverlayForPreview, passed: !!overlay, status: overlay ? 'passed' : 'unavailable', reason: overlay ? 'Legacy Safety Overlay V2 is available.' : 'Legacy Safety Overlay V2 is missing.' }),
     _gate({ id: 'safety-clamp-exists', label: 'Safety Clamp exists', required: flags.requireSafetyClampForPreview, passed: !!safety, status: safety ? 'passed' : 'unavailable', reason: safety ? 'Safety Clamp V2 is available.' : 'Safety Clamp V2 is missing.' }),
@@ -376,7 +384,7 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
   // explicit, always-visible productionRestrictions[] array so a
   // preview-ready state never reports itself as "blocked" by its own
   // by-design safety rails.
-  if (!testGateEligible) blockers.push({ blocker: 'Controlled Overlay Test Gate does not indicate controlled-test eligibility.', severity: 'high', requiredFix: 'Wait for the test gate to reach controlled-test eligibility before generating a preview.', source: 'Controlled Overlay Test Gate V2' });
+  if (!testGateEligible) blockers.push({ blocker: 'Controlled Overlay Test Gate does not indicate preview eligibility.', severity: 'high', requiredFix: 'Wait for the test gate to reach preview eligibility before generating a preview.', source: 'Controlled Overlay Test Gate V2' });
   if (requireReview && !humanReviewComplete) blockers.push({ blocker: `Human review is ${humanReviewFailed ? 'failed' : 'incomplete'} (${requiredReviewItems.filter(c => c.status === 'pending').length} item(s) pending).`, severity: 'critical', requiredFix: 'Complete all required human review checklist items.', source: 'Human Review Process' });
   if (hardStopsCount > 0) blockers.push({ blocker: `Safety clamp contains ${hardStopsCount} hard stop(s).`, severity: 'critical', requiredFix: 'Resolve all active hard stops before trusting this preview.', source: 'Safety Clamp V2' });
   if (criticalOverstack) blockers.push({ blocker: 'Over-stack risk is critical.', severity: 'critical', requiredFix: 'Reduce over-stacked tool combinations.', source: 'Safety Clamp V2' });
