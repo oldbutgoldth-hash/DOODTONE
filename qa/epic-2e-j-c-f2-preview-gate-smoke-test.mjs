@@ -143,6 +143,69 @@ const humanReviewStateAdjust = _projectHumanReviewStateV2(adjustReview);
 const { sandbox: sandboxAdjust } = runFullPipeline(humanReviewStateAdjust);
 record('D (pipeline): a single needs-adjustment blocks canGeneratePreview', sandboxAdjust.canGeneratePreview === false, `canGeneratePreview=${sandboxAdjust.canGeneratePreview}`);
 
+// ── FIX 3-F (EPIC 2E-J-C-F2 Step 3-F): conservative rank-based duplicate precedence ──
+console.log('');
+console.log('=== Step 3-F: Conservative duplicate precedence (failed > pending > passed) ===');
+
+const _pending = { id: ID, status: 'pending', reviewed: false, reviewerDecision: 'undecided' };
+const _passed = { id: ID, status: 'passed', reviewed: true, reviewerDecision: 'approve' };
+const _needsAdj = { id: ID, status: 'passed', reviewed: true, reviewerDecision: 'needs-adjustment' };
+const _unreviewed = { id: ID, status: 'passed', reviewed: false, reviewerDecision: 'approve' };
+const _undecidedPassed = { id: ID, status: 'passed', reviewed: true, reviewerDecision: 'undecided' };
+const _failed = { id: ID, status: 'failed', reviewed: true, reviewerDecision: 'reject' };
+
+const t1 = _projectHumanReviewStateV2({ reviewItems: [_pending, _passed] });
+record('1: pending then passed -> omitted', t1[ID] === undefined, JSON.stringify(t1));
+
+const t2 = _projectHumanReviewStateV2({ reviewItems: [_passed, _pending] });
+record('2: passed then pending -> omitted', t2[ID] === undefined, JSON.stringify(t2));
+
+const t3 = _projectHumanReviewStateV2({ reviewItems: [_needsAdj, _passed] });
+record('3: needs-adjustment then passed -> omitted', t3[ID] === undefined, JSON.stringify(t3));
+
+const t4 = _projectHumanReviewStateV2({ reviewItems: [_passed, _needsAdj] });
+record('4: passed then needs-adjustment -> omitted', t4[ID] === undefined, JSON.stringify(t4));
+
+const t5 = _projectHumanReviewStateV2({ reviewItems: [_unreviewed, _passed] });
+record('5: unreviewed then passed -> omitted', t5[ID] === undefined, JSON.stringify(t5));
+
+const t6 = _projectHumanReviewStateV2({ reviewItems: [_passed, _unreviewed] });
+record('6: passed then unreviewed -> omitted', t6[ID] === undefined, JSON.stringify(t6));
+
+const t7 = _projectHumanReviewStateV2({ reviewItems: [_undecidedPassed] });
+record('7: passed+reviewed=true+undecided -> omitted', t7[ID] === undefined, JSON.stringify(t7));
+
+const t8a = _projectHumanReviewStateV2({ reviewItems: [_failed, _pending, _passed] });
+const t8b = _projectHumanReviewStateV2({ reviewItems: [_passed, _failed, _pending] });
+const t8c = _projectHumanReviewStateV2({ reviewItems: [_pending, _passed, _failed] });
+record('8: failed+pending+passed, any order -> failed always wins', t8a[ID] === 'failed' && t8b[ID] === 'failed' && t8c[ID] === 'failed', `order1=${t8a[ID]}, order2=${t8b[ID]}, order3=${t8c[ID]}`);
+
+const t9 = _projectHumanReviewStateV2({ reviewItems: [_passed, _passed] });
+record('9: approved duplicate entries -> passed', t9[ID] === 'passed', JSON.stringify(t9));
+
+const humanReviewStateT10 = _projectHumanReviewStateV2(allApproved());
+const { sandbox: sandboxT10, renderPlan: renderPlanT10 } = runFullPipeline(humanReviewStateT10);
+record('10: all ten properly approved -> canGeneratePreview=true', sandboxT10.canGeneratePreview === true, `canGeneratePreview=${sandboxT10.canGeneratePreview}`);
+record('10: all ten properly approved -> Render Plan renderable=true', renderPlanT10.v2RenderPlan.renderable === true, `renderable=${renderPlanT10.v2RenderPlan.renderable}`);
+
+// Test 11: buildFinalPreset-level integration — every checklist ID
+// carries one pending duplicate AND one passed duplicate.
+const mixedAllIds = { reviewItems: REQUIRED_IDS.flatMap((id) => [
+  { id, status: 'pending', reviewed: false, reviewerDecision: 'undecided' },
+  { id, status: 'passed', reviewed: true, reviewerDecision: 'approve' },
+]) };
+const humanReviewStateT11 = _projectHumanReviewStateV2(mixedAllIds);
+record('11: every ID has a pending+passed duplicate -> projected map empty', Object.keys(humanReviewStateT11).length === 0, JSON.stringify(humanReviewStateT11));
+const { sandbox: sandboxT11 } = runFullPipeline(humanReviewStateT11);
+const missingT11 = sandboxT11.previewGateChecks?.filter((g) => g.required && !g.passed).map((g) => g.id) ?? [];
+record('11: Sandbox Human Review remains incomplete', missingT11.includes('human-review-complete'), `missingRequirements=${JSON.stringify(missingT11)}`);
+record('11: canGeneratePreview remains false', sandboxT11.canGeneratePreview === false, `canGeneratePreview=${sandboxT11.canGeneratePreview}`);
+
+record('12: canWriteProduction = false', sandboxT10.canWriteProduction === false, `value=${sandboxT10.canWriteProduction}`);
+record('12: canExportPreview = false', sandboxT10.canExportPreview === false, `value=${sandboxT10.canExportPreview}`);
+record('12: allowControlledOverlayTest = false', LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest === false, `value=${LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest}`);
+record('12: selectedOutputSource = legacy', sandboxT10.selectedOutputSource === 'legacy', `value=${sandboxT10.selectedOutputSource}`);
+
 // ── Summary ──
 const pass = results.filter((r) => r.result === 'PASS').length;
 const fail = results.filter((r) => r.result === 'FAIL').length;

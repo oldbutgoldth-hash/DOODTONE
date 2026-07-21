@@ -379,69 +379,101 @@ function _safeBoundedArrayForReview(input, maxLen = 32) {
  * return shape) into the flat map `{[itemId]: 'passed'|'failed'}` the
  * Preview Sandbox's `humanReviewState` parameter expects.
  *
- * PASS rule: an item projects as `"passed"` ONLY when ALL of:
- *   - status === "passed"
- *   - reviewed === true
- *   - reviewerDecision is not "reject"
- *   - reviewerDecision is not "needs-adjustment"
+ * CLASSIFICATION (per item, before duplicate resolution):
  *
- * FAILED rule: an item projects as `"failed"` when EITHER:
+ * FAILED when EITHER:
  *   - status === "failed"
  *   - reviewerDecision === "reject"
  *
- * Everything else (unreviewed, missing/unrecognized decision,
- * needs-adjustment, pending, unknown status, malformed input, unknown
- * checklist id) is left OUT of the map entirely — the Sandbox's own
- * checklist then correctly defaults that item to "pending", never
- * silently upgraded to passed. `reviewerDecision` is normalized against
- * an exact allow-list only — never inferred from labels/text, never
+ * PASSED only when ALL of:
+ *   - status === "passed"
+ *   - reviewed === true
+ *   - reviewerDecision === "approve" (exactly — "undecided" is NOT approval)
+ *
+ * PENDING for everything else with a valid canonical ID: unreviewed,
+ * `status === "pending"`, missing/unknown status, missing/unknown/
+ * "undecided"/"needs-adjustment" reviewerDecision, or any other
+ * malformed field. A valid ID with uncertain fields always stays
+ * pending — never silently upgraded to passed.
+ *
+ * If the item ID itself is missing, unknown, or unreadable, the item
+ * is skipped entirely — it cannot safely be associated with any
+ * checklist entry. `reviewerDecision` is normalized against an exact
+ * allow-list only — never inferred from labels/text, never
  * `.toString()`'d.
  *
- * DUPLICATE RULE: if the same checklist id appears more than once
- * (malformed/hostile input), conservative precedence applies — a
- * "failed" entry always wins and can never be overwritten by a later
- * "passed" duplicate for the same id; a "passed" entry can only ever
- * fill a genuinely empty slot.
+ * CONSERVATIVE DUPLICATE PRECEDENCE (Step 3-F): when the same
+ * checklist ID appears more than once, the STRONGEST conservative
+ * classification wins, by rank `failed(3) > pending(2) > passed(1)`,
+ * regardless of input order — a `pending` duplicate is remembered
+ * internally and outranks a later (or earlier) `passed` duplicate for
+ * the same ID, so e.g. `pending` then `passed`, or `passed` then
+ * `pending`, both conservatively resolve to pending (omitted from the
+ * final map). `pending` itself is never present in the final returned
+ * map — the Sandbox's own checklist already defaults an omitted ID to
+ * "pending" — but it is tracked internally throughout duplicate
+ * resolution specifically so it can correctly outrank a weaker later
+ * entry.
  *
  * Never trusts the external array/item shape directly (bounded safe
  * array projection, single safe read per field, hostile getters
  * degrade to "skip this item" rather than throwing). Never mutates the
  * input. Unknown checklist ids are rejected — this never creates a new
- * Review category.
+ * Review category. No new state is ever exposed to Production.
  */
+// FIX 3-F (EPIC 2E-J-C-F2 Step 3-F): conservative rank-based
+// classification — a WEAKER state must never override a STRONGER
+// conservative state for the same checklist ID, regardless of input
+// order. Rank: failed(3) > pending(2) > passed(1). `pending` must be
+// remembered internally during duplicate resolution (so a
+// pending-then-passed OR passed-then-pending duplicate both correctly
+// end up pending), even though `pending` itself is never present in
+// the final returned map (the Sandbox's own checklist already
+// defaults an omitted ID to "pending").
+const _REVIEW_RANK = { failed: 3, pending: 2, passed: 1 };
+
+/** Classifies a single, already safely-read item's fields into 'failed' | 'pending' | 'passed'. Never returns anything else. */
+function _classifyReviewItem(status, reviewed, reviewerDecision) {
+  if (status === 'failed' || reviewerDecision === 'reject') return 'failed';
+  // PASSED requires an unambiguous, fully-confirmed approval — status,
+  // reviewed flag, AND an explicit "approve" decision. "undecided" is
+  // NOT approval (test 7) and must not count as passed.
+  if (status === 'passed' && reviewed === true && reviewerDecision === 'approve') return 'passed';
+  // Everything else (pending/unreviewed/undecided/needs-adjustment/
+  // unknown status/malformed fields) is conservatively PENDING — never
+  // silently upgraded.
+  return 'pending';
+}
+
 function _projectHumanReviewStateV2(existingReviewState) {
   const rawItems = _safeReadReviewField(existingReviewState, 'reviewItems');
   const items = _safeBoundedArrayForReview(rawItems, 32);
-  const map = {};
+  // Tracks the STRONGEST (highest-rank) classification seen so far per
+  // canonical ID — including 'pending', so a later, weaker duplicate
+  // (e.g. a stray 'passed' after a genuine 'pending') can never
+  // overwrite it. Input order never matters.
+  const strongestById = new Map();
   for (const rawItem of items) {
     if (!rawItem || typeof rawItem !== 'object') continue; // null/primitive entries skipped
     const id = _safeReadReviewField(rawItem, 'id');
-    if (typeof id !== 'string' || !REQUIRED_REVIEW_ITEM_IDS.has(id)) continue; // unknown/malformed key skipped — never a new category
+    if (typeof id !== 'string' || !REQUIRED_REVIEW_ITEM_IDS.has(id)) continue; // missing/unknown/unreadable ID — cannot be safely associated with a checklist entry, skipped
     const status = _safeReadReviewField(rawItem, 'status');
     const reviewed = _safeReadReviewField(rawItem, 'reviewed');
     const rawDecision = _safeReadReviewField(rawItem, 'reviewerDecision');
     const reviewerDecision = VALID_REVIEWER_DECISIONS.includes(rawDecision) ? rawDecision : null;
 
-    const isFailed = status === 'failed' || reviewerDecision === 'reject';
-    // PENDING RULE (test case G): a MISSING/unrecognized reviewerDecision
-    // must not be treated as passed either, even when status/reviewed
-    // both look complete — an explicit, recognized decision is required.
-    const isPassed = !isFailed && status === 'passed' && reviewed === true
-      && reviewerDecision !== null && reviewerDecision !== 'needs-adjustment';
+    const classification = _classifyReviewItem(status, reviewed, reviewerDecision);
+    const existing = strongestById.get(id);
+    if (existing === undefined || _REVIEW_RANK[classification] > _REVIEW_RANK[existing]) {
+      strongestById.set(id, classification);
+    }
+  }
 
-    let projected = null;
-    if (isFailed) projected = 'failed';
-    else if (isPassed) projected = 'passed';
-    // else: pending/uncertain — left out of the map entirely, never upgraded
-
-    if (projected === null) continue;
-
-    // Duplicate precedence: failed always wins and is never overwritten;
-    // a 'passed' entry only ever fills a genuinely empty slot.
-    const existing = map[id];
-    if (existing === 'failed') continue;
-    if (projected === 'failed') { map[id] = 'failed'; continue; }
-    if (existing === undefined) map[id] = projected;
+  // Produce the existing Sandbox map contract: failed -> "failed",
+  // passed -> "passed", pending -> omitted entirely.
+  const map = {};
+  for (const [id, classification] of strongestById) {
+    if (classification === 'failed' || classification === 'passed') map[id] = classification;
   }
   return map;
 }
