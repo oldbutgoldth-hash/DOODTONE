@@ -134,6 +134,114 @@ let visualPreviewComparisonController = null;
 // section's skeleton exists in the DOM.
 let interactiveBeforeAfterController = null;
 let interactivePreviewObservationController = null;
+
+// ── EPIC 2E-J-C-F2 Step 7A-F1: safe, read-only QA snapshot hook ──────
+// Gated strictly behind `?qa=1` in the page URL — when absent, no
+// global hook is created at all, per this step's explicit instruction.
+// Every returned field is a safe, freshly-copied primitive (number,
+// string, boolean, or array/object of only those) — never image
+// pixels, filenames, file paths, EXIF, user data, complete Analysis
+// objects, DOM elements, or a mutable reference into live application
+// state. This is purely diagnostic/read-only and never writes
+// anything back into the application.
+function _qaSafeNum(v) { return typeof v === 'number' && Number.isFinite(v) ? v : null; }
+function _qaSafeBool(v) { return v === true || v === false ? v : null; }
+function _qaSafeStr(v) { return typeof v === 'string' ? v : null; }
+function _qaSafeStrArray(v) { return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 32) : []; }
+
+function ensureQaSnapshotHook() {
+  let qaEnabled = false;
+  try { qaEnabled = new URLSearchParams(window.location.search).get('qa') === '1'; } catch { qaEnabled = false; }
+  if (!qaEnabled) return; // no ?qa=1 -> no global hook created at all
+
+  function getPreviewPipelineSnapshot() {
+    const fsi = state.lastFinalStyleIntent ?? null;
+    const testGate = fsi?.controlledOverlayTestGateV2 ?? null;
+    const overlaySimulation = fsi?.legacyOverlaySimulationV2 ?? null;
+    const legacySafetyOverlay = fsi?.legacySafetyOverlayV2 ?? null;
+    const shadowCompare = fsi?.lightroomShadowCompareReportV2 ?? null;
+    const safetyClamp = fsi?.lightroomSafetyClampV2 ?? null;
+    const previewSandbox = state.lastPreviewSandbox ?? null;
+    const v2Plan = fsi?.visualPreviewRenderPlanV2?.v2RenderPlan ?? null;
+    const legacyPlan = fsi?.visualPreviewRenderPlanV2?.legacyRenderPlan ?? null;
+
+    let interactiveState = null, alignmentStatus = null;
+    try {
+      const ibaState = interactiveBeforeAfterController ? interactiveBeforeAfterController.getState() : null;
+      interactiveState = _qaSafeStr(ibaState?.state);
+      alignmentStatus = _qaSafeStr(ibaState?.metadata?.alignment?.status) ?? _qaSafeStr(ibaState?.blockedReason);
+    } catch { /* leave nulls, never throw from the QA hook */ }
+
+    let observationEnabled = null, observationState = null;
+    try {
+      const obsState = interactivePreviewObservationController ? interactivePreviewObservationController.getState() : null;
+      observationState = _qaSafeStr(obsState?.state);
+      observationEnabled = obsState ? (obsState.state === 'ready' || obsState.state === 'selected' || obsState.state === 'cleared') : null;
+    } catch { /* leave nulls */ }
+
+    return {
+      analysisGeneration: _qaSafeNum(analysisRenderGeneration),
+      testGate: {
+        exists: !!testGate,
+        confidence: _qaSafeNum(testGate?.confidence),
+        safetyScore: _qaSafeNum(testGate?.safetyScore),
+        canPreviewOverlayPreset: _qaSafeBool(testGate?.canPreviewOverlayPreset),
+        canEnterControlledTest: _qaSafeBool(testGate?.canEnterControlledTest),
+      },
+      overlaySimulation: {
+        exists: !!overlaySimulation,
+        confidence: _qaSafeNum(overlaySimulation?.confidence),
+        safetyScore: _qaSafeNum(overlaySimulation?.safetyScore),
+      },
+      legacySafetyOverlay: {
+        exists: !!legacySafetyOverlay,
+        confidence: _qaSafeNum(legacySafetyOverlay?.confidence),
+        safetyScore: _qaSafeNum(legacySafetyOverlay?.safetyScore),
+      },
+      shadowCompare: {
+        exists: !!shadowCompare,
+        confidence: _qaSafeNum(shadowCompare?.confidence),
+        safetyScore: _qaSafeNum(shadowCompare?.safetyScore),
+      },
+      safetyClamp: {
+        exists: !!safetyClamp,
+        globalSafetyScore: _qaSafeNum(safetyClamp?.globalSafetyScore),
+      },
+      previewSandbox: {
+        exists: !!previewSandbox,
+        previewState: _qaSafeStr(previewSandbox?.previewState),
+        confidence: _qaSafeNum(previewSandbox?.confidence),
+        safetyScore: _qaSafeNum(previewSandbox?.safetyScore),
+        canGeneratePreview: _qaSafeBool(previewSandbox?.canGeneratePreview),
+        missingRequirements: _qaSafeStrArray(previewSandbox?.previewGateChecks?.filter?.((g) => g?.required && !g?.passed)?.map?.((g) => g?.reason)),
+        failedGateIds: _qaSafeStrArray(previewSandbox?.previewGateChecks?.filter?.((g) => g?.required && !g?.passed)?.map?.((g) => g?.id)),
+        selectedOutputSource: _qaSafeStr(previewSandbox?.selectedOutputSource),
+        canWriteProduction: _qaSafeBool(previewSandbox?.canWriteProduction),
+        canExportPreview: _qaSafeBool(previewSandbox?.canExportPreview),
+      },
+      renderPlan: {
+        exists: !!v2Plan,
+        v2Renderable: _qaSafeBool(v2Plan?.renderable),
+        v2State: _qaSafeStr(v2Plan?.state),
+        visualAdjustmentsApplied: _qaSafeBool(v2Plan?.visualAdjustmentsApplied),
+      },
+      visualPreview: {
+        legacyState: _qaSafeStr(legacyPlan?.renderable === true ? 'renderable' : (legacyPlan ? 'not-renderable' : null)),
+        controlledV2State: _qaSafeStr(v2Plan?.renderable === true ? 'renderable' : (v2Plan ? 'not-renderable' : null)),
+      },
+      interactive: {
+        state: interactiveState,
+        alignmentStatus,
+      },
+      observation: {
+        enabled: observationEnabled,
+        state: observationState,
+      },
+    };
+  }
+
+  window.__LUMIXA_QA__ = { getPreviewPipelineSnapshot };
+}
 // EPIC 2E-J Phase B: the session summary is created ONCE and persists
 // across Re-analyze/New image/Reset — only the current generation's
 // record is invalidated/cleared on those events, never the whole
@@ -188,6 +296,7 @@ waitForRoot(() => {
   setupAnalysisTabs();
   setupAnalysisResizeObserver();
   ensureReviewConsoleController();
+  ensureQaSnapshotHook();
 
   // Tone Curve Editor — init after DOM ready
   const curveCanvas = document.getElementById('toneCurveCanvas');
@@ -1486,6 +1595,12 @@ async function runAnalysis() {
     // xmp-validator, and does NOT affect XMP export.
     state.lastPreviewSandbox = finalPreset._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2 ?? null;
     state.lastPreviewReviewState = finalPreset._decision?.finalStyleIntent?.controlledPreviewReviewStateV2 ?? null;
+    // FIX 1 (EPIC 2E-J-C-F2 Step 7A-F1): kept for the read-only QA
+    // snapshot hook only (see ensureQaSnapshotHook below) — a plain
+    // reference to the already-computed finalStyleIntent, never
+    // mutated here or by the QA hook, never affecting XMP export or
+    // any production path.
+    state.lastFinalStyleIntent = finalPreset._decision?.finalStyleIntent ?? null;
     const reviewSec = document.getElementById('reviewConsoleSection');
     const reviewInner = document.getElementById('reviewConsoleInner');
     if (reviewSec && reviewInner && (state.lastPreviewSandbox || state.lastPreviewReviewState)) {

@@ -1,11 +1,11 @@
 {
-  "suite": "EPIC 2E-J-C-F2 Step 7A — Full Application Ready Reachability",
-  "generatedAt": "2026-07-21T06:24:40.652Z",
+  "suite": "EPIC 2E-J-C-F2 Step 7A (+ Step 7A-F1) - Full Application Ready Reachability",
+  "generatedAt": "2026-07-21T07:04:12.975Z",
   "summary": {
-    "total": 11,
-    "pass": 6,
+    "total": 13,
+    "pass": 7,
     "fail": 1,
-    "notTested": 4
+    "notTested": 5
   },
   "firstFixtureReachingReady": null,
   "fixtureRecords": [
@@ -13,117 +13,143 @@
       "fixture": "neutral-balanced.png",
       "analysisCompleted": true,
       "reviewItemsClicked": 10,
-      "legacyPreviewState": "unknown",
-      "controlledV2PreviewState": "unavailable",
-      "interactiveState": "partial",
-      "observationState": "Observation is unavailable because only one preview rendered.",
+      "legacyPreviewState": "rendered",
+      "controlledV2PreviewState": "not-renderable",
+      "interactiveState": "cancelled",
+      "observationState": "unavailable",
       "observationEnabled": false,
       "blockers": [
-        "Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced."
+        "Confidence 0.597 vs. required 0.72."
+      ],
+      "failedGateIds": [
+        "confidence-sufficient"
       ]
     },
     {
       "fixture": "warm-portrait-synthetic.png",
       "analysisCompleted": true,
       "reviewItemsClicked": 10,
-      "legacyPreviewState": "unknown",
-      "controlledV2PreviewState": "unavailable",
-      "interactiveState": "partial",
-      "observationState": "Observation is unavailable because only one preview rendered.",
+      "legacyPreviewState": "rendered",
+      "controlledV2PreviewState": "not-renderable",
+      "interactiveState": "cancelled",
+      "observationState": "unavailable",
       "observationEnabled": false,
       "blockers": [
-        "Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced."
+        "Confidence 0.593 vs. required 0.72."
+      ],
+      "failedGateIds": [
+        "confidence-sufficient"
       ]
     },
     {
       "fixture": "cool-shadow-synthetic.png",
       "analysisCompleted": true,
       "reviewItemsClicked": 10,
-      "legacyPreviewState": "unknown",
-      "controlledV2PreviewState": "unavailable",
-      "interactiveState": "partial",
-      "observationState": "Observation is unavailable because only one preview rendered.",
+      "legacyPreviewState": "rendered",
+      "controlledV2PreviewState": "not-renderable",
+      "interactiveState": "cancelled",
+      "observationState": "unavailable",
       "observationEnabled": false,
       "blockers": [
-        "Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced."
+        "Confidence 0.585 vs. required 0.72.",
+        "Safety score 0.743 vs. required 0.75."
+      ],
+      "failedGateIds": [
+        "confidence-sufficient",
+        "safety-score-sufficient"
       ]
     },
     {
       "fixture": "highlight-shadow-range.png",
       "analysisCompleted": true,
       "reviewItemsClicked": 10,
-      "legacyPreviewState": "unknown",
-      "controlledV2PreviewState": "unavailable",
-      "interactiveState": "partial",
-      "observationState": "Observation is unavailable because only one preview rendered.",
+      "legacyPreviewState": "rendered",
+      "controlledV2PreviewState": "not-renderable",
+      "interactiveState": "cancelled",
+      "observationState": "unavailable",
       "observationEnabled": false,
       "blockers": [
-        "Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced."
+        "Confidence 0.593 vs. required 0.72.",
+        "Safety score 0.738 vs. required 0.75."
+      ],
+      "failedGateIds": [
+        "confidence-sufficient",
+        "safety-score-sufficient"
       ]
     }
   ],
   "consoleErrors": [],
   "screenshotsGenerated": [
-    "actual-partial-state-neutral-balanced.png",
-    "actual-partial-state-warm-portrait-synthetic.png",
-    "actual-partial-state-cool-shadow-synthetic.png",
-    "actual-partial-state-highlight-shadow-range.png"
+    "actual-cancelled-state-neutral-balanced.png",
+    "actual-cancelled-state-warm-portrait-synthetic.png",
+    "actual-cancelled-state-cool-shadow-synthetic.png",
+    "actual-cancelled-state-highlight-shadow-range.png"
   ],
   "results": [
     {
-      "test": "[neutral-balanced.png] Per-fixture pipeline record",
+      "test": "[neutral-balanced.png] Per-fixture pipeline record (RECORD_CAPTURED - evidence only)",
       "result": "PASS",
-      "evidence": "{\"fixture\":\"neutral-balanced.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"unknown\",\"controlledV2PreviewState\":\"unavailable\",\"interactiveState\":\"partial\",\"observationState\":\"Observation is unavailable because only one preview rendered.\",\"observationEnabled\":false,\"blockers\":[\"Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced.\"]}"
+      "evidence": "{\"fixture\":\"neutral-balanced.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"not-renderable\",\"interactiveState\":\"cancelled\",\"observationState\":\"unavailable\",\"observationEnabled\":false,\"blockers\":[\"Confidence 0.597 vs. required 0.72.\"],\"failedGateIds\":[\"confidence-sufficient\"]}"
     },
     {
-      "test": "[warm-portrait-synthetic.png] Per-fixture pipeline record",
+      "test": "[warm-portrait-synthetic.png] Per-fixture pipeline record (RECORD_CAPTURED - evidence only)",
       "result": "PASS",
-      "evidence": "{\"fixture\":\"warm-portrait-synthetic.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"unknown\",\"controlledV2PreviewState\":\"unavailable\",\"interactiveState\":\"partial\",\"observationState\":\"Observation is unavailable because only one preview rendered.\",\"observationEnabled\":false,\"blockers\":[\"Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced.\"]}"
+      "evidence": "{\"fixture\":\"warm-portrait-synthetic.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"not-renderable\",\"interactiveState\":\"cancelled\",\"observationState\":\"unavailable\",\"observationEnabled\":false,\"blockers\":[\"Confidence 0.593 vs. required 0.72.\"],\"failedGateIds\":[\"confidence-sufficient\"]}"
     },
     {
-      "test": "[cool-shadow-synthetic.png] Per-fixture pipeline record",
+      "test": "[cool-shadow-synthetic.png] Per-fixture pipeline record (RECORD_CAPTURED - evidence only)",
       "result": "PASS",
-      "evidence": "{\"fixture\":\"cool-shadow-synthetic.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"unknown\",\"controlledV2PreviewState\":\"unavailable\",\"interactiveState\":\"partial\",\"observationState\":\"Observation is unavailable because only one preview rendered.\",\"observationEnabled\":false,\"blockers\":[\"Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced.\"]}"
+      "evidence": "{\"fixture\":\"cool-shadow-synthetic.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"not-renderable\",\"interactiveState\":\"cancelled\",\"observationState\":\"unavailable\",\"observationEnabled\":false,\"blockers\":[\"Confidence 0.585 vs. required 0.72.\",\"Safety score 0.743 vs. required 0.75.\"],\"failedGateIds\":[\"confidence-sufficient\",\"safety-score-sufficient\"]}"
     },
     {
-      "test": "[highlight-shadow-range.png] Per-fixture pipeline record",
+      "test": "[highlight-shadow-range.png] Per-fixture pipeline record (RECORD_CAPTURED - evidence only)",
       "result": "PASS",
-      "evidence": "{\"fixture\":\"highlight-shadow-range.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"unknown\",\"controlledV2PreviewState\":\"unavailable\",\"interactiveState\":\"partial\",\"observationState\":\"Observation is unavailable because only one preview rendered.\",\"observationEnabled\":false,\"blockers\":[\"Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced.\"]}"
+      "evidence": "{\"fixture\":\"highlight-shadow-range.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"not-renderable\",\"interactiveState\":\"cancelled\",\"observationState\":\"unavailable\",\"observationEnabled\":false,\"blockers\":[\"Confidence 0.593 vs. required 0.72.\",\"Safety score 0.738 vs. required 0.75.\"],\"failedGateIds\":[\"confidence-sufficient\",\"safety-score-sufficient\"]}"
     },
     {
       "test": "Full Application Acceptance: at least one fixture reaches Ready",
       "result": "FAIL",
-      "evidence": "NO fixture reached Ready. Exact blocker (from every fixture): \"Confidence <value> vs. required 0.72\" (the \"confidence-sufficient\" Sandbox gate) — see per-fixture records above. This is a genuine, data-independent evidence gate (the underlying confidence formula uses fixed constants such as 0.6 for \"legacy input available\", not per-pixel image analysis), not a fixture-selection problem."
+      "evidence": "NO fixture reached Ready. See FIX 3 confidence breakdown above for the proven cause (a structural sequencing limitation, not a wiring bug, not a threshold, not a fixture-selection problem)."
     },
     {
       "test": "Actual Observation UI workflow",
       "result": "NOT_TESTED",
-      "evidence": "Observation controls never became enabled through the real application in this run — cannot test real UI interaction on disabled controls without fabricating state, which this test explicitly must not do."
+      "evidence": "Observation controls never became enabled through the real application in this run."
     },
     {
       "test": "Actual Session Clear button test",
       "result": "NOT_TESTED",
-      "evidence": "Same reason — Session Summary never displayed an active Observation to clear."
+      "evidence": "Same reason."
     },
     {
       "test": "Generation handoff test",
       "result": "NOT_TESTED",
-      "evidence": "Same reason — no Observation was ever selected to invalidate."
+      "evidence": "Same reason."
     },
     {
       "test": "Identity Preview UI honesty",
       "result": "NOT_TESTED",
-      "evidence": "No fixture reached a state where Controlled V2 rendered (Identity or otherwise) through the real application in this run."
+      "evidence": "No fixture reached a rendered Controlled V2 state in this run."
     },
     {
-      "test": "Console errors (excluding confirmed font-host failures)",
+      "test": "Console errors (only confirmed font-host failures excluded)",
       "result": "PASS",
       "evidence": "(none)"
     },
     {
-      "test": "Production lock: XMP export unchanged (byte length)",
+      "test": "XMP export source confirmed Legacy (via QA snapshot)",
+      "result": "PASS",
+      "evidence": "selectedOutputSource=legacy"
+    },
+    {
+      "test": "XMP captured before any Observation interaction",
       "result": "PASS",
       "evidence": "length=2962"
+    },
+    {
+      "test": "Observation-to-XMP comparison (before vs after Observation interaction)",
+      "result": "NOT_TESTED",
+      "evidence": "Observation was never enabled through the real application in this run."
     }
   ],
   "decision": "FAIL"

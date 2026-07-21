@@ -1,0 +1,273 @@
+{
+  "generatedAt": "2026-07-21T07:04:12.976Z",
+  "liveEvidenceRecords": [
+    {
+      "fixture": "neutral-balanced.png",
+      "snapshot": {
+        "analysisGeneration": 2,
+        "testGate": {
+          "exists": true,
+          "confidence": 0.689,
+          "safetyScore": 0.812,
+          "canPreviewOverlayPreset": true,
+          "canEnterControlledTest": false
+        },
+        "overlaySimulation": {
+          "exists": true,
+          "confidence": 0.604,
+          "safetyScore": 0.783
+        },
+        "legacySafetyOverlay": {
+          "exists": true,
+          "confidence": 0.648,
+          "safetyScore": 0.851
+        },
+        "shadowCompare": {
+          "exists": true,
+          "confidence": 0.606,
+          "safetyScore": null
+        },
+        "safetyClamp": {
+          "exists": true,
+          "globalSafetyScore": 0.628
+        },
+        "previewSandbox": {
+          "exists": true,
+          "previewState": "blocked",
+          "confidence": 0.597,
+          "safetyScore": 0.754,
+          "canGeneratePreview": false,
+          "missingRequirements": [
+            "Confidence 0.597 vs. required 0.72."
+          ],
+          "failedGateIds": [
+            "confidence-sufficient"
+          ],
+          "selectedOutputSource": "legacy",
+          "canWriteProduction": false,
+          "canExportPreview": false
+        },
+        "renderPlan": {
+          "exists": true,
+          "v2Renderable": false,
+          "v2State": null,
+          "visualAdjustmentsApplied": null
+        },
+        "visualPreview": {
+          "legacyState": "renderable",
+          "controlledV2State": "not-renderable"
+        },
+        "interactive": {
+          "state": "cancelled",
+          "alignmentStatus": null
+        },
+        "observation": {
+          "enabled": false,
+          "state": "unavailable"
+        }
+      }
+    },
+    {
+      "fixture": "warm-portrait-synthetic.png",
+      "snapshot": {
+        "analysisGeneration": 2,
+        "testGate": {
+          "exists": true,
+          "confidence": 0.686,
+          "safetyScore": 0.837,
+          "canPreviewOverlayPreset": true,
+          "canEnterControlledTest": false
+        },
+        "overlaySimulation": {
+          "exists": true,
+          "confidence": 0.584,
+          "safetyScore": 0.806
+        },
+        "legacySafetyOverlay": {
+          "exists": true,
+          "confidence": 0.649,
+          "safetyScore": 0.872
+        },
+        "shadowCompare": {
+          "exists": true,
+          "confidence": 0.613,
+          "safetyScore": null
+        },
+        "safetyClamp": {
+          "exists": true,
+          "globalSafetyScore": 0.681
+        },
+        "previewSandbox": {
+          "exists": true,
+          "previewState": "blocked",
+          "confidence": 0.593,
+          "safetyScore": 0.78,
+          "canGeneratePreview": false,
+          "missingRequirements": [
+            "Confidence 0.593 vs. required 0.72."
+          ],
+          "failedGateIds": [
+            "confidence-sufficient"
+          ],
+          "selectedOutputSource": "legacy",
+          "canWriteProduction": false,
+          "canExportPreview": false
+        },
+        "renderPlan": {
+          "exists": true,
+          "v2Renderable": false,
+          "v2State": null,
+          "visualAdjustmentsApplied": null
+        },
+        "visualPreview": {
+          "legacyState": "renderable",
+          "controlledV2State": "not-renderable"
+        },
+        "interactive": {
+          "state": "cancelled",
+          "alignmentStatus": null
+        },
+        "observation": {
+          "enabled": false,
+          "state": "unavailable"
+        }
+      }
+    },
+    {
+      "fixture": "cool-shadow-synthetic.png",
+      "snapshot": {
+        "analysisGeneration": 2,
+        "testGate": {
+          "exists": true,
+          "confidence": 0.675,
+          "safetyScore": 0.801,
+          "canPreviewOverlayPreset": true,
+          "canEnterControlledTest": false
+        },
+        "overlaySimulation": {
+          "exists": true,
+          "confidence": 0.575,
+          "safetyScore": 0.773
+        },
+        "legacySafetyOverlay": {
+          "exists": true,
+          "confidence": 0.626,
+          "safetyScore": 0.842
+        },
+        "shadowCompare": {
+          "exists": true,
+          "confidence": 0.605,
+          "safetyScore": null
+        },
+        "safetyClamp": {
+          "exists": true,
+          "globalSafetyScore": 0.606
+        },
+        "previewSandbox": {
+          "exists": true,
+          "previewState": "blocked",
+          "confidence": 0.585,
+          "safetyScore": 0.743,
+          "canGeneratePreview": false,
+          "missingRequirements": [
+            "Confidence 0.585 vs. required 0.72.",
+            "Safety score 0.743 vs. required 0.75."
+          ],
+          "failedGateIds": [
+            "confidence-sufficient",
+            "safety-score-sufficient"
+          ],
+          "selectedOutputSource": "legacy",
+          "canWriteProduction": false,
+          "canExportPreview": false
+        },
+        "renderPlan": {
+          "exists": true,
+          "v2Renderable": false,
+          "v2State": null,
+          "visualAdjustmentsApplied": null
+        },
+        "visualPreview": {
+          "legacyState": "renderable",
+          "controlledV2State": "not-renderable"
+        },
+        "interactive": {
+          "state": "cancelled",
+          "alignmentStatus": null
+        },
+        "observation": {
+          "enabled": false,
+          "state": "unavailable"
+        }
+      }
+    },
+    {
+      "fixture": "highlight-shadow-range.png",
+      "snapshot": {
+        "analysisGeneration": 2,
+        "testGate": {
+          "exists": true,
+          "confidence": 0.684,
+          "safetyScore": 0.797,
+          "canPreviewOverlayPreset": true,
+          "canEnterControlledTest": false
+        },
+        "overlaySimulation": {
+          "exists": true,
+          "confidence": 0.601,
+          "safetyScore": 0.769
+        },
+        "legacySafetyOverlay": {
+          "exists": true,
+          "confidence": 0.639,
+          "safetyScore": 0.839
+        },
+        "shadowCompare": {
+          "exists": true,
+          "confidence": 0.598,
+          "safetyScore": null
+        },
+        "safetyClamp": {
+          "exists": true,
+          "globalSafetyScore": 0.597
+        },
+        "previewSandbox": {
+          "exists": true,
+          "previewState": "blocked",
+          "confidence": 0.593,
+          "safetyScore": 0.738,
+          "canGeneratePreview": false,
+          "missingRequirements": [
+            "Confidence 0.593 vs. required 0.72.",
+            "Safety score 0.738 vs. required 0.75."
+          ],
+          "failedGateIds": [
+            "confidence-sufficient",
+            "safety-score-sufficient"
+          ],
+          "selectedOutputSource": "legacy",
+          "canWriteProduction": false,
+          "canExportPreview": false
+        },
+        "renderPlan": {
+          "exists": true,
+          "v2Renderable": false,
+          "v2State": null,
+          "visualAdjustmentsApplied": null
+        },
+        "visualPreview": {
+          "legacyState": "renderable",
+          "controlledV2State": "not-renderable"
+        },
+        "interactive": {
+          "state": "cancelled",
+          "alignmentStatus": null
+        },
+        "observation": {
+          "enabled": false,
+          "state": "unavailable"
+        }
+      }
+    }
+  ]
+}
