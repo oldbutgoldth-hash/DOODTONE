@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-21T08:14:50.949Z",
+  "generatedAt": "2026-07-21T10:08:34.498Z",
   "liveEvidenceRecords": [
     {
       "fixture": "neutral-balanced.png",
@@ -61,7 +61,32 @@
         },
         "observation": {
           "enabled": true,
-          "state": "ready"
+          "state": "ready",
+          "selectedValue": null,
+          "reasons": [],
+          "observationGenerationId": null
+        },
+        "sessionSummary": {
+          "totalObserved": 0,
+          "activeObservations": 0,
+          "preferLegacy": 0,
+          "preferV2": 0,
+          "noVisibleDifference": 0,
+          "unsure": 0,
+          "cleared": 0,
+          "invalidated": 0,
+          "reasonCounts": {
+            "skinTone": 0,
+            "whiteBalance": 0,
+            "highlightDetail": 0,
+            "shadowDetail": 0,
+            "contrast": 0,
+            "colorBalance": 0,
+            "saturation": 0,
+            "naturalLook": 0,
+            "clarityDetail": 0,
+            "noSpecificReason": 0
+          }
         }
       }
     },
@@ -125,7 +150,32 @@
         },
         "observation": {
           "enabled": true,
-          "state": "ready"
+          "state": "ready",
+          "selectedValue": null,
+          "reasons": [],
+          "observationGenerationId": null
+        },
+        "sessionSummary": {
+          "totalObserved": 0,
+          "activeObservations": 0,
+          "preferLegacy": 0,
+          "preferV2": 0,
+          "noVisibleDifference": 0,
+          "unsure": 0,
+          "cleared": 0,
+          "invalidated": 0,
+          "reasonCounts": {
+            "skinTone": 0,
+            "whiteBalance": 0,
+            "highlightDetail": 0,
+            "shadowDetail": 0,
+            "contrast": 0,
+            "colorBalance": 0,
+            "saturation": 0,
+            "naturalLook": 0,
+            "clarityDetail": 0,
+            "noSpecificReason": 0
+          }
         }
       }
     },
@@ -189,7 +239,32 @@
         },
         "observation": {
           "enabled": true,
-          "state": "ready"
+          "state": "ready",
+          "selectedValue": null,
+          "reasons": [],
+          "observationGenerationId": null
+        },
+        "sessionSummary": {
+          "totalObserved": 0,
+          "activeObservations": 0,
+          "preferLegacy": 0,
+          "preferV2": 0,
+          "noVisibleDifference": 0,
+          "unsure": 0,
+          "cleared": 0,
+          "invalidated": 0,
+          "reasonCounts": {
+            "skinTone": 0,
+            "whiteBalance": 0,
+            "highlightDetail": 0,
+            "shadowDetail": 0,
+            "contrast": 0,
+            "colorBalance": 0,
+            "saturation": 0,
+            "naturalLook": 0,
+            "clarityDetail": 0,
+            "noSpecificReason": 0
+          }
         }
       }
     },
@@ -253,7 +328,32 @@
         },
         "observation": {
           "enabled": true,
-          "state": "ready"
+          "state": "ready",
+          "selectedValue": null,
+          "reasons": [],
+          "observationGenerationId": null
+        },
+        "sessionSummary": {
+          "totalObserved": 0,
+          "activeObservations": 0,
+          "preferLegacy": 0,
+          "preferV2": 0,
+          "noVisibleDifference": 0,
+          "unsure": 0,
+          "cleared": 0,
+          "invalidated": 0,
+          "reasonCounts": {
+            "skinTone": 0,
+            "whiteBalance": 0,
+            "highlightDetail": 0,
+            "shadowDetail": 0,
+            "contrast": 0,
+            "colorBalance": 0,
+            "saturation": 0,
+            "naturalLook": 0,
+            "clarityDetail": 0,
+            "noSpecificReason": 0
+          }
         }
       }
     }
