@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-21T07:04:12.976Z",
+  "generatedAt": "2026-07-21T07:33:02.057Z",
   "liveEvidenceRecords": [
     {
       "fixture": "neutral-balanced.png",
@@ -33,37 +33,35 @@
         },
         "previewSandbox": {
           "exists": true,
-          "previewState": "blocked",
-          "confidence": 0.597,
-          "safetyScore": 0.754,
-          "canGeneratePreview": false,
-          "missingRequirements": [
-            "Confidence 0.597 vs. required 0.72."
-          ],
-          "failedGateIds": [
-            "confidence-sufficient"
-          ],
+          "previewState": "preview-ready",
+          "confidence": 0.747,
+          "safetyScore": 0.804,
+          "canGeneratePreview": true,
+          "missingRequirements": [],
+          "failedGateIds": [],
           "selectedOutputSource": "legacy",
           "canWriteProduction": false,
-          "canExportPreview": false
+          "canExportPreview": false,
+          "legacyContextAvailability": true,
+          "legacyContextSourceType": "legacy-preset"
         },
         "renderPlan": {
           "exists": true,
-          "v2Renderable": false,
+          "v2Renderable": true,
           "v2State": null,
           "visualAdjustmentsApplied": null
         },
         "visualPreview": {
           "legacyState": "renderable",
-          "controlledV2State": "not-renderable"
+          "controlledV2State": "renderable"
         },
         "interactive": {
-          "state": "cancelled",
+          "state": "ready",
           "alignmentStatus": null
         },
         "observation": {
-          "enabled": false,
-          "state": "unavailable"
+          "enabled": true,
+          "state": "ready"
         }
       }
     },
@@ -99,37 +97,35 @@
         },
         "previewSandbox": {
           "exists": true,
-          "previewState": "blocked",
-          "confidence": 0.593,
-          "safetyScore": 0.78,
-          "canGeneratePreview": false,
-          "missingRequirements": [
-            "Confidence 0.593 vs. required 0.72."
-          ],
-          "failedGateIds": [
-            "confidence-sufficient"
-          ],
+          "previewState": "preview-ready",
+          "confidence": 0.743,
+          "safetyScore": 0.83,
+          "canGeneratePreview": true,
+          "missingRequirements": [],
+          "failedGateIds": [],
           "selectedOutputSource": "legacy",
           "canWriteProduction": false,
-          "canExportPreview": false
+          "canExportPreview": false,
+          "legacyContextAvailability": true,
+          "legacyContextSourceType": "legacy-preset"
         },
         "renderPlan": {
           "exists": true,
-          "v2Renderable": false,
+          "v2Renderable": true,
           "v2State": null,
           "visualAdjustmentsApplied": null
         },
         "visualPreview": {
           "legacyState": "renderable",
-          "controlledV2State": "not-renderable"
+          "controlledV2State": "renderable"
         },
         "interactive": {
-          "state": "cancelled",
+          "state": "ready",
           "alignmentStatus": null
         },
         "observation": {
-          "enabled": false,
-          "state": "unavailable"
+          "enabled": true,
+          "state": "ready"
         }
       }
     },
@@ -165,39 +161,35 @@
         },
         "previewSandbox": {
           "exists": true,
-          "previewState": "blocked",
-          "confidence": 0.585,
-          "safetyScore": 0.743,
-          "canGeneratePreview": false,
-          "missingRequirements": [
-            "Confidence 0.585 vs. required 0.72.",
-            "Safety score 0.743 vs. required 0.75."
-          ],
-          "failedGateIds": [
-            "confidence-sufficient",
-            "safety-score-sufficient"
-          ],
+          "previewState": "preview-ready",
+          "confidence": 0.735,
+          "safetyScore": 0.793,
+          "canGeneratePreview": true,
+          "missingRequirements": [],
+          "failedGateIds": [],
           "selectedOutputSource": "legacy",
           "canWriteProduction": false,
-          "canExportPreview": false
+          "canExportPreview": false,
+          "legacyContextAvailability": true,
+          "legacyContextSourceType": "legacy-preset"
         },
         "renderPlan": {
           "exists": true,
-          "v2Renderable": false,
+          "v2Renderable": true,
           "v2State": null,
           "visualAdjustmentsApplied": null
         },
         "visualPreview": {
           "legacyState": "renderable",
-          "controlledV2State": "not-renderable"
+          "controlledV2State": "renderable"
         },
         "interactive": {
-          "state": "cancelled",
+          "state": "ready",
           "alignmentStatus": null
         },
         "observation": {
-          "enabled": false,
-          "state": "unavailable"
+          "enabled": true,
+          "state": "ready"
         }
       }
     },
@@ -233,39 +225,35 @@
         },
         "previewSandbox": {
           "exists": true,
-          "previewState": "blocked",
-          "confidence": 0.593,
-          "safetyScore": 0.738,
-          "canGeneratePreview": false,
-          "missingRequirements": [
-            "Confidence 0.593 vs. required 0.72.",
-            "Safety score 0.738 vs. required 0.75."
-          ],
-          "failedGateIds": [
-            "confidence-sufficient",
-            "safety-score-sufficient"
-          ],
+          "previewState": "preview-ready",
+          "confidence": 0.743,
+          "safetyScore": 0.788,
+          "canGeneratePreview": true,
+          "missingRequirements": [],
+          "failedGateIds": [],
           "selectedOutputSource": "legacy",
           "canWriteProduction": false,
-          "canExportPreview": false
+          "canExportPreview": false,
+          "legacyContextAvailability": true,
+          "legacyContextSourceType": "legacy-preset"
         },
         "renderPlan": {
           "exists": true,
-          "v2Renderable": false,
+          "v2Renderable": true,
           "v2State": null,
           "visualAdjustmentsApplied": null
         },
         "visualPreview": {
           "legacyState": "renderable",
-          "controlledV2State": "not-renderable"
+          "controlledV2State": "renderable"
         },
         "interactive": {
-          "state": "cancelled",
+          "state": "ready",
           "alignmentStatus": null
         },
         "observation": {
-          "enabled": false,
-          "state": "unavailable"
+          "enabled": true,
+          "state": "ready"
         }
       }
     }

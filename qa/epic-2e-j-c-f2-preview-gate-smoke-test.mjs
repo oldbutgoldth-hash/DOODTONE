@@ -2,10 +2,13 @@
 /**
  * qa/epic-2e-j-c-f2-preview-gate-smoke-test.mjs
  *
- * EPIC 2E-J-C-F2 Steps 1-3 — a focused, non-browser Node.js smoke test
- * for the Controlled V2 Preview Gate reachability fix and the safe
- * Human Review projection. Calls the real project modules directly
- * (no browser, no screenshots, no Observation UI).
+ * EPIC 2E-J-C-F2 Steps 1-6 Core closeout — a focused, non-browser
+ * Node.js smoke test for the Controlled V2 Preview Gate reachability
+ * fix, the safe Human Review projection with conservative duplicate
+ * precedence, and Identity Preview honesty. Calls the real project
+ * modules directly (no browser, no screenshots, no Observation UI).
+ * This does NOT cover browser rendering or Full Phase C QA — those
+ * remain separate, out of scope for this Core-only closeout.
  *
  * Run: node qa/epic-2e-j-c-f2-preview-gate-smoke-test.mjs
  */
@@ -252,6 +255,25 @@ record('C: canWriteProduction=false', sandboxC.canWriteProduction === false, `va
 record('C: canExportPreview=false', sandboxC.canExportPreview === false, `value=${sandboxC.canExportPreview}`);
 record('C: selectedOutputSource=legacy', sandboxC.selectedOutputSource === 'legacy', `value=${sandboxC.selectedOutputSource}`);
 
+// FIX 2 (Step 4-6-F): regression-test the ACTUAL Identity Pixel
+// contract — using the REAL V2 adjustment model produced by
+// renderPlanC above (never a manually-constructed unrelated object).
+const identityWidth = 2, identityHeight = 2;
+const identityOriginal = new Uint8ClampedArray(identityWidth * identityHeight * 4);
+for (let i = 0; i < identityOriginal.length; i++) identityOriginal[i] = (i * 37) % 256; // deterministic non-uniform pattern
+const identityOriginalCopy = Uint8ClampedArray.from(identityOriginal);
+const identityTestBuffer = Uint8ClampedArray.from(identityOriginal);
+const identityResult = applyPreviewPixelTransformV2({ data: identityTestBuffer, width: identityWidth, height: identityHeight }, renderPlanC.v2RenderPlan.adjustmentModel);
+record('C: Identity Pixel contract — state=rendered', identityResult.state === 'rendered', `state=${identityResult.state}`);
+record('C: Identity Pixel contract — transformed=false', identityResult.transformed === false, `transformed=${identityResult.transformed}`);
+record('C: Identity Pixel contract — appliedAdjustments is an Array', Array.isArray(identityResult.appliedAdjustments), `type=${typeof identityResult.appliedAdjustments}`);
+record('C: Identity Pixel contract — appliedAdjustments.length=0', identityResult.appliedAdjustments.length === 0, `length=${identityResult.appliedAdjustments.length}`);
+let identityBytesUnchanged = true;
+for (let i = 0; i < identityTestBuffer.length; i++) { if (identityTestBuffer[i] !== identityOriginalCopy[i]) { identityBytesUnchanged = false; break; } }
+record('C: Identity Pixel contract — every output byte equals original', identityBytesUnchanged, `unchanged=${identityBytesUnchanged}`);
+const identityReasonHonest = identityResult.reasons.some((r) => /no supported|unchanged/i.test(r));
+record('C: Identity Pixel contract — reason indicates no supported adjustment/unchanged pixels', identityReasonHonest, JSON.stringify(identityResult.reasons));
+
 // Test D: missing Sandbox entirely.
 const renderPlanD = buildVisualPreviewRenderPlanV2({});
 record('D: missing Sandbox -> renderable=false', renderPlanD.v2RenderPlan.renderable === false, `value=${renderPlanD.v2RenderPlan.renderable}`);
@@ -282,34 +304,119 @@ const renderPlanH = buildVisualPreviewRenderPlanV2({ controlledOverlayPreviewSan
 record('H: contradictory evidence -> renderable=false', renderPlanH.v2RenderPlan.renderable === false, `value=${renderPlanH.v2RenderPlan.renderable}`);
 record('H: contradictory evidence -> blocker identifies it', renderPlanH.v2RenderPlan.reasons.some((r) => /contradictory/i.test(r)), JSON.stringify(renderPlanH.v2RenderPlan.reasons));
 
-// Test I: genuine supported adjustment, via the isolated renderer's own
-// contract (colorGrading with a non-zero shadowSat/highlightSat) — not
-// adding a new supported-adjustment field, just exercising the one the
-// Render Plan/renderer contract already supports.
+// Renderer supported-adjustment regression (FIX 3, Step 4-6-F): this
+// exercises the isolated renderer's OWN existing contract directly
+// (colorGrading with a non-zero shadowSat/highlightSat) — it does NOT
+// test a concrete V2 Render Plan adjustment, because the current V2
+// Render Plan intentionally has no concrete supported adjustments (see
+// the file-level Identity Preview policy above). No new V2-supported
+// field is added here.
 const imgWidth = 2, imgHeight = 2;
 const imgData = new Uint8ClampedArray(imgWidth * imgHeight * 4).fill(128);
 for (let i = 3; i < imgData.length; i += 4) imgData[i] = 255;
-const transformResultI = applyPreviewPixelTransformV2({ data: imgData, width: imgWidth, height: imgHeight }, { colorGrading: { shadowSat: 0.3, highlightSat: 0.2 } });
-record('I: genuine supported adjustment -> transformed=true', transformResultI.transformed === true, `transformed=${transformResultI.transformed}`);
-record('I: genuine supported adjustment -> appliedAdjustments non-empty', transformResultI.appliedAdjustments.length > 0, JSON.stringify(transformResultI.appliedAdjustments));
+const rendererSupportedAdjustmentResult = applyPreviewPixelTransformV2({ data: imgData, width: imgWidth, height: imgHeight }, { colorGrading: { shadowSat: 0.3, highlightSat: 0.2 } });
+record('Renderer supported-adjustment regression: transformed=true', rendererSupportedAdjustmentResult.transformed === true, `transformed=${rendererSupportedAdjustmentResult.transformed}`);
+record('Renderer supported-adjustment regression: appliedAdjustments includes colorGrading', rendererSupportedAdjustmentResult.appliedAdjustments.includes('colorGrading'), JSON.stringify(rendererSupportedAdjustmentResult.appliedAdjustments));
+record('Renderer supported-adjustment regression: appliedAdjustments.length > 0', rendererSupportedAdjustmentResult.appliedAdjustments.length > 0, `length=${rendererSupportedAdjustmentResult.appliedAdjustments.length}`);
+const noIdentityWording = !rendererSupportedAdjustmentResult.reasons.some((r) => /identity|unchanged/i.test(r));
+record('Renderer supported-adjustment regression: reason does not describe Identity/unchanged preview', noIdentityWording, JSON.stringify(rendererSupportedAdjustmentResult.reasons));
 
 // Test L: Production Mapping regression — identical Basic/WB/HSL/
 // Color-Grading/Calibration/Tone-Curve fields with vs. without Review
 // state, using the canonical buildFinalPreset output shape (not a
-// hand-picked subset).
+// hand-picked subset). FIX 4 (Step 4-6-F): compares the UNION of keys
+// from both sides (not just `resultWithoutReview`'s keys) so a
+// Review-dependent Production key that was added or removed on only
+// one side is also detected, not just changed values on shared keys.
 const resultWithoutReview = buildFinalPreset({});
 const resultWithReview = buildFinalPreset({ controlledPreviewReviewStateV2: allApprovedB });
 const metadataKeys = new Set(['_decision', '_mappingTrace']);
+const unionKeys = new Set([...Object.keys(resultWithoutReview), ...Object.keys(resultWithReview)]);
 let productionMappingIdentical = true;
 const differences = [];
-for (const key of Object.keys(resultWithoutReview)) {
+for (const key of unionKeys) {
   if (metadataKeys.has(key)) continue;
+  const inWithout = Object.prototype.hasOwnProperty.call(resultWithoutReview, key);
+  const inWith = Object.prototype.hasOwnProperty.call(resultWithReview, key);
+  if (inWithout !== inWith) {
+    productionMappingIdentical = false;
+    differences.push(`${key} (present only on ${inWithout ? 'without-Review' : 'with-Review'} side)`);
+    continue;
+  }
   if (JSON.stringify(resultWithoutReview[key]) !== JSON.stringify(resultWithReview[key])) {
     productionMappingIdentical = false;
     differences.push(key);
   }
 }
-record('L: Production Mapping fields identical with/without Review state', productionMappingIdentical, differences.length ? `differing fields: ${differences.join(', ')}` : 'all fields identical');
+record('L: Production Mapping fields identical with/without Review state (union comparison)', productionMappingIdentical, differences.length ? `differing/added/removed fields: ${differences.join(', ')}` : 'all fields identical, no key added or removed');
+
+// ── Step 7A-F2: Authoritative post-mapping Preview Sandbox rebuild ──
+console.log('');
+console.log('=== Step 7A-F2: Authoritative post-mapping Sandbox (partial vs full Legacy context) ===');
+
+// Test A: direct partial legacy context (no legacyPreset, only legacyStyleBudget).
+// Uses live-fixture-representative evidence values (captured in Step
+// 7A-F1) rather than uniformly high mocks, so the partial-context
+// confidence penalty is genuinely visible (matches the spec's
+// documented ~0.597 partial-context confidence).
+const liveRepresentativeSimulation = { confidence: 0.604, safetyScore: 0.783, legacyInputSummary: { available: true } };
+const liveRepresentativeOverlay = { confidence: 0.648, safetyScore: 0.851 };
+const liveRepresentativeClamp = { hardStops: [], overStackAnalysis: { severity: 'low' }, globalSafetyScore: 0.628 };
+const liveRepresentativeShadowCompare = { safetyDelta: { status: 'safe' }, confidence: 0.606 };
+const testGateA = buildControlledOverlayTestGateV2({ legacyOverlaySimulationV2: liveRepresentativeSimulation, legacySafetyOverlayV2: liveRepresentativeOverlay, lightroomSafetyClampV2: liveRepresentativeClamp, lightroomShadowCompareReportV2: liveRepresentativeShadowCompare });
+const sandboxPartial = buildControlledOverlayPreviewSandboxV2({ legacyOverlaySimulationV2: liveRepresentativeSimulation, legacySafetyOverlayV2: liveRepresentativeOverlay, lightroomSafetyClampV2: liveRepresentativeClamp, lightroomShadowCompareReportV2: liveRepresentativeShadowCompare, legacyStyleBudget: { some: 'budget' }, controlledOverlayTestGateV2: testGateA, humanReviewState: _projectHumanReviewStateV2(allApproved()) });
+console.log(`  [INFO] A: partial legacy context (live-representative evidence) — confidence=${sandboxPartial.confidence}, safetyScore=${sandboxPartial.safetyScore}`);
+record('A: partial legacy context — confidence gate fails', sandboxPartial.confidence < 0.72, `confidence=${sandboxPartial.confidence}`);
+
+// Test B: same evidence plus real Legacy preset.
+const testGateB = buildControlledOverlayTestGateV2({ legacyOverlaySimulationV2: liveRepresentativeSimulation, legacySafetyOverlayV2: liveRepresentativeOverlay, lightroomSafetyClampV2: liveRepresentativeClamp, lightroomShadowCompareReportV2: liveRepresentativeShadowCompare, legacyPreset });
+const sandboxFull = buildControlledOverlayPreviewSandboxV2({ legacyOverlaySimulationV2: liveRepresentativeSimulation, legacySafetyOverlayV2: liveRepresentativeOverlay, lightroomSafetyClampV2: liveRepresentativeClamp, lightroomShadowCompareReportV2: liveRepresentativeShadowCompare, legacyPreset, controlledOverlayTestGateV2: testGateB, humanReviewState: _projectHumanReviewStateV2(allApproved()) });
+console.log(`  [INFO] B: full legacy context (live-representative evidence) — confidence=${sandboxFull.confidence}, safetyScore=${sandboxFull.safetyScore}`);
+record('B: full legacy context — canGeneratePreview=true', sandboxFull.canGeneratePreview === true, `canGeneratePreview=${sandboxFull.canGeneratePreview}`);
+record('B: full legacy context — confidence higher than partial', sandboxFull.confidence > sandboxPartial.confidence, `full=${sandboxFull.confidence} vs partial=${sandboxPartial.confidence}`);
+
+// Test C: actual buildFinalPreset with NO prior Review.
+const resultC = buildFinalPreset({});
+const sandboxC7f2 = resultC._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2;
+record('C: buildFinalPreset (no Review) — authoritative Sandbox uses legacy-preset context', sandboxC7f2?.simulatedPreviewPreset?.metadata?.legacyPreviewInputAvailable === true || sandboxC7f2?.confidence > sandboxPartial.confidence, `confidence=${sandboxC7f2?.confidence}`);
+record('C: buildFinalPreset (no Review) — Human Review remains incomplete, Preview blocked', sandboxC7f2?.canGeneratePreview === false, `canGeneratePreview=${sandboxC7f2?.canGeneratePreview}`);
+
+// Test D: actual buildFinalPreset with all ten genuinely approved.
+const resultD7f2 = buildFinalPreset({ controlledPreviewReviewStateV2: allApproved() });
+const sandboxD7f2 = resultD7f2._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2;
+const renderPlanD7f2 = resultD7f2._decision?.finalStyleIntent?.visualPreviewRenderPlanV2?.v2RenderPlan;
+record('D: buildFinalPreset (all approved) — authoritative Sandbox uses legacy-preset context', sandboxD7f2?.simulatedPreviewPreset?.metadata?.sourceType === 'legacy-preset', `sourceType=${sandboxD7f2?.simulatedPreviewPreset?.metadata?.sourceType}`);
+record('D: buildFinalPreset (all approved) — human-review-complete passes, canGeneratePreview=true', sandboxD7f2?.canGeneratePreview === true, `canGeneratePreview=${sandboxD7f2?.canGeneratePreview}`);
+record('D: buildFinalPreset (all approved) — V2 Render Plan renderable', renderPlanD7f2?.renderable === true, `renderable=${renderPlanD7f2?.renderable}`);
+const identityWordingD = renderPlanD7f2?.reasons?.some((r) => /identity/i.test(r)) || renderPlanD7f2?.warnings?.some((w) => /identity/i.test(w));
+record('D: buildFinalPreset (all approved) — Identity Preview remains honest (no concrete adjustment)', identityWordingD, JSON.stringify(renderPlanD7f2?.reasons));
+
+// Test E: pending/reject duplicate regression (Step 3-F rules still hold post-rebuild).
+const mixedReviewE = { reviewItems: REQUIRED_IDS.flatMap((id) => [{ id, status: 'pending', reviewed: false, reviewerDecision: 'undecided' }, { id, status: 'passed', reviewed: true, reviewerDecision: 'approve' }]) };
+const resultE7f2 = buildFinalPreset({ controlledPreviewReviewStateV2: mixedReviewE });
+const sandboxE7f2 = resultE7f2._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2;
+record('E: pending/passed duplicate — remains blocked post-rebuild', sandboxE7f2?.canGeneratePreview === false, `canGeneratePreview=${sandboxE7f2?.canGeneratePreview}`);
+
+// Test F: Production Mapping comparison across this patch (union of keys).
+const resultF7f2Without = buildFinalPreset({});
+const resultF7f2With = buildFinalPreset({ controlledPreviewReviewStateV2: allApproved() });
+const unionKeysF = new Set([...Object.keys(resultF7f2Without), ...Object.keys(resultF7f2With)]);
+let productionIdenticalF = true;
+const diffsF = [];
+for (const key of unionKeysF) {
+  if (metadataKeys.has(key)) continue;
+  const inW = Object.prototype.hasOwnProperty.call(resultF7f2Without, key);
+  const inR = Object.prototype.hasOwnProperty.call(resultF7f2With, key);
+  if (inW !== inR) { productionIdenticalF = false; diffsF.push(`${key} (only on one side)`); continue; }
+  if (JSON.stringify(resultF7f2Without[key]) !== JSON.stringify(resultF7f2With[key])) { productionIdenticalF = false; diffsF.push(key); }
+}
+record('F: Production Mapping comparison (post-rebuild, union) — no key added/removed/changed', productionIdenticalF, diffsF.length ? diffsF.join(', ') : 'all fields identical');
+
+// Test G: Production lock.
+record('G: selectedOutputSource=legacy', sandboxD7f2?.selectedOutputSource === 'legacy', `value=${sandboxD7f2?.selectedOutputSource}`);
+record('G: canWriteProduction=false', sandboxD7f2?.canWriteProduction === false, `value=${sandboxD7f2?.canWriteProduction}`);
+record('G: canExportPreview=false', sandboxD7f2?.canExportPreview === false, `value=${sandboxD7f2?.canExportPreview}`);
+record('G: allowControlledOverlayTest=false', LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest === false, `value=${LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest}`);
 
 // ── Summary ──
 const pass = results.filter((r) => r.result === 'PASS').length;

@@ -218,6 +218,12 @@ function ensureQaSnapshotHook() {
         selectedOutputSource: _qaSafeStr(previewSandbox?.selectedOutputSource),
         canWriteProduction: _qaSafeBool(previewSandbox?.canWriteProduction),
         canExportPreview: _qaSafeBool(previewSandbox?.canExportPreview),
+        // FIX 5 (Step 7A-F2): safe classification only (never the
+        // actual Legacy preset values) — read from the Sandbox's own
+        // existing `simulatedPreviewPreset.metadata` field, already
+        // produced by mapping-v2-overlay-preview-sandbox.js.
+        legacyContextAvailability: _qaSafeBool(previewSandbox?.simulatedPreviewPreset?.metadata?.legacyPreviewInputAvailable),
+        legacyContextSourceType: _qaSafeStr(previewSandbox?.simulatedPreviewPreset?.metadata?.sourceType),
       },
       renderPlan: {
         exists: !!v2Plan,

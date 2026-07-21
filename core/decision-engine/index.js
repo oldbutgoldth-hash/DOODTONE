@@ -175,6 +175,89 @@ export function buildFinalPreset(inputs) {
     fingerprint, decision, stats, basic, wb, hsl, calibration, grading, toneCurves,
   });
 
+  // ── EPIC 2E-J-C-F2 Step 7A-F2: AUTHORITATIVE post-mapping Preview
+  // Sandbox + Review State rebuild ──────────────────────────────────
+  //
+  // PROVEN ROOT CAUSE: the Preview Sandbox and Review State built
+  // inside `_buildDecision()` above are necessarily PROVISIONAL —
+  // `mapped` (the real, concrete Production Legacy preset) does not
+  // exist yet at that point, so those provisional objects only ever
+  // receive `legacyStyleBudget` (never `legacyPreset`), yielding
+  // `legacyAvailabilityFactor: 0.5` ("partial") instead of `1.0`
+  // ("full") in the Sandbox's own confidence/safety formulas — costing
+  // ~0.15 confidence and ~0.05 safety, live-verified across all four
+  // Step 7A-F1 fixtures. This block corrects that sequencing defect by
+  // rebuilding BOTH objects now that `mapped` genuinely exists, using
+  // the exact same current pipeline evidence, and OVERWRITES
+  // `decision.finalStyleIntent`'s provisional Sandbox/Review-State
+  // with these authoritative ones before Side-by-Side Comparison,
+  // Visual Preview Render Plan, Interactive Before/After, or
+  // Observation ever read them. No downstream preview stage may
+  // consume the provisional (pre-mapping) objects after this point.
+  //
+  // FIX 3: the provisional objects remain briefly reachable via
+  // `_provisionalPreMappingPreviewSandboxV2`/`_provisionalPreMappingReviewStateV2`
+  // for backward-compatible introspection ONLY — never read by any
+  // downstream preview/UI stage in this codebase, and never restoring
+  // stale Review data (the authoritative rebuild re-projects Human
+  // Review from the ORIGINAL caller-supplied `controlledPreviewReviewStateV2`
+  // via the same conservative `_projectHumanReviewStateV2`, never from
+  // the provisional Sandbox's own state, so no lifecycle counter or
+  // Human Review decision is duplicated).
+  //
+  // FIX 4 (safe failure): both authoritative objects are built into
+  // local variables FIRST; if the rebuild throws, Production Mapping
+  // (`mapped`) is completely untouched, `selectedOutputSource` stays
+  // Legacy, Preview correctly stays blocked/unavailable (the
+  // provisional pre-mapping Sandbox — itself always safely
+  // unrenderable/blocked by design — is kept as the fallback), and
+  // only a safe, normalized error string is recorded — never a raw
+  // object or stack trace.
+  decision.finalStyleIntent._provisionalPreMappingPreviewSandboxV2 = decision.finalStyleIntent.controlledOverlayPreviewSandboxV2 ?? null;
+  decision.finalStyleIntent._provisionalPreMappingReviewStateV2 = decision.finalStyleIntent.controlledPreviewReviewStateV2 ?? null;
+  try {
+    const authoritativeHumanReviewState = _projectHumanReviewStateV2(controlledPreviewReviewStateV2);
+    const authoritativeSandbox = buildControlledOverlayPreviewSandboxV2({
+      finalStyleIntent: decision.finalStyleIntent, decision: { styleBudget: decision.styleBudget },
+      legacyPreset: mapped, legacyStyleBudget: decision.styleBudget,
+      lightroomMappingPlanV2: decision.finalStyleIntent.lightroomMappingPlanV2,
+      lightroomTranslationV2: decision.finalStyleIntent.lightroomTranslationV2,
+      lightroomSafetyClampV2: decision.finalStyleIntent.lightroomSafetyClampV2,
+      lightroomShadowCompareReportV2: decision.finalStyleIntent.lightroomShadowCompareReportV2,
+      lightroomControlledActivationV2: decision.finalStyleIntent.lightroomControlledActivationV2,
+      legacySafetyOverlayV2: decision.finalStyleIntent.legacySafetyOverlayV2,
+      legacyOverlaySimulationV2: decision.finalStyleIntent.legacyOverlaySimulationV2,
+      controlledOverlayTestGateV2: decision.finalStyleIntent.controlledOverlayTestGateV2,
+      styleBudgetIntelligence: decision.finalStyleIntent.styleBudgetIntelligence,
+      photographerIntent: decision.finalStyleIntent.photographerIntent,
+      styleDNA: decision.finalStyleIntent.photographerStyle?.top?.styleDNA,
+      styleFeasibility: decision.finalStyleIntent.styleFeasibilityEstimate,
+      captureCapability: decision.finalStyleIntent.captureCapabilityEstimate,
+      humanReviewState: authoritativeHumanReviewState,
+      // No `flags` override — always resolves to the safe defaults.
+    });
+    const authoritativeReviewState = createPreviewReviewStateV2({
+      existingReviewState: controlledPreviewReviewStateV2,
+      controlledOverlayPreviewSandboxV2: authoritativeSandbox,
+      controlledOverlayTestGateV2: decision.finalStyleIntent.controlledOverlayTestGateV2,
+      legacyOverlaySimulationV2: decision.finalStyleIntent.legacyOverlaySimulationV2,
+      legacySafetyOverlayV2: decision.finalStyleIntent.legacySafetyOverlayV2,
+      lightroomSafetyClampV2: decision.finalStyleIntent.lightroomSafetyClampV2,
+      lightroomShadowCompareReportV2: decision.finalStyleIntent.lightroomShadowCompareReportV2,
+      photographerIntent: decision.finalStyleIntent.photographerIntent,
+      photographerStyle: decision.finalStyleIntent.photographerStyle,
+      styleDNA: decision.finalStyleIntent.photographerStyle?.top?.styleDNA,
+      captureCapability: decision.finalStyleIntent.captureCapabilityEstimate,
+    });
+    // Only commit once BOTH rebuilds succeed — overwrite the
+    // provisional objects with the authoritative ones.
+    decision.finalStyleIntent.controlledOverlayPreviewSandboxV2 = authoritativeSandbox;
+    decision.finalStyleIntent.controlledPreviewReviewStateV2 = authoritativeReviewState;
+  } catch (e) {
+    decision.finalStyleIntent.authoritativePreviewSandboxError = `Authoritative post-mapping Preview Sandbox rebuild failed safely (production unaffected, provisional pre-mapping Sandbox retained as fallback): ${e.message}`;
+    // Provisional objects (assigned above) remain in place as the safe fallback — never silently promoted to "authoritative".
+  }
+
   // ── EPIC 2E-G Phase B: Side-by-Side Preview Comparison V2 (integration
   // order #12 — after Preview Sandbox #10 and Review State #11, both of
   // which already exist on decision.finalStyleIntent at this point). ──

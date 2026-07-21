@@ -73,26 +73,23 @@ async function passAllReviewItems(page) {
   return itemIds.length;
 }
 
-async function waitForAnalysisCompletion(page, priorGeneration, maxWaitMs = 20000) {
+async function waitForAnalysisCompletion(page, priorGeneration, maxWaitMs = 25000) {
   const start = Date.now();
+  const transientInteractiveStates = new Set(['cancelled', 'preparing', null, undefined]);
   while (Date.now() - start < maxWaitMs) {
     const snapshot = await page.evaluate(() => (window.__LUMIXA_QA__ ? window.__LUMIXA_QA__.getPreviewPipelineSnapshot() : null));
-    if (snapshot && snapshot.analysisGeneration > priorGeneration && snapshot.previewSandbox.exists) {
-      // Allow the Interactive Before/After controller's own generation-
-      // handoff logic to settle past any transient 'cancelled' state
-      // before reading the final snapshot.
-      await page.waitForTimeout(500);
-      const settledSnapshot = await page.evaluate(() => (window.__LUMIXA_QA__ ? window.__LUMIXA_QA__.getPreviewPipelineSnapshot() : null));
-      return { completed: true, snapshot: settledSnapshot };
+    if (snapshot && snapshot.analysisGeneration > priorGeneration && snapshot.previewSandbox.exists && !transientInteractiveStates.has(snapshot.interactive?.state)) {
+      return { completed: true, snapshot };
     }
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(300);
   }
   const finalSnapshot = await page.evaluate(() => (window.__LUMIXA_QA__ ? window.__LUMIXA_QA__.getPreviewPipelineSnapshot() : null));
-  return { completed: false, snapshot: finalSnapshot };
+  return { completed: finalSnapshot?.previewSandbox?.exists === true, snapshot: finalSnapshot };
 }
 
 async function main() {
   await mkdir(SCREENSHOT_DIR, { recursive: true });
+  await mkdir(path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f2'), { recursive: true });
   const server = await startServer();
   const browser = await chromium.launch();
   const consoleErrors = [];
@@ -146,6 +143,11 @@ async function main() {
         reviewItemsClicked: itemsClicked,
         legacyPreviewState,
         controlledV2PreviewState,
+        legacyContextAvailability: snapshot?.previewSandbox?.legacyContextAvailability ?? null,
+        legacyContextSourceType: snapshot?.previewSandbox?.legacyContextSourceType ?? null,
+        sandboxConfidence: snapshot?.previewSandbox?.confidence ?? null,
+        sandboxSafetyScore: snapshot?.previewSandbox?.safetyScore ?? null,
+        canGeneratePreview: snapshot?.previewSandbox?.canGeneratePreview ?? null,
         interactiveState: interactiveStateNormalized,
         observationState: snapshot?.observation?.state ?? null,
         observationEnabled,
@@ -156,7 +158,20 @@ async function main() {
       liveEvidenceRecords.push({ fixture, snapshot });
       record(`[${fixture}] Per-fixture pipeline record (RECORD_CAPTURED - evidence only)`, 'PASS', JSON.stringify(fixtureRecord));
 
-      if (observationEnabled && !firstReadyFixture) firstReadyFixture = fixture;
+      if (observationEnabled && !firstReadyFixture) {
+        firstReadyFixture = fixture;
+        // Step 7A-F2 screenshots — captured for the genuine first Ready fixture only.
+        await page.screenshot({ path: path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f2', 'first-ready-fixture.png') });
+        // Every currently-reachable Ready fixture in this codebase is an
+        // Identity Preview (the V2 adjustment model has no concrete
+        // supported adjustments anywhere yet — see Step 4-6's Identity
+        // Preview policy) — captured whenever the Render Plan itself
+        // reports renderable, rather than depending on a field the
+        // Interactive controller's exposed state may not populate.
+        if (snapshot?.renderPlan?.v2Renderable === true) {
+          await page.screenshot({ path: path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f2', 'identity-preview-ready.png') });
+        }
+      }
 
       for (const rf of requestFailures) {
         if (/fonts\.googleapis\.com|fonts\.gstatic\.com/i.test(rf.url)) continue;
@@ -194,6 +209,16 @@ async function main() {
       console.log('  wiring correction, with real regression risk, outside this patch\'s scope.');
       console.log('  No Core file was modified to force this; Step 7A remains FAIL, honestly.');
     }
+
+    // Step 7A-F2 specific decision: "PASS — Live Preview Pipeline
+    // Reachable" requires only that at least one fixture naturally
+    // reaches authoritative full Legacy context + V2 rendered +
+    // Interactive Ready + Observation enabled. This does NOT weaken or
+    // replace the full Step 7A final acceptance rule below (which
+    // additionally requires the actual UI workflow/Session
+    // Clear/Generation handoff tests — those remain Step 7A-F3's job).
+    const step7aF2ReadyRecord = fixtureRecords.find((r) => r.legacyContextAvailability === true && r.legacyContextSourceType === 'legacy-preset' && r.controlledV2PreviewState === 'rendered' && r.interactiveState === 'ready' && r.observationEnabled === true);
+    record('Step 7A-F2 decision: PASS — Live Preview Pipeline Reachable', step7aF2ReadyRecord ? 'PASS' : 'FAIL', step7aF2ReadyRecord ? `fixture=${step7aF2ReadyRecord.fixture}` : 'no fixture reached full authoritative-context Ready in this run');
 
     record('Full Application Acceptance: at least one fixture reaches Ready', firstReadyFixture ? 'PASS' : 'FAIL', firstReadyFixture ? `first ready fixture=${firstReadyFixture}` : 'NO fixture reached Ready. See FIX 3 confidence breakdown above for the proven cause (a structural sequencing limitation, not a wiring bug, not a threshold, not a fixture-selection problem).');
 

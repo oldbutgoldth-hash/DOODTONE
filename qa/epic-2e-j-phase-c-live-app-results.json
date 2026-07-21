@@ -1,135 +1,140 @@
 {
   "suite": "EPIC 2E-J-C-F2 Step 7A (+ Step 7A-F1) - Full Application Ready Reachability",
-  "generatedAt": "2026-07-21T07:04:12.975Z",
+  "generatedAt": "2026-07-21T07:33:02.056Z",
   "summary": {
-    "total": 13,
-    "pass": 7,
-    "fail": 1,
+    "total": 14,
+    "pass": 9,
+    "fail": 0,
     "notTested": 5
   },
-  "firstFixtureReachingReady": null,
+  "firstFixtureReachingReady": "neutral-balanced.png",
   "fixtureRecords": [
     {
       "fixture": "neutral-balanced.png",
       "analysisCompleted": true,
       "reviewItemsClicked": 10,
       "legacyPreviewState": "rendered",
-      "controlledV2PreviewState": "not-renderable",
-      "interactiveState": "cancelled",
-      "observationState": "unavailable",
-      "observationEnabled": false,
-      "blockers": [
-        "Confidence 0.597 vs. required 0.72."
-      ],
-      "failedGateIds": [
-        "confidence-sufficient"
-      ]
+      "controlledV2PreviewState": "rendered",
+      "legacyContextAvailability": true,
+      "legacyContextSourceType": "legacy-preset",
+      "sandboxConfidence": 0.747,
+      "sandboxSafetyScore": 0.804,
+      "canGeneratePreview": true,
+      "interactiveState": "ready",
+      "observationState": "ready",
+      "observationEnabled": true,
+      "blockers": [],
+      "failedGateIds": []
     },
     {
       "fixture": "warm-portrait-synthetic.png",
       "analysisCompleted": true,
       "reviewItemsClicked": 10,
       "legacyPreviewState": "rendered",
-      "controlledV2PreviewState": "not-renderable",
-      "interactiveState": "cancelled",
-      "observationState": "unavailable",
-      "observationEnabled": false,
-      "blockers": [
-        "Confidence 0.593 vs. required 0.72."
-      ],
-      "failedGateIds": [
-        "confidence-sufficient"
-      ]
+      "controlledV2PreviewState": "rendered",
+      "legacyContextAvailability": true,
+      "legacyContextSourceType": "legacy-preset",
+      "sandboxConfidence": 0.743,
+      "sandboxSafetyScore": 0.83,
+      "canGeneratePreview": true,
+      "interactiveState": "ready",
+      "observationState": "ready",
+      "observationEnabled": true,
+      "blockers": [],
+      "failedGateIds": []
     },
     {
       "fixture": "cool-shadow-synthetic.png",
       "analysisCompleted": true,
       "reviewItemsClicked": 10,
       "legacyPreviewState": "rendered",
-      "controlledV2PreviewState": "not-renderable",
-      "interactiveState": "cancelled",
-      "observationState": "unavailable",
-      "observationEnabled": false,
-      "blockers": [
-        "Confidence 0.585 vs. required 0.72.",
-        "Safety score 0.743 vs. required 0.75."
-      ],
-      "failedGateIds": [
-        "confidence-sufficient",
-        "safety-score-sufficient"
-      ]
+      "controlledV2PreviewState": "rendered",
+      "legacyContextAvailability": true,
+      "legacyContextSourceType": "legacy-preset",
+      "sandboxConfidence": 0.735,
+      "sandboxSafetyScore": 0.793,
+      "canGeneratePreview": true,
+      "interactiveState": "ready",
+      "observationState": "ready",
+      "observationEnabled": true,
+      "blockers": [],
+      "failedGateIds": []
     },
     {
       "fixture": "highlight-shadow-range.png",
       "analysisCompleted": true,
       "reviewItemsClicked": 10,
       "legacyPreviewState": "rendered",
-      "controlledV2PreviewState": "not-renderable",
-      "interactiveState": "cancelled",
-      "observationState": "unavailable",
-      "observationEnabled": false,
-      "blockers": [
-        "Confidence 0.593 vs. required 0.72.",
-        "Safety score 0.738 vs. required 0.75."
-      ],
-      "failedGateIds": [
-        "confidence-sufficient",
-        "safety-score-sufficient"
-      ]
+      "controlledV2PreviewState": "rendered",
+      "legacyContextAvailability": true,
+      "legacyContextSourceType": "legacy-preset",
+      "sandboxConfidence": 0.743,
+      "sandboxSafetyScore": 0.788,
+      "canGeneratePreview": true,
+      "interactiveState": "ready",
+      "observationState": "ready",
+      "observationEnabled": true,
+      "blockers": [],
+      "failedGateIds": []
     }
   ],
   "consoleErrors": [],
   "screenshotsGenerated": [
-    "actual-cancelled-state-neutral-balanced.png",
-    "actual-cancelled-state-warm-portrait-synthetic.png",
-    "actual-cancelled-state-cool-shadow-synthetic.png",
-    "actual-cancelled-state-highlight-shadow-range.png"
+    "actual-ready-state-neutral-balanced.png",
+    "actual-ready-state-warm-portrait-synthetic.png",
+    "actual-ready-state-cool-shadow-synthetic.png",
+    "actual-ready-state-highlight-shadow-range.png"
   ],
   "results": [
     {
       "test": "[neutral-balanced.png] Per-fixture pipeline record (RECORD_CAPTURED - evidence only)",
       "result": "PASS",
-      "evidence": "{\"fixture\":\"neutral-balanced.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"not-renderable\",\"interactiveState\":\"cancelled\",\"observationState\":\"unavailable\",\"observationEnabled\":false,\"blockers\":[\"Confidence 0.597 vs. required 0.72.\"],\"failedGateIds\":[\"confidence-sufficient\"]}"
+      "evidence": "{\"fixture\":\"neutral-balanced.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"rendered\",\"legacyContextAvailability\":true,\"legacyContextSourceType\":\"legacy-preset\",\"sandboxConfidence\":0.747,\"sandboxSafetyScore\":0.804,\"canGeneratePreview\":true,\"interactiveState\":\"ready\",\"observationState\":\"ready\",\"observationEnabled\":true,\"blockers\":[],\"failedGateIds\":[]}"
     },
     {
       "test": "[warm-portrait-synthetic.png] Per-fixture pipeline record (RECORD_CAPTURED - evidence only)",
       "result": "PASS",
-      "evidence": "{\"fixture\":\"warm-portrait-synthetic.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"not-renderable\",\"interactiveState\":\"cancelled\",\"observationState\":\"unavailable\",\"observationEnabled\":false,\"blockers\":[\"Confidence 0.593 vs. required 0.72.\"],\"failedGateIds\":[\"confidence-sufficient\"]}"
+      "evidence": "{\"fixture\":\"warm-portrait-synthetic.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"rendered\",\"legacyContextAvailability\":true,\"legacyContextSourceType\":\"legacy-preset\",\"sandboxConfidence\":0.743,\"sandboxSafetyScore\":0.83,\"canGeneratePreview\":true,\"interactiveState\":\"ready\",\"observationState\":\"ready\",\"observationEnabled\":true,\"blockers\":[],\"failedGateIds\":[]}"
     },
     {
       "test": "[cool-shadow-synthetic.png] Per-fixture pipeline record (RECORD_CAPTURED - evidence only)",
       "result": "PASS",
-      "evidence": "{\"fixture\":\"cool-shadow-synthetic.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"not-renderable\",\"interactiveState\":\"cancelled\",\"observationState\":\"unavailable\",\"observationEnabled\":false,\"blockers\":[\"Confidence 0.585 vs. required 0.72.\",\"Safety score 0.743 vs. required 0.75.\"],\"failedGateIds\":[\"confidence-sufficient\",\"safety-score-sufficient\"]}"
+      "evidence": "{\"fixture\":\"cool-shadow-synthetic.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"rendered\",\"legacyContextAvailability\":true,\"legacyContextSourceType\":\"legacy-preset\",\"sandboxConfidence\":0.735,\"sandboxSafetyScore\":0.793,\"canGeneratePreview\":true,\"interactiveState\":\"ready\",\"observationState\":\"ready\",\"observationEnabled\":true,\"blockers\":[],\"failedGateIds\":[]}"
     },
     {
       "test": "[highlight-shadow-range.png] Per-fixture pipeline record (RECORD_CAPTURED - evidence only)",
       "result": "PASS",
-      "evidence": "{\"fixture\":\"highlight-shadow-range.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"not-renderable\",\"interactiveState\":\"cancelled\",\"observationState\":\"unavailable\",\"observationEnabled\":false,\"blockers\":[\"Confidence 0.593 vs. required 0.72.\",\"Safety score 0.738 vs. required 0.75.\"],\"failedGateIds\":[\"confidence-sufficient\",\"safety-score-sufficient\"]}"
+      "evidence": "{\"fixture\":\"highlight-shadow-range.png\",\"analysisCompleted\":true,\"reviewItemsClicked\":10,\"legacyPreviewState\":\"rendered\",\"controlledV2PreviewState\":\"rendered\",\"legacyContextAvailability\":true,\"legacyContextSourceType\":\"legacy-preset\",\"sandboxConfidence\":0.743,\"sandboxSafetyScore\":0.788,\"canGeneratePreview\":true,\"interactiveState\":\"ready\",\"observationState\":\"ready\",\"observationEnabled\":true,\"blockers\":[],\"failedGateIds\":[]}"
+    },
+    {
+      "test": "Step 7A-F2 decision: PASS — Live Preview Pipeline Reachable",
+      "result": "PASS",
+      "evidence": "fixture=neutral-balanced.png"
     },
     {
       "test": "Full Application Acceptance: at least one fixture reaches Ready",
-      "result": "FAIL",
-      "evidence": "NO fixture reached Ready. See FIX 3 confidence breakdown above for the proven cause (a structural sequencing limitation, not a wiring bug, not a threshold, not a fixture-selection problem)."
+      "result": "PASS",
+      "evidence": "first ready fixture=neutral-balanced.png"
     },
     {
       "test": "Actual Observation UI workflow",
       "result": "NOT_TESTED",
-      "evidence": "Observation controls never became enabled through the real application in this run."
+      "evidence": "Not reached in this run"
     },
     {
       "test": "Actual Session Clear button test",
       "result": "NOT_TESTED",
-      "evidence": "Same reason."
+      "evidence": "Not reached in this run"
     },
     {
       "test": "Generation handoff test",
       "result": "NOT_TESTED",
-      "evidence": "Same reason."
+      "evidence": "Not reached in this run"
     },
     {
       "test": "Identity Preview UI honesty",
       "result": "NOT_TESTED",
-      "evidence": "No fixture reached a rendered Controlled V2 state in this run."
+      "evidence": "Not reached in this run"
     },
     {
       "test": "Console errors (only confirmed font-host failures excluded)",
