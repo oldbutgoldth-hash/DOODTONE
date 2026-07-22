@@ -1142,6 +1142,33 @@ async function runAnalysis() {
     return;
   }
 
+  // COMBINED CLOSEOUT R1 — Phase B FIX B1: capture the Observation
+  // Controller's PRIOR state and prior Generation ID BEFORE incrementing
+  // analysisRenderGeneration — never after. The Controller's own
+  // generationProvider() callback reads analysisRenderGeneration live,
+  // so reading getState() AFTER the increment would let the provider
+  // already report the NEW generation while the Controller's own
+  // `context.generationId` still held the OLD one — getState() would
+  // itself detect a transient provider/context mismatch and briefly set
+  // the stale warning, only for the very next reset() call (the old
+  // code) to erase it again inside the SAME synchronous task, before any
+  // MutationObserver could ever observe the transition. Capturing BEFORE
+  // the increment guarantees the provider and context still genuinely
+  // agree at capture time — a clean read, no side effect, no premature
+  // transition.
+  let priorObsState = null;
+  let priorGenerationId = null;
+  // Recorded per FIX B1's explicit requirement — used by FIX B3 callers
+  // downstream (and available for QA introspection) to confirm a stale
+  // warning is only ever meaningful when a real prior Observation
+  // genuinely existed.
+  let priorObservationWasSelected = false;
+  if (interactivePreviewObservationController) {
+    priorObsState = interactivePreviewObservationController.getState();
+    priorGenerationId = safeGetVisualPreviewProperty(priorObsState, 'currentGenerationId');
+    priorObservationWasSelected = safeGetVisualPreviewProperty(priorObsState, 'state') === 'selected';
+  }
+
   // New generation for this analysis run — any in-flight render callback
   // from a PREVIOUS import that resolves after this point will see its
   // captured generation number no longer match and skip committing its
@@ -1178,20 +1205,37 @@ async function runAnalysis() {
     if (ibaInnerEarly) renderInteractiveBeforeAfterStatus(ibaInnerEarly, { ...newIbaState, state: 'preparing' });
   }
 
-  // EPIC 2E-J Phase A: clear any Preview Observation immediately at the
-  // same point — covers BOTH Re-analyze and New image, since
-  // runAnalysis() is the single entry point for both. The observation
-  // must never be carried forward to a new generation/image; the
-  // controls disable again until the new Interactive comparison
-  // reaches Ready.
+  // EPIC 2E-J Phase A (COMBINED CLOSEOUT R1 — Phase B FIX B2): enter a
+  // real "preparing" Context for the NEW generation through the
+  // Controller's own setContext() lifecycle — never reset(). This
+  // covers BOTH Re-analyze and New image, since runAnalysis() is the
+  // single entry point for both. setContext() detects the genuine
+  // generation change itself, clears stale Observation/Reason memory
+  // through the SAME centralized _clearObservationMemory() helper
+  // reset() used to call, and — ONLY when a real prior Observation
+  // genuinely existed (staleCleared === true) — surfaces the exact one
+  // stale-generation warning through the ordinary onStateChange
+  // pipeline (never a timer, never a Test-only injection). Controls
+  // disable again immediately (unavailableReason: 'preparing') until
+  // the new Interactive comparison reaches Ready; the warning remains
+  // visible until that next genuine context transition, at which point
+  // deriving state fresh from the Ready context naturally stops
+  // including it (FIX B5) — no manual clearing required.
   if (interactivePreviewObservationController) {
-    // EPIC 2E-J Phase B: capture the generation BEFORE reset() clears
-    // its own context — reset() sets currentGenerationId to null
-    // internally, so invalidating the Session record must use this
-    // captured value directly rather than reading it back afterward.
-    const priorObsState = interactivePreviewObservationController.getState();
-    const priorGenerationId = safeGetVisualPreviewProperty(priorObsState, 'currentGenerationId');
-    interactivePreviewObservationController.reset();
+    interactivePreviewObservationController.setContext({
+      generationId: renderGeneration,
+      interactiveState: 'preparing',
+      interactiveReady: false,
+      safetyBlocked: false,
+      blockedReason: null,
+    });
+    // FIX B4: invalidate the prior generation's Session record exactly
+    // once. The setContext() call above already synchronously emitted
+    // onStateChange -> _syncObservationSession(), which independently
+    // invalidates the SAME prior generation through the SAME shared
+    // `lastInvalidatedObservationGenerationId` guard — so whichever path
+    // runs first "wins" and this one becomes a no-op rather than a
+    // second invalidation, never double-counting one transition as two.
     if (interactivePreviewObservationSession && priorGenerationId !== null && priorGenerationId !== undefined && lastInvalidatedObservationGenerationId !== priorGenerationId) {
       interactivePreviewObservationSession.invalidateGeneration(priorGenerationId);
       lastInvalidatedObservationGenerationId = priorGenerationId;

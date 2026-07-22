@@ -28,6 +28,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { detectPlaywrightPackage, detectBrowserExecutable } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -223,14 +224,29 @@ const requiredContrastCategories = [
 }
 
 // ══════════════════════════════════════════════════════════════════
-// FIX 7 — Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED. This
-// reads the EXISTING F1 static-results honest-status record — it does
+// FIX 7 (COMBINED CLOSEOUT R1 revision) — Browser suite status is
+// LIVE-DETECTED in this file, not read as a retired literal. This does
 // NOT execute or fabricate a browser run, and does NOT regenerate the
-// Browser or Final Phase C result JSON.
+// Browser or Final Phase C result JSON — it only detects whether a
+// Playwright package/Chromium binary is currently present.
 // ══════════════════════════════════════════════════════════════════
+const livePkgStatus = await detectPlaywrightPackage();
+const liveExeStatus = await detectBrowserExecutable(livePkgStatus.mod ? livePkgStatus.mod.chromium : null);
+const liveBrowserStatus = liveExeStatus.found ? 'BROWSER_BINARY_AVAILABLE' : 'BROWSER_BINARY_UNAVAILABLE';
 {
-  const status = f1StaticResultsRaw?.browserSuiteExecution?.status;
-  record('Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)', status === 'NOT_RUN_ENVIRONMENT_BLOCKED', `status=${status}`);
+  const ownSrc = await readFile(fileURLToPath(import.meta.url), 'utf8');
+  // Scan only the output-object construction (after this diagnostic block's
+  // own source, which legitimately mentions the retired literal as a string
+  // for comparison purposes) to avoid a self-referential false match.
+  const outputBlockSrc = ownSrc.slice(ownSrc.lastIndexOf('const output = {'));
+  const outputUsesLiveStatus = outputBlockSrc.includes('status: liveBrowserStatus') && !outputBlockSrc.includes("status: 'NOT_RUN_ENVIRONMENT_BLOCKED'");
+  const f1Status = f1StaticResultsRaw?.browserSuiteExecution?.status;
+  const f1IsRecognizedLiveValue = f1Status === 'BROWSER_BINARY_AVAILABLE' || f1Status === 'BROWSER_BINARY_UNAVAILABLE';
+  record(
+    'Browser result is live-detected as BROWSER_BINARY_AVAILABLE/UNAVAILABLE (retired NOT_RUN_ENVIRONMENT_BLOCKED literal no longer emitted; consistent with F1 static-results honest-status record)',
+    outputUsesLiveStatus && f1IsRecognizedLiveValue,
+    `liveBrowserStatus=${liveBrowserStatus}, outputUsesLiveStatus=${outputUsesLiveStatus}, f1Status=${f1Status}`
+  );
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -531,12 +547,13 @@ const output = {
   results,
   disclaimer: 'This suite audits the SOURCE TEXT of qa/epic-2e-j-phase-c-step7b-b-test.mjs for the presence of required categories/thresholds/wiring. It does NOT execute a browser, does NOT measure real computed colors or element sizes, and does NOT prove real Contrast/Touch-target PASS. A PASS here means "the required code path is present," not "the real UI meets WCAG."',
   browserSuiteExecution: {
-    status: 'NOT_RUN_ENVIRONMENT_BLOCKED',
-    note: 'Unchanged from the F1-R/F1-R2 record. This F2-S patch did not execute, simulate, or regenerate the real browser suite or its result JSON.',
+    status: liveBrowserStatus,
+    packageStatus: livePkgStatus.status,
+    note: 'COMBINED CLOSEOUT R1 Phase F: live-detected every run, replacing the retired NOT_RUN_ENVIRONMENT_BLOCKED literal. This F2-S/S2/S3 patch did not execute, simulate, or regenerate the real browser suite or its result JSON — Browser availability is reported here for diagnostic purposes only.',
     browserOrFinalResultJsonRegenerated: false,
   },
 };
 await writeFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-b-f2-static-results.json'), JSON.stringify(output, null, 2));
 console.log(`\n${passCount}/${results.length} PASS, ${failCount} FAIL`);
-console.log('Browser suite execution: NOT_RUN_ENVIRONMENT_BLOCKED (see output JSON)');
+console.log(`Browser suite execution: ${liveBrowserStatus} (see output JSON)`);
 process.exit(failCount > 0 ? 1 : 0);

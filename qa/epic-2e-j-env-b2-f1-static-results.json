@@ -1,9 +1,9 @@
 {
   "suite": "EPIC 2E-J ENV-B2-F1 FIX 10 — Real Browser QA Determinism and Evidence Integrity static/functional self-test",
-  "generatedAt": "2026-07-22T13:15:24.737Z",
+  "generatedAt": "2026-07-22T14:24:58.327Z",
   "summary": {
-    "total": 34,
-    "pass": 34,
+    "total": 35,
+    "pass": 35,
     "fail": 0,
     "notTested": 0
   },
@@ -11,7 +11,7 @@
     {
       "test": "Setup: qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "191673 bytes"
+      "evidence": "200741 bytes"
     },
     {
       "test": "Setup: qa/helpers/playwright-lumixa-test-runtime.mjs is readable",
@@ -44,9 +44,14 @@
       "evidence": "hasFn=true, ownEntry=true, fourExactIds=true, recordsEveryStepShape=true, allExactlyOneCheckedCurrent=true, allExpectedVisitedCurrent=true"
     },
     {
-      "test": "FIX 3/6 (ENV-B2-F2): every Tab-count bound in this suite (canonical Reason/Clear scenario — TWO independent bounds boundToFirstReason/boundReasonToClearSession — Part 3.1, Part 4.1) is derived from the real focusable-order distance via computeBoundedMaxTabs() — the previous hard-coded 15/20 guesses are all gone",
+      "test": "FIX 3/6 (ENV-B2-F2, renamed under COMBINED CLOSEOUT R1 Phase A): every Tab-count bound in this suite (canonical Reason/Clear scenario — boundToFirstReason computed pre-selection, boundFirstReasonToClearReasons/boundClearReasonsToClearSession recomputed AFTER the Reason toggle — Part 3.1, Part 4.1) is derived from the real focusable-order distance via computeBoundedMaxTabs() — the previous hard-coded 15/20 guesses, and the old stale pre-toggle boundReasonToClearSession, are all gone",
       "result": "PASS",
-      "evidence": "hasScenarioFn=true, hasBoundFn=true, genericBoundDerivedFromRealOrder=true, noHardCoded15=true, noHardCoded20=true, p3UsesBound=true, p4UsesBound=true, twoIndependentBoundsDerived=true"
+      "evidence": "hasScenarioFn=true, hasBoundFn=true, genericBoundDerivedFromRealOrder=true, noHardCoded15=true, noHardCoded20=true, p3UsesBound=true, p4UsesBound=true, threeIndependentBoundsDerived=true"
+    },
+    {
+      "test": "FIX A2 (COMBINED CLOSEOUT R1): the old stale pre-toggle boundReasonToClearSession (computed before Clear Reasons became enabled, then reused after) is gone from the source",
+      "result": "PASS",
+      "evidence": "present=true"
     },
     {
       "test": "FIX 3/6 (ENV-B2-F2): the canonical Reason/Clear scenario requires Tab to reach Clear Reasons, Clear Observation, AND Clear Session — each gated by boundsAllDerived — not merely one of the three, in both PART 2 and F3-S PART 1 call sites",

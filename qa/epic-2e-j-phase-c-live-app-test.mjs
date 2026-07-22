@@ -18,40 +18,28 @@
  *         qa/epic-2e-j-phase-c-live-evidence-results.json
  */
 
-import http from 'node:http';
 import crypto from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
+// COMBINED CLOSEOUT R1 — Phase E: migrated off node:http/localhost/direct
+// chromium.launch() onto the shared Navigation-Free In-Memory Harness —
+// the SAME helper the Step 7B-B suite uses. No local server, no
+// localhost/127.0.0.1/private-IP navigation; the only navigation target
+// is about:blank?qa=1.
+import {
+  detectPlaywrightPackage,
+  detectBrowserExecutable,
+  REQUIRED_LAUNCH_ARGS,
+  buildLumixaAppSnapshot,
+  openLumixaInMemoryPage,
+} from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const PORT = 19995;
 const FIXTURES_DIR = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j');
 const F3_SCREENSHOT_DIR = path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f3');
 const FIXTURES = ['neutral-balanced.png', 'warm-portrait-synthetic.png', 'cool-shadow-synthetic.png', 'highlight-shadow-range.png'];
-
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg' };
-
-function startServer() {
-  return new Promise((resolve) => {
-    const server = http.createServer(async (req, res) => {
-      try {
-        const urlPath = decodeURIComponent(req.url.split('?')[0]);
-        const filePath = path.join(PROJECT_ROOT, urlPath === '/' ? '/index.html' : urlPath);
-        const data = await readFile(filePath);
-        const ext = path.extname(filePath);
-        res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-        res.end(data);
-      } catch {
-        res.writeHead(404);
-        res.end('not found');
-      }
-    });
-    server.listen(PORT, () => resolve(server));
-  });
-}
 
 const results = [];
 function record(test, result, evidence) {
@@ -121,8 +109,27 @@ function sha256(text) {
 
 async function main() {
   await mkdir(F3_SCREENSHOT_DIR, { recursive: true });
-  const server = await startServer();
-  const browser = await chromium.launch();
+  // COMBINED CLOSEOUT R1 — Phase E: shared Browser detection (never a
+  // downloaded binary), launched with the required sandbox args. When
+  // unavailable, this suite exits honestly before any test runs and
+  // never regenerates its result JSONs.
+  const pkg = await detectPlaywrightPackage();
+  if (pkg.status !== 'PLAYWRIGHT_PACKAGE_AVAILABLE') {
+    console.log(`Playwright Node package unavailable: ${pkg.error}`);
+    console.log('Final decision: PLAYWRIGHT_PACKAGE_UNAVAILABLE');
+    console.log('qa/epic-2e-j-phase-c-live-app-results.json / qa/epic-2e-j-phase-c-live-evidence-results.json were NOT regenerated (honest environment-blocked exit).');
+    process.exit(0);
+  }
+  const { chromium } = pkg.mod;
+  const browserDetect = await detectBrowserExecutable(chromium);
+  if (!browserDetect.found) {
+    console.log(`No usable Browser executable found among ${browserDetect.attempts.length} candidates (never downloaded one): ${JSON.stringify(browserDetect.attempts)}`);
+    console.log('Final decision: BROWSER_BINARY_UNAVAILABLE');
+    console.log('qa/epic-2e-j-phase-c-live-app-results.json / qa/epic-2e-j-phase-c-live-evidence-results.json were NOT regenerated (honest environment-blocked exit).');
+    process.exit(0);
+  }
+  const browser = await chromium.launch({ executablePath: browserDetect.found, args: REQUIRED_LAUNCH_ARGS });
+  const appSnapshot = await buildLumixaAppSnapshot(PROJECT_ROOT);
   const consoleErrors = [];
   const fixtureRecords = [];
   const liveEvidenceRecords = [];
@@ -135,14 +142,14 @@ async function main() {
     // Step 7A/F1/F2/F2-G), re-verified as a regression check.
     // ══════════════════════════════════════════════════════════════
     for (const fixture of FIXTURES) {
-      const page = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
+      const fixtureRuntime = await openLumixaInMemoryPage({ browser, projectRoot: PROJECT_ROOT, qaQuery: '?qa=1', viewport: { width: 1440, height: 1400 }, prebuiltApp: appSnapshot });
+      const page = fixtureRuntime.page;
       const pageErrors = [];
       page.on('pageerror', (e) => pageErrors.push(String(e)));
       const requestFailures = [];
       page.on('requestfailed', (req) => requestFailures.push({ url: req.url(), failure: req.failure()?.errorText ?? 'unknown' }));
       page.on('response', (res) => { if (res.status() >= 400) requestFailures.push({ url: res.url(), status: res.status() }); });
 
-      await page.goto(`http://localhost:${PORT}/index.html?qa=1`);
       await page.waitForTimeout(600);
       const genBefore = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? 0);
       const { completed, snapshot } = await importAndReachReady(page, fixture, genBefore);
@@ -185,7 +192,7 @@ async function main() {
 
       for (const rf of requestFailures) { if (!/fonts\.googleapis\.com|fonts\.gstatic\.com/i.test(rf.url)) consoleErrors.push({ fixture, type: 'requestfailed', ...rf }); }
       for (const e of pageErrors) consoleErrors.push({ fixture, type: 'pageerror', error: e });
-      await page.close();
+      await fixtureRuntime.cleanup();
     }
 
     record('Full Application Acceptance: at least one fixture reaches Ready', firstReadyFixture ? 'PASS' : 'FAIL', firstReadyFixture ? `first ready fixture=${firstReadyFixture}` : 'NO fixture reached Ready in this run.');
@@ -196,13 +203,13 @@ async function main() {
     // Only runs when at least one fixture reaches Ready.
     // ══════════════════════════════════════════════════════════════
     if (firstReadyFixture) {
-      const page = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
+      const f3Runtime = await openLumixaInMemoryPage({ browser, projectRoot: PROJECT_ROOT, qaQuery: '?qa=1', viewport: { width: 1440, height: 1400 }, prebuiltApp: appSnapshot });
+      const page = f3Runtime.page;
       const f3Errors = [];
       page.on('pageerror', (e) => f3Errors.push(String(e)));
       const f3RequestFailures = [];
       page.on('requestfailed', (req) => f3RequestFailures.push(req.url()));
 
-      await page.goto(`http://localhost:${PORT}/index.html?qa=1`);
       await page.waitForTimeout(600);
       const gen0 = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? 0);
       await importAndReachReady(page, FIXTURES[0], gen0);
@@ -428,7 +435,7 @@ async function main() {
       for (const url of f3RequestFailures) { if (!/fonts\.googleapis\.com|fonts\.gstatic\.com/i.test(url)) consoleErrors.push({ context: 'F3', type: 'requestfailed', url }); }
       for (const e of f3Errors) consoleErrors.push({ context: 'F3', type: 'pageerror', error: e });
 
-      await page.close();
+      await f3Runtime.cleanup();
     } else {
       record('Actual Observation UI workflow', 'NOT_TESTED', 'No fixture reached Ready in this run — cannot test real UI interaction on disabled controls.');
       record('Actual Session Clear button test', 'NOT_TESTED', 'Same reason.');
@@ -441,7 +448,6 @@ async function main() {
 
   } finally {
     await browser.close();
-    server.close();
   }
 
   const passCount = results.filter((r) => r.result === 'PASS').length;

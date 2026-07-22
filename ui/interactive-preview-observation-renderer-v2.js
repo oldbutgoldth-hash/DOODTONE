@@ -368,7 +368,37 @@ export function renderInteractivePreviewObservationV2(container, state) {
     input.checked = isChecked;
     // At the limit, unchecked boxes become disabled (checked ones stay
     // removable); when not enabled at all, everything is disabled.
-    input.disabled = !reasonsEnabled || (reasonLimitReached && !isChecked);
+    const isDisabled = !reasonsEnabled || (reasonLimitReached && !isChecked);
+    input.disabled = isDisabled;
+
+    // COMBINED CLOSEOUT R1 — Phase C FIX C1/C2: an explicit, measurable,
+    // Renderer-owned visible style difference on the Reason's own
+    // label — never relying on native checkbox rendering, cursor alone,
+    // the bare `disabled` property, or a className with no attached
+    // CSS. `data-ipo-disabled` is the bounded Production attribute; the
+    // opacity/background/border-color changes are the measurable
+    // computed-style differences (getComputedStyle) a Contrast/Focus
+    // audit can detect. Applied/removed idempotently on every render —
+    // explicit values in BOTH branches, never a partial clear that could
+    // leave stale inline styling behind, and enabled text/contrast is
+    // fully restored to its ORIGINAL values (never left dimmer or
+    // otherwise degraded) so FIX C4 (no contrast regression) holds.
+    const reasonLabel = input.closest('label');
+    if (reasonLabel) {
+      if (isDisabled) {
+        reasonLabel.dataset.ipoDisabled = 'true';
+        reasonLabel.style.opacity = '0.55';
+        reasonLabel.style.backgroundColor = 'var(--surface-2)';
+        reasonLabel.style.borderColor = 'var(--border)';
+        reasonLabel.style.cursor = 'not-allowed';
+      } else {
+        delete reasonLabel.dataset.ipoDisabled;
+        reasonLabel.style.opacity = '1';
+        reasonLabel.style.backgroundColor = 'transparent';
+        reasonLabel.style.borderColor = 'var(--border)';
+        reasonLabel.style.cursor = 'pointer';
+      }
+    }
   });
   // Step 7B-B-F3-P1 FIX 4 — render priority into the EXISTING
   // #ipoReasonLimit polite live region (no fourth live region added):

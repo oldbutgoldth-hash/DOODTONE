@@ -132,15 +132,24 @@ record('Setup: qa/playwright-in-memory-app-smoke.mjs is readable', smokeSrc.leng
   const noHardCoded20 = !/tabTo\(page, 'ipoClearSessionButton', 20,/.test(testSrc);
   const p3UsesBound = /const p3Bound = await computeBoundedMaxTabs\(page, p3Entry\.targetId, 'ipoClearButton'\)/.test(testSrc);
   const p4UsesBound = /const p4Bound = await computeBoundedMaxTabs\(page, 'ipoOption_prefer-legacy', 'ipoClearSessionButton'\)/.test(testSrc);
-  const twoIndependentBoundsDerived = /const boundToFirstReason = expectedFirstReasonId \? await computeBoundedMaxTabs\(page, 'ipoOption_prefer-legacy', expectedFirstReasonId\)/.test(testSrc)
-    && /const boundReasonToClearSession = expectedFirstReasonId \? await computeBoundedMaxTabs\(page, expectedFirstReasonId, 'ipoClearSessionButton'\)/.test(testSrc)
-    && /const boundsAllDerived = boundToFirstReason\.derived === true && boundReasonToClearSession\.derived === true/.test(testSrc);
-  const pass = hasScenarioFn && hasBoundFn && genericBoundDerivedFromRealOrder && noHardCoded15 && noHardCoded20 && p3UsesBound && p4UsesBound && twoIndependentBoundsDerived;
+  // COMBINED CLOSEOUT R1 — Phase A FIX A2 renamed the post-Reason-selection
+  // bound pair: the old single boundReasonToClearSession (computed too
+  // early, before Clear Reasons became enabled) was replaced by TWO bounds
+  // recomputed AFTER the Reason toggle: boundFirstReasonToClearReasons and
+  // boundClearReasonsToClearSession. boundToFirstReason (computed BEFORE
+  // any Reason is selected) is unchanged.
+  const threeIndependentBoundsDerived = /const boundToFirstReason = expectedFirstReasonId \? await computeBoundedMaxTabs\(page, 'ipoOption_prefer-legacy', expectedFirstReasonId\)/.test(testSrc)
+    && /const boundFirstReasonToClearReasons = reachedFirstReasonId \? await computeBoundedMaxTabs\(page, reachedFirstReasonId, 'ipoClearReasonsButton'\)/.test(testSrc)
+    && /const boundClearReasonsToClearSession = await computeBoundedMaxTabs\(page, 'ipoClearReasonsButton', 'ipoClearSessionButton'\)/.test(testSrc)
+    && /const boundsAllDerived = boundFirstReasonToClearReasons\.derived === true && boundClearReasonsToClearSession\.derived === true/.test(testSrc);
+  const pass = hasScenarioFn && hasBoundFn && genericBoundDerivedFromRealOrder && noHardCoded15 && noHardCoded20 && p3UsesBound && p4UsesBound && threeIndependentBoundsDerived;
   record(
-    'FIX 3/6 (ENV-B2-F2): every Tab-count bound in this suite (canonical Reason/Clear scenario — TWO independent bounds boundToFirstReason/boundReasonToClearSession — Part 3.1, Part 4.1) is derived from the real focusable-order distance via computeBoundedMaxTabs() — the previous hard-coded 15/20 guesses are all gone',
+    'FIX 3/6 (ENV-B2-F2, renamed under COMBINED CLOSEOUT R1 Phase A): every Tab-count bound in this suite (canonical Reason/Clear scenario — boundToFirstReason computed pre-selection, boundFirstReasonToClearReasons/boundClearReasonsToClearSession recomputed AFTER the Reason toggle — Part 3.1, Part 4.1) is derived from the real focusable-order distance via computeBoundedMaxTabs() — the previous hard-coded 15/20 guesses, and the old stale pre-toggle boundReasonToClearSession, are all gone',
     pass,
-    `hasScenarioFn=${hasScenarioFn}, hasBoundFn=${hasBoundFn}, genericBoundDerivedFromRealOrder=${genericBoundDerivedFromRealOrder}, noHardCoded15=${noHardCoded15}, noHardCoded20=${noHardCoded20}, p3UsesBound=${p3UsesBound}, p4UsesBound=${p4UsesBound}, twoIndependentBoundsDerived=${twoIndependentBoundsDerived}`
+    `hasScenarioFn=${hasScenarioFn}, hasBoundFn=${hasBoundFn}, genericBoundDerivedFromRealOrder=${genericBoundDerivedFromRealOrder}, noHardCoded15=${noHardCoded15}, noHardCoded20=${noHardCoded20}, p3UsesBound=${p3UsesBound}, p4UsesBound=${p4UsesBound}, threeIndependentBoundsDerived=${threeIndependentBoundsDerived}`
   );
+  const oldStaleBoundGone = !/const boundReasonToClearSession = expectedFirstReasonId/.test(testSrc);
+  record('FIX A2 (COMBINED CLOSEOUT R1): the old stale pre-toggle boundReasonToClearSession (computed before Clear Reasons became enabled, then reused after) is gone from the source', oldStaleBoundGone, `present=${oldStaleBoundGone}`);
   const requiresAllThreeClearTargets = /f3ReasonClear\.boundsAllDerived && f3ReasonClear\.reachedClearReasons && f3ReasonClear\.reachedClearObs && f3ReasonClear\.reachedClearSession/.test(testSrc)
     && /canonicalReasonClear\.boundsAllDerived && canonicalReasonClear\.reachedClearReasons/.test(testSrc);
   record('FIX 3/6 (ENV-B2-F2): the canonical Reason/Clear scenario requires Tab to reach Clear Reasons, Clear Observation, AND Clear Session — each gated by boundsAllDerived — not merely one of the three, in both PART 2 and F3-S PART 1 call sites', requiresAllThreeClearTargets, `present=${requiresAllThreeClearTargets}`);

@@ -17,40 +17,28 @@
  * Output: qa/epic-2e-j-phase-c-step7b-a-results.json
  */
 
-import http from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
 import { createInteractivePreviewObservationSessionV2 } from '../ui/interactive-preview-observation-session-v2.js';
+// COMBINED CLOSEOUT R1 — Phase E: migrated off node:http/localhost/direct
+// chromium.launch() onto the shared Navigation-Free In-Memory Harness —
+// the SAME helper the Step 7B-B suite uses. No local server, no
+// localhost/127.0.0.1/private-IP navigation; the only navigation target
+// is about:blank?qa=1.
+import {
+  detectPlaywrightPackage,
+  detectBrowserExecutable,
+  REQUIRED_LAUNCH_ARGS,
+  buildLumixaAppSnapshot,
+  openLumixaInMemoryPage,
+} from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const PORT = 19993;
 const FIXTURES_DIR = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j');
 const SCREENSHOT_DIR = path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-7b-a');
 const VIEWPORTS = [320, 360, 390, 430, 768, 1024, 1440];
-
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg' };
-
-function startServer() {
-  return new Promise((resolve) => {
-    const server = http.createServer(async (req, res) => {
-      try {
-        const urlPath = decodeURIComponent(req.url.split('?')[0]);
-        const filePath = path.join(PROJECT_ROOT, urlPath === '/' ? '/index.html' : urlPath);
-        const data = await readFile(filePath);
-        const ext = path.extname(filePath);
-        res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-        res.end(data);
-      } catch {
-        res.writeHead(404);
-        res.end('not found');
-      }
-    });
-    server.listen(PORT, () => resolve(server));
-  });
-}
 
 const results = [];
 function record(test, result, evidence) {
@@ -369,8 +357,28 @@ const RESTORE_AND_VERIFY_JS = `
 
 async function main() {
   await mkdir(SCREENSHOT_DIR, { recursive: true });
-  const server = await startServer();
-  const browser = await chromium.launch();
+  // COMBINED CLOSEOUT R1 — Phase E: shared Browser detection (never a
+  // downloaded binary), launched with the required sandbox args. When
+  // unavailable, this suite exits honestly before any test runs and
+  // never regenerates its result JSON.
+  const pkg = await detectPlaywrightPackage();
+  if (pkg.status !== 'PLAYWRIGHT_PACKAGE_AVAILABLE') {
+    console.log(`Playwright Node package unavailable: ${pkg.error}`);
+    console.log('Final decision: PLAYWRIGHT_PACKAGE_UNAVAILABLE');
+    console.log('qa/epic-2e-j-phase-c-step7b-a-results.json was NOT regenerated (honest environment-blocked exit).');
+    process.exit(0);
+  }
+  const { chromium } = pkg.mod;
+  const browserDetect = await detectBrowserExecutable(chromium);
+  if (!browserDetect.found) {
+    console.log(`No usable Browser executable found among ${browserDetect.attempts.length} candidates (never downloaded one): ${JSON.stringify(browserDetect.attempts)}`);
+    console.log('Final decision: BROWSER_BINARY_UNAVAILABLE');
+    console.log('qa/epic-2e-j-phase-c-step7b-a-results.json was NOT regenerated (honest environment-blocked exit).');
+    process.exit(0);
+  }
+  const browser = await chromium.launch({ executablePath: browserDetect.found, args: REQUIRED_LAUNCH_ARGS });
+  // Built ONCE and shared by every in-memory Page this suite opens.
+  const appSnapshot = await buildLumixaAppSnapshot(PROJECT_ROOT);
   const consoleErrors = [];
   const screenshotsGenerated = [];
   let finalCounts = null;
@@ -389,20 +397,27 @@ async function main() {
     console.log('=== FIX 4: page-audit self-test (mechanism verification only, not part of the real audit) ===');
     {
       const selfTestErrors = [];
-      const selfTestPage = await browser.newPage();
+      const selfTestRuntime = await openLumixaInMemoryPage({ browser, projectRoot: PROJECT_ROOT, qaQuery: '?qa=1', prebuiltApp: appSnapshot });
+      const selfTestPage = selfTestRuntime.page;
       const selfTestAudit = attachPageAudit(selfTestPage, 'self-test', selfTestErrors);
-      await selfTestPage.goto(`http://localhost:${PORT}/index.html`);
+      // COMBINED CLOSEOUT R1 — Phase E: there is no real local server to
+      // 404 against anymore. A genuine 404 `response` event is produced
+      // WITHOUT any real network egress via page.route().fulfill() —
+      // Playwright intercepts and synthesizes the response locally, so
+      // this remains a zero-Network-request self-test while still
+      // proving the response-listener code path genuinely fires.
+      await selfTestPage.route('https://qa-self-test.invalid/**', (route) => route.fulfill({ status: 404, contentType: 'text/plain', body: 'not found' }));
       await selfTestPage.waitForTimeout(300);
       await selfTestPage.evaluate(() => console.error('STEP7B_A_TEST_ERROR'));
-      // Genuine local 404 — a real missing-resource request, not a font host.
-      await selfTestPage.evaluate(() => fetch('/this-file-genuinely-does-not-exist.xyz').catch(() => {}));
+      // Genuine synthesized 404 — a real intercepted response, not a font host.
+      await selfTestPage.evaluate(() => fetch('https://qa-self-test.invalid/this-file-genuinely-does-not-exist.xyz').catch(() => {}));
       await selfTestPage.waitForTimeout(300);
       selfTestAudit.finalize();
       const injectedErrorCaught = selfTestErrors.some((e) => e.type === 'console.error' && e.text === 'STEP7B_A_TEST_ERROR');
       const genuine404Caught = selfTestErrors.some((e) => e.type === 'httpError' && e.status === 404);
       record('FIX 4: self-test — injected console.error is captured by attachPageAudit/finalize', injectedErrorCaught, `caught=${injectedErrorCaught}`);
       record('FIX 4: self-test — genuine local 404 is captured (never excluded like a font host)', genuine404Caught, `caught=${genuine404Caught}, allSelfTestErrors=${JSON.stringify(selfTestErrors)}`);
-      await selfTestPage.close();
+      await selfTestRuntime.cleanup();
       // selfTestErrors is intentionally discarded here — never merged into the real audit's consoleErrors.
     }
 
@@ -488,10 +503,10 @@ async function main() {
     // messaging, clipboard, downloads, History, Cookie) during real UI
     // actions, with exact-reference restoration proof.
     // ══════════════════════════════════════════════════════════════
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
+    const mainRuntime = await openLumixaInMemoryPage({ browser, projectRoot: PROJECT_ROOT, qaQuery: '?qa=1', viewport: { width: 1440, height: 1400 }, prebuiltApp: appSnapshot });
+    const page = mainRuntime.page;
     const mainPageAudit = attachPageAudit(page, 'privacy-main', consoleErrors);
 
-    await page.goto(`http://localhost:${PORT}/index.html?qa=1`);
     await page.waitForTimeout(600);
     const { completed, snapshot } = await reachReady(page, 'neutral-balanced.png');
     record('Real application reaches Ready with Observation enabled', completed && snapshot?.observation?.enabled === true, `completed=${completed}, observationEnabled=${snapshot?.observation?.enabled}`);
@@ -682,9 +697,9 @@ async function main() {
 
     for (const width of VIEWPORTS) {
       const vpErrors = [];
-      const vp = await browser.newPage({ viewport: { width, height: 1500 } });
+      const vpRuntime = await openLumixaInMemoryPage({ browser, projectRoot: PROJECT_ROOT, qaQuery: '?qa=1', viewport: { width, height: 1500 }, prebuiltApp: appSnapshot });
+      const vp = vpRuntime.page;
       const vpAudit = attachPageAudit(vp, `viewport-${width}px`, vpErrors);
-      await vp.goto(`http://localhost:${PORT}/index.html?qa=1`);
       await vp.waitForTimeout(600);
       await reachReady(vp, 'neutral-balanced.png');
       await vp.click('#ipoOption_prefer-legacy');
@@ -715,14 +730,13 @@ async function main() {
       if (width <= 430) { await vp.screenshot({ path: path.join(SCREENSHOT_DIR, `mobile-${width}px.png`), fullPage: true }); screenshotsGenerated.push(`full-app-7b-a/mobile-${width}px.png`); }
       else if (width === 768) { await vp.screenshot({ path: path.join(SCREENSHOT_DIR, 'tablet-768px.png'), fullPage: true }); screenshotsGenerated.push('full-app-7b-a/tablet-768px.png'); }
       else if (width === 1440) { await vp.evaluate(() => { const el = document.getElementById('interactivePreviewObservationSection'); if (el) el.scrollIntoView(); }); await vp.waitForTimeout(200); await vp.screenshot({ path: path.join(SCREENSHOT_DIR, 'desktop-1440px.png') }); screenshotsGenerated.push('full-app-7b-a/desktop-1440px.png'); }
-      await vp.close();
+      await vpRuntime.cleanup();
     }
 
     record('FIX 8: main Privacy page — no console/resource error', consoleErrors.filter((e) => e.context === 'privacy-main').length === 0, consoleErrors.filter((e) => e.context === 'privacy-main').length === 0 ? '(none)' : JSON.stringify(consoleErrors.filter((e) => e.context === 'privacy-main')));
 
   } finally {
     await browser.close();
-    server.close();
   }
 
   const passCount = results.filter((r) => r.result === 'PASS').length;

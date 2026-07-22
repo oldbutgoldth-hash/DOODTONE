@@ -91,10 +91,18 @@ function noClickBetween(a, b) {
   record('FIX 1 (ENV-B2-F2): SUMMARY is modeled as a native Tab stop (the first <summary> child of a <details> element) — ROOT CAUSE 1', summaryModeledAsTabStop, `present=${summaryModeledAsTabStop}`);
 }
 {
-  // FIX 1 (ENV-B2-F2): closed-details descendants are excluded from
-  // sequential focus, EXCEPT the summary itself.
-  const closedDetailsExcluded = testSrc.includes('function isHiddenInsideClosedDetails(el)') && testSrc.includes('if (details.open) return false;') && testSrc.includes('if (el === firstSummary) return false;') && testSrc.includes('return !(firstSummary && firstSummary.contains(el));');
-  record('FIX 1 (ENV-B2-F2): descendants hidden inside a CLOSED <details> element are excluded from sequential focus, except its own focusable <summary>', closedDetailsExcluded, `present=${closedDetailsExcluded}`);
+  // FIX A3 (COMBINED CLOSEOUT R1): closed-details descendants are excluded
+  // from sequential focus, EXCEPT the summary itself — and the walk now
+  // covers EVERY ancestor <details> (not just the nearest via closest()),
+  // so a nested case (inner <details open> inside an outer <details
+  // closed>) is still correctly hidden by the outer closed ancestor.
+  const closedDetailsExcluded = testSrc.includes('function isHiddenInsideClosedDetails(el)')
+    && testSrc.includes('let cur = el.parentElement;')
+    && testSrc.includes("if (cur.tagName === 'DETAILS' && !cur.open) {")
+    && testSrc.includes('const withinOwnSummary = el === firstSummary || (firstSummary && firstSummary.contains(el));')
+    && testSrc.includes('if (!withinOwnSummary) return true;')
+    && testSrc.includes('cur = cur.parentElement;');
+  record('FIX A3 (COMBINED CLOSEOUT R1, was FIX 1 ENV-B2-F2): descendants hidden inside ANY ancestor CLOSED <details> element (walking every ancestor, not just the nearest) are excluded from sequential focus, except that details ancestor\'s own focusable <summary>', closedDetailsExcluded, `present=${closedDetailsExcluded}`);
 }
 {
   // FIX 1 (ENV-B2-F2): positive tabindex ordering (ascending, ties
@@ -111,11 +119,19 @@ function noClickBetween(a, b) {
   record('FIX 1 (ENV-B2-F2): inert Elements/descendants and aria-hidden="true" Elements/descendants are excluded, the full required native-focusable element set is recognized, and [contenteditable]:not([contenteditable=false]) is handled', inertAriaHiddenExcluded && requiredElementSet && contentEditableHandled, `inertAriaHiddenExcluded=${inertAriaHiddenExcluded}, requiredElementSet=${requiredElementSet}, contentEditableHandled=${contentEditableHandled}`);
 }
 {
-  // FIX 1 (ENV-B2-F2): radio-group roving Tab stop — checked enabled
-  // Radio is the stop, otherwise the first ENABLED Radio; disabled
-  // Radios never become the stop.
-  const rovingTabStopHandled = testSrc.includes("const groupEls = Array.from(document.getElementsByName(el.name)).filter((r) => r.type === 'radio' && !r.disabled);") && testSrc.includes('const checked = groupEls.find((r) => r.checked);') && testSrc.includes('const stop = checked || groupEls[0];') && testSrc.includes('if (!stop) continue;');
-  record('FIX 1 (ENV-B2-F2): named radio-group roving Tab stop is handled (checked enabled Radio, otherwise first enabled Radio; disabled Radios never become the stop; an all-disabled group contributes no stop)', rovingTabStopHandled, `present=${rovingTabStopHandled}`);
+  // FIX A4 (COMBINED CLOSEOUT R1, was FIX 1 ENV-B2-F2): radio-group roving
+  // Tab stop — checked enabled Radio is the stop, otherwise the first
+  // ENABLED Radio; disabled Radios never become the stop. Groups are now
+  // keyed by the ACTUAL native grouping boundary (tree root + form owner +
+  // name) via radioGroupKey(), never by name alone — same-name Radios in
+  // DIFFERENT Forms/tree roots are never merged into one group.
+  const rovingTabStopHandled = testSrc.includes('function radioGroupKey(r)')
+    && testSrc.includes("return identify(root) + '::' + (form ? identify(form) : 'no-form') + '::' + r.name;")
+    && testSrc.includes("const groupEls = Array.from(document.getElementsByName(el.name)).filter((r) => r.type === 'radio' && !r.disabled && radioGroupKey(r) === key);")
+    && testSrc.includes('const checked = groupEls.find((r) => r.checked);')
+    && testSrc.includes('const stop = checked || groupEls[0];')
+    && testSrc.includes('if (!stop) continue;');
+  record('FIX A4 (COMBINED CLOSEOUT R1, was FIX 1 ENV-B2-F2): named radio-group roving Tab stop is handled (checked enabled Radio, otherwise first enabled Radio; disabled Radios never become the stop; an all-disabled group contributes no stop), grouped by real tree-root+form+name identity so same-name Radios in different Forms are never merged', rovingTabStopHandled, `present=${rovingTabStopHandled}`);
 }
 {
   // FIX 2 (ENV-B2-F2): each independent scenario resets its OWN Radio
@@ -602,8 +618,13 @@ function noClickBetween(a, b) {
   record('FIX 9 (F3-P1): calling clearReasons() when no Reasons existed never unconditionally (re-)sets the token — a repeated empty clear cannot manufacture a new announcement', noUnconditionalSet, `present=${noUnconditionalSet}`);
 
   // ordinary Reason mutation clears the token.
-  const toggleClears = controllerSrc2.includes('reasons = normalizeReasons(nextReasons);\n    reasonsGenerationId = generationId;\n    // Step 7B-B-F3-P1 FIX 3 — adding/removing a Reason clears any prior\n    // Reasons-cleared announcement (a genuine Reason mutation).\n    reasonAnnouncement = null;');
-  const setReasonsClears = controllerSrc2.includes("reasons = normalizeReasons(_safeBoundedArray(reasonsInput));\n    reasonsGenerationId = generationId;\n    // Step 7B-B-F3-P1 FIX 3 — setReasons() clears any prior\n    // Reasons-cleared announcement (a genuine Reason mutation).\n    reasonAnnouncement = null;");
+  // COMBINED CLOSEOUT R1 — FIX D1 changed the unconditional
+  // `reasonsGenerationId = generationId;` assignment to a conditional one
+  // that maintains the reasons.length === 0 => reasonsGenerationId === null
+  // invariant; the reasonAnnouncement-clearing line immediately after it
+  // is unchanged.
+  const toggleClears = controllerSrc2.includes('reasons = normalizeReasons(nextReasons);\n    // COMBINED CLOSEOUT R1 — FIX D1: maintain reasons.length === 0 =>\n    // reasonsGenerationId === null. Removing the FINAL Reason must never\n    // leave a stale non-null reasonsGenerationId behind — that stale\n    // value alone is what previously let a later clearReasons() believe\n    // a real Reason still existed and manufacture a false announcement.\n    reasonsGenerationId = reasons.length > 0 ? generationId : null;\n    // Step 7B-B-F3-P1 FIX 3 — adding/removing a Reason clears any prior\n    // Reasons-cleared announcement (a genuine Reason mutation).\n    reasonAnnouncement = null;');
+  const setReasonsClears = controllerSrc2.includes("reasons = normalizeReasons(_safeBoundedArray(reasonsInput));\n    // COMBINED CLOSEOUT R1 — FIX D1: maintain reasons.length === 0 =>\n    // reasonsGenerationId === null. setReasons([]) (or any input that\n    // normalizes to empty, including hostile input) must never leave a\n    // stale non-null reasonsGenerationId behind.\n    reasonsGenerationId = reasons.length > 0 ? generationId : null;\n    // Step 7B-B-F3-P1 FIX 3 — setReasons() clears any prior\n    // Reasons-cleared announcement (a genuine Reason mutation).\n    reasonAnnouncement = null;");
   record('FIX 9 (F3-P1): ordinary Reason mutation (toggleReason success and setReasons() success) clears reasonAnnouncement to null', toggleClears && setReasonsClears, `toggleClears=${toggleClears}, setReasonsClears=${setReasonsClears}`);
 
   // Renderer maps the token to the exact bounded message.

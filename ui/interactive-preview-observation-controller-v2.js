@@ -517,8 +517,16 @@ export function createInteractivePreviewObservationControllerV2(options) {
 
   // EPIC 2E-J Phase B: clears ONLY the reason tags — keeps the current
   // Observation selected and its session association valid.
+  // COMBINED CLOSEOUT R1 — FIX D2: a genuine "had Reasons" determination
+  // rests on reasons.length ALONE — reasonsGenerationId must never by
+  // itself be treated as sufficient proof that a real Reason was ever
+  // selected. This is a defense-in-depth guard for the FIX D1 invariant
+  // (reasons.length === 0 => reasonsGenerationId === null) maintained at
+  // every mutation site — even if that invariant were ever violated
+  // elsewhere, this check alone can never manufacture a false "Reasons
+  // cleared" announcement from a stale generation id with no real Reasons.
   function _clearReasonsMemory() {
-    const hadReasons = reasons.length > 0 || reasonsGenerationId !== null;
+    const hadReasons = reasons.length > 0;
     reasons = [];
     reasonsGenerationId = null;
     return hadReasons;
@@ -742,7 +750,12 @@ export function createInteractivePreviewObservationControllerV2(options) {
     }
 
     reasons = normalizeReasons(nextReasons);
-    reasonsGenerationId = generationId;
+    // COMBINED CLOSEOUT R1 — FIX D1: maintain reasons.length === 0 =>
+    // reasonsGenerationId === null. Removing the FINAL Reason must never
+    // leave a stale non-null reasonsGenerationId behind — that stale
+    // value alone is what previously let a later clearReasons() believe
+    // a real Reason still existed and manufacture a false announcement.
+    reasonsGenerationId = reasons.length > 0 ? generationId : null;
     // Step 7B-B-F3-P1 FIX 3 — adding/removing a Reason clears any prior
     // Reasons-cleared announcement (a genuine Reason mutation).
     reasonAnnouncement = null;
@@ -770,7 +783,11 @@ export function createInteractivePreviewObservationControllerV2(options) {
     // (a hostile `length` getter or a hostile numeric-index getter
     // could otherwise throw or return unbounded data).
     reasons = normalizeReasons(_safeBoundedArray(reasonsInput));
-    reasonsGenerationId = generationId;
+    // COMBINED CLOSEOUT R1 — FIX D1: maintain reasons.length === 0 =>
+    // reasonsGenerationId === null. setReasons([]) (or any input that
+    // normalizes to empty, including hostile input) must never leave a
+    // stale non-null reasonsGenerationId behind.
+    reasonsGenerationId = reasons.length > 0 ? generationId : null;
     // Step 7B-B-F3-P1 FIX 3 — setReasons() clears any prior
     // Reasons-cleared announcement (a genuine Reason mutation).
     reasonAnnouncement = null;

@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J — Step 7B-B-F2-S/F2-S2/F2-S3: static coverage self-test (source audit only, no Chromium)",
-  "generatedAt": "2026-07-22T13:16:17.014Z",
+  "generatedAt": "2026-07-22T14:24:57.762Z",
   "summary": {
     "total": 41,
     "pass": 41,
@@ -10,12 +10,12 @@
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "191673 bytes"
+      "evidence": "200741 bytes"
     },
     {
       "test": "ui/interactive-preview-observation-renderer-v2.js is readable (for touch-target cross-check)",
       "result": "PASS",
-      "evidence": "29154 bytes"
+      "evidence": "30675 bytes"
     },
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-f1-static-results.json is readable",
@@ -98,9 +98,9 @@
       "evidence": "present=true"
     },
     {
-      "test": "Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)",
+      "test": "Browser result is live-detected as BROWSER_BINARY_AVAILABLE/UNAVAILABLE (retired NOT_RUN_ENVIRONMENT_BLOCKED literal no longer emitted; consistent with F1 static-results honest-status record)",
       "result": "PASS",
-      "evidence": "status=NOT_RUN_ENVIRONMENT_BLOCKED"
+      "evidence": "liveBrowserStatus=BROWSER_BINARY_UNAVAILABLE, outputUsesLiveStatus=true, f1Status=BROWSER_BINARY_UNAVAILABLE"
     },
     {
       "test": "FIX 1: background-image is checked unconditionally on every visited element, before any opaque-color break (old gated pattern removed)",
@@ -215,8 +215,9 @@
   ],
   "disclaimer": "This suite audits the SOURCE TEXT of qa/epic-2e-j-phase-c-step7b-b-test.mjs for the presence of required categories/thresholds/wiring. It does NOT execute a browser, does NOT measure real computed colors or element sizes, and does NOT prove real Contrast/Touch-target PASS. A PASS here means \"the required code path is present,\" not \"the real UI meets WCAG.\"",
   "browserSuiteExecution": {
-    "status": "NOT_RUN_ENVIRONMENT_BLOCKED",
-    "note": "Unchanged from the F1-R/F1-R2 record. This F2-S patch did not execute, simulate, or regenerate the real browser suite or its result JSON.",
+    "status": "BROWSER_BINARY_UNAVAILABLE",
+    "packageStatus": "PLAYWRIGHT_PACKAGE_AVAILABLE",
+    "note": "COMBINED CLOSEOUT R1 Phase F: live-detected every run, replacing the retired NOT_RUN_ENVIRONMENT_BLOCKED literal. This F2-S/S2/S3 patch did not execute, simulate, or regenerate the real browser suite or its result JSON — Browser availability is reported here for diagnostic purposes only.",
     "browserOrFinalResultJsonRegenerated": false
   }
 }

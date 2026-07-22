@@ -14,11 +14,12 @@
  *
  * FIX 5: this script does NOT run, simulate, or fabricate the real
  * Chromium browser suite (qa/epic-2e-j-phase-c-step7b-b-test.mjs). The
- * output file it writes honestly records that the browser suite was
- * NOT_RUN_ENVIRONMENT_BLOCKED for this patch, and does not reuse the
- * prior 28/29 browser-suite result as evidence for the FIX 1/2/3
- * changes made in this patch (those changes have never been exercised
- * in a real browser).
+ * output file it writes honestly records the LIVE Browser environment
+ * status (COMBINED CLOSEOUT R1 Phase F — computed via
+ * detectPlaywrightPackage()/detectBrowserExecutable(), never the
+ * retired NOT_RUN_ENVIRONMENT_BLOCKED literal), and never reuses a
+ * prior browser-suite result as evidence for changes made in a later
+ * patch.
  *
  * Run: node qa/epic-2e-j-phase-c-step7b-b-f1-static-test.mjs
  * Output: qa/epic-2e-j-phase-c-step7b-b-f1-static-results.json
@@ -28,6 +29,12 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeStep7BBDecision, isAllowedExternalFontUrl } from './epic-2e-j-phase-c-step7b-b-f1-decision.mjs';
+// COMBINED CLOSEOUT R1 — Phase F: the legacy NOT_RUN_ENVIRONMENT_BLOCKED
+// term is retired. The real Browser environment status is now computed
+// LIVE via the same detectPlaywrightPackage()/detectBrowserExecutable()
+// helpers every other suite in this project uses, rather than a
+// hard-coded literal.
+import { detectPlaywrightPackage, detectBrowserExecutable } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -293,21 +300,31 @@ function expectedExitCode(decision) {
 const passCount = results.filter((r) => r.result === 'PASS').length;
 const failCount = results.filter((r) => r.result === 'FAIL').length;
 
+// COMBINED CLOSEOUT R1 — Phase F: LIVE Browser environment status,
+// computed fresh every run rather than a hard-coded legacy literal.
+const livePkgStatus = await detectPlaywrightPackage();
+const liveExeStatus = await detectBrowserExecutable(livePkgStatus.mod ? livePkgStatus.mod.chromium : null);
+const liveBrowserStatus = liveExeStatus.found ? 'BROWSER_BINARY_AVAILABLE' : 'BROWSER_BINARY_UNAVAILABLE';
+
 const output = {
   suite: 'EPIC 2E-J — Step 7B-B-F1-R / F1-R2: static decision self-test (no Chromium, no network, no DOM)',
   generatedAt: new Date().toISOString(),
   summary: { total: results.length, pass: passCount, fail: failCount },
   results,
-  // FIX 5 — honest environment status. This static self-test exercises
-  // ONLY the pure decision function and the pure URL allowlist — it
-  // does NOT execute, simulate, or infer anything about the real
-  // Chromium browser suite (qa/epic-2e-j-phase-c-step7b-b-test.mjs).
+  // FIX 5 / COMBINED CLOSEOUT R1 Phase F — honest, LIVE environment
+  // status. This static self-test exercises ONLY the pure decision
+  // function and the pure URL allowlist — it does NOT execute,
+  // simulate, or infer anything about the real Chromium browser suite
+  // (qa/epic-2e-j-phase-c-step7b-b-test.mjs). The legacy
+  // NOT_RUN_ENVIRONMENT_BLOCKED term is retired in favor of a live
+  // detection result.
   browserSuiteExecution: {
-    status: 'NOT_RUN_ENVIRONMENT_BLOCKED',
-    reason: 'This sandbox cannot download or launch a Chromium binary (network allowlist blocks the Playwright browser download host, and no system browser is available). The FIX 1/2/3 changes to qa/epic-2e-j-phase-c-step7b-b-test.mjs (fail-closed decision wiring, console/resource listeners, required result rows) were NOT executed in a real browser for this patch.',
+    status: liveBrowserStatus,
+    packageStatus: livePkgStatus.status,
+    reason: 'This static self-test never executes, simulates, or fabricates the real Chromium browser suite regardless of whether a Browser binary is currently available — Browser availability is reported honestly here for diagnostic purposes only. The FIX 1/2/3 changes to qa/epic-2e-j-phase-c-step7b-b-test.mjs (fail-closed decision wiring, console/resource listeners, required result rows) were NOT executed by THIS static suite.',
     doesNotClaim: [
       'PASS for the browser suite',
-      'that qa/epic-2e-j-phase-c-step7b-b-results.json on disk (28/29, from a PRIOR run before this patch) is evidence for the FIX 1/2/3 changes made here',
+      'that any prior qa/epic-2e-j-phase-c-step7b-b-results.json on disk is evidence for changes made in a later patch',
       'any Console/Resource runtime counts (zero or otherwise) from an actual run',
     ],
     finalPhaseCDecisionRegenerated: false,
@@ -315,5 +332,5 @@ const output = {
 };
 await writeFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-b-f1-static-results.json'), JSON.stringify(output, null, 2));
 console.log(`\n${passCount}/${results.length} PASS, ${failCount} FAIL`);
-console.log('Browser suite execution: NOT_RUN_ENVIRONMENT_BLOCKED (see output JSON)');
+console.log(`Browser suite execution: ${liveBrowserStatus} (see output JSON)`);
 process.exit(failCount > 0 ? 1 : 0);

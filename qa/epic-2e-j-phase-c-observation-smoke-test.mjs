@@ -19,37 +19,26 @@
  * Output: qa/epic-2e-j-phase-c-results.json
  */
 
-import http from 'node:http';
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
+// COMBINED CLOSEOUT R1 — Phase E: migrated off node:http/localhost/direct
+// chromium.launch() onto the shared Navigation-Free In-Memory Harness —
+// the SAME helper the Step 7B-B suite uses. No local server, no
+// localhost/127.0.0.1/private-IP navigation; the only navigation target
+// is about:blank?qa=1.
+import {
+  detectPlaywrightPackage,
+  detectBrowserExecutable,
+  REQUIRED_LAUNCH_ARGS,
+  buildLumixaAppSnapshot,
+  openLumixaInMemoryPage,
+} from './helpers/playwright-lumixa-test-runtime.mjs';
+import { CANONICAL_ORIGIN } from './helpers/playwright-in-memory-app.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const PORT = 19997;
 const VIEWPORTS = [320, 360, 390, 430, 768, 1024, 1440];
-
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg' };
-
-function startServer() {
-  return new Promise((resolve) => {
-    const server = http.createServer(async (req, res) => {
-      try {
-        const urlPath = decodeURIComponent(req.url.split('?')[0]);
-        const filePath = path.join(PROJECT_ROOT, urlPath === '/' ? '/index.html' : urlPath);
-        const data = await readFile(filePath);
-        const ext = path.extname(filePath);
-        res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-        res.end(data);
-      } catch {
-        res.writeHead(404);
-        res.end('not found');
-      }
-    });
-    server.listen(PORT, () => resolve(server));
-  });
-}
 
 const results = [];
 function record(test, result, evidence) {
@@ -91,9 +80,9 @@ const DRIVE_REAL_APP_JS = `
   (async () => {
     const obsInner = document.getElementById('interactivePreviewObservationInner');
     const sessionInner = document.getElementById('interactivePreviewObservationSessionInner');
-    const { createInteractivePreviewObservationControllerV2 } = await import('/ui/interactive-preview-observation-controller-v2.js');
-    const { createInteractivePreviewObservationSessionV2 } = await import('/ui/interactive-preview-observation-session-v2.js');
-    const { ensureInteractivePreviewObservationLayout, renderInteractivePreviewObservationV2, ensureInteractivePreviewObservationSessionLayout, renderInteractivePreviewObservationSessionV2 } = await import('/ui/interactive-preview-observation-renderer-v2.js');
+    const { createInteractivePreviewObservationControllerV2 } = await import('${CANONICAL_ORIGIN}/ui/interactive-preview-observation-controller-v2.js');
+    const { createInteractivePreviewObservationSessionV2 } = await import('${CANONICAL_ORIGIN}/ui/interactive-preview-observation-session-v2.js');
+    const { ensureInteractivePreviewObservationLayout, renderInteractivePreviewObservationV2, ensureInteractivePreviewObservationSessionLayout, renderInteractivePreviewObservationSessionV2 } = await import('${CANONICAL_ORIGIN}/ui/interactive-preview-observation-renderer-v2.js');
     const elements = ensureInteractivePreviewObservationLayout(obsInner);
     ensureInteractivePreviewObservationSessionLayout(sessionInner);
     const session = createInteractivePreviewObservationSessionV2();
@@ -138,8 +127,27 @@ const DRIVE_REAL_APP_JS = `
 `;
 
 async function main() {
-  const server = await startServer();
-  const browser = await chromium.launch();
+  // COMBINED CLOSEOUT R1 — Phase E: shared Browser detection (never a
+  // downloaded binary), launched with the required sandbox args. When
+  // unavailable, this suite exits honestly before any test runs and
+  // never regenerates its result JSON.
+  const pkg = await detectPlaywrightPackage();
+  if (pkg.status !== 'PLAYWRIGHT_PACKAGE_AVAILABLE') {
+    console.log(`Playwright Node package unavailable: ${pkg.error}`);
+    console.log('Final decision: PLAYWRIGHT_PACKAGE_UNAVAILABLE');
+    console.log('qa/epic-2e-j-phase-c-results.json was NOT regenerated (honest environment-blocked exit).');
+    process.exit(0);
+  }
+  const { chromium } = pkg.mod;
+  const browserDetect = await detectBrowserExecutable(chromium);
+  if (!browserDetect.found) {
+    console.log(`No usable Browser executable found among ${browserDetect.attempts.length} candidates (never downloaded one): ${JSON.stringify(browserDetect.attempts)}`);
+    console.log('Final decision: BROWSER_BINARY_UNAVAILABLE');
+    console.log('qa/epic-2e-j-phase-c-results.json was NOT regenerated (honest environment-blocked exit).');
+    process.exit(0);
+  }
+  const browser = await chromium.launch({ executablePath: browserDetect.found, args: REQUIRED_LAUNCH_ARGS });
+  const appSnapshot = await buildLumixaAppSnapshot(PROJECT_ROOT);
   const coverage = { fullApplicationWorkflow: 'NOT_TESTED', syntheticIntegrationHarness: 'FAIL', physicalDevice: 'NOT_TESTED', screenReader: 'NOT_TESTED' };
 
   try {
@@ -148,10 +156,10 @@ async function main() {
     // complete, unmodified application (import → analysis → Interactive
     // Before/After) can reach "Ready" and enable Observation.
     // ══════════════════════════════════════════════════════════════
-    const readyPage = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
+    const readyRuntime = await openLumixaInMemoryPage({ browser, projectRoot: PROJECT_ROOT, qaQuery: '?qa=1', viewport: { width: 1440, height: 1200 }, prebuiltApp: appSnapshot });
+    const readyPage = readyRuntime.page;
     const readyErrors = [];
     readyPage.on('pageerror', (e) => readyErrors.push(String(e)));
-    await readyPage.goto(`http://localhost:${PORT}/index.html`);
     await readyPage.waitForTimeout(600);
     const uploadPath = path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'mobile-320px.png');
     // Use a real local image fixture already present in this environment
@@ -194,7 +202,7 @@ async function main() {
         record('Full application Ready reachability', 'NOT_TESTED', `Real pipeline did not reach a state that enables Observation (expected, documented, pre-existing Render Plan limitation — Controlled V2 has no concrete adjustment data for this fixture). Blocker state: ${JSON.stringify(pipelineState)}`);
       }
     }
-    await readyPage.close();
+    await readyRuntime.cleanup();
 
     // ══════════════════════════════════════════════════════════════
     // Controller/Renderer/Session integration harness (SYNTHETIC —
@@ -203,7 +211,8 @@ async function main() {
     // Ready context, inside the REAL index.html page (not a standalone
     // harness file) so the exact production CSS/layout is exercised.
     // ══════════════════════════════════════════════════════════════
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
+    const harnessRuntime = await openLumixaInMemoryPage({ browser, projectRoot: PROJECT_ROOT, qaQuery: '?qa=1', viewport: { width: 1440, height: 1400 }, prebuiltApp: appSnapshot });
+    const page = harnessRuntime.page;
     const consoleErrors = [];
     page.on('pageerror', (e) => consoleErrors.push(String(e)));
     page.on('console', (msg) => {
@@ -221,7 +230,6 @@ async function main() {
       if (text.includes('fonts.googleapis.com') || text.includes('fonts.gstatic.com') || text.includes('Failed to load resource')) return;
       consoleErrors.push(text);
     });
-    await page.goto(`http://localhost:${PORT}/index.html`);
     await page.waitForTimeout(600);
     await page.setInputFiles('#fileIn', '/tmp/test_photo.jpg');
     await page.waitForTimeout(16000);
@@ -313,21 +321,26 @@ async function main() {
     record('[App-level] Session Clear + current re-record: radio remains checked', radioStillChecked === true ? 'PASS' : 'FAIL', `checked=${radioStillChecked}`);
 
     // ── Provider unavailable / mismatch ──
-    const providerUnavailablePage = await browser.newPage({ viewport: { width: 700, height: 800 } });
-    await providerUnavailablePage.goto(`http://localhost:${PORT}/index.html`);
+    // COMBINED CLOSEOUT R1 — Phase E: the module is imported by its
+    // In-Memory canonical ID (CANONICAL_ORIGIN + project-relative path,
+    // bound to a data: URL via the page's own <script type="importmap">)
+    // rather than an absolute `/ui/...` path — there is no real server
+    // to resolve that path against anymore.
+    const providerRuntime = await openLumixaInMemoryPage({ browser, projectRoot: PROJECT_ROOT, qaQuery: '?qa=1', viewport: { width: 700, height: 800 }, prebuiltApp: appSnapshot });
+    const providerUnavailablePage = providerRuntime.page;
     await providerUnavailablePage.waitForTimeout(600);
-    const providerTestResult = await providerUnavailablePage.evaluate(() => {
-      return import('/ui/interactive-preview-observation-controller-v2.js').then(({ createInteractivePreviewObservationControllerV2 }) => {
+    const providerTestResult = await providerUnavailablePage.evaluate((origin) => {
+      return import(`${origin}/ui/interactive-preview-observation-controller-v2.js`).then(({ createInteractivePreviewObservationControllerV2 }) => {
         const c = createInteractivePreviewObservationControllerV2({ generationProvider: () => { throw new Error('down'); } });
         c.setContext({ generationId: 1, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null });
         const s = c.getState();
         c.dispose();
         return { state: s.state, generationConfirmed: s.metadata.generationConfirmed, warnings: s.warnings };
       });
-    });
+    }, CANONICAL_ORIGIN);
     record('Provider unavailable produces neutral warning, stays usable', providerTestResult.state === 'ready' && providerTestResult.generationConfirmed === false && providerTestResult.warnings.length > 0 ? 'PASS' : 'FAIL', JSON.stringify(providerTestResult));
-    const mismatchResult = await providerUnavailablePage.evaluate(() => {
-      return import('/ui/interactive-preview-observation-controller-v2.js').then(({ createInteractivePreviewObservationControllerV2 }) => {
+    const mismatchResult = await providerUnavailablePage.evaluate((origin) => {
+      return import(`${origin}/ui/interactive-preview-observation-controller-v2.js`).then(({ createInteractivePreviewObservationControllerV2 }) => {
         let gen = 1;
         const c = createInteractivePreviewObservationControllerV2({ generationProvider: () => gen });
         c.setContext({ generationId: 1, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null });
@@ -337,9 +350,9 @@ async function main() {
         c.dispose();
         return { state: r.state, observation: r.observation };
       });
-    });
+    }, CANONICAL_ORIGIN);
     record('Provider mismatch clears observation via getState', mismatchResult.state === 'unavailable' && mismatchResult.observation === null ? 'PASS' : 'FAIL', JSON.stringify(mismatchResult));
-    await providerUnavailablePage.close();
+    await providerRuntime.cleanup();
 
     // ── No duplicate IDs ──
     const dupIds = await page.evaluate(() => {
@@ -478,8 +491,8 @@ async function main() {
     // shared harness's own onStateChange wiring used elsewhere in this
     // file.
     // ══════════════════════════════════════════════════════════════
-    const reasonAnnouncementControllerTest = await page.evaluate(async () => {
-      const { createInteractivePreviewObservationControllerV2 } = await import('/ui/interactive-preview-observation-controller-v2.js');
+    const reasonAnnouncementControllerTest = await page.evaluate(async (origin) => {
+      const { createInteractivePreviewObservationControllerV2 } = await import(`${origin}/ui/interactive-preview-observation-controller-v2.js`);
       let callbackCount = 0;
       let gen = 10;
       const c = createInteractivePreviewObservationControllerV2({ generationProvider: () => gen, onStateChange: () => { callbackCount++; } });
@@ -547,7 +560,7 @@ async function main() {
 
       c.dispose();
       return { scenarioA, scenarioB, scenarioC, scenarioD, scenarioE, scenarioF };
-    });
+    }, CANONICAL_ORIGIN);
     record('FIX 6 Scenario A: Clear Reasons preserves Observation, sets reasonAnnouncement="reasons-cleared", exactly one callback', reasonAnnouncementControllerTest.scenarioA.observationPreserved && reasonAnnouncementControllerTest.scenarioA.reasonsEmpty && reasonAnnouncementControllerTest.scenarioA.announcement === 'reasons-cleared' && reasonAnnouncementControllerTest.scenarioA.callbackCount === 1, JSON.stringify(reasonAnnouncementControllerTest.scenarioA));
     record('FIX 6 Scenario B: repeated empty clearReasons() does not crash, does not emit a duplicate callback, does not create a new announcement transition', !reasonAnnouncementControllerTest.scenarioB.crashed && reasonAnnouncementControllerTest.scenarioB.callbackCount === 0 && reasonAnnouncementControllerTest.scenarioB.announcementUnchanged, JSON.stringify(reasonAnnouncementControllerTest.scenarioB));
     record('FIX 6 Scenario C: adding a Reason after Clear Reasons selects the new Reason and clears reasonAnnouncement to null', reasonAnnouncementControllerTest.scenarioC.reasonSelected && reasonAnnouncementControllerTest.scenarioC.announcement === null, JSON.stringify(reasonAnnouncementControllerTest.scenarioC));
@@ -562,8 +575,8 @@ async function main() {
     // priority/textContent/hostile-token logic is tested directly and
     // in isolation from any live Controller.
     // ══════════════════════════════════════════════════════════════
-    const rendererPriorityTest = await page.evaluate(async () => {
-      const { ensureInteractivePreviewObservationLayout, renderInteractivePreviewObservationV2 } = await import('/ui/interactive-preview-observation-renderer-v2.js');
+    const rendererPriorityTest = await page.evaluate(async (origin) => {
+      const { ensureInteractivePreviewObservationLayout, renderInteractivePreviewObservationV2 } = await import(`${origin}/ui/interactive-preview-observation-renderer-v2.js`);
       const testDiv = document.createElement('div');
       testDiv.id = '__f3p1RendererTestContainer';
       testDiv.style.display = 'none';
@@ -602,7 +615,7 @@ async function main() {
 
       document.body.removeChild(testDiv);
       return { clearedText, clearedHtml, limitText, priorityText, nullTokenText, hostileText, hostileHtml, hostileObjectText };
-    });
+    }, CANONICAL_ORIGIN);
     const EXPECTED_CLEARED_MESSAGE = 'Reasons cleared. Observation remains selected. Production output was not changed.';
     const EXPECTED_LIMIT_MESSAGE = 'You can select up to five reasons.';
     record('FIX 7: "reasons-cleared" renders the exact message into #ipoReasonLimit', rendererPriorityTest.clearedText === EXPECTED_CLEARED_MESSAGE, `text="${rendererPriorityTest.clearedText}"`);
@@ -613,18 +626,175 @@ async function main() {
     record('FIX 7: a hostile string token (HTML-like) is ignored and never rendered as markup', rendererPriorityTest.hostileText === '' && rendererPriorityTest.hostileHtml === '', `text="${rendererPriorityTest.hostileText}", html="${rendererPriorityTest.hostileHtml}"`);
     record('FIX 7: a hostile non-string (object) token is ignored (only the exact string "reasons-cleared" is ever accepted)', rendererPriorityTest.hostileObjectText === '', `text="${rendererPriorityTest.hostileObjectText}"`);
 
-    await page.close();
+    // ══════════════════════════════════════════════════════════════
+    // COMBINED CLOSEOUT R1 — Phase G: focused Controller regression
+    // tests proving Phase B (stale-generation warning lifecycle) and
+    // Phase D (Clear-Reasons empty edge) on DEDICATED fresh controller
+    // instances, isolated from the F3-P1 Scenario A-F harness above.
+    // ══════════════════════════════════════════════════════════════
+    const phaseGControllerTest = await page.evaluate(async (origin) => {
+      const { createInteractivePreviewObservationControllerV2 } = await import(`${origin}/ui/interactive-preview-observation-controller-v2.js`);
+      const STALE_MSG = 'The previous observation was cleared because a newer analysis is active.';
+
+      // G1: first analysis, no Observation ever selected -> no stale
+      // warning on the 'preparing' transition or the following 'ready'.
+      let g1 = 100;
+      const c1 = createInteractivePreviewObservationControllerV2({ generationProvider: () => g1, onStateChange: () => {} });
+      const s1a = c1.setContext({ generationId: g1, interactiveState: 'preparing', interactiveReady: false, safetyBlocked: false, blockedReason: null });
+      const s1b = c1.setContext({ generationId: g1, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null });
+      const scenarioG1 = {
+        noWarningOnFirstPreparing: Array.isArray(s1a.warnings) && s1a.warnings.length === 0,
+        noWarningOnFirstReady: Array.isArray(s1b.warnings) && s1b.warnings.length === 0,
+      };
+      c1.dispose();
+
+      // G2: Re-analyze with a selected Observation+Reason -> old cleared,
+      // stale warning emitted exactly once on 'preparing', then genuinely
+      // clears on the following 'ready' for the SAME new generation.
+      let g2 = 200;
+      const c2 = createInteractivePreviewObservationControllerV2({ generationProvider: () => g2, onStateChange: () => {} });
+      c2.setContext({ generationId: g2, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null });
+      c2.selectObservation('prefer-legacy');
+      c2.toggleReason('skin-tone');
+      const beforeReanalyze = c2.getState();
+      g2 = 201;
+      const afterPreparing = c2.setContext({ generationId: g2, interactiveState: 'preparing', interactiveReady: false, safetyBlocked: false, blockedReason: null });
+      const afterReady = c2.setContext({ generationId: g2, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null });
+      const scenarioG2 = {
+        beforeObservation: beforeReanalyze.observation,
+        clearedAfterPreparing: afterPreparing.observation === null && afterPreparing.reasons.length === 0,
+        warningEmittedOnce: Array.isArray(afterPreparing.warnings) && afterPreparing.warnings.length === 1 && afterPreparing.warnings[0] === STALE_MSG,
+        warningClearedOnReady: Array.isArray(afterReady.warnings) && afterReady.warnings.length === 0,
+      };
+      c2.dispose();
+
+      // G3: setReasons([]) then clearReasons() with NO real Reason ever
+      // selected -> no announcement, no callback (FIX D1/D2/D3).
+      let g3 = 300;
+      let cbCount3 = 0;
+      const c3 = createInteractivePreviewObservationControllerV2({ generationProvider: () => g3, onStateChange: () => { cbCount3++; } });
+      c3.setContext({ generationId: g3, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null });
+      c3.selectObservation('prefer-legacy');
+      cbCount3 = 0;
+      const afterEmptySet = c3.setReasons([]);
+      cbCount3 = 0;
+      const afterEmptyClear = c3.clearReasons();
+      const scenarioG3 = {
+        announcementAfterSetEmpty: afterEmptySet.reasonAnnouncement,
+        announcementAfterClear: afterEmptyClear.reasonAnnouncement,
+        callbackCountAfterClear: cbCount3,
+      };
+      c3.dispose();
+
+      // G4: select one Reason, remove it (back to empty via toggle),
+      // then clearReasons() -> the removal itself legitimately fires a
+      // callback/null announcement (FIX 3 F3-P1, unchanged), but the
+      // SUBSEQUENT clearReasons() on the now-empty set must be a true
+      // no-op (FIX D1/D2/D3).
+      let g4 = 400;
+      let cbCount4 = 0;
+      const c4 = createInteractivePreviewObservationControllerV2({ generationProvider: () => g4, onStateChange: () => { cbCount4++; } });
+      c4.setContext({ generationId: g4, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null });
+      c4.selectObservation('prefer-legacy');
+      c4.toggleReason('skin-tone');
+      c4.toggleReason('skin-tone'); // remove the only Reason -> back to empty
+      cbCount4 = 0;
+      const afterFinalRemoveClear = c4.clearReasons();
+      const scenarioG4 = {
+        reasonsEmpty: afterFinalRemoveClear.reasons.length === 0,
+        announcement: afterFinalRemoveClear.reasonAnnouncement,
+        callbackCount: cbCount4,
+      };
+      c4.dispose();
+
+      return { scenarioG1, scenarioG2, scenarioG3, scenarioG4 };
+    }, CANONICAL_ORIGIN);
+    record('Phase G Scenario G1: first analysis with no prior Observation never produces a stale-generation warning (neither on preparing nor the following ready)', phaseGControllerTest.scenarioG1.noWarningOnFirstPreparing && phaseGControllerTest.scenarioG1.noWarningOnFirstReady, JSON.stringify(phaseGControllerTest.scenarioG1));
+    record('Phase G Scenario G2: Re-analyze with a selected Observation clears the old Observation/Reasons and emits the stale warning exactly once on preparing, then genuinely clears on the next ready for the same generation', phaseGControllerTest.scenarioG2.beforeObservation === 'prefer-legacy' && phaseGControllerTest.scenarioG2.clearedAfterPreparing && phaseGControllerTest.scenarioG2.warningEmittedOnce && phaseGControllerTest.scenarioG2.warningClearedOnReady, JSON.stringify(phaseGControllerTest.scenarioG2));
+    record('Phase G Scenario G3: setReasons([]) then clearReasons() with no real Reason ever selected produces no announcement and no callback', phaseGControllerTest.scenarioG3.announcementAfterSetEmpty === null && phaseGControllerTest.scenarioG3.announcementAfterClear === null && phaseGControllerTest.scenarioG3.callbackCountAfterClear === 0, JSON.stringify(phaseGControllerTest.scenarioG3));
+    record('Phase G Scenario G4: removing the final Reason then calling clearReasons() on the now-empty set produces no announcement and no callback', phaseGControllerTest.scenarioG4.reasonsEmpty && phaseGControllerTest.scenarioG4.announcement === null && phaseGControllerTest.scenarioG4.callbackCount === 0, JSON.stringify(phaseGControllerTest.scenarioG4));
+
+    // ══════════════════════════════════════════════════════════════
+    // COMBINED CLOSEOUT R1 — Phase G: focused Renderer regression
+    // tests proving Phase C (explicit disabled-Reason visible style)
+    // and the exact textContent-only stale-warning rendering, on a
+    // DETACHED synthetic container isolated from any live Controller.
+    // ══════════════════════════════════════════════════════════════
+    const phaseGRendererTest = await page.evaluate(async (origin) => {
+      const { ensureInteractivePreviewObservationLayout, renderInteractivePreviewObservationV2 } = await import(`${origin}/ui/interactive-preview-observation-renderer-v2.js`);
+      const testDiv = document.createElement('div');
+      testDiv.id = '__phaseGRendererTestContainer';
+      testDiv.style.display = 'none';
+      document.body.appendChild(testDiv);
+      ensureInteractivePreviewObservationLayout(testDiv);
+      const inputByValue = (v) => testDiv.querySelector(`input[name="ipoReason"][value="${v}"]`);
+      const labelFor = (v) => inputByValue(v).closest('label');
+
+      const fiveSelected = ['skin-tone', 'white-balance', 'highlight-detail', 'shadow-detail', 'contrast'];
+      renderInteractivePreviewObservationV2(testDiv, { state: 'selected', observation: 'prefer-legacy', reasons: fiveSelected, reasonLimitReached: true, metadata: {} });
+
+      const disabledInput = inputByValue('color-balance');
+      const disabledLabel = labelFor('color-balance');
+      const disabledStyle = {
+        disabled: disabledInput.disabled,
+        dataAttr: disabledLabel.dataset.ipoDisabled,
+        opacity: disabledLabel.style.opacity,
+        backgroundColor: disabledLabel.style.backgroundColor,
+        cursor: disabledLabel.style.cursor,
+      };
+
+      const checkedInput = inputByValue('skin-tone');
+      const checkedLabel = labelFor('skin-tone');
+      const checkedStyle = {
+        disabled: checkedInput.disabled,
+        checked: checkedInput.checked,
+        dataAttrPresent: 'ipoDisabled' in checkedLabel.dataset,
+        opacity: checkedLabel.style.opacity,
+        cursor: checkedLabel.style.cursor,
+      };
+
+      // Remove one checked Reason -> the disabled sixth Reason must
+      // become re-enabled with its style FULLY restored (no stale
+      // disabled attribute/inline style left behind) — FIX C2.
+      const fourSelected = ['skin-tone', 'white-balance', 'highlight-detail', 'shadow-detail'];
+      renderInteractivePreviewObservationV2(testDiv, { state: 'selected', observation: 'prefer-legacy', reasons: fourSelected, reasonLimitReached: false, metadata: {} });
+      const reEnabledInput = inputByValue('color-balance');
+      const reEnabledLabel = labelFor('color-balance');
+      const reEnabledStyle = {
+        disabled: reEnabledInput.disabled,
+        dataAttrPresent: 'ipoDisabled' in reEnabledLabel.dataset,
+        opacity: reEnabledLabel.style.opacity,
+        backgroundColor: reEnabledLabel.style.backgroundColor,
+        cursor: reEnabledLabel.style.cursor,
+      };
+
+      // Exact stale-warning rendering: textContent only, no markup.
+      renderInteractivePreviewObservationV2(testDiv, { state: 'cleared', observation: null, warnings: ['The previous observation was cleared because a newer analysis is active.'], reasons: [], reasonLimitReached: false, metadata: {} });
+      const warningEl = testDiv.querySelector('#ipoWarning');
+      const warningText = warningEl.textContent;
+      const warningHtml = warningEl.innerHTML;
+
+      document.body.removeChild(testDiv);
+      return { disabledStyle, checkedStyle, reEnabledStyle, warningText, warningHtml };
+    }, CANONICAL_ORIGIN);
+    const EXPECTED_STALE_WARNING = 'The previous observation was cleared because a newer analysis is active.';
+    record('Phase G: a disabled unchecked Reason (sixth, over the five-Reason limit) has an explicit measurable visible style distinct from enabled (data-ipo-disabled marker, opacity != 1, distinguishing background, not-allowed cursor)', phaseGRendererTest.disabledStyle.disabled === true && phaseGRendererTest.disabledStyle.dataAttr === 'true' && phaseGRendererTest.disabledStyle.opacity !== '1' && phaseGRendererTest.disabledStyle.cursor === 'not-allowed', JSON.stringify(phaseGRendererTest.disabledStyle));
+    record('Phase G: checked Reasons at the five-Reason limit remain enabled with normal (non-disabled) style', phaseGRendererTest.checkedStyle.disabled === false && phaseGRendererTest.checkedStyle.checked === true && !phaseGRendererTest.checkedStyle.dataAttrPresent && phaseGRendererTest.checkedStyle.opacity === '1' && phaseGRendererTest.checkedStyle.cursor === 'pointer', JSON.stringify(phaseGRendererTest.checkedStyle));
+    record('Phase G: removing one checked Reason restores the previously-disabled Reason to fully enabled with its normal style (no stale disabled attribute/inline style remains)', phaseGRendererTest.reEnabledStyle.disabled === false && !phaseGRendererTest.reEnabledStyle.dataAttrPresent && phaseGRendererTest.reEnabledStyle.opacity === '1' && phaseGRendererTest.reEnabledStyle.backgroundColor === 'transparent' && phaseGRendererTest.reEnabledStyle.cursor === 'pointer', JSON.stringify(phaseGRendererTest.reEnabledStyle));
+    record('Phase G: the exact stale-generation warning message is rendered into #ipoWarning via textContent only (innerHTML equals the same plain text, no markup/injection)', phaseGRendererTest.warningText === EXPECTED_STALE_WARNING && phaseGRendererTest.warningHtml === EXPECTED_STALE_WARNING, `text="${phaseGRendererTest.warningText}", html="${phaseGRendererTest.warningHtml}"`);
+
+    await harnessRuntime.cleanup();
     coverage.syntheticIntegrationHarness = results.filter((r) => r.result === 'FAIL').length === 0 ? 'PASS' : 'FAIL';
 
     // ══════════════════════════════════════════════════════════════
     // FIX 1/2/3 (EPIC 2E-J-C-F): element-level responsive containment
-    // across all 7 required viewports, on the REAL index.html.
+    // across all 7 required viewports, on the REAL application.
     // ══════════════════════════════════════════════════════════════
     for (const width of VIEWPORTS) {
-      const p = await browser.newPage({ viewport: { width, height: 1500 } });
+      const pRuntime = await openLumixaInMemoryPage({ browser, projectRoot: PROJECT_ROOT, qaQuery: '?qa=1', viewport: { width, height: 1500 }, prebuiltApp: appSnapshot });
+      const p = pRuntime.page;
       const pErrors = [];
       p.on('pageerror', (e) => pErrors.push(String(e)));
-      await p.goto(`http://localhost:${PORT}/index.html`);
       await p.waitForTimeout(600);
       await p.setInputFiles('#fileIn', '/tmp/test_photo.jpg');
       await p.waitForTimeout(16000);
@@ -634,14 +804,13 @@ async function main() {
       const overflow = await p.evaluate(ELEMENT_OVERFLOW_CHECK_JS(width));
       const pass = overflow.findings.length === 0 && overflow.docScrollW <= overflow.docClientW;
       record(`Element-level overflow containment at ${width}px`, pass ? 'PASS' : 'FAIL', pass ? `docScrollW=${overflow.docScrollW}, no clipped children` : JSON.stringify(overflow.findings));
-      await p.close();
+      await pRuntime.cleanup();
     }
 
     record('Console errors across entire smoke test', consoleErrors.length === 0 ? 'PASS' : 'FAIL', consoleErrors.length === 0 ? '(none)' : consoleErrors.join('; '));
 
   } finally {
     await browser.close();
-    server.close();
   }
 
   const passCount = results.filter((r) => r.result === 'PASS').length;

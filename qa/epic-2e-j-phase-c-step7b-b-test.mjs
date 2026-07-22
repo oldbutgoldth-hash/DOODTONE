@@ -299,13 +299,24 @@ const STEP7BB_TEST_UTILS_SRC = `(() => {
   // closed state (this is ROOT CAUSE 1: the previous model omitted
   // SUMMARY entirely, so the real Chromium predecessor of the
   // Observation radio group — a <summary> — was never modeled).
+  // FIX A3 (COMBINED CLOSEOUT R1): walk EVERY ancestor <details> element
+  // (never just the nearest one via closest()) — a nested case (inner
+  // <details open> sitting inside an outer <details closed>) must still
+  // be hidden by the OUTER closed ancestor even though the NEAREST
+  // details ancestor is open. An Element is excluded when it is inside
+  // ANY closed details ancestor, unless it is within THAT closed
+  // details' own first-summary subtree (its own always-visible toggle).
   function isHiddenInsideClosedDetails(el) {
-    const details = el.closest ? el.closest('details') : null;
-    if (!details) return false;
-    if (details.open) return false;
-    const firstSummary = details.querySelector('summary');
-    if (el === firstSummary) return false;
-    return !(firstSummary && firstSummary.contains(el));
+    let cur = el.parentElement;
+    while (cur) {
+      if (cur.tagName === 'DETAILS' && !cur.open) {
+        const firstSummary = cur.querySelector('summary');
+        const withinOwnSummary = el === firstSummary || (firstSummary && firstSummary.contains(el));
+        if (!withinOwnSummary) return true;
+      }
+      cur = cur.parentElement;
+    }
+    return false;
   }
   function parsedTabIndex(el) {
     const attr = el.getAttribute('tabindex');
@@ -380,13 +391,24 @@ const STEP7BB_TEST_UTILS_SRC = `(() => {
     // becomes the group Tab stop; a group with every Radio disabled
     // contributes no Tab stop at all. Dedup is applied AFTER the
     // positive-tabindex sort so relative ordering stays correct.
+    // FIX A4 (COMBINED CLOSEOUT R1): group Radios by their ACTUAL native
+    // grouping boundary — tree root, form owner, AND name — never by
+    // name alone. Same-name Radios belonging to DIFFERENT Forms (or
+    // different tree roots/shadow roots) must never be merged into the
+    // same group/Tab stop.
+    function radioGroupKey(r) {
+      const root = r.getRootNode ? r.getRootNode() : document;
+      const form = r.form || null;
+      return identify(root) + '::' + (form ? identify(form) : 'no-form') + '::' + r.name;
+    }
     const filtered = [];
-    const seenRadioGroups = new Set();
+    const seenRadioGroupKeys = new Set();
     for (const { el } of withMeta) {
       if (el.tagName === 'INPUT' && el.type === 'radio' && el.name) {
-        if (seenRadioGroups.has(el.name)) continue;
-        seenRadioGroups.add(el.name);
-        const groupEls = Array.from(document.getElementsByName(el.name)).filter((r) => r.type === 'radio' && !r.disabled);
+        const key = radioGroupKey(el);
+        if (seenRadioGroupKeys.has(key)) continue;
+        seenRadioGroupKeys.add(key);
+        const groupEls = Array.from(document.getElementsByName(el.name)).filter((r) => r.type === 'radio' && !r.disabled && radioGroupKey(r) === key);
         const checked = groupEls.find((r) => r.checked);
         const stop = checked || groupEls[0];
         if (!stop) continue;
@@ -666,19 +688,43 @@ async function runObservationSelectionReasonAndClearScenario(page) {
     return first ? first.id : null;
   });
 
-  // FIX 4 — focusable order recomputed AFTER the state change.
-  const postSelectOrder = await page.evaluate(() => window.__step7bbTestUtils.computeFocusableOrder().map((o) => ({ index: o.index, id: o.id, identity: o.identity })));
-  const radioIndex = postSelectOrder.findIndex((o) => o.id === 'ipoOption_prefer-legacy');
-  const clearObsIndex = postSelectOrder.findIndex((o) => o.id === 'ipoClearButton');
-  const firstReasonIndex = expectedFirstReasonId ? postSelectOrder.findIndex((o) => o.id === expectedFirstReasonId) : -1;
-  const clearReasonsIndex = postSelectOrder.findIndex((o) => o.id === 'ipoClearReasonsButton');
-  const clearSessionIndex = postSelectOrder.findIndex((o) => o.id === 'ipoClearSessionButton');
-  const observedOrderCorrect = radioIndex >= 0 && clearObsIndex > radioIndex && firstReasonIndex > clearObsIndex && clearReasonsIndex > firstReasonIndex && clearSessionIndex > clearReasonsIndex;
+  // ── FIX A1 (COMBINED CLOSEOUT R1) — SNAPSHOT A: the REAL focusable
+  // order immediately after Observation selection, BEFORE any Reason is
+  // selected. Clear Reasons remains genuinely DISABLED at this point —
+  // it is CORRECTLY ABSENT from sequential focus (a disabled Element is
+  // never a Tab stop), so Snapshot A must never fail merely because
+  // Clear Reasons is missing here; that is the expected, correct state.
+  // The observed order is: selected Radio -> Clear Observation -> every
+  // Reason control -> Clear Session (Clear Reasons skipped entirely).
+  const snapshotA = await page.evaluate(() => {
+    const order = window.__step7bbTestUtils.computeFocusableOrder().map((o) => ({ index: o.index, id: o.id, identity: o.identity }));
+    const reasonIds = Array.from(document.querySelectorAll('input[name="ipoReason"]')).map((r) => r.id);
+    const clearReasonsBtn = document.getElementById('ipoClearReasonsButton');
+    return {
+      order,
+      radioIndex: order.findIndex((o) => o.id === 'ipoOption_prefer-legacy'),
+      clearObsIndex: order.findIndex((o) => o.id === 'ipoClearButton'),
+      reasonIndices: reasonIds.map((id) => order.findIndex((o) => o.id === id)),
+      clearReasonsIndex: order.findIndex((o) => o.id === 'ipoClearReasonsButton'),
+      clearSessionIndex: order.findIndex((o) => o.id === 'ipoClearSessionButton'),
+      clearReasonsDisabled: !!clearReasonsBtn && clearReasonsBtn.disabled === true,
+    };
+  });
+  const snapshotAReasonsAllPresent = snapshotA.reasonIndices.length > 0 && snapshotA.reasonIndices.every((idx) => idx >= 0);
+  const snapshotAReasonsAllAfterClearObs = snapshotA.reasonIndices.every((idx) => idx > snapshotA.clearObsIndex);
+  const snapshotAReasonsAllBeforeClearSession = snapshotA.clearSessionIndex >= 0 && snapshotA.reasonIndices.every((idx) => idx < snapshotA.clearSessionIndex);
+  const snapshotACorrect = snapshotA.radioIndex >= 0
+    && snapshotA.clearObsIndex > snapshotA.radioIndex
+    && snapshotAReasonsAllPresent
+    && snapshotAReasonsAllAfterClearObs
+    && snapshotA.clearReasonsDisabled === true
+    && snapshotA.clearReasonsIndex === -1 // correctly ABSENT — never a failure condition
+    && snapshotAReasonsAllBeforeClearSession;
 
-  // FIX 6 — bounds derived from the CURRENT post-selection order.
+  // FIX A2 — bound to the first Reason is derived from Snapshot A's own
+  // order (valid regardless of Clear Reasons' state, since it never sits
+  // between the selected Radio and the first Reason).
   const boundToFirstReason = expectedFirstReasonId ? await computeBoundedMaxTabs(page, 'ipoOption_prefer-legacy', expectedFirstReasonId) : { maxTabs: 0, bounds: {}, derived: false };
-  const boundReasonToClearSession = expectedFirstReasonId ? await computeBoundedMaxTabs(page, expectedFirstReasonId, 'ipoClearSessionButton') : { maxTabs: 0, bounds: {}, derived: false };
-  const boundsAllDerived = boundToFirstReason.derived === true && boundReasonToClearSession.derived === true;
 
   // ── Phase A: real Tab forward from the selected Radio to the first Reason. ──
   let reachedClearObs = false;
@@ -699,6 +745,10 @@ async function runObservationSelectionReasonAndClearScenario(page) {
   }
 
   // ── Phase B (FIX 5): Space on the Reason, Shift+Tab identity reversal. ──
+  // This Space press is the exact state-changing action Clear Reasons
+  // has been waiting for — FIX A2 requires every bound calculated AFTER
+  // this point to be recomputed from the NEW post-toggle order, never
+  // reused from before this Space press.
   let reasonSpaceResult = null;
   if (reachedFirstReasonId !== null) {
     await page.keyboard.press('Space');
@@ -711,15 +761,56 @@ async function runObservationSelectionReasonAndClearScenario(page) {
     reasonSpaceResult = { reasonId: reachedFirstReasonId, reasonChecked, previousIdentity: firstReasonPreviousIdentity, afterShiftTabIdentity, shiftTabReturnsToExactPreviousElement };
   }
 
-  // ── Phase C: continue real Tab forward to Clear Reasons / Clear Session. ──
+  // ── FIX A1 — SNAPSHOT B: the REAL focusable order AFTER the first
+  // Reason is genuinely selected. Clear Reasons must now be ENABLED and
+  // PRESENT, appearing after every Reason control and before Clear
+  // Session — never reusing Snapshot A's (pre-toggle) indices.
+  const snapshotB = await page.evaluate(() => {
+    const order = window.__step7bbTestUtils.computeFocusableOrder().map((o) => ({ index: o.index, id: o.id, identity: o.identity }));
+    const reasonIds = Array.from(document.querySelectorAll('input[name="ipoReason"]')).map((r) => r.id);
+    const clearReasonsBtn = document.getElementById('ipoClearReasonsButton');
+    return {
+      order,
+      firstReasonChecked: document.querySelector('input[name="ipoReason"]')?.checked === true,
+      reasonIndices: reasonIds.map((id) => order.findIndex((o) => o.id === id)),
+      clearReasonsIndex: order.findIndex((o) => o.id === 'ipoClearReasonsButton'),
+      clearSessionIndex: order.findIndex((o) => o.id === 'ipoClearSessionButton'),
+      clearReasonsEnabled: !!clearReasonsBtn && clearReasonsBtn.disabled === false,
+    };
+  });
+  const snapshotBReasonsAllPresent = snapshotB.reasonIndices.length > 0 && snapshotB.reasonIndices.every((idx) => idx >= 0);
+  const snapshotBClearReasonsAfterAllReasons = snapshotB.clearReasonsIndex >= 0 && snapshotB.reasonIndices.every((idx) => snapshotB.clearReasonsIndex > idx);
+  const snapshotBClearReasonsBeforeClearSession = snapshotB.clearReasonsIndex >= 0 && snapshotB.clearSessionIndex > snapshotB.clearReasonsIndex;
+  const snapshotBCorrect = snapshotB.clearReasonsEnabled === true
+    && snapshotBReasonsAllPresent
+    && snapshotBClearReasonsAfterAllReasons
+    && snapshotBClearReasonsBeforeClearSession;
+
+  // FIX A2 — TWO bounds recomputed from the CURRENT post-toggle
+  // (Snapshot B) order — never a bound calculated while Clear Reasons
+  // was still disabled. Both must fail closed (derived:false) rather
+  // than let a safety-margin fallback masquerade as PASS evidence.
+  const boundFirstReasonToClearReasons = reachedFirstReasonId ? await computeBoundedMaxTabs(page, reachedFirstReasonId, 'ipoClearReasonsButton') : { maxTabs: 0, bounds: {}, derived: false };
+  const boundClearReasonsToClearSession = await computeBoundedMaxTabs(page, 'ipoClearReasonsButton', 'ipoClearSessionButton');
+  const boundsAllDerived = boundFirstReasonToClearReasons.derived === true && boundClearReasonsToClearSession.derived === true;
+
+  // ── Phase C: continue real Tab forward — first to Clear Reasons
+  // (now genuinely enabled/present per Snapshot B), then to Clear
+  // Session — using the POST-toggle bounds derived above.
   let reachedClearReasons = false;
-  let reachedClearSession = false;
-  const sequenceC = [];
-  for (let i = 0; i < boundReasonToClearSession.maxTabs && !(reachedClearReasons && reachedClearSession); i++) {
+  const sequenceC1 = [];
+  for (let i = 0; i < boundFirstReasonToClearReasons.maxTabs && !reachedClearReasons; i++) {
     await page.keyboard.press('Tab');
     const id = await page.evaluate(() => document.activeElement.id);
-    sequenceC.push(id);
+    sequenceC1.push(id);
     if (id === 'ipoClearReasonsButton') reachedClearReasons = true;
+  }
+  let reachedClearSession = false;
+  const sequenceC2 = [];
+  for (let i = 0; i < boundClearReasonsToClearSession.maxTabs && !reachedClearSession; i++) {
+    await page.keyboard.press('Tab');
+    const id = await page.evaluate(() => document.activeElement.id);
+    sequenceC2.push(id);
     if (id === 'ipoClearSessionButton') reachedClearSession = true;
   }
 
@@ -727,11 +818,11 @@ async function runObservationSelectionReasonAndClearScenario(page) {
     entry, selectionOk, afterSelect,
     expectedFirstReasonId, reachedFirstReasonId,
     firstReasonMatchesExpected: reachedFirstReasonId !== null && reachedFirstReasonId === expectedFirstReasonId,
-    postSelectOrder: { radioIndex, clearObsIndex, firstReasonIndex, clearReasonsIndex, clearSessionIndex },
-    observedOrderCorrect,
-    boundToFirstReason, boundReasonToClearSession, boundsAllDerived,
+    snapshotA, snapshotACorrect,
+    snapshotB, snapshotBCorrect,
+    boundToFirstReason, boundFirstReasonToClearReasons, boundClearReasonsToClearSession, boundsAllDerived,
     reachedClearObs, reachedClearReasons, reachedClearSession,
-    sequence: [...sequenceA, ...(reasonSpaceResult ? [`SPACE(${reasonSpaceResult.reasonId})`, 'Shift+Tab', 'Tab'] : []), ...sequenceC],
+    sequence: [...sequenceA, ...(reasonSpaceResult ? [`SPACE(${reasonSpaceResult.reasonId})`, 'Shift+Tab', 'Tab'] : []), ...sequenceC1, ...sequenceC2],
     reasonSpaceResult,
   };
 }
@@ -1065,6 +1156,49 @@ async function main() {
     attachErrorListeners(page, 'main');
     await installStep7bbTestUtils(page); // FIX 4 (ENV-B2-F1): persistent Focus identity + real focusable-order computation, installed once, reused throughout
 
+    // ── FIX A3 (COMBINED CLOSEOUT R1) — functional DOM self-test for
+    // NESTED closed <details>: an inner <details open> sitting inside an
+    // outer <details closed> must still have its descendant content
+    // hidden from sequential focus (the outer closed ancestor wins),
+    // while the OUTER details' own first <summary> remains focusable
+    // regardless of the inner details' open/closed state. Builds real
+    // DOM nodes, queries the real computeFocusableOrder(), then removes
+    // the nodes — never leaves test-only markup behind for the rest of
+    // the suite.
+    const nestedDetailsResult = await page.evaluate(() => {
+      const outer = document.createElement('details');
+      outer.id = 'step7bbNestedDetailsOuter';
+      // outer.open intentionally left false (CLOSED)
+      const outerSummary = document.createElement('summary');
+      outerSummary.id = 'step7bbNestedDetailsOuterSummary';
+      outerSummary.textContent = 'Outer summary';
+      outer.appendChild(outerSummary);
+      const inner = document.createElement('details');
+      inner.id = 'step7bbNestedDetailsInner';
+      inner.open = true; // inner is OPEN
+      const innerSummary = document.createElement('summary');
+      innerSummary.textContent = 'Inner summary';
+      inner.appendChild(innerSummary);
+      const descendantButton = document.createElement('button');
+      descendantButton.id = 'step7bbNestedDetailsDescendantButton';
+      descendantButton.textContent = 'Descendant control';
+      inner.appendChild(descendantButton);
+      outer.appendChild(inner);
+      document.body.appendChild(outer);
+
+      const order = window.__step7bbTestUtils.computeFocusableOrder();
+      const descendantPresent = order.some((o) => o.id === 'step7bbNestedDetailsDescendantButton');
+      const outerSummaryPresent = order.some((o) => o.id === 'step7bbNestedDetailsOuterSummary');
+
+      document.body.removeChild(outer); // cleanup — never leaves test-only markup behind
+      return { descendantPresent, outerSummaryPresent };
+    });
+    record(
+      "FIX A3 (COMBINED CLOSEOUT R1): functional DOM self-test — nested closed <details> (inner OPEN, outer CLOSED): the descendant control inside the open inner details is still excluded from focus order because the OUTER details is closed, while the outer details' own first <summary> remains focusable",
+      nestedDetailsResult.descendantPresent === false && nestedDetailsResult.outerSummaryPresent === true,
+      JSON.stringify(nestedDetailsResult)
+    );
+
     record('ENV-B2 PART 1/5-7: In-Memory runtime storage compatibility for the main Page (native accessible or shim installed, verified before app load)', mainRuntime.storageAccessVerified ? 'PASS' : 'FAIL', `storageStatus=${mainRuntime.storageStatus}, nativeStorageAvailable=${mainRuntime.nativeStorageAvailable}, storageAccessVerified=${mainRuntime.storageAccessVerified}`);
     record('ENV-B2 PART 7: window.localStorage/sessionStorage are read-only Window properties (a replacement assignment never silently replaces the object; a strict-mode throw is also acceptable evidence)', mainRuntime.readOnlyCheck.localStorageReadOnly && mainRuntime.readOnlyCheck.sessionStorageReadOnly && mainRuntime.readOnlyCheck.localIdentityPreserved && mainRuntime.readOnlyCheck.sessionIdentityPreserved ? 'PASS' : 'FAIL', JSON.stringify(mainRuntime.readOnlyCheck));
 
@@ -1154,14 +1288,19 @@ async function main() {
       JSON.stringify({ entryOk: canonicalReasonClear.entry.ok, afterSelect: canonicalReasonClear.afterSelect })
     );
     record(
-      'FIX 4 (ENV-B2-F2): the real post-selection focusable order is OBSERVED (never assumed) to be Clear Observation -> first Reason -> remaining Reasons -> Clear Reasons -> Clear Session',
-      canonicalReasonClear.observedOrderCorrect,
-      JSON.stringify(canonicalReasonClear.postSelectOrder)
+      'FIX A1 (COMBINED CLOSEOUT R1): SNAPSHOT A — immediately after Observation selection, BEFORE any Reason is selected, the real focusable order is OBSERVED to be selected Radio -> Clear Observation -> every Reason control -> Clear Session, with Clear Reasons correctly DISABLED and correctly ABSENT (never a failure condition)',
+      canonicalReasonClear.snapshotACorrect,
+      JSON.stringify(canonicalReasonClear.snapshotA)
     );
     record(
-      'FIX 6 (ENV-B2-F2): every Tab bound (Radio->first Reason, first Reason->Clear Session) is derived from the CURRENT post-selection focusable order — when a bound cannot be derived this fails closed (never a fallback-40-as-PASS)',
+      'FIX A1 (COMBINED CLOSEOUT R1): SNAPSHOT B — after the first Reason is genuinely selected via Space, the real focusable order is OBSERVED to have Clear Reasons now ENABLED and PRESENT, appearing after every Reason control and before Clear Session',
+      canonicalReasonClear.snapshotBCorrect,
+      JSON.stringify(canonicalReasonClear.snapshotB)
+    );
+    record(
+      'FIX A2 (COMBINED CLOSEOUT R1): every post-Reason-selection Tab bound (first Reason->Clear Reasons, Clear Reasons->Clear Session) is derived from the CURRENT post-toggle focusable order — never reusing a bound calculated while Clear Reasons was still disabled — and fails closed (never a fallback-40-as-PASS) when a bound cannot be derived',
       canonicalReasonClear.boundsAllDerived,
-      JSON.stringify({ boundToFirstReason: canonicalReasonClear.boundToFirstReason, boundReasonToClearSession: canonicalReasonClear.boundReasonToClearSession })
+      JSON.stringify({ boundToFirstReason: canonicalReasonClear.boundToFirstReason, boundFirstReasonToClearReasons: canonicalReasonClear.boundFirstReasonToClearReasons, boundClearReasonsToClearSession: canonicalReasonClear.boundClearReasonsToClearSession })
     );
     // Historic Test name, mapped to the canonical scenario's evidence.
     record('Tab exits radio group and reaches Reason checkboxes in DOM order', canonicalReasonClear.boundsAllDerived && canonicalReasonClear.reachedClearObs && canonicalReasonClear.reachedFirstReasonId !== null, `reachedClearObs=${canonicalReasonClear.reachedClearObs}, focusedId=${canonicalReasonClear.reachedFirstReasonId}`);
@@ -1403,6 +1542,8 @@ async function main() {
     record('Part 1.6 / FIX 5 (ENV-B2-F2): Shift+Tab reverses navigation', f3ReasonClear.reasonSpaceResult != null && f3ReasonClear.reasonSpaceResult.afterShiftTabIdentity !== f3ReasonClear.reasonSpaceResult.reasonId, JSON.stringify(f3ReasonClear.reasonSpaceResult));
     record('FIX 5 (ENV-B2-F2): Shift+Tab returns to the EXACT expected previous Element (persistent identity comparison, recorded before advancing), not merely a different Element', f3ReasonClear.reasonSpaceResult != null && f3ReasonClear.reasonSpaceResult.shiftTabReturnsToExactPreviousElement === true, JSON.stringify(f3ReasonClear.reasonSpaceResult));
     record('Part 1.7 / FIX 6 (ENV-B2-F2): Tab reaches Clear Reasons, Clear Observation, and Clear Session within a bound derived from the CURRENT post-selection focusable order (fails closed when not derivable, never a fallback-40-as-PASS)', f3ReasonClear.boundsAllDerived && f3ReasonClear.reachedClearReasons && f3ReasonClear.reachedClearObs && f3ReasonClear.reachedClearSession, `boundsAllDerived=${f3ReasonClear.boundsAllDerived}, reachedClearReasons=${f3ReasonClear.reachedClearReasons}, reachedClearObs=${f3ReasonClear.reachedClearObs}, reachedClearSession=${f3ReasonClear.reachedClearSession}`);
+    record('FIX A1 (COMBINED CLOSEOUT R1): SNAPSHOT A (pre-Reason-selection) — Clear Reasons correctly disabled and absent, never a failure condition', f3ReasonClear.snapshotACorrect, JSON.stringify(f3ReasonClear.snapshotA));
+    record('FIX A1 (COMBINED CLOSEOUT R1): SNAPSHOT B (post-Reason-selection) — Clear Reasons now enabled and present, after all Reason controls and before Clear Session', f3ReasonClear.snapshotBCorrect, JSON.stringify(f3ReasonClear.snapshotB));
 
     const f3FullTabSequence = [f3Entry.actualAfterTabIdentity, ...f3Arrow.steps.map((s) => `${s.key}->${s.activeId}`), ...f3ReasonClear.sequence];
 
