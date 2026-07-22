@@ -1,9 +1,9 @@
 {
   "suite": "EPIC 2E-J ENV-B1A-R PART 11 — Virtual-Origin helper static/functional self-test",
-  "generatedAt": "2026-07-22T09:36:51.991Z",
+  "generatedAt": "2026-07-22T10:16:43.562Z",
   "summary": {
-    "total": 33,
-    "pass": 33,
+    "total": 40,
+    "pass": 40,
     "fail": 0
   },
   "results": [
@@ -130,7 +130,7 @@
     {
       "test": "qa/playwright-virtual-origin-smoke.mjs is readable",
       "result": "PASS",
-      "evidence": "15204 bytes"
+      "evidence": "17856 bytes"
     },
     {
       "test": "No localhost/127.0.0.1 string is ever used as the navigation target — navigation goes only to the virtual origin",
@@ -171,6 +171,41 @@
       "test": "The smoke test never attempts to download a Browser (no \"playwright install\" / \"npx playwright\" invocation)",
       "result": "PASS",
       "evidence": "present=true"
+    },
+    {
+      "test": "PART 12 fix 1: every record() call in the smoke test passes a PASS/FAIL/NOT_TESTED string, never a bare boolean/expression — so a runtime false assertion is always counted as FAIL",
+      "result": "PASS",
+      "evidence": "totalRecordCalls=17, offenders=[]"
+    },
+    {
+      "test": "PART 12 fix 1 (continued): the final-decision computation filters on the string 'FAIL' (consistent with fix 1, so it actually catches failures)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "PART 12 fix 2: the Browser launch call includes the required args (--no-sandbox, --disable-dev-shm-usage)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "PART 12 fix 3: the route-security self-test no longer uses context.request.get() as proof of BrowserContext Page routing, and instead uses an in-page fetch() via page.evaluate()",
+      "result": "PASS",
+      "evidence": "usesContextRequestAsProof=false, usesPageEvaluateFetch=true"
+    },
+    {
+      "test": "PART 12 fix 4: fontFallbackUsed is no longer a hardcoded literal — it is destructured from the helper's real returned state and assigned from that real value",
+      "result": "PASS",
+      "evidence": "hardcodesFontFallback=false, destructuresRealValue=true, assignsRealValue=true"
+    },
+    {
+      "test": "PART 12 fix 5: ENV-B1A-R is now honestly labeled as unsupported by this sandbox's navigation-blocking policy, and this label is included in the written result JSON",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "PART 12: the existing ENV-B1A-R smoke test file was fixed in place, not deleted — it remains as diagnostic evidence",
+      "result": "PASS",
+      "evidence": "bytes=17856"
     }
   ],
   "disclaimer": "This suite calls the helper's real exported pure functions directly (path safety, MIME mapping, origin/external/Google-Fonts classification) and audits the two harness files' source text. It does not launch a Browser and proves nothing about actual Playwright/Chromium behavior — that is the separate runtime smoke test's job."

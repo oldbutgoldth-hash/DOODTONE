@@ -1,6 +1,6 @@
 {
-  "suite": "EPIC 2E-J ENV-B1A-R — Playwright Virtual-Origin Harness smoke test",
-  "generatedAt": "2026-07-22T10:16:45.694Z",
+  "suite": "EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test",
+  "generatedAt": "2026-07-22T10:16:45.232Z",
   "results": [
     {
       "test": "PART 1: Playwright Node package resolvability",
@@ -16,19 +16,20 @@
   "playwrightPackageStatus": "PLAYWRIGHT_PACKAGE_AVAILABLE",
   "browserExecutablePath": null,
   "browserVersion": null,
-  "origin": "http://lumixa.test",
-  "navigationStatus": "NOT_ATTEMPTED_BROWSER_BINARY_UNAVAILABLE",
-  "totalRequests": 0,
-  "jsRequests": 0,
-  "cssRequests": 0,
-  "imageRequests": 0,
-  "local404s": 0,
-  "forbiddenRequests": 0,
-  "unexpectedExternalRequests": 0,
+  "aboutBlankUrl": "about:blank?qa=1",
+  "aboutBlankResult": null,
+  "finalPageUrl": null,
+  "moduleCount": 0,
+  "importEdgeCount": 0,
+  "dynamicImportLiteralCount": 0,
+  "inlineModuleCount": 0,
+  "localAssetCount": 0,
+  "requestsByScheme": {},
+  "totalNetworkRequests": 0,
   "pageErrors": [],
   "consoleErrors": [],
-  "requestFailures": [],
-  "fontFallbackUsed": false,
-  "finalDecision": "BROWSER_BINARY_UNAVAILABLE",
-  "knownSandboxLimitation": "Per EPIC 2E-J ENV-B1B: this sandbox blocks Browser navigation to any non-\"about:\" target (net::ERR_BLOCKED_BY_ADMINISTRATOR), including this harness's own virtual origin — independent of Browser-binary availability. The navigation-free in-memory harness (qa/helpers/playwright-in-memory-app.mjs) exists specifically because of this limitation."
+  "unresolvedImports": [],
+  "rejectedSpecifiers": [],
+  "duplicateCanonicalIds": [],
+  "finalDecision": "BROWSER_BINARY_UNAVAILABLE"
 }

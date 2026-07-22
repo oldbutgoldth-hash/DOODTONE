@@ -1,0 +1,192 @@
+{
+  "suite": "EPIC 2E-J ENV-B1B PART 11 — In-Memory App Harness static/functional self-test",
+  "generatedAt": "2026-07-22T10:16:44.783Z",
+  "summary": {
+    "total": 36,
+    "pass": 36,
+    "fail": 0
+  },
+  "results": [
+    {
+      "test": "1. scanCodeMask marks the real import statement as code, and the comment/JSDoc/string mentions as non-code",
+      "result": "PASS",
+      "evidence": "real=1, comment=0, jsdoc=0, string=0"
+    },
+    {
+      "test": "1b. a real import statement is still correctly found even when an earlier same-line-terminator-free comment also contains the word \"import ... from\"",
+      "result": "PASS",
+      "evidence": "{\"edges\":[{\"specifier\":\"./e.js\",\"projectRelativePath\":\"e.js\",\"canonicalId\":\"https://lumixa.invalid/e.js\",\"context\":\"import-from\"}],\"rejected\":[]}"
+    },
+    {
+      "test": "2. static \"import ... from\" specifiers (default+named, namespace) are rewritten to canonical IDs, quotes preserved",
+      "result": "PASS",
+      "evidence": "import Foo, { bar, baz as qux } from 'https://lumixa.invalid/ui/x.js';\nimport * as ns from 'https://lumixa.invalid/y.js';\n"
+    },
+    {
+      "test": "3. side-effect \"import '...';\" (no clause, no \"from\") is rewritten to its canonical ID",
+      "result": "PASS",
+      "evidence": "import 'https://lumixa.invalid/ui/side-effect.js';\n"
+    },
+    {
+      "test": "4. export-from forms (named, *, * as ns) all rewrite their specifiers to canonical IDs",
+      "result": "PASS",
+      "evidence": "export { a, b } from 'https://lumixa.invalid/core/re1.js';\nexport * from 'https://lumixa.invalid/core/re2.js';\nexport * as ns from 'https://lumixa.invalid/core/re3.js';\n"
+    },
+    {
+      "test": "5. a literal dynamic import('...') is rewritten to its canonical ID",
+      "result": "PASS",
+      "evidence": "import('https://lumixa.invalid/core/project-version.js').then(() => {});\n"
+    },
+    {
+      "test": "6. a non-literal dynamic import (a variable, not a single string literal) is honestly rejected, never rewritten or guessed at",
+      "result": "PASS",
+      "evidence": "{\"edges\":[],\"rejected\":[{\"specifier\":null,\"reason\":\"non-literal dynamic import rejected (argument is not a single string literal)\",\"context\":\"dynamic-import\",\"raw\":\"path\"}]}"
+    },
+    {
+      "test": "6b. a concatenated dynamic import argument is also rejected as non-literal (not just a bare variable)",
+      "result": "PASS",
+      "evidence": "{\"edges\":[],\"rejected\":[{\"specifier\":null,\"reason\":\"non-literal dynamic import rejected (argument is not a single string literal)\",\"context\":\"dynamic-import\",\"raw\":\"'./a.js' + '.js'\"}]}"
+    },
+    {
+      "test": "7/8. traversal, backslash, node:, bare-package, and absolute-URL specifiers are all honestly rejected (never rewritten, never silently dropped without a reason)",
+      "result": "PASS",
+      "evidence": "[{\"snippet\":\"import x from '../../../etc/passwd';\",\"rejectedReason\":\"module specifier escapes project root: \\\"../../../etc/passwd\\\" from \\\"\\\"\"},{\"snippet\":\"import x from '../outside.js';\",\"rejectedReason\":\"module specifier escapes project root: \\\"../outside.js\\\" from \\\"\\\"\"},{\"snippet\":\"import x from 'C:\\\\\\\\windows\\\\\\\\evil.js';\",\"rejectedReason\":\"bare package import not supported: \\\"C:\\\\\\\\windows\\\\\\\\evil.js\\\"\"},{\"snippet\":\"import x from 'node:fs';\",\"rejectedReason\":\"node: import not allowed in a Browser module: \\\"node:fs\\\"\"},{\"snippet\":\"import x from 'left-pad';\",\"rejectedReason\":\"bare package import not supported: \\\"left-pad\\\"\"},{\"snippet\":\"import x from 'https://evil.example.com/x.js';\",\"rejectedReason\":\"absolute URL / protocol-relative import not allowed (network-zero contract): \\\"https://evil.example.com/x.js\\\"\"}]"
+    },
+    {
+      "test": "7b. resolveModuleSpecifierToProjectPath rejects escape-the-root relative paths and correctly resolves root-absolute (\"/core/...\") paths regardless of importer depth",
+      "result": "PASS",
+      "evidence": "{\"direct\":{\"ok\":false,\"reason\":\"module specifier escapes project root: \\\"../../../../outside.js\\\" from \\\"ui\\\"\"},\"rootAbsolute\":{\"ok\":true,\"projectRelativePath\":\"core/histogram-engine/index.js\"}}"
+    },
+    {
+      "test": "9. a module imported from multiple places is stored once in the graph (module reuse, not a duplicate), with zero duplicateCanonicalIds reported",
+      "result": "PASS",
+      "evidence": "duplicateCanonicalIds=[], histogramEdgeReferences=1"
+    },
+    {
+      "test": "The real project builds successfully into an in-memory app (no exception)",
+      "result": "PASS",
+      "evidence": "moduleCount=76"
+    },
+    {
+      "test": "10. the Import Map <script type=\"importmap\"> appears before the first <script type=\"module\"> tag",
+      "result": "PASS",
+      "evidence": "importMapIdx=10156, firstModuleScriptIdx=2506417"
+    },
+    {
+      "test": "11. no <script type=\"module\" src=\"...​\"> tag remains in the document (the ui/app.js entry was converted to an inline canonical import)",
+      "result": "PASS",
+      "evidence": "present=false"
+    },
+    {
+      "test": "11b. the app.js entry point is present as an inline canonical import",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "The Import Map is valid, parseable JSON with an \"imports\" object",
+      "result": "PASS",
+      "evidence": "76 entries"
+    },
+    {
+      "test": "Every Import Map value is a data:text/javascript;base64,... URL (never a network URL)",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "Every Import Map key is a canonical https://lumixa.invalid/... identifier (never navigated to)",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "toEvidenceSummary() never includes full module source text or data: URLs (Part 10 redaction requirement)",
+      "result": "PASS",
+      "evidence": "evidenceKeys=moduleCount,modulePaths,importEdgeCount,dynamicImportLiteralCount,inlineModuleCount,dataModuleCount,localAssetCount,rejectedSpecifiers,duplicateCanonicalIds,fontFallbackUsed"
+    },
+    {
+      "test": "Google Fonts network dependency is fully removed from the in-memory document",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "fontFallbackUsed is derived from an actual removed-link count, not a hardcoded literal disconnected from any check",
+      "result": "PASS",
+      "evidence": "fontFallbackUsed=true, removedFontLinkCount=3"
+    },
+    {
+      "test": "12/19/20. Building the in-memory app twice never modifies index.html, ui/app.js, or any Core/Mapping/XMP file on disk (Production, Mapping, and XMP remain byte-identical)",
+      "result": "PASS",
+      "evidence": "{\"before\":{\"index.html\":\"06ca7c4785808c41edc253e3c37a61f4f81ce6494edebf00b51bdb615ee0f740\",\"ui/app.js\":\"c93d6a36f57a6cdad4775f17a7ab93f63b8bb5b3ae2a98cafacb834ec959243e\",\"core/histogram-engine/index.js\":\"b2872fe3eb35de5d138b1eec3b85d305540d43c856a190513aa3cac7e6ef6615\",\"core/lightroom-mapping-engine/index.js\":\"f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099\",\"core/xmp-validator/index.js\":\"ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f\"},\"after\":{\"index.html\":\"06ca7c4785808c41edc253e3c37a61f4f81ce6494edebf00b51bdb615ee0f740\",\"ui/app.js\":\"c93d6a36f57a6cdad4775f17a7ab93f63b8bb5b3ae2a98cafacb834ec959243e\",\"core/histogram-engine/index.js\":\"b2872fe3eb35de5d138b1eec3b85d305540d43c856a190513aa3cac7e6ef6615\",\"core/lightroom-mapping-engine/index.js\":\"f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099\",\"core/xmp-validator/index.js\":\"ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f\"}}"
+    },
+    {
+      "test": "qa/helpers/playwright-in-memory-app.mjs is readable",
+      "result": "PASS",
+      "evidence": "25840 bytes"
+    },
+    {
+      "test": "qa/playwright-in-memory-app-smoke.mjs is readable",
+      "result": "PASS",
+      "evidence": "18229 bytes"
+    },
+    {
+      "test": "The in-memory app helper never imports \"playwright\" itself — statically testable even when the package is unavailable",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "The in-memory app helper never writes to disk (read-only: readFile only) — cannot mutate Production/Mapping/XMP files",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "12. no local HTTP server is constructed anywhere in this harness (no http.createServer / .listen(port))",
+      "result": "PASS",
+      "evidence": "constructsLocalServer=false"
+    },
+    {
+      "test": "13. page.goto() is never called with anything except the ABOUT_BLANK_URL constant (\"about:blank?qa=1\") — no virtual-origin, localhost, file:, or data: navigation anywhere in this harness",
+      "result": "PASS",
+      "evidence": "gotoCalls=[\"ABOUT_BLANK_URL\"]"
+    },
+    {
+      "test": "The smoke test loads the application via page.setContent(), not via any Browser navigation",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "The smoke test creates its BrowserContext with serviceWorkers: \"block\" and launches Chromium with the required sandbox args",
+      "result": "PASS",
+      "evidence": "serviceWorkersBlock=true, launchArgs=true"
+    },
+    {
+      "test": "The smoke test never attempts to download a Browser",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "This new harness does not modify or depend on the existing Virtual-Origin helper's routing installer (kept separate per spec)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "The in-memory app helper reuses the existing Virtual-Origin helper's proven path-safety primitives (resolveSafeLocalPath) rather than re-implementing traversal defenses from scratch",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Every record() call in the new smoke test passes a PASS/FAIL/NOT_TESTED string (learned from the ENV-B1A-R Part 12 fix — never repeat the boolean-record bug in new code)",
+      "result": "PASS",
+      "evidence": "totalRecordCalls=19, offenders=[]"
+    },
+    {
+      "test": "The final-decision computation filters on the string 'FAIL'",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "17/18. Neither new file ever references or regenerates the existing Browser results file or the Final Phase C results file",
+      "result": "PASS",
+      "evidence": "present=true"
+    }
+  ],
+  "disclaimer": "This suite calls the helper's real exported functions directly against synthetic snippets and the real project files, and audits both new harness files' source text plus Production-file hash immutability. It does not launch a Browser and proves nothing about actual Playwright/Chromium runtime behavior — that is the separate runtime smoke test's job."
+}

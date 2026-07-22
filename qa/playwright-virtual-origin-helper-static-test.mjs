@@ -191,6 +191,52 @@ try {
   record('The smoke test never attempts to download a Browser (no "playwright install" / "npx playwright" invocation)', neverDownloadsBrowser, `present=${neverDownloadsBrowser}`);
 }
 
+// ══════════════════════════════════════════════════════════════════
+// EPIC 2E-J ENV-B1B PART 12 — proves the four flagged ENV-B1A-R smoke
+// test defects are genuinely fixed in the actual source (not merely
+// described as fixed), by reading the real current file content.
+// ══════════════════════════════════════════════════════════════════
+{
+  const recordCalls = [...smokeSrc.matchAll(/record\(\s*(['"`])(?:(?!\1)[\s\S])*?\1\s*,\s*([^,]+),/g)];
+  const stringResultRe = /^'(PASS|FAIL|NOT_TESTED)'$/;
+  const ternaryResultRe = /\?\s*'(PASS|FAIL|NOT_TESTED)'\s*:\s*'(PASS|FAIL|NOT_TESTED)'/;
+  const offenders = recordCalls
+    .map((m) => m[2].trim())
+    .filter((arg) => !stringResultRe.test(arg) && !ternaryResultRe.test(arg));
+  record(
+    'PART 12 fix 1: every record() call in the smoke test passes a PASS/FAIL/NOT_TESTED string, never a bare boolean/expression — so a runtime false assertion is always counted as FAIL',
+    recordCalls.length > 0 && offenders.length === 0,
+    `totalRecordCalls=${recordCalls.length}, offenders=${JSON.stringify(offenders)}`
+  );
+}
+{
+  const filterUsesFailString = /results\.filter\(\s*\(r\)\s*=>\s*r\.result\s*===\s*'FAIL'\s*\)/.test(smokeSrc);
+  record('PART 12 fix 1 (continued): the final-decision computation filters on the string \'FAIL\' (consistent with fix 1, so it actually catches failures)', filterUsesFailString, `present=${filterUsesFailString}`);
+}
+{
+  const hasRequiredArgs = /chromium\.launch\(\{\s*executablePath:\s*browserDetect\.found,\s*args:\s*\[\s*'--no-sandbox'\s*,\s*'--disable-dev-shm-usage'\s*\]\s*\}\)/.test(smokeSrc);
+  record('PART 12 fix 2: the Browser launch call includes the required args (--no-sandbox, --disable-dev-shm-usage)', hasRequiredArgs, `present=${hasRequiredArgs}`);
+}
+{
+  const usesContextRequestAsProof = /(?:const|let|var)\s+\w+\s*=\s*await\s+context\.request\.get\(/.test(smokeSrc);
+  const usesPageEvaluateFetch = /page\.evaluate\(async \(u\) => \{[\s\S]*?fetch\(u\)/.test(smokeSrc);
+  record('PART 12 fix 3: the route-security self-test no longer uses context.request.get() as proof of BrowserContext Page routing, and instead uses an in-page fetch() via page.evaluate()', !usesContextRequestAsProof && usesPageEvaluateFetch, `usesContextRequestAsProof=${usesContextRequestAsProof}, usesPageEvaluateFetch=${usesPageEvaluateFetch}`);
+}
+{
+  const hardcodesFontFallback = /output\.fontFallbackUsed\s*=\s*true\s*;/.test(smokeSrc);
+  const destructuresRealValue = /const \{ externalRequestLog, localRequestLog, fontFallbackUsed \} = await installLumixaVirtualOrigin\(/.test(smokeSrc);
+  const assignsRealValue = /output\.fontFallbackUsed\s*=\s*fontFallbackUsed\s*===\s*true\s*;/.test(smokeSrc);
+  record('PART 12 fix 4: fontFallbackUsed is no longer a hardcoded literal — it is destructured from the helper\'s real returned state and assigned from that real value', !hardcodesFontFallback && destructuresRealValue && assignsRealValue, `hardcodesFontFallback=${hardcodesFontFallback}, destructuresRealValue=${destructuresRealValue}, assignsRealValue=${assignsRealValue}`);
+}
+{
+  const labelsKnownLimitation = smokeSrc.includes('KNOWN_SANDBOX_LIMITATION') && smokeSrc.includes('ERR_BLOCKED_BY_ADMINISTRATOR') && smokeSrc.includes('knownSandboxLimitation: KNOWN_SANDBOX_LIMITATION');
+  record('PART 12 fix 5: ENV-B1A-R is now honestly labeled as unsupported by this sandbox\'s navigation-blocking policy, and this label is included in the written result JSON', labelsKnownLimitation, `present=${labelsKnownLimitation}`);
+}
+{
+  const fileWasNotDeleted = smokeSrc.length > 0;
+  record('PART 12: the existing ENV-B1A-R smoke test file was fixed in place, not deleted — it remains as diagnostic evidence', fileWasNotDeleted, `bytes=${smokeSrc.length}`);
+}
+
 const passCount = results.filter((r) => r.result === 'PASS').length;
 const failCount = results.filter((r) => r.result === 'FAIL').length;
 const output = {

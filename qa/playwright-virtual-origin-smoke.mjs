@@ -27,6 +27,23 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const ORIGIN = 'http://lumixa.test';
 const NAV_URL = `${ORIGIN}/index.html?qa=1`;
 
+// ── ENV-B1B PART 12 — honest sandbox-policy note ──
+// A later, separate investigation (EPIC 2E-J ENV-B1B) established that in
+// this sandbox, Browser navigation to ANY non-"about:" target — including
+// this harness's own virtual origin http://lumixa.test, plus
+// localhost/127.0.0.1/private-IP/public HTTP(S)/file:/data: — is blocked
+// before Playwright route fulfillment by a sandbox administrator policy
+// (net::ERR_BLOCKED_BY_ADMINISTRATOR), independent of whether a Browser
+// binary is even present. This means the Virtual-Origin approach in THIS
+// file cannot succeed in this sandbox even on a future run where PART 2
+// finds a real Chromium executable — a FAIL_VIRTUAL_ORIGIN outcome in
+// that specific case is a genuine environment/policy limitation, not a
+// bug in this harness. See qa/helpers/playwright-in-memory-app.mjs and
+// qa/playwright-in-memory-app-smoke.mjs (EPIC 2E-J ENV-B1B) for the
+// navigation-free replacement approach (Import Maps + page.setContent),
+// which does not depend on any Browser navigation succeeding at all.
+const KNOWN_SANDBOX_LIMITATION = 'Per EPIC 2E-J ENV-B1B: this sandbox blocks Browser navigation to any non-"about:" target (net::ERR_BLOCKED_BY_ADMINISTRATOR), including this harness\'s own virtual origin — independent of Browser-binary availability. The navigation-free in-memory harness (qa/helpers/playwright-in-memory-app.mjs) exists specifically because of this limitation.';
+
 const results = [];
 function record(test, result, evidence) {
   results.push({ test, result, evidence });
@@ -124,6 +141,7 @@ async function main() {
     requestFailures: [],
     fontFallbackUsed: false,
     finalDecision: null,
+    knownSandboxLimitation: KNOWN_SANDBOX_LIMITATION,
   };
 
   // ── PART 1 ──
@@ -160,9 +178,9 @@ async function main() {
   // ── PARTS 3/4/5/6/7/8/9 — real Browser attempt ──
   let browser = null;
   try {
-    browser = await chromium.launch({ executablePath: browserDetect.found });
+    browser = await chromium.launch({ executablePath: browserDetect.found, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
     const context = await browser.newContext({ serviceWorkers: 'block' });
-    const { externalRequestLog, localRequestLog } = await installLumixaVirtualOrigin(context, { projectRoot: PROJECT_ROOT, origin: ORIGIN });
+    const { externalRequestLog, localRequestLog, fontFallbackUsed } = await installLumixaVirtualOrigin(context, { projectRoot: PROJECT_ROOT, origin: ORIGIN });
 
     const page = await context.newPage();
     const pageErrors = [];
@@ -193,16 +211,18 @@ async function main() {
     await page.waitForTimeout(400);
 
     output.navigationStatus = navigationStatus;
-    record('PART 3: virtual-origin navigation succeeds and final URL begins with the virtual origin', navigationStatus === 'SUCCEEDED' && typeof finalUrl === 'string' && finalUrl.startsWith(`${ORIGIN}/`), `navigationStatus=${navigationStatus}, finalUrl=${finalUrl}`);
+    const part3Pass = navigationStatus === 'SUCCEEDED' && typeof finalUrl === 'string' && finalUrl.startsWith(`${ORIGIN}/`);
+    record('PART 3: virtual-origin navigation succeeds and final URL begins with the virtual origin', part3Pass ? 'PASS' : 'FAIL', `navigationStatus=${navigationStatus}, finalUrl=${finalUrl}`);
 
     const readyState = await page.evaluate(() => document.readyState).catch(() => null);
-    record('PART 8: document becomes interactive or complete', readyState === 'interactive' || readyState === 'complete', `readyState=${readyState}`);
+    const readyStatePass = readyState === 'interactive' || readyState === 'complete';
+    record('PART 8: document becomes interactive or complete', readyStatePass ? 'PASS' : 'FAIL', `readyState=${readyState}`);
 
     const bodyContent = await page.evaluate(() => {
       const body = document.body;
       return body ? (body.textContent || '').trim().length : 0;
     }).catch(() => 0);
-    record('PART 8: application body contains visible non-empty content', bodyContent > 0, `bodyTextLength=${bodyContent}`);
+    record('PART 8: application body contains visible non-empty content', bodyContent > 0 ? 'PASS' : 'FAIL', `bodyTextLength=${bodyContent}`);
 
     const jsRequests = requestLog.filter((r) => /\.m?js(\?|$)/.test(r.url) && r.url.startsWith(ORIGIN));
     const cssRequests = requestLog.filter((r) => /\.css(\?|$)/.test(r.url) && r.url.startsWith(ORIGIN));
@@ -221,20 +241,31 @@ async function main() {
     output.pageErrors = pageErrors;
     output.consoleErrors = consoleErrors;
     output.requestFailures = requestFailures;
-    output.fontFallbackUsed = true; // the helper's Google Fonts stub routes are always installed by installLumixaVirtualOrigin
+    // Derived from the helper's own real, observed routing behavior (only
+    // set true inside installLumixaVirtualOrigin when a Google-Fonts
+    // request was actually intercepted and stubbed) — never a hardcoded
+    // assumption independent of what actually happened on the wire.
+    output.fontFallbackUsed = fontFallbackUsed === true;
 
-    record('PART 8: index.html loads from disk under the virtual origin', localRequestsOnly.some((r) => r.url === NAV_URL || r.url === `${ORIGIN}/index.html`) , `matchingRequests=${JSON.stringify(localRequestsOnly.filter((r) => r.url.includes('index.html')))}`);
-    record('PART 8: at least one JS/MJS module loads', jsRequests.length > 0, `jsRequests=${jsRequests.length}`);
-    record('PART 8: CSS loads when present (informational — not required to be non-zero)', true, `cssRequests=${cssRequests.length}`);
-    record('PART 8: no local JS/CSS/module/image 404 under the virtual origin', local404sList.length === 0, `local404s=${JSON.stringify(local404sList)}`);
-    record('PART 8: no unexpected external request reached the real network', externalRequestLog.length === 0, `unexpectedExternalRequests=${JSON.stringify(externalRequestLog)}`);
+    record('PART 8: index.html loads from disk under the virtual origin', (localRequestsOnly.some((r) => r.url === NAV_URL || r.url === `${ORIGIN}/index.html`)) ? 'PASS' : 'FAIL', `matchingRequests=${JSON.stringify(localRequestsOnly.filter((r) => r.url.includes('index.html')))}`);
+    record('PART 8: at least one JS/MJS module loads', jsRequests.length > 0 ? 'PASS' : 'FAIL', `jsRequests=${jsRequests.length}`);
+    record('PART 8: CSS loads when present (informational — not required to be non-zero)', 'PASS', `cssRequests=${cssRequests.length}`);
+    record('PART 8: no local JS/CSS/module/image 404 under the virtual origin', local404sList.length === 0 ? 'PASS' : 'FAIL', `local404s=${JSON.stringify(local404sList)}`);
+    record('PART 8: no unexpected external request reached the real network', externalRequestLog.length === 0 ? 'PASS' : 'FAIL', `unexpectedExternalRequests=${JSON.stringify(externalRequestLog)}`);
     const localhostAttempts = requestLog.filter((r) => /^https?:\/\/(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|::1)/i.test(r.url));
-    record('PART 8: no localhost/127.0.0.1/private-IP request was made', localhostAttempts.length === 0, `localhostAttempts=${JSON.stringify(localhostAttempts)}`);
-    record('PART 8: no page errors', pageErrors.length === 0, pageErrors.length === 0 ? '(none)' : JSON.stringify(pageErrors));
-    record('PART 8: no console errors', consoleErrors.length === 0, consoleErrors.length === 0 ? '(none)' : JSON.stringify(consoleErrors));
-    record('PART 8: no request failures', requestFailures.length === 0, requestFailures.length === 0 ? '(none)' : JSON.stringify(requestFailures));
+    record('PART 8: no localhost/127.0.0.1/private-IP request was made', localhostAttempts.length === 0 ? 'PASS' : 'FAIL', `localhostAttempts=${JSON.stringify(localhostAttempts)}`);
+    record('PART 8: no page errors', pageErrors.length === 0 ? 'PASS' : 'FAIL', pageErrors.length === 0 ? '(none)' : JSON.stringify(pageErrors));
+    record('PART 8: no console errors', consoleErrors.length === 0 ? 'PASS' : 'FAIL', consoleErrors.length === 0 ? '(none)' : JSON.stringify(consoleErrors));
+    record('PART 8: no request failures', requestFailures.length === 0 ? 'PASS' : 'FAIL', requestFailures.length === 0 ? '(none)' : JSON.stringify(requestFailures));
 
     // ── PART 9 — route security self-test ──
+    // Uses an in-PAGE fetch() (via page.evaluate), not context.request.get()
+    // — context.request is a separate APIRequestContext whose relationship
+    // to context.route() handlers is not the thing under test here and is
+    // not reliable proof of BrowserContext-level Page routing. An in-page
+    // fetch unambiguously exercises the same network path a real page
+    // navigation/resource load would use, so a 403 here is real proof the
+    // route handler's containment check ran.
     let traversalAllPass = true;
     const traversalEvidence = [];
     for (const traversalPath of TRAVERSAL_PATHS) {
@@ -242,8 +273,10 @@ async function main() {
       let status = null;
       let threw = null;
       try {
-        const r = await context.request.get(url, { failOnStatusCode: false });
-        status = r.status();
+        status = await page.evaluate(async (u) => {
+          const r = await fetch(u);
+          return r.status;
+        }, url);
       } catch (e) {
         threw = String((e && e.message) || e);
       }
@@ -251,7 +284,7 @@ async function main() {
       if (!pass) traversalAllPass = false;
       traversalEvidence.push({ path: traversalPath, status, threw });
     }
-    record('PART 9: route security self-test — every traversal path is rejected with 403, outside file never read', traversalAllPass, JSON.stringify(traversalEvidence));
+    record('PART 9: route security self-test — every traversal path is rejected with 403, outside file never read', traversalAllPass ? 'PASS' : 'FAIL', JSON.stringify(traversalEvidence));
 
     const allPartEightNinePassed = results.filter((r) => r.result === 'FAIL').length === 0 && navigationStatus === 'SUCCEEDED';
     output.finalDecision = allPartEightNinePassed ? 'PASS_VIRTUAL_ORIGIN_READY' : 'FAIL_VIRTUAL_ORIGIN';
@@ -289,6 +322,7 @@ main().catch(async (err) => {
       pageErrors: [], consoleErrors: [], requestFailures: [],
       fontFallbackUsed: false,
       finalDecision: 'TOOL_ENVIRONMENT_UNAVAILABLE',
+      knownSandboxLimitation: KNOWN_SANDBOX_LIMITATION,
       crashError: String((err && err.message) || err),
     }, null, 2));
   } catch { /* best-effort */ }
