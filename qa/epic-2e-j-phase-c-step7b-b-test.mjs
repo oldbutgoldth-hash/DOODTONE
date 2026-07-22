@@ -380,54 +380,279 @@ async function main() {
     record('Main Observation status uses polite live region', ariaLiveCheck.statusIsPolite === true, `statusIsPolite=${ariaLiveCheck.statusIsPolite}`);
 
     // ══════════════════════════════════════════════════════════════
-    // PART 5 — Contrast audit (deterministic calculator, WCAG-style).
+    // PART 5 PREP (Step 7B-B-F2) — real UI workflow to reach the
+    // five-Reason limit state (genuine disabled 6th Reason, non-empty
+    // Reason-limit message, non-empty Selected Reasons text) so the
+    // Contrast and Touch-target audits below measure REAL rendered
+    // content, never a simulated/injected disabled class. Earlier real
+    // interactions above (Parts 2-3 clicking through Observation
+    // radios and Reason checkboxes) have already driven genuine
+    // recordObservation() calls into the Session, so Session
+    // Metrics/Top Reasons should also carry real, non-placeholder
+    // content by this point — this step adds one more genuine
+    // selection on top of that, never a fabricated one.
     // ══════════════════════════════════════════════════════════════
-    console.log('=== Contrast audit ===');
-    const contrastTargets = [
-      ['ipoStatus', 'Status message'],
-      ['ipoSafetyNote', 'Safety note'],
-      ['ipoClearButton', 'Clear Observation button'],
-      ['ipoClearReasonsButton', 'Clear Reasons button'],
-      ['ipoClearSessionButton', 'Clear Session button'],
-    ];
+    console.log('=== Reaching five-Reason-limit state for Contrast/Touch-target audits (Step 7B-B-F2) ===');
+    await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); });
+    await page.waitForTimeout(150);
+    const f2ReasonIds = ['skin-tone', 'white-balance', 'highlight-detail', 'shadow-detail', 'contrast'];
+    for (const r of f2ReasonIds) {
+      const alreadyChecked = await page.evaluate((rid) => document.getElementById(`ipoReason_${rid}`)?.checked === true, r);
+      if (!alreadyChecked) await page.click(`#ipoReason_${r}`);
+    }
+    await page.waitForTimeout(150);
+    const f2SixthDisabled = await page.evaluate(() => document.getElementById('ipoReason_color-balance')?.disabled === true);
+    record('Five-Reason limit re-established for Contrast/Touch-target audits (real UI workflow, not simulated)', f2SixthDisabled, `disabled=${f2SixthDisabled}`);
+
+    // ══════════════════════════════════════════════════════════════
+    // PART 5 — Contrast audit (Step 7B-B-F2: complete required target
+    // list, WCAG-proven large-text threshold, ancestor alpha-composited
+    // background resolution). Deterministic calculator, WCAG-style.
+    // ══════════════════════════════════════════════════════════════
+    console.log('=== Contrast audit (Step 7B-B-F2 complete target list) ===');
     contrastResults = [];
-    for (const [id, label] of contrastTargets) {
-      const colors = await page.evaluate((elId) => {
-        const el = document.getElementById(elId);
-        if (!el) return null;
-        const style = getComputedStyle(el);
-        let bg = style.backgroundColor;
-        let bgEl = el;
-        // Walk up to find a non-transparent background if the element itself is transparent.
-        while (bg === 'rgba(0, 0, 0, 0)' && bgEl.parentElement) { bgEl = bgEl.parentElement; bg = getComputedStyle(bgEl).backgroundColor; }
-        return { color: style.color, backgroundColor: bg };
-      }, id);
-      if (!colors) { record(`Contrast: ${label}`, 'NOT_TESTED', 'element not found'); continue; }
-      const fg = parseRgb(colors.color);
-      const bg = parseRgb(colors.backgroundColor);
-      if (!fg || !bg) { record(`Contrast: ${label}`, 'NOT_TESTED', `could not parse computed colors reliably (fg=${colors.color}, bg=${colors.backgroundColor}) — reported honestly as a limitation, not fabricated`); continue; }
-      const ratio = contrastRatio(fg, bg);
-      contrastResults.push({ label, ratio: +ratio.toFixed(2) });
-      record(`Contrast: ${label} meets 4.5:1 (WCAG AA normal text)`, ratio >= 4.5, `ratio=${ratio.toFixed(2)}:1, fg=${colors.color}, bg=${colors.backgroundColor}`);
+    const contrastAudit = await page.evaluate(() => {
+      // FIX 3 — effective-background resolver: walks ancestors,
+      // composites every semi-transparent layer found via the standard
+      // "over" alpha-blend formula (never just the first non-transparent
+      // hit), and only falls back to an assumed white page base if the
+      // walk reaches the document root without ever finding a fully
+      // opaque layer. Flags a background-image sighting on any layer
+      // that was still needed for the composite (i.e. before an opaque
+      // base was found) as the ONLY genuinely non-computable case.
+      function parseRgbaLocal(str) {
+        const m = str && str.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+        if (!m) return null;
+        const r = parseFloat(m[1]), g = parseFloat(m[2]), b = parseFloat(m[3]);
+        const a = m[4] !== undefined ? parseFloat(m[4]) : 1;
+        return [r, g, b, a];
+      }
+      function resolveEffectiveBackground(startEl) {
+        const layers = [];
+        let bgImageBeforeOpaque = null;
+        let el = startEl;
+        let foundOpaque = false;
+        while (el) {
+          const style = getComputedStyle(el);
+          const rgba = parseRgbaLocal(style.backgroundColor);
+          if (rgba && rgba[3] > 0) {
+            layers.push(rgba);
+            if (rgba[3] >= 1) { foundOpaque = true; break; }
+          }
+          if (!foundOpaque && style.backgroundImage && style.backgroundImage !== 'none' && bgImageBeforeOpaque === null) {
+            bgImageBeforeOpaque = style.backgroundImage;
+          }
+          el = el.parentElement;
+        }
+        if (bgImageBeforeOpaque && !foundOpaque) {
+          return { undeterminable: true, reason: `background-image present ("${bgImageBeforeOpaque.slice(0, 80)}") on an ancestor before any opaque background-color was found` };
+        }
+        let [r, g, b] = [255, 255, 255];
+        for (let i = layers.length - 1; i >= 0; i--) {
+          const [lr, lg, lb, la] = layers[i];
+          r = lr * la + r * (1 - la);
+          g = lg * la + g * (1 - la);
+          b = lb * la + b * (1 - la);
+        }
+        return { undeterminable: false, rgb: [Math.round(r), Math.round(g), Math.round(b)], hadOpaqueBase: foundOpaque, layerCount: layers.length };
+      }
+
+      // FIX 2 — large-text proof from computed fontSize/fontWeight only,
+      // never inferred from tag name.
+      function isProvenLargeText(fontSizePx, fontWeight) {
+        return fontSizePx >= 24 || (fontSizePx >= 18.66 && fontWeight >= 700);
+      }
+
+      function collect(elOrNull, label, required) {
+        if (!elOrNull) return { label, required, missing: true };
+        const style = getComputedStyle(elOrNull);
+        const fontSize = parseFloat(style.fontSize) || 0;
+        const fontWeight = parseInt(style.fontWeight, 10) || 400;
+        const text = (elOrNull.textContent || '').trim().slice(0, 80);
+        const bg = resolveEffectiveBackground(elOrNull);
+        return { label, required, missing: false, color: style.color, fontSize, fontWeight, text, isLargeText: isProvenLargeText(fontSize, fontWeight), bg };
+      }
+
+      const out = [];
+      out.push(collect(document.querySelector('#interactivePreviewObservationSection h4'), 'Observation title', true));
+      out.push(collect(document.querySelector('#interactivePreviewObservationSection p'), 'Observation subtitle', true));
+      out.push(collect(document.getElementById('ipoStatus'), 'Observation status', true));
+      out.push(collect(document.getElementById('ipoWarning'), 'Warning', true));
+      out.push(collect(document.getElementById('ipoSafetyNote'), 'Safety note', true));
+      // Privacy/session-only note has no id; it is structurally the
+      // element immediately BEFORE #ipoSafetyNote (see
+      // ui/interactive-preview-observation-renderer-v2.js, where
+      // detailsNoteEl is appended immediately before safetyNoteEl with
+      // nothing between them) — a real DOM-structure lookup, not a
+      // guess.
+      out.push(collect(document.getElementById('ipoSafetyNote')?.previousElementSibling ?? null, 'Privacy/session-only note', true));
+
+      Array.from(document.querySelectorAll('input[name="ipoObservation"]')).forEach((r, i) => {
+        out.push(collect(r.closest('label')?.querySelector('span') ?? null, `Observation radio label ${i} (${r.value})`, true));
+      });
+      Array.from(document.querySelectorAll('input[name="ipoReason"]')).forEach((c, i) => {
+        out.push(collect(c.closest('label')?.querySelector('span') ?? null, `Reason label ${i} (${c.value})${c.disabled ? ' [disabled]' : ''}`, true));
+      });
+
+      out.push(collect(document.getElementById('ipoReasonLimit'), 'Reason-limit message', true));
+      out.push(collect(document.getElementById('ipoReasonStatus'), 'Selected Reasons text', true));
+
+      // Real DOM structure combines label+value (and label+count) into
+      // a SINGLE text node per row (see
+      // renderInteractivePreviewObservationSessionV2: `${label}: ${value}`
+      // / `Top reasons: ${label} (${count}), ...`) — there is no
+      // separate label element vs value element to test independently,
+      // so one contrast measurement per rendered row genuinely covers
+      // both required categories for that row.
+      const metricsEl = document.getElementById('ipoSessionMetrics');
+      const metricsChildren = metricsEl ? Array.from(metricsEl.children) : [];
+      if (metricsChildren.length === 0) {
+        out.push({ label: 'Session metric labels/values', required: true, missing: true });
+      } else {
+        metricsChildren.forEach((child, i) => out.push(collect(child, `Session metric row ${i} (label+value combined in one text node)`, true)));
+      }
+      const topReasonsEl = document.getElementById('ipoSessionTopReasons');
+      const topReasonsChildren = topReasonsEl ? Array.from(topReasonsEl.children) : [];
+      if (topReasonsChildren.length === 0) {
+        out.push({ label: 'Top Reasons labels/counts', required: true, missing: true });
+      } else {
+        topReasonsChildren.forEach((child, i) => out.push(collect(child, `Top Reasons row ${i} (label+count combined in one text node)`, true)));
+      }
+
+      out.push(collect(document.getElementById('ipoClearButton'), 'Clear Observation button', true));
+      out.push(collect(document.getElementById('ipoClearReasonsButton'), 'Clear Reasons button', true));
+      out.push(collect(document.getElementById('ipoClearSessionButton'), 'Clear Session button', true));
+      return out;
+    });
+
+    for (const entry of contrastAudit) {
+      if (entry.missing) {
+        // FIX 1: a missing required Element is FAIL, never NOT_TESTED.
+        record(`Contrast: ${entry.label}`, false, 'required element not found in DOM — FAIL (never NOT_TESTED for a missing required element)');
+        continue;
+      }
+      const fg = parseRgb(entry.color);
+      if (!fg) {
+        // FIX 1: a normal opaque foreground color that fails to parse is FAIL.
+        record(`Contrast: ${entry.label}`, false, `foreground color could not be parsed (color=${entry.color}) — FAIL, not NOT_TESTED`);
+        continue;
+      }
+      if (entry.bg.undeterminable) {
+        // FIX 3: the ONLY permitted NOT_TESTED path — a genuinely
+        // non-computable gradient/background-image case, with explicit
+        // evidence (never an arbitrary escape hatch to preserve Suite success).
+        record(`Contrast: ${entry.label}`, 'NOT_TESTED', entry.bg.reason);
+        continue;
+      }
+      const ratio = contrastRatio(fg, entry.bg.rgb);
+      const threshold = entry.isLargeText ? 3.0 : 4.5;
+      contrastResults.push({ label: entry.label, ratio: +ratio.toFixed(2), threshold, isLargeText: entry.isLargeText, fontSize: entry.fontSize, fontWeight: entry.fontWeight, text: entry.text });
+      record(`Contrast: ${entry.label} meets ${threshold}:1 (WCAG AA ${entry.isLargeText ? 'large' : 'normal'} text)`, ratio >= threshold, `ratio=${ratio.toFixed(2)}:1, fontSize=${entry.fontSize}px, fontWeight=${entry.fontWeight}, fg=${entry.color}, resolvedBg=rgb(${entry.bg.rgb.join(',')}) [hadOpaqueBase=${entry.bg.hadOpaqueBase}, layers=${entry.bg.layerCount}], text="${entry.text}"`);
     }
 
     // ══════════════════════════════════════════════════════════════
-    // PART 6 — Touch target sizes.
+    // PART 5B — Focus indicator contrast (Step 7B-B-F2 FIX 5). Real
+    // keyboard focus only (never mouse-hover/`.focus()` alone as
+    // proof): for the radio, a click first selects it within its
+    // roving-tabindex group (radios cannot be reached by Tab unless
+    // checked), then a genuine Shift+Tab/Tab pair lands real keyboard
+    // focus back on it — the same technique already used for the other
+    // targets below.
     // ══════════════════════════════════════════════════════════════
-    console.log('=== Touch target sizes ===');
+    console.log('=== Focus indicator contrast (real keyboard focus) ===');
+    const focusIndicatorTargets = [
+      { id: 'ipoOption_prefer-legacy', label: 'Observation radio (prefer-legacy)', isRadio: true },
+      { id: 'ipoReason_skin-tone', label: 'Reason checkbox (skin-tone)', isRadio: false },
+      { id: 'ipoClearButton', label: 'Clear Observation button', isRadio: false },
+      { id: 'ipoClearReasonsButton', label: 'Clear Reasons button', isRadio: false },
+      { id: 'ipoClearSessionButton', label: 'Clear Session button', isRadio: false },
+    ];
+    for (const target of focusIndicatorTargets) {
+      const elExists = await page.evaluate((elId) => !!document.getElementById(elId), target.id);
+      if (!elExists) { record(`Focus indicator: ${target.label}`, false, 'required element not found in DOM — FAIL'); continue; }
+      if (target.isRadio) {
+        await page.click(`#${target.id}`);
+        await page.waitForTimeout(80);
+      } else {
+        await page.evaluate((elId) => document.getElementById(elId)?.focus({ preventScroll: true }), target.id);
+      }
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Tab');
+      const info = await page.evaluate((elId) => {
+        const el = document.getElementById(elId);
+        const styledEl = el.closest('label') || el;
+        const style = getComputedStyle(styledEl);
+        const outlineWidth = parseFloat(style.outlineWidth) || 0;
+        const outlineStyle = style.outlineStyle;
+        const outlineColor = style.outlineColor;
+        const boxShadow = style.boxShadow;
+        const hasVisibleIndicator = (outlineWidth > 0 && outlineStyle !== 'none') || (boxShadow && boxShadow !== 'none');
+        // "Not clipped": neither the styled element itself nor its
+        // immediate parent hides overflow, which would clip an outline.
+        const ownOverflow = style.overflow;
+        const parentOverflow = styledEl.parentElement ? getComputedStyle(styledEl.parentElement).overflow : 'visible';
+        const notClipped = !/hidden|clip/.test(ownOverflow) && !/hidden|clip/.test(parentOverflow);
+        // Adjacent background: the resolved background just outside the
+        // element (its own parent's background), walked up the same
+        // way as the Contrast audit above.
+        function parseRgbaLocal(str) {
+          const m = str && str.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+          if (!m) return null;
+          return [parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]), m[4] !== undefined ? parseFloat(m[4]) : 1];
+        }
+        let bgEl = styledEl.parentElement || styledEl;
+        let bg = getComputedStyle(bgEl).backgroundColor;
+        let rgba = parseRgbaLocal(bg);
+        while ((!rgba || rgba[3] === 0) && bgEl.parentElement) { bgEl = bgEl.parentElement; bg = getComputedStyle(bgEl).backgroundColor; rgba = parseRgbaLocal(bg); }
+        return {
+          isFocused: document.activeElement === el,
+          hasVisibleIndicator, outlineWidth, outlineStyle, outlineColor, boxShadow, notClipped,
+          adjacentBg: rgba ? [Math.round(rgba[0]), Math.round(rgba[1]), Math.round(rgba[2])] : null,
+        };
+      }, target.id);
+      if (!info.isFocused) { record(`Focus indicator: ${target.label}`, false, `element did not receive real keyboard focus — ${JSON.stringify(info)}`); continue; }
+      if (!info.hasVisibleIndicator) { record(`Focus indicator: ${target.label}`, false, `no visible non-zero indicator (outlineWidth=${info.outlineWidth}, outlineStyle=${info.outlineStyle}, boxShadow=${info.boxShadow})`); continue; }
+      if (!info.notClipped) { record(`Focus indicator: ${target.label}`, false, 'indicator is clipped by an ancestor overflow:hidden/clip'); continue; }
+      const outlineRgb = parseRgb(info.outlineColor);
+      if (!outlineRgb || !info.adjacentBg) {
+        record(`Focus indicator: ${target.label}`, false, `could not parse outline/adjacent-background color for a contrast check (outlineColor=${info.outlineColor}, adjacentBg=${JSON.stringify(info.adjacentBg)}) — FAIL, not NOT_TESTED`);
+        continue;
+      }
+      const ratio = contrastRatio(outlineRgb, info.adjacentBg);
+      record(`Focus indicator: ${target.label} contrast against adjacent background meets 3:1`, ratio >= 3.0, `ratio=${ratio.toFixed(2)}:1, outlineColor=${info.outlineColor}, adjacentBg=rgb(${info.adjacentBg.join(',')}), outlineWidth=${info.outlineWidth}, notClipped=${info.notClipped}`);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // PART 6 — Touch target sizes (Step 7B-B-F2 FIX 6: 43.5px on BOTH
+    // width and height, all 17 required targets enumerated and
+    // recorded individually).
+    // ══════════════════════════════════════════════════════════════
+    console.log('=== Touch target sizes (Step 7B-B-F2: MIN=43.5, width+height, 17 targets) ===');
     const touchTargetCheck = await page.evaluate(() => {
-      const MIN = 40; // ~44px with 1-2px tolerance for sub-pixel rendering
-      const results = [];
-      const check = (el, label) => { if (!el) return; const r = el.getBoundingClientRect(); results.push({ label, width: Math.round(r.width), height: Math.round(r.height), pass: r.height >= MIN }); };
-      document.querySelectorAll('input[name="ipoObservation"]').forEach((r, i) => check(r.closest('label'), 'radio-label-' + i));
-      document.querySelectorAll('input[name="ipoReason"]').forEach((c, i) => check(c.closest('label'), 'reason-label-' + i));
+      const MIN = 43.5;
+      const out = [];
+      const check = (elt, id) => {
+        if (!elt) { out.push({ id, width: null, height: null, pass: false, missing: true }); return; }
+        const r = elt.getBoundingClientRect();
+        const width = +r.width.toFixed(2);
+        const height = +r.height.toFixed(2);
+        out.push({ id, width, height, pass: width >= MIN && height >= MIN, missing: false });
+      };
+      const radios = Array.from(document.querySelectorAll('input[name="ipoObservation"]'));
+      radios.forEach((r, i) => check(r.closest('label'), `radio-label-${i}-${r.value}`));
+      const reasons = Array.from(document.querySelectorAll('input[name="ipoReason"]'));
+      reasons.forEach((c, i) => check(c.closest('label'), `reason-label-${i}-${c.value}`));
       check(document.getElementById('ipoClearButton'), 'clear-observation-btn');
       check(document.getElementById('ipoClearReasonsButton'), 'clear-reasons-btn');
       check(document.getElementById('ipoClearSessionButton'), 'clear-session-btn');
-      return results;
+      return out;
     });
-    const touchTargetsAllPass = touchTargetCheck.every((r) => r.pass);
-    record('All touch targets approximately >=44px (radio/reason labels, Clear buttons)', touchTargetsAllPass, touchTargetsAllPass ? `all ${touchTargetCheck.length} targets pass` : JSON.stringify(touchTargetCheck.filter((r) => !r.pass)));
+    for (const t of touchTargetCheck) {
+      if (t.missing) { record(`Touch target: ${t.id}`, false, 'required target element not found — FAIL (never NOT_TESTED for a missing required target)'); continue; }
+      record(`Touch target: ${t.id} >= 43.5x43.5px`, t.pass, `width=${t.width}, height=${t.height}, pass=${t.pass}`);
+    }
+    const touchTargetsAllPass = touchTargetCheck.every((t) => t.pass);
+    record('All 17 touch targets pass width>=43.5 AND height>=43.5 (radio/reason labels, Clear buttons)', touchTargetsAllPass && touchTargetCheck.length === 17, `count=${touchTargetCheck.length}, allPass=${touchTargetsAllPass}, targets=${JSON.stringify(touchTargetCheck)}`);
     record('Physical touch hardware', 'NOT_TESTED', 'genuine physical touch hardware was not used');
 
     await page.close();

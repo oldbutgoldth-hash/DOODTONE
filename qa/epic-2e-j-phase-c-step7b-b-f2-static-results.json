@@ -1,0 +1,112 @@
+{
+  "suite": "EPIC 2E-J — Step 7B-B-F2-S FIX 7: static coverage self-test (source audit only, no Chromium)",
+  "generatedAt": "2026-07-22T04:37:05.090Z",
+  "summary": {
+    "total": 19,
+    "pass": 19,
+    "fail": 0
+  },
+  "results": [
+    {
+      "test": "qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
+      "result": "PASS",
+      "evidence": "52046 bytes"
+    },
+    {
+      "test": "ui/interactive-preview-observation-renderer-v2.js is readable (for touch-target cross-check)",
+      "result": "PASS",
+      "evidence": "27867 bytes"
+    },
+    {
+      "test": "qa/epic-2e-j-phase-c-step7b-b-f1-static-results.json is readable",
+      "result": "PASS",
+      "evidence": "parsed OK"
+    },
+    {
+      "test": "Every required Contrast category string appears in the Browser test source",
+      "result": "PASS",
+      "evidence": "16 categories found"
+    },
+    {
+      "test": "Missing-Element path (Contrast) calls FAIL, not NOT_TESTED",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Missing-Element path (Touch target) calls FAIL, not NOT_TESTED",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Missing-Element path (Focus indicator) calls FAIL, not NOT_TESTED",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Ordinary foreground-color parse failure calls FAIL (Contrast)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Ordinary outline/adjacent-background parse failure calls FAIL (Focus indicator)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "The only permitted Contrast NOT_TESTED path is the documented gradient/background-image limitation",
+      "result": "PASS",
+      "evidence": "hasDocumentedGradientNotTested=true, total 'NOT_TESTED' string literal occurrences in source=3"
+    },
+    {
+      "test": "Normal-text WCAG threshold 4.5:1 exists in the Contrast audit",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Large-text threshold 3.0 exists and is proven by computed fontSize/fontWeight (never tag name)",
+      "result": "PASS",
+      "evidence": "hasLargeTextFn=true, hasLargeTextCriteria=true, hasTagNameAssumption=false"
+    },
+    {
+      "test": "Focus indicator contrast threshold 3:1 exists",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Touch-target threshold is 43.5 (old 40px tolerance removed)",
+      "result": "PASS",
+      "evidence": "hasTouchThreshold=true, oldThresholdGone=true"
+    },
+    {
+      "test": "All 17 touch targets are enumerated (4 Observation radios + 10 Reasons + 3 Clear buttons, cross-checked against real renderer option-array lengths)",
+      "result": "PASS",
+      "evidence": "obsOptionCount=4, reasonOptionCount=10, clearButtonCheckCount=3, total=17, hasRadiosForEach=true, hasReasonsForEach=true"
+    },
+    {
+      "test": "Touch-target pass requires BOTH width>=43.5 AND height>=43.5 (not height-only)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Every touch target is recorded as {id, width, height, pass}",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Physical touch hardware remains NOT_TESTED (unchanged, still the only permitted manual gap)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)",
+      "result": "PASS",
+      "evidence": "status=NOT_RUN_ENVIRONMENT_BLOCKED"
+    }
+  ],
+  "disclaimer": "This suite audits the SOURCE TEXT of qa/epic-2e-j-phase-c-step7b-b-test.mjs for the presence of required categories/thresholds/wiring. It does NOT execute a browser, does NOT measure real computed colors or element sizes, and does NOT prove real Contrast/Touch-target PASS. A PASS here means \"the required code path is present,\" not \"the real UI meets WCAG.\"",
+  "browserSuiteExecution": {
+    "status": "NOT_RUN_ENVIRONMENT_BLOCKED",
+    "note": "Unchanged from the F1-R/F1-R2 record. This F2-S patch did not execute, simulate, or regenerate the real browser suite or its result JSON.",
+    "browserOrFinalResultJsonRegenerated": false
+  }
+}
