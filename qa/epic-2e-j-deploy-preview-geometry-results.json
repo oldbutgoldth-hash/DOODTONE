@@ -1,0 +1,27 @@
+{
+  "suite": "DEPLOY GEOMETRY R1 — Deploy Preview Geometry suite",
+  "runId": "48547350-b266-4cf4-8cf2-8fb6733ca444",
+  "startedAt": "2026-07-22T19:56:03.940Z",
+  "completedAt": "2026-07-22T19:56:03.955Z",
+  "completed": true,
+  "sourceHash": "23f75c090f0111672bf419260fb0cc80fc06415e9377c9a14d14597411575c8d",
+  "deployUrl": null,
+  "browserExecutablePath": null,
+  "browserVersion": null,
+  "generatedAt": "2026-07-22T19:56:03.955Z",
+  "summary": {
+    "total": 1,
+    "pass": 0,
+    "fail": 0,
+    "notTested": 1
+  },
+  "results": [
+    {
+      "test": "Deploy Preview Geometry availability",
+      "result": "NOT_TESTED",
+      "evidence": "LUMIXA_DEPLOY_URL environment variable was not provided. Set it to the exact deployed HTTPS URL to run this suite for real."
+    }
+  ],
+  "screenshotsGenerated": [],
+  "decision": "DEPLOY_URL_REQUIRED"
+}

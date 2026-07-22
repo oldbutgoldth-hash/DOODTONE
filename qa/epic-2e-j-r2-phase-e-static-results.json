@@ -1,9 +1,9 @@
 {
   "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
-  "generatedAt": "2026-07-22T17:16:03.529Z",
+  "generatedAt": "2026-07-22T19:54:31.400Z",
   "summary": {
-    "total": 95,
-    "pass": 95,
+    "total": 92,
+    "pass": 92,
     "fail": 0,
     "notTested": 0
   },
@@ -11,12 +11,12 @@
     {
       "test": "generateRunId() returns a non-empty string",
       "result": "PASS",
-      "evidence": "idA=2205696a-e319-4039-a17b-5b4ad5c6706c"
+      "evidence": "idA=9e2a0d45-0e07-4735-8aeb-7b9b87ba2b5b"
     },
     {
       "test": "generateRunId() returns a fresh value on each call (never reused)",
       "result": "PASS",
-      "evidence": "idA=2205696a-e319-4039-a17b-5b4ad5c6706c, idB=4ada5bf6-bf81-416e-a8b0-d65a50078495"
+      "evidence": "idA=9e2a0d45-0e07-4735-8aeb-7b9b87ba2b5b, idB=e7d56211-169e-423a-a949-761a6215d1f9"
     },
     {
       "test": "computeSourceHash() is deterministic for identical inputs",
@@ -131,7 +131,7 @@
     {
       "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
       "result": "PASS",
-      "evidence": "oldRunId=bce20f54-259e-4456-bcbd-2470bb8670a2, newRunId=c0eab065-09a5-441c-b492-104a2b9e14ad"
+      "evidence": "oldRunId=1172cbf9-4662-47eb-bf9f-ac1a4f690269, newRunId=f819729c-aeaf-4f93-9915-462637a332c2"
     },
     {
       "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",
@@ -454,32 +454,17 @@
       "evidence": "present(no stale label)=true"
     },
     {
-      "test": "R3-12: ui/app.js is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)",
+      "test": "R3-12: qa/baselines/lufa42-production-lock-manifest.json is present and parses as JSON (checked-in, portable — never a machine-specific sibling directory)",
       "result": "PASS",
-      "evidence": "baseHash=b19cda0d92d76a4441ce90068fec2e2b031a4e89ffebb0b904a7f865f90e1019, curHash=b19cda0d92d76a4441ce90068fec2e2b031a4e89ffebb0b904a7f865f90e1019"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_f1r/LUMIXA_AI_EPIC_2E_J_PHASE_C_RECOVERED_DEADCODE_CLEAN/qa/baselines/lufa42-production-lock-manifest.json"
     },
     {
-      "test": "R3-12: ui/interactive-preview-observation-controller-v2.js is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)",
+      "test": "R3-12: Production-lock manifest declares a non-empty locked-file set",
       "result": "PASS",
-      "evidence": "baseHash=371164bf6e5923cd9d1c0c07e69673608e50c4a02458b4e817dc5d12329c24f6, curHash=371164bf6e5923cd9d1c0c07e69673608e50c4a02458b4e817dc5d12329c24f6"
+      "evidence": "lockedFileCount=70"
     },
     {
-      "test": "R3-12: ui/interactive-preview-observation-renderer-v2.js is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)",
-      "result": "PASS",
-      "evidence": "baseHash=d733feb368698a2ed85233e51284a70beed10c7423f6a68a2048d27e24ed186c, curHash=d733feb368698a2ed85233e51284a70beed10c7423f6a68a2048d27e24ed186c"
-    },
-    {
-      "test": "R3-12: ui/interactive-preview-observation-session-v2.js is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)",
-      "result": "PASS",
-      "evidence": "baseHash=aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9, curHash=aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9"
-    },
-    {
-      "test": "R3-12: index.html is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)",
-      "result": "PASS",
-      "evidence": "baseHash=06ca7c4785808c41edc253e3c37a61f4f81ce6494edebf00b51bdb615ee0f740, curHash=06ca7c4785808c41edc253e3c37a61f4f81ce6494edebf00b51bdb615ee0f740"
-    },
-    {
-      "test": "R3-12: core/ directory is byte-for-byte identical to the LU6A09~1 baseline (every file, path-relative SHA-256 comparison)",
+      "test": "R3-12: every LOCKED core/ui/index.html file is byte-for-byte identical to the checked-in Production-lock manifest (70 files, SHA-256)",
       "result": "PASS",
       "evidence": "match"
     }

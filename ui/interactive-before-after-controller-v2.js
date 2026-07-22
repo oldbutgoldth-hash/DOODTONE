@@ -95,13 +95,30 @@ function _readCanvasDimensions(canvas) {
  * genuinely aligned rather than merely "close enough by luck".
  */
 function _computeAlignment(legacyDims, v2Dims) {
+  // DEPLOY GEOMETRY R1 — Phase A FIX A3 (root cause): when only one (or
+  // neither) side has rendered, geometry has genuinely NOT been
+  // compared yet — this is "not evaluated", never "evaluated and found
+  // to differ". The previous code hard-coded `sameAspectRatio: false`/
+  // `exactSourcePixelMatch: false` here, which is a false claim of a
+  // genuine mismatch and was the exact cause of the misleading
+  // "Alignment: Blocked geometry" text appearing whenever only Legacy
+  // (or only V2) had rendered — a state that has nothing to do with
+  // geometry at all. `null` is the honest tri-state value for "not yet
+  // evaluated"; only the real two-dims branch below may ever report an
+  // actual `true`/`false` verdict.
   if (!legacyDims || !v2Dims) {
     return {
       sourceLegacyWidth: legacyDims?.width ?? null, sourceLegacyHeight: legacyDims?.height ?? null,
       sourceV2Width: v2Dims?.width ?? null, sourceV2Height: v2Dims?.height ?? null,
       displayWidth: null, displayHeight: null,
-      sameAspectRatio: false, exactSourcePixelMatch: false, displayDimensionsNormalized: false,
+      sameAspectRatio: null, exactSourcePixelMatch: null, displayDimensionsNormalized: false,
       aspectRatioRelativeDifference: null, aspectRatioTolerance: ASPECT_RATIO_TOLERANCE,
+      // DEPLOY GEOMETRY R1 — Phase C5: spec-named aliases for the same
+      // values above (additive only — every pre-existing field name is
+      // unchanged) — "not yet evaluated" honestly reports null here too.
+      legacyPixelWidth: legacyDims?.width ?? null, legacyPixelHeight: legacyDims?.height ?? null,
+      v2PixelWidth: v2Dims?.width ?? null, v2PixelHeight: v2Dims?.height ?? null,
+      canonicalWidth: null, canonicalHeight: null,
     };
   }
   const legacyRatio = legacyDims.width / legacyDims.height;
@@ -143,6 +160,16 @@ function _computeAlignment(legacyDims, v2Dims) {
     displayWidth, displayHeight,
     sameAspectRatio: sameAspectRatio && (displayWidth !== null || exactSourcePixelMatch), exactSourcePixelMatch, displayDimensionsNormalized,
     aspectRatioRelativeDifference: relativeDiff, aspectRatioTolerance: ASPECT_RATIO_TOLERANCE,
+    // DEPLOY GEOMETRY R1 — Phase C5: spec-named aliases (additive only)
+    // for the required alignment-metadata shape. `canonicalWidth`/
+    // `canonicalHeight` are only ever reported when the two sides'
+    // SOURCE backing dimensions are literally identical
+    // (exactSourcePixelMatch) — there is no single "the" canonical size
+    // to report otherwise, so this never fabricates one.
+    legacyPixelWidth: legacyDims.width, legacyPixelHeight: legacyDims.height,
+    v2PixelWidth: v2Dims.width, v2PixelHeight: v2Dims.height,
+    canonicalWidth: exactSourcePixelMatch ? legacyDims.width : null,
+    canonicalHeight: exactSourcePixelMatch ? legacyDims.height : null,
   };
 }
 

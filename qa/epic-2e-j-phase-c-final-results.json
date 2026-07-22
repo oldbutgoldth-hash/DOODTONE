@@ -1,11 +1,11 @@
 {
   "suite": "EPIC 2E-J Phase C — Final Machine-Readable Result (COMBINED CLOSEOUT R3)",
-  "runId": "e5e39757-9422-44f7-98d2-635157c12864",
-  "generatedAt": "2026-07-22T17:15:05.391Z",
+  "runId": "5157e5da-c3b9-435a-9c6e-8a4b8d3dd887",
+  "generatedAt": "2026-07-22T19:56:08.066Z",
   "completed": true,
   "syntax": {
     "ran": true,
-    "total": 101,
+    "total": 108,
     "fail": 0
   },
   "focusedCoreRegression": {
@@ -26,11 +26,12 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "df951eda-72ff-43cc-9df9-a53d2fb913b4",
-      "generatedAt": "2026-07-22T17:12:17.003Z",
+      "runId": "54577035-0f9d-4e81-a009-243b85805c6d",
+      "generatedAt": "2026-07-22T19:55:52.693Z",
       "ok": false,
       "reasons": [
-        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence"
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
+        "result is missing a sourceHash — cannot prove freshness"
       ]
     },
     {
@@ -43,11 +44,12 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "d834d475-d905-4f93-acb2-4c321f97b91a",
-      "generatedAt": "2026-07-22T17:12:17.542Z",
+      "runId": "01033ba8-1faa-429c-a2ff-677df333c65b",
+      "generatedAt": "2026-07-22T19:55:53.215Z",
       "ok": false,
       "reasons": [
-        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence"
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
+        "result is missing a sourceHash — cannot prove freshness"
       ]
     },
     {
@@ -60,11 +62,12 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "fdb27a30-ddd4-4947-b511-0ca6d4a07671",
-      "generatedAt": "2026-07-22T17:12:24.255Z",
+      "runId": "93a4e25c-8e8b-4ddd-be98-e0cc04ea1a04",
+      "generatedAt": "2026-07-22T19:55:53.757Z",
       "ok": false,
       "reasons": [
-        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence"
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
+        "result is missing a sourceHash — cannot prove freshness"
       ]
     },
     {
@@ -77,14 +80,61 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "9893fadb-858c-4216-a89f-4cb4d9e637a9",
-      "generatedAt": "2026-07-22T17:12:18.609Z",
+      "runId": "35902fec-fd7a-40e0-9c4f-08fbe3f0fb20",
+      "generatedAt": "2026-07-22T19:55:54.265Z",
       "ok": false,
       "reasons": [
-        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (CONDITIONAL_PASS/PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence"
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (CONDITIONAL_PASS/PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
+        "result is missing a sourceHash — cannot prove freshness"
+      ]
+    },
+    {
+      "key": "previewGeometryStatic",
+      "label": "Preview Geometry Static",
+      "decision": "PASS",
+      "summary": {
+        "total": 35,
+        "pass": 35,
+        "fail": 0,
+        "notTested": 0
+      },
+      "runId": "bf7ce5be-91fe-4c24-bb9c-3b5c707f7e17",
+      "generatedAt": "2026-07-22T19:56:03.234Z",
+      "ok": true,
+      "reasons": []
+    },
+    {
+      "key": "previewGeometryBrowser",
+      "label": "Preview Geometry local Browser suite",
+      "decision": "BROWSER_BINARY_UNAVAILABLE",
+      "summary": {
+        "total": 1,
+        "pass": 0,
+        "fail": 0,
+        "notTested": 1
+      },
+      "runId": "439fee1b-2506-4574-845d-a3eb7bda6cce",
+      "generatedAt": "2026-07-22T19:56:03.862Z",
+      "ok": false,
+      "reasons": [
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
+        "result is missing a sourceHash — cannot prove freshness"
       ]
     }
   ],
+  "deployGate": {
+    "key": "deployPreviewGeometry",
+    "label": "Deploy Preview Geometry",
+    "decision": "DEPLOY_URL_REQUIRED",
+    "deployUrl": null,
+    "screenshotsGenerated": [],
+    "runId": "48547350-b266-4cf4-8cf2-8fb6733ca444",
+    "generatedAt": "2026-07-22T19:56:03.955Z",
+    "ok": false,
+    "reasons": [
+      "decision is \"DEPLOY_URL_REQUIRED\", not PASS_DEPLOY_PREVIEW_GEOMETRY"
+    ]
+  },
   "manualTestsNotPerformed": [
     "Physical touch hardware",
     "Real screen-reader verification (NVDA/JAWS/VoiceOver)",
@@ -94,10 +144,12 @@
   "controlledTestState": "disabled",
   "decision": "BLOCKED_AUTOMATED_ACCEPTANCE_NOT_MET",
   "blockingReasons": [
-    "Live App: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
-    "Observation Smoke: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
-    "Step 7B-A: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
-    "Step 7B-B: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (CONDITIONAL_PASS/PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence"
+    "Live App: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
+    "Observation Smoke: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
+    "Step 7B-A: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
+    "Step 7B-B: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (CONDITIONAL_PASS/PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
+    "Preview Geometry local Browser suite: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
+    "Deploy Preview Geometry: decision is \"DEPLOY_URL_REQUIRED\", not PASS_DEPLOY_PREVIEW_GEOMETRY"
   ],
   "finalDecisionNarrative": "NOT a CONDITIONAL_PASS. One or more automated acceptance gates were not satisfied by current, fresh evidence in this run — see blockingReasons. This is reported honestly rather than reusing/copying forward any older Final PASS/CONDITIONAL_PASS result."
 }

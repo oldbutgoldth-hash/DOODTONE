@@ -404,65 +404,52 @@ async function main() {
     record('R3-11: epic-2e-j-phase-c-live-app-test.mjs logs "Live App Final Decision" (FIX C1)', hasCorrectLabel, `present=${hasCorrectLabel}`);
     record('R3-11: epic-2e-j-phase-c-live-app-test.mjs no longer contains the incorrect "Step 7A Final Decision" label', hasNoStaleLabel, `present(no stale label)=${hasNoStaleLabel}`);
 
-    // ── R3-12: no Production file changed — genuine hash comparison ──
-    // against the LU6A09~1 baseline this entire R3 round continues from
-    // (the same baseline confirmed, earlier in this campaign, to be the
-    // previously-delivered R2_v2 package via matching file listings/
-    // timestamps). A real byte-for-byte SHA-256 comparison, not a
-    // timestamp/existence-only check.
-    const baselineRoot = path.resolve(PROJECT_ROOT, '..', '..', 'LU6A09~1');
-    const PRODUCTION_LOCKED_FILES = [
-      'ui/app.js',
-      'ui/interactive-preview-observation-controller-v2.js',
-      'ui/interactive-preview-observation-renderer-v2.js',
-      'ui/interactive-preview-observation-session-v2.js',
-      'index.html',
-    ];
+    // ── R3-12 (DEPLOY GEOMETRY R1 — Phase H2 rewrite): no LOCKED
+    // Production file changed — genuine byte-for-byte SHA-256
+    // comparison against the CHECKED-IN, portable
+    // qa/baselines/lufa42-production-lock-manifest.json, replacing the
+    // previous machine-specific "compare against a sibling LU6A09~1
+    // directory" approach (which only ever worked on the one
+    // machine/session that happened to have that exact sibling
+    // directory present, and silently degraded to a single NOT_TESTED-
+    // style FAIL everywhere else — never portable). The manifest is
+    // part of this repository (qa/baselines/), so this check now works
+    // identically on any machine.
     async function sha256File(p) {
       const buf = await readFile(p);
       return createHash('sha256').update(buf).digest('hex');
     }
-    let baselineReachable = true;
+    let lockManifest = null;
+    let lockManifestReachable = true;
+    const lockManifestPath = path.join(PROJECT_ROOT, 'qa', 'baselines', 'lufa42-production-lock-manifest.json');
     try {
-      await readFile(path.join(baselineRoot, 'index.html'));
+      lockManifest = JSON.parse(await readFile(lockManifestPath, 'utf8'));
     } catch {
-      baselineReachable = false;
+      lockManifestReachable = false;
     }
-    if (baselineReachable) {
-      for (const relFile of PRODUCTION_LOCKED_FILES) {
+    record('R3-12: qa/baselines/lufa42-production-lock-manifest.json is present and parses as JSON (checked-in, portable — never a machine-specific sibling directory)', lockManifestReachable, lockManifestPath);
+    if (lockManifestReachable && lockManifest && typeof lockManifest.files === 'object') {
+      const lockedFilePaths = Object.keys(lockManifest.files);
+      record('R3-12: Production-lock manifest declares a non-empty locked-file set', lockedFilePaths.length > 0, `lockedFileCount=${lockedFilePaths.length}`);
+      let mismatchCount = 0;
+      let missingCount = 0;
+      const mismatchedFiles = [];
+      for (const relFile of lockedFilePaths) {
         try {
-          const [baseHash, curHash] = await Promise.all([
-            sha256File(path.join(baselineRoot, relFile)),
-            sha256File(path.join(PROJECT_ROOT, relFile)),
-          ]);
-          record(`R3-12: ${relFile} is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)`, baseHash === curHash, `baseHash=${baseHash}, curHash=${curHash}`);
-        } catch (hashErr) {
-          record(`R3-12: ${relFile} is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)`, false, `could not hash: ${hashErr.message}`);
+          const curHash = await sha256File(path.join(PROJECT_ROOT, relFile));
+          if (curHash !== lockManifest.files[relFile]) { mismatchCount++; mismatchedFiles.push(relFile); }
+        } catch {
+          missingCount++;
+          mismatchedFiles.push(relFile);
         }
       }
-      // core/ directory: hash every file, sorted by a path relative to
-      // each root (never the absolute path, which necessarily differs
-      // between the baseline and current directories).
-      async function hashDirRelative(root, subdir) {
-        const out = [];
-        async function walk(dir) {
-          const entries = await readdir(dir, { withFileTypes: true });
-          for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-            const full = path.join(dir, entry.name);
-            if (entry.isDirectory()) { await walk(full); } else if (entry.isFile()) {
-              const rel = path.relative(root, full);
-              out.push(`${rel}:${await sha256File(full)}`);
-            }
-          }
-        }
-        await walk(path.join(root, subdir));
-        return out.sort().join('\n');
-      }
-      const baselineCoreDigest = await hashDirRelative(baselineRoot, 'core');
-      const currentCoreDigest = await hashDirRelative(PROJECT_ROOT, 'core');
-      record('R3-12: core/ directory is byte-for-byte identical to the LU6A09~1 baseline (every file, path-relative SHA-256 comparison)', baselineCoreDigest === currentCoreDigest, baselineCoreDigest === currentCoreDigest ? 'match' : 'MISMATCH DETECTED');
-    } else {
-      record('R3-12: LU6A09~1 baseline reachable for Production-lock hash comparison', false, `baseline not reachable at ${baselineRoot} — cannot perform genuine hash comparison in this environment`);
+      record(
+        `R3-12: every LOCKED core/ui/index.html file is byte-for-byte identical to the checked-in Production-lock manifest (${lockedFilePaths.length} files, SHA-256)`,
+        mismatchCount === 0 && missingCount === 0,
+        mismatchCount === 0 && missingCount === 0 ? 'match' : `MISMATCH DETECTED: ${JSON.stringify(mismatchedFiles)} (mismatched=${mismatchCount}, missing=${missingCount})`
+      );
+    } else if (lockManifestReachable) {
+      record('R3-12: Production-lock manifest has a valid "files" map', false, 'manifest.files is missing or not an object');
     }
 
   } finally {

@@ -56,6 +56,10 @@ const UNAVAILABLE_REASON_MESSAGE = {
   source: 'Observation is unavailable because the preview sources are incomplete.',
   'missing-generation': 'Observation is unavailable because the current analysis generation is unknown.',
   'not-ready': 'Observation is available after both previews are ready.',
+  // DEPLOY GEOMETRY R1 — Phase D: must match the controller's own
+  // UNAVAILABLE_REASON_MESSAGE['pixel-mismatch'] exactly (same
+  // rationale documented there).
+  'pixel-mismatch': 'Observation is unavailable because exact pixel dimensions between the two previews have not been proven.',
 };
 const SAFETY_BLOCKED_MESSAGE = 'Observation is unavailable while the comparison is blocked by a safety anomaly.';
 // Must match the controller's own PROVIDER_UNCONFIRMED_WARNING text

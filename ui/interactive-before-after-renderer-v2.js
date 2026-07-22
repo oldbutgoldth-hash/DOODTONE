@@ -415,9 +415,14 @@ export function renderInteractiveBeforeAfterStatus(container, state) {
 
     if (a && rawSourceLegacyWidth !== null && rawSourceV2Width !== null) {
       let alignLabel, alignColor;
+      // DEPLOY GEOMETRY R1 — Phase A FIX A3: "Blocked geometry" is
+      // reserved for a genuine evaluated mismatch (a real Boolean
+      // `false`) — never shown merely because geometry has not been
+      // evaluated yet (honest `null`).
       if (rawSameAspectRatio === false) { alignLabel = 'Alignment: Blocked geometry'; alignColor = TONE_COLOR.danger; }
       else if (rawDisplayDimensionsNormalized === true) { alignLabel = 'Alignment: Normalized once'; alignColor = TONE_COLOR.neutral; }
       else if (rawExactSourcePixelMatch === true) { alignLabel = 'Alignment: Exact dimensions'; alignColor = TONE_COLOR.success; }
+      else if (rawSameAspectRatio === null && rawExactSourcePixelMatch === null) { alignLabel = 'Alignment: Not evaluated — both previews are required'; alignColor = TONE_COLOR.neutral; }
       else { alignLabel = 'Alignment: Unknown'; alignColor = TONE_COLOR.neutral; }
       sourceStatusRowEl.appendChild(badge(alignLabel, alignColor));
     }

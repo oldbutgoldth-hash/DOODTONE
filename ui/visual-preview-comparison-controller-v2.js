@@ -227,9 +227,9 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
   }
 
   /**
-   * @param {{ source: (HTMLImageElement|ImageBitmap|HTMLCanvasElement|OffscreenCanvas), renderPlan: object, analysisGenerationId: (number|string|null), signal?: AbortSignal }} input
+   * @param {{ source: (HTMLImageElement|ImageBitmap|HTMLCanvasElement|OffscreenCanvas), renderPlan: object, analysisGenerationId: (number|string|null), signal?: AbortSignal, v2BlockerCode?: (string|null) }} input
    */
-  async function render({ source, renderPlan, analysisGenerationId, signal } = {}) {
+  async function render({ source, renderPlan, analysisGenerationId, signal, v2BlockerCode = null } = {}) {
     if (disposed) return _unavailableState(analysisGenerationId, ['Visual Preview Comparison controller has been disposed.']);
     const mySession = ++sessionId;
 
@@ -291,15 +291,27 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
     if (legacyEligible && hasSource && !hasLegacyCanvas) blockers.push('Legacy preview target canvas is unavailable.');
     if (v2Eligible && hasSource && !hasV2Canvas) blockers.push('V2 preview target canvas is unavailable.');
 
+    // DEPLOY GEOMETRY R1 — Phase C4 (exact output dimensions): compute
+    // the shared device-pixel-ratio ONCE here, before either sequential
+    // render call, and pass the SAME value to both — Legacy and V2 must
+    // never independently re-read `window.devicePixelRatio` at two
+    // different points in time, since the two render() calls are
+    // genuinely sequential (awaited one after another) and a DPR change
+    // in between (display drag, zoom) would otherwise make the two
+    // sides' backing pixel dimensions diverge even though they share
+    // the identical source and constraints.
+    const sharedDevicePixelRatio = (typeof window !== 'undefined' && Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0)
+      ? window.devicePixelRatio : 1;
+
     // Sequential rendering: Legacy first, release, then V2 — never two
     // large staging buffers held simultaneously (mobile-memory safety).
     if (legacyEligible && hasSource && hasLegacyCanvas) {
-      legacyResult = await legacyRenderer.render({ source, canvas: legacyCanvas, renderPlan: rp, side: 'legacy', signal });
+      legacyResult = await legacyRenderer.render({ source, canvas: legacyCanvas, renderPlan: rp, side: 'legacy', signal, sharedDevicePixelRatio });
       if (mySession !== sessionId) return _cancelledState(analysisGenerationId);
     }
 
     if (v2Eligible && hasSource && hasV2Canvas) {
-      v2Result = await v2Renderer.render({ source, canvas: v2Canvas, renderPlan: rp, side: 'v2', signal });
+      v2Result = await v2Renderer.render({ source, canvas: v2Canvas, renderPlan: rp, side: 'v2', signal, sharedDevicePixelRatio });
       if (mySession !== sessionId) return _cancelledState(analysisGenerationId);
     }
 
@@ -347,6 +359,14 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
         legacyEligible, v2Eligible, v2Contradictory,
         selectedProductionSource, allowExport, allowProductionWrite,
         v2ExportEligible, v2AppliedToProduction,
+        // DEPLOY GEOMETRY R1 — Phase A FIX A1/A4: a bounded, stable
+        // diagnostic code string (or null), passed through unchanged
+        // from the caller — never computed or altered by this
+        // controller, which has no access to the Preview Sandbox
+        // object itself (only the Render Plan). Used downstream purely
+        // to select a more specific, honest UI message; never affects
+        // eligibility or rendering.
+        v2BlockerCode: typeof v2BlockerCode === 'string' ? v2BlockerCode : null,
       },
     };
 

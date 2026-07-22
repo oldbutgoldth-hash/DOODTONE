@@ -197,7 +197,7 @@ export function ensureVisualPreviewComparisonLayout(container) {
   container.replaceChildren(root);
 }
 
-function _renderSidePanel(side, sideResult, selectedProductionSource) {
+function _renderSidePanel(side, sideResult, selectedProductionSource, v2BlockerCode) {
   const badgesEl = document.getElementById(`vpr${side}Badges`);
   const placeholderEl = document.getElementById(`vpr${side}Placeholder`);
   const statusLineEl = document.getElementById(`vpr${side}StatusLine`);
@@ -233,8 +233,17 @@ function _renderSidePanel(side, sideResult, selectedProductionSource) {
     placeholderEl.style.display = 'none';
   } else {
     placeholderEl.style.display = 'flex';
+    // DEPLOY GEOMETRY R1 — Phase A FIX A4: when V2 is unavailable ONLY
+    // because Human Review is incomplete, state the exact, bounded
+    // reason rather than a generic "unavailable" — never label an
+    // ordinary review-incomplete state a geometry failure, and never
+    // automatically approve Review items to work around it.
+    const isReviewIncompleteV2 = side !== 'Legacy' && v2BlockerCode === 'REVIEW_INCOMPLETE';
     let msg;
-    if (!sideResult) msg = side === 'Legacy' ? 'Legacy preview plan is unavailable.' : 'V2 preview plan is unavailable.';
+    if (isReviewIncompleteV2 && (!sideResult || state === 'unavailable')) {
+      msg = 'Complete Human Review to prepare the Controlled V2 preview.';
+    }
+    else if (!sideResult) msg = side === 'Legacy' ? 'Legacy preview plan is unavailable.' : 'V2 preview plan is unavailable.';
     else if (state === 'blocked') msg = 'Preview rendering is blocked by current safety evidence.';
     else if (state === 'cancelled') msg = 'Preview render was cancelled because a newer analysis is available.';
     else if (state === 'failed') msg = 'Preview rendering failed. The source image and production output were not changed.';
@@ -260,7 +269,17 @@ function _renderSidePanel(side, sideResult, selectedProductionSource) {
 
   const visualAdjustmentsApplied = sideResult?.metadata?.visualAdjustmentsApplied;
   if (rendered && visualAdjustmentsApplied === false) {
-    warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: 'Preview rendered from the source image, but no supported visual adjustments were applied.' }));
+    // DEPLOY GEOMETRY R1 — Phase C2: for the V2 side, this is the
+    // valid Identity Preview state (available + renderable +
+    // previewOnly + zero supported adjustments) — use the spec's exact
+    // required wording. This branch only runs when `rendered` is
+    // already true (the "Unavailable" placeholder above is hidden in
+    // that case, and STATE_LABEL['rendered'] is 'Rendered') — an
+    // Identity Preview must never be described as Unavailable.
+    const identityText = side !== 'Legacy'
+      ? 'Identity preview — no supported browser adjustment was applied'
+      : 'Preview rendered from the source image, but no supported visual adjustments were applied.';
+    warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: identityText }));
   }
   _safeArray(sideResult?.warnings).slice(0, 4).forEach(w => {
     const t = _safeText(w);
@@ -394,7 +413,13 @@ export function renderVisualPreviewComparison(container, comparisonState) {
   }
 
   _renderSidePanel('Legacy', cs.legacy, selectedProductionSource);
-  _renderSidePanel('V2', cs.v2);
+  // DEPLOY GEOMETRY R1 — Phase A FIX A1/A4: md.v2BlockerCode is a
+  // bounded, stable diagnostic code (never a raw object/exception)
+  // computed upstream (ui/app.js, which has access to both the Render
+  // Plan and the Preview Sandbox) and threaded through in metadata —
+  // used ONLY to select a more specific, honest placeholder message
+  // for the V2 side; never changes eligibility/rendering itself.
+  _renderSidePanel('V2', cs.v2, undefined, md.v2BlockerCode);
 
   const overallMessagesEl = document.getElementById('vprOverallMessages');
   if (overallMessagesEl) {

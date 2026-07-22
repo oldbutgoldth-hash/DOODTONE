@@ -1,0 +1,85 @@
+{
+  "markerSampleRelative": {
+    "x": 0.15,
+    "y": 0.15
+  },
+  "colorMatchToleranceRGB": 60,
+  "markerColors": {
+    "red": [
+      255,
+      0,
+      0
+    ],
+    "green": [
+      0,
+      170,
+      0
+    ],
+    "blue": [
+      0,
+      0,
+      255
+    ],
+    "yellow": [
+      230,
+      200,
+      0
+    ]
+  },
+  "fixtures": [
+    {
+      "filename": "landscape-orientation-1.jpg",
+      "encodedPixelWidth": 800,
+      "encodedPixelHeight": 600,
+      "exifOrientation": 1,
+      "expectedDecodedWidth": 800,
+      "expectedDecodedHeight": 600,
+      "expectedVisualTopLeftMarker": "red"
+    },
+    {
+      "filename": "portrait-orientation-1.jpg",
+      "encodedPixelWidth": 600,
+      "encodedPixelHeight": 800,
+      "exifOrientation": 1,
+      "expectedDecodedWidth": 600,
+      "expectedDecodedHeight": 800,
+      "expectedVisualTopLeftMarker": "red"
+    },
+    {
+      "filename": "landscape-orientation-3.jpg",
+      "encodedPixelWidth": 800,
+      "encodedPixelHeight": 600,
+      "exifOrientation": 3,
+      "expectedDecodedWidth": 800,
+      "expectedDecodedHeight": 600,
+      "expectedVisualTopLeftMarker": "red"
+    },
+    {
+      "filename": "landscape-matrix-orientation-6.jpg",
+      "encodedPixelWidth": 600,
+      "encodedPixelHeight": 800,
+      "exifOrientation": 6,
+      "expectedDecodedWidth": 800,
+      "expectedDecodedHeight": 600,
+      "expectedVisualTopLeftMarker": "red"
+    },
+    {
+      "filename": "portrait-matrix-orientation-8.jpg",
+      "encodedPixelWidth": 800,
+      "encodedPixelHeight": 600,
+      "exifOrientation": 8,
+      "expectedDecodedWidth": 600,
+      "expectedDecodedHeight": 800,
+      "expectedVisualTopLeftMarker": "red"
+    },
+    {
+      "filename": "landscape-no-exif.png",
+      "encodedPixelWidth": 800,
+      "encodedPixelHeight": 600,
+      "exifOrientation": null,
+      "expectedDecodedWidth": 800,
+      "expectedDecodedHeight": 600,
+      "expectedVisualTopLeftMarker": "red"
+    }
+  ]
+}

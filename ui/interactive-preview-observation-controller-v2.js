@@ -177,6 +177,14 @@ const UNAVAILABLE_REASON_MESSAGE = {
   source: 'Observation is unavailable because the preview sources are incomplete.',
   'missing-generation': 'Observation is unavailable because the current analysis generation is unknown.',
   'not-ready': 'Observation is available after both previews are ready.',
+  // DEPLOY GEOMETRY R1 — Phase D: a specific, honest gate code for the
+  // one real cause that can make Interactive Before/After report
+  // 'ready' while Observation's own stricter gate still refuses —
+  // exact source pixel dimensions were not proven identical (IBA's own
+  // 'ready' state tolerates a one-time display-size normalization,
+  // which is not sufficient for Observation per this task's explicit
+  // requirement). Never collapsed into the generic 'not-ready' text.
+  'pixel-mismatch': 'Observation is unavailable because exact pixel dimensions between the two previews have not been proven.',
 };
 const SAFETY_BLOCKED_MESSAGE = 'Observation is unavailable while the comparison is blocked by a safety anomaly.';
 const STALE_WARNING_MESSAGE = 'The previous observation was cleared because a newer analysis is active.';
@@ -369,6 +377,13 @@ function deriveObservationStateV2(input) {
     else if (interactiveState === 'partial') reason = 'partial';
     else if (interactiveState === 'failed') reason = 'failed';
     else if (interactiveState === 'cancelled') reason = 'cancelled';
+    // DEPLOY GEOMETRY R1 — Phase D: Interactive Before/After reports
+    // 'ready' (its own slider-readiness gate, which tolerates a
+    // one-time display-size normalization) while Observation's own
+    // stricter caller-supplied `interactiveReady` remains false — the
+    // ONLY real cause the caller (ui/app.js) ever produces this exact
+    // combination for is an unproven exact-pixel-dimension match.
+    else if (interactiveState === 'ready' && !interactiveReady) reason = 'pixel-mismatch';
     else reason = 'not-ready';
 
     return _buildState({

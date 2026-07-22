@@ -1,0 +1,194 @@
+{
+  "suite": "DEPLOY GEOMETRY R1 — Preview Geometry Static test",
+  "runId": "bf7ce5be-91fe-4c24-bb9c-3b5c707f7e17",
+  "startedAt": "2026-07-22T19:56:03.126Z",
+  "completedAt": "2026-07-22T19:56:03.234Z",
+  "completed": true,
+  "sourceHash": "b7a3f5b7a4baea1b058ff13a7e092083d679874ad59488a928d4f24ac9ff9fdc",
+  "generatedAt": "2026-07-22T19:56:03.234Z",
+  "summary": {
+    "total": 35,
+    "pass": 35,
+    "fail": 0,
+    "notTested": 0
+  },
+  "results": [
+    {
+      "test": "manifest.json is present and parses as JSON",
+      "result": "PASS",
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_f1r/LUMIXA_AI_EPIC_2E_J_PHASE_C_RECOVERED_DEADCODE_CLEAN/qa/fixtures/preview-geometry/manifest.json"
+    },
+    {
+      "test": "manifest declares exactly the 6 required fixtures",
+      "result": "PASS",
+      "evidence": "declared=[\"landscape-orientation-1.jpg\",\"portrait-orientation-1.jpg\",\"landscape-orientation-3.jpg\",\"landscape-matrix-orientation-6.jpg\",\"portrait-matrix-orientation-8.jpg\",\"landscape-no-exif.png\"]"
+    },
+    {
+      "test": "manifest entry for landscape-orientation-1.jpg has all required fields",
+      "result": "PASS",
+      "evidence": "missing=[]"
+    },
+    {
+      "test": "manifest entry for portrait-orientation-1.jpg has all required fields",
+      "result": "PASS",
+      "evidence": "missing=[]"
+    },
+    {
+      "test": "manifest entry for landscape-orientation-3.jpg has all required fields",
+      "result": "PASS",
+      "evidence": "missing=[]"
+    },
+    {
+      "test": "manifest entry for landscape-matrix-orientation-6.jpg has all required fields",
+      "result": "PASS",
+      "evidence": "missing=[]"
+    },
+    {
+      "test": "manifest entry for portrait-matrix-orientation-8.jpg has all required fields",
+      "result": "PASS",
+      "evidence": "missing=[]"
+    },
+    {
+      "test": "manifest entry for landscape-no-exif.png has all required fields",
+      "result": "PASS",
+      "evidence": "missing=[]"
+    },
+    {
+      "test": "landscape-orientation-1.jpg: file exists and is readable",
+      "result": "PASS",
+      "evidence": "size=12654 bytes"
+    },
+    {
+      "test": "landscape-orientation-1.jpg: independently-parsed EXIF Orientation matches manifest",
+      "result": "PASS",
+      "evidence": "manifest=1, independentParse=1"
+    },
+    {
+      "test": "landscape-orientation-1.jpg: bounded synthetic fixture size (never a real photo)",
+      "result": "PASS",
+      "evidence": "size=12654 bytes (limit 512000)"
+    },
+    {
+      "test": "portrait-orientation-1.jpg: file exists and is readable",
+      "result": "PASS",
+      "evidence": "size=12556 bytes"
+    },
+    {
+      "test": "portrait-orientation-1.jpg: independently-parsed EXIF Orientation matches manifest",
+      "result": "PASS",
+      "evidence": "manifest=1, independentParse=1"
+    },
+    {
+      "test": "portrait-orientation-1.jpg: bounded synthetic fixture size (never a real photo)",
+      "result": "PASS",
+      "evidence": "size=12556 bytes (limit 512000)"
+    },
+    {
+      "test": "landscape-orientation-3.jpg: file exists and is readable",
+      "result": "PASS",
+      "evidence": "size=12674 bytes"
+    },
+    {
+      "test": "landscape-orientation-3.jpg: independently-parsed EXIF Orientation matches manifest",
+      "result": "PASS",
+      "evidence": "manifest=3, independentParse=3"
+    },
+    {
+      "test": "landscape-orientation-3.jpg: bounded synthetic fixture size (never a real photo)",
+      "result": "PASS",
+      "evidence": "size=12674 bytes (limit 512000)"
+    },
+    {
+      "test": "landscape-matrix-orientation-6.jpg: file exists and is readable",
+      "result": "PASS",
+      "evidence": "size=12752 bytes"
+    },
+    {
+      "test": "landscape-matrix-orientation-6.jpg: independently-parsed EXIF Orientation matches manifest",
+      "result": "PASS",
+      "evidence": "manifest=6, independentParse=6"
+    },
+    {
+      "test": "landscape-matrix-orientation-6.jpg: bounded synthetic fixture size (never a real photo)",
+      "result": "PASS",
+      "evidence": "size=12752 bytes (limit 512000)"
+    },
+    {
+      "test": "portrait-matrix-orientation-8.jpg: file exists and is readable",
+      "result": "PASS",
+      "evidence": "size=12514 bytes"
+    },
+    {
+      "test": "portrait-matrix-orientation-8.jpg: independently-parsed EXIF Orientation matches manifest",
+      "result": "PASS",
+      "evidence": "manifest=8, independentParse=8"
+    },
+    {
+      "test": "portrait-matrix-orientation-8.jpg: bounded synthetic fixture size (never a real photo)",
+      "result": "PASS",
+      "evidence": "size=12514 bytes (limit 512000)"
+    },
+    {
+      "test": "landscape-no-exif.png: file exists and is readable",
+      "result": "PASS",
+      "evidence": "size=2836 bytes"
+    },
+    {
+      "test": "landscape-no-exif.png: independently-parsed EXIF Orientation matches manifest",
+      "result": "PASS",
+      "evidence": "manifest=null, independentParse=null"
+    },
+    {
+      "test": "landscape-no-exif.png: bounded synthetic fixture size (never a real photo)",
+      "result": "PASS",
+      "evidence": "size=2836 bytes (limit 512000)"
+    },
+    {
+      "test": "EXIF parser fails closed on a truncated APP1 segment",
+      "result": "PASS",
+      "evidence": "threw as expected"
+    },
+    {
+      "test": "EXIF parser returns null (not an error) for a non-JPEG buffer",
+      "result": "PASS",
+      "evidence": "PNG/other-format buffers are honestly \"no EXIF\", not a parse failure"
+    },
+    {
+      "test": "Decision self-test: all PASS",
+      "result": "PASS",
+      "evidence": "expected=PASS, got=PASS"
+    },
+    {
+      "test": "Decision self-test: one FAIL",
+      "result": "PASS",
+      "evidence": "expected=FAIL, got=FAIL"
+    },
+    {
+      "test": "Decision self-test: unexpected NOT_TESTED",
+      "result": "PASS",
+      "evidence": "expected=FAIL, got=FAIL"
+    },
+    {
+      "test": "Decision self-test: permitted NOT_TESTED",
+      "result": "PASS",
+      "evidence": "expected=PASS, got=PASS"
+    },
+    {
+      "test": "Decision self-test: malformed row (boolean result)",
+      "result": "PASS",
+      "evidence": "expected=FAIL, got=FAIL"
+    },
+    {
+      "test": "Decision self-test: empty result set",
+      "result": "PASS",
+      "evidence": "expected=FAIL, got=FAIL"
+    },
+    {
+      "test": "epic-2e-j-preview-geometry-browser-test.mjs passes node --check",
+      "result": "PASS",
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_f1r/LUMIXA_AI_EPIC_2E_J_PHASE_C_RECOVERED_DEADCODE_CLEAN/qa/epic-2e-j-preview-geometry-browser-test.mjs"
+    }
+  ],
+  "decision": "PASS",
+  "decisionReasons": []
+}

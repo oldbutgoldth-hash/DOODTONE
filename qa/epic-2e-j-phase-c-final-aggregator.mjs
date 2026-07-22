@@ -39,11 +39,17 @@
  * Output: qa/epic-2e-j-phase-c-final-results.json
  */
 
-import { readFile, writeFile, stat } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateRunId, computeSourceHash, writeResultAtomic } from './helpers/playwright-lumixa-test-runtime.mjs';
+// DEPLOY GEOMETRY R1 — Phase H1: sourceHash is now the PRIMARY
+// freshness proof (see phase-c-suite-source-manifest.mjs for the full
+// root-cause rationale) — replaces the previous mtime-vs-generatedAt
+// comparison, which produced false STALE rejections after a ZIP
+// extraction reset every file's mtime.
+import { computeCurrentSourceHash } from './phase-c-suite-source-manifest.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -94,7 +100,37 @@ const GATE_SUITES = [
     },
     acceptanceLabel: 'FAIL 0, NOT_TESTED exactly 1 (Physical touch hardware only), decision=CONDITIONAL_PASS',
   },
+  // DEPLOY GEOMETRY R1 — Phase H3: new gates for this EPIC.
+  {
+    key: 'previewGeometryStatic',
+    label: 'Preview Geometry Static',
+    resultFile: 'epic-2e-j-preview-geometry-static-results.json',
+    sourceFile: 'epic-2e-j-preview-geometry-static-test.mjs',
+    validDecisions: ['PASS', 'FAIL'],
+    acceptance: (r) => r.summary?.fail === 0 && r.summary?.notTested === 0 && r.decision === 'PASS',
+    acceptanceLabel: 'FAIL 0, NOT_TESTED 0, decision=PASS',
+  },
+  {
+    key: 'previewGeometryBrowser',
+    label: 'Preview Geometry local Browser suite',
+    resultFile: 'epic-2e-j-preview-geometry-browser-results.json',
+    sourceFile: 'epic-2e-j-preview-geometry-browser-test.mjs',
+    validDecisions: ['PASS', 'FAIL'],
+    acceptance: (r) => r.summary?.fail === 0 && r.summary?.notTested === 0 && r.decision === 'PASS',
+    acceptanceLabel: 'FAIL 0, NOT_TESTED 0, decision=PASS — every geometry fixture PASS, V2 Unavailable count 0, Exact dimensions for all fixtures, Observation enabled for all fixtures',
+  },
 ];
+
+// DEPLOY GEOMETRY R1 — Phase G/H3: the Deploy Preview Geometry suite
+// uses its OWN bounded decision vocabulary (never the generic PASS/
+// FAIL two-value set) — read and reported separately from GATE_SUITES,
+// never forced through the same acceptance-function shape.
+const DEPLOY_GATE = {
+  key: 'deployPreviewGeometry',
+  label: 'Deploy Preview Geometry',
+  resultFile: 'epic-2e-j-deploy-preview-geometry-results.json',
+  sourceFile: 'epic-2e-j-deploy-preview-geometry-test.mjs',
+};
 
 function isMalformedRow(row) {
   const testOk = row && typeof row.test === 'string' && row.test.trim().length > 0;
@@ -105,7 +141,6 @@ function isMalformedRow(row) {
 
 async function evaluateGateSuite(gate) {
   const resultPath = path.join(PROJECT_ROOT, 'qa', gate.resultFile);
-  const sourcePath = path.join(PROJECT_ROOT, 'qa', gate.sourceFile);
   const reasons = [];
   let resultObj = null;
   try {
@@ -126,16 +161,30 @@ async function evaluateGateSuite(gate) {
     if (malformedCount > 0) reasons.push(`${malformedCount} malformed result row(s)`);
   }
 
-  // Freshness: the result must not predate the suite's own source file.
-  try {
-    const [resultStat, sourceStat] = await Promise.all([stat(resultPath), stat(sourcePath)]);
-    const resultTimestamp = new Date(resultObj.generatedAt ?? resultObj.completedAt ?? 0).getTime();
-    if (Number.isFinite(resultTimestamp) && sourceStat.mtimeMs > resultTimestamp) {
-      reasons.push(`result (generatedAt=${resultObj.generatedAt ?? resultObj.completedAt}) predates its own source file's last modification (mtime=${sourceStat.mtime.toISOString()}) — STALE, must be rerun`);
+  // DEPLOY GEOMETRY R1 — Phase H1 (root cause fix): freshness is now
+  // proven by an EXACT sourceHash match against a CURRENT recomputation
+  // from the shared suite-source manifest — never by comparing the
+  // result's generatedAt timestamp against the source file's on-disk
+  // mtime. The previous mtime-based check produced a FALSE "STALE, must
+  // be rerun" rejection after a ZIP extraction, because ZIP tools
+  // frequently reset every extracted file's mtime to the moment of
+  // extraction (or otherwise fail to preserve a trustworthy relative
+  // ordering) — a genuinely fresh, exactly-matching result could
+  // "predate" its own just-extracted, byte-identical source file purely
+  // from filesystem noise, never from an actual source change. An exact
+  // sourceHash match is authoritative regardless of what any mtime
+  // currently reports; mtime is no longer read or compared at all here.
+  if (typeof resultObj.sourceHash !== 'string' || resultObj.sourceHash.trim().length === 0) {
+    reasons.push('result is missing a sourceHash — cannot prove freshness');
+  } else {
+    try {
+      const currentHash = await computeCurrentSourceHash(gate.key, PROJECT_ROOT);
+      if (currentHash !== resultObj.sourceHash) {
+        reasons.push(`sourceHash mismatch: result.sourceHash=${resultObj.sourceHash}, current recomputed hash=${currentHash} — the suite's source (or a shared helper it depends on) has changed since this result was generated; STALE, must be rerun`);
+      }
+    } catch (hashErr) {
+      reasons.push(`could not recompute current sourceHash for freshness verification: ${hashErr.message}`);
     }
-    void resultStat;
-  } catch (statErr) {
-    reasons.push(`could not verify freshness against source mtime: ${statErr.message}`);
   }
 
   // Only evaluate the suite-specific acceptance criteria once the result
@@ -192,19 +241,63 @@ async function runFreshSyntaxCheck() {
   }
 }
 
+/**
+ * DEPLOY GEOMETRY R1 — Phase G/H3: reads the Deploy Preview Geometry
+ * suite's result using its OWN bounded decision vocabulary (never
+ * forced through the generic PASS/FAIL GATE_SUITES shape). Applies the
+ * same sourceHash freshness proof as every other gate.
+ */
+async function evaluateDeployGate() {
+  const resultPath = path.join(PROJECT_ROOT, 'qa', DEPLOY_GATE.resultFile);
+  let resultObj = null;
+  try {
+    resultObj = JSON.parse(await readFile(resultPath, 'utf8'));
+  } catch (readErr) {
+    return { ...DEPLOY_GATE, ok: false, reasons: [`could not read/parse result file: ${readErr.message}`], resultObj: null, decision: null, runId: null, generatedAt: null, deployUrl: null };
+  }
+  const reasons = [];
+  if (typeof resultObj.runId !== 'string' || resultObj.runId.trim().length === 0) reasons.push('missing/empty runId');
+  if (resultObj.completed !== true) reasons.push('completed !== true');
+  if (typeof resultObj.sourceHash !== 'string' || resultObj.sourceHash.trim().length === 0) {
+    reasons.push('result is missing a sourceHash — cannot prove freshness');
+  } else {
+    try {
+      const currentHash = await computeCurrentSourceHash(DEPLOY_GATE.key, PROJECT_ROOT);
+      if (currentHash !== resultObj.sourceHash) reasons.push(`sourceHash mismatch: result.sourceHash=${resultObj.sourceHash}, current=${currentHash} — STALE, must be rerun`);
+    } catch (hashErr) {
+      reasons.push(`could not recompute current sourceHash: ${hashErr.message}`);
+    }
+  }
+  const passed = resultObj.decision === 'PASS_DEPLOY_PREVIEW_GEOMETRY';
+  if (!passed) reasons.push(`decision is "${resultObj.decision}", not PASS_DEPLOY_PREVIEW_GEOMETRY`);
+  return {
+    ...DEPLOY_GATE,
+    ok: reasons.length === 0 && passed,
+    reasons,
+    resultObj,
+    decision: resultObj.decision ?? null,
+    runId: resultObj.runId ?? null,
+    generatedAt: resultObj.generatedAt ?? resultObj.completedAt ?? null,
+    deployUrl: resultObj.deployUrl ?? null,
+    screenshotsGenerated: resultObj.screenshotsGenerated ?? [],
+  };
+}
+
 async function main() {
   const runId = generateRunId();
   const generatedAt = new Date().toISOString();
 
-  const [syntaxResult, focusedCore, ...gateResults] = await Promise.all([
+  const [syntaxResult, focusedCore, deployGateResult, ...gateResults] = await Promise.all([
     runFreshSyntaxCheck(),
     runFocusedCoreRegression(),
+    evaluateDeployGate(),
     ...GATE_SUITES.map(evaluateGateSuite),
   ]);
 
   const allGatesOk = gateResults.every((g) => g.ok === true);
   const syntaxOk = syntaxResult.ran && syntaxResult.fail === 0;
   const focusedCoreOk = focusedCore.ran && focusedCore.parsed && focusedCore.fail === 0;
+  const deployOk = deployGateResult.ok === true;
 
   const blockingReasons = [];
   if (!syntaxOk) blockingReasons.push(`Syntax check: ${syntaxResult.ran ? `${syntaxResult.fail} file(s) failed node --check` : `could not run (${syntaxResult.error})`}`);
@@ -212,8 +305,21 @@ async function main() {
   for (const g of gateResults) {
     if (!g.ok) blockingReasons.push(`${g.label}: ${g.reasons.join('; ')}`);
   }
+  if (!deployOk) blockingReasons.push(`${deployGateResult.label}: ${deployGateResult.reasons.join('; ')}`);
 
-  const overallDecision = (allGatesOk && syntaxOk && focusedCoreOk) ? 'CONDITIONAL_PASS' : 'BLOCKED_AUTOMATED_ACCEPTANCE_NOT_MET';
+  // DEPLOY GEOMETRY R1 — Phase H3/final acceptance: CONDITIONAL_PASS
+  // only when EVERY local automated gate AND Deploy parity both pass.
+  // When every local gate passes but Deploy parity specifically has
+  // not (the expected, honest outcome whenever LUMIXA_DEPLOY_URL is
+  // unavailable or the deployed build hasn't been verified), the
+  // decision is the specific `BLOCKED_DEPLOY_PARITY_NOT_MET` — never
+  // silently produce CONDITIONAL_PASS, and never conflate this with a
+  // genuine local-gate failure (which keeps the older, more general
+  // `BLOCKED_AUTOMATED_ACCEPTANCE_NOT_MET` label).
+  const localAutomatedOk = allGatesOk && syntaxOk && focusedCoreOk;
+  const overallDecision = (localAutomatedOk && deployOk)
+    ? 'CONDITIONAL_PASS'
+    : (localAutomatedOk ? 'BLOCKED_DEPLOY_PARITY_NOT_MET' : 'BLOCKED_AUTOMATED_ACCEPTANCE_NOT_MET');
 
   const output = {
     suite: 'EPIC 2E-J Phase C — Final Machine-Readable Result (COMBINED CLOSEOUT R3)',
@@ -232,6 +338,20 @@ async function main() {
       ok: g.ok,
       reasons: g.reasons,
     })),
+    // DEPLOY GEOMETRY R1 — Phase H3: Deploy Preview Geometry reported
+    // separately, with its own bounded decision vocabulary and
+    // deployUrl/screenshotsGenerated fields.
+    deployGate: {
+      key: deployGateResult.key,
+      label: deployGateResult.label,
+      decision: deployGateResult.decision,
+      deployUrl: deployGateResult.deployUrl,
+      screenshotsGenerated: deployGateResult.screenshotsGenerated ?? [],
+      runId: deployGateResult.runId,
+      generatedAt: deployGateResult.generatedAt,
+      ok: deployGateResult.ok,
+      reasons: deployGateResult.reasons,
+    },
     manualTestsNotPerformed: [
       'Physical touch hardware',
       'Real screen-reader verification (NVDA/JAWS/VoiceOver)',
@@ -242,8 +362,10 @@ async function main() {
     decision: overallDecision,
     blockingReasons: overallDecision === 'CONDITIONAL_PASS' ? [] : blockingReasons,
     finalDecisionNarrative: overallDecision === 'CONDITIONAL_PASS'
-      ? 'CONDITIONAL_PASS — all automated acceptance gates (Syntax, Focused Core, Live App, Observation Smoke, Step 7B-A, Step 7B-B) were satisfied by CURRENT, fresh evidence in this run. Remaining gaps are the permitted manual-only items (physical touch hardware, real screen-reader verification, physical-device verification).'
-      : 'NOT a CONDITIONAL_PASS. One or more automated acceptance gates were not satisfied by current, fresh evidence in this run — see blockingReasons. This is reported honestly rather than reusing/copying forward any older Final PASS/CONDITIONAL_PASS result.',
+      ? 'CONDITIONAL_PASS — all automated acceptance gates (Syntax, Focused Core, Live App, Observation Smoke, Step 7B-A, Step 7B-B, Preview Geometry Static, Preview Geometry local Browser suite) AND real Deploy parity (PASS_DEPLOY_PREVIEW_GEOMETRY) were satisfied by CURRENT, fresh (sourceHash-verified) evidence in this run. Remaining gaps are the permitted manual-only items (physical touch hardware, real screen-reader verification, physical-device verification).'
+      : overallDecision === 'BLOCKED_DEPLOY_PARITY_NOT_MET'
+        ? 'BLOCKED_DEPLOY_PARITY_NOT_MET — every LOCAL automated acceptance gate passed with current, fresh evidence, but real Deploy parity has not been established (see deployGate.reasons — commonly LUMIXA_DEPLOY_URL was not provided, the deployed build did not match the source contract, or the deployed workflow itself failed). Deploy Preview Geometry is NOT claimed to have passed.'
+        : 'NOT a CONDITIONAL_PASS. One or more automated acceptance gates were not satisfied by current, fresh evidence in this run — see blockingReasons. This is reported honestly rather than reusing/copying forward any older Final PASS/CONDITIONAL_PASS result.',
   };
 
   await writeResultAtomic(FINAL_RESULTS_PATH, output);

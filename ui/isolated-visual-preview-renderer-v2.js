@@ -570,7 +570,7 @@ function _createTempCanvas(width, height) {
  * @param {number} [params.generationId] - used for stale-render protection when paired with a controller from createIsolatedVisualPreviewRendererV2()
  * @param {AbortSignal} [params.signal]
  */
-export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan, side, generationId, signal, shouldCommit } = {}) {
+export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan, side, generationId, signal, shouldCommit, sharedDevicePixelRatio } = {}) {
   const startTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const normalizedSide = side === 'v2' ? 'v2' : side === 'legacy' ? 'legacy' : null;
 
@@ -622,7 +622,22 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   const constraints = plan.renderConstraints ?? renderPlan?.sharedRenderConstraints ?? {};
   const maxDPR = Number.isFinite(constraints.maxDevicePixelRatio) && constraints.maxDevicePixelRatio > 0 ? constraints.maxDevicePixelRatio : 2;
   const maxPixelCount = Number.isFinite(constraints.maxPixelCount) && constraints.maxPixelCount > 0 ? constraints.maxPixelCount : 2048 * 2048;
-  const requestedDpr = Math.min(maxDPR, (typeof window !== 'undefined' && Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1));
+  // DEPLOY GEOMETRY R1 — Phase C4 (exact output dimensions): when the
+  // caller (the comparison controller) supplies a single
+  // `sharedDevicePixelRatio` value computed ONCE before both the
+  // Legacy and V2 sequential render() calls, use it verbatim instead
+  // of independently re-reading `window.devicePixelRatio` here. Two
+  // sequential async calls each reading the live global independently
+  // is a genuine (if rare) race — a DPR change between the two calls
+  // (e.g. a window drag across displays, or a zoom level change)
+  // would otherwise make backingWidth/backingHeight diverge between
+  // sides even though both share the exact same source and
+  // constraints. A missing/invalid override falls back to the
+  // previous live-read behavior, unchanged.
+  const rawDpr = (typeof sharedDevicePixelRatio === 'number' && Number.isFinite(sharedDevicePixelRatio) && sharedDevicePixelRatio > 0)
+    ? sharedDevicePixelRatio
+    : (typeof window !== 'undefined' && Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1);
+  const requestedDpr = Math.min(maxDPR, rawDpr);
 
   let effectiveDpr = requestedDpr;
   let backingWidth = Math.max(1, Math.round(safeDims.width * effectiveDpr));

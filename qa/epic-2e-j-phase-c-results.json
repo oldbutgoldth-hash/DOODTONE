@@ -1,13 +1,13 @@
 {
   "suite": "EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test",
-  "runId": "d834d475-d905-4f93-acb2-4c321f97b91a",
-  "startedAt": "2026-07-22T17:12:17.542Z",
-  "completedAt": "2026-07-22T17:12:17.542Z",
+  "runId": "01033ba8-1faa-429c-a2ff-677df333c65b",
+  "startedAt": "2026-07-22T19:55:53.215Z",
+  "completedAt": "2026-07-22T19:55:53.215Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-22T17:12:17.542Z",
+  "generatedAt": "2026-07-22T19:55:53.215Z",
   "summary": {
     "total": 1,
     "pass": 0,

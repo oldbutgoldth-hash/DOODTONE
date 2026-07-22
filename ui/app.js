@@ -51,6 +51,8 @@ import { createReviewConsoleController } from './review-console-controller.js';
 import { renderSideBySideComparison } from './side-by-side-comparison-renderer.js';
 import { createVisualPreviewComparisonControllerV2 } from './visual-preview-comparison-controller-v2.js';
 import { ensureVisualPreviewComparisonLayout, renderVisualPreviewComparison, clearVisualPreviewComparisonDisplay, buildRenderingPlaceholderState, buildPreparingAnalysisState } from './visual-preview-comparison-renderer-v2.js';
+// DEPLOY GEOMETRY R1 — Phase B: canonical decode + EXIF orientation.
+import { createPreviewSourceGeometryNormalizerV2 } from './preview-source-geometry-normalizer-v2.js';
 import { createInteractiveBeforeAfterControllerV2 } from './interactive-before-after-controller-v2.js';
 import { ensureInteractiveBeforeAfterLayout, getInteractiveBeforeAfterElements, renderInteractiveBeforeAfterStatus, clearInteractiveBeforeAfterDisplay } from './interactive-before-after-renderer-v2.js';
 import { createInteractivePreviewObservationControllerV2 } from './interactive-preview-observation-controller-v2.js';
@@ -115,7 +117,22 @@ const state = {
   lastPreviewReviewState: null,
   lastProcessingLog: null,
   curveEditor: null,
+  // DEPLOY GEOMETRY R1 — Phase B1: the currently-selected File, retained
+  // in page memory ONLY for as long as this generation is current —
+  // never written to localStorage/sessionStorage/IndexedDB, never sent
+  // to Network, never read for its name/path anywhere in this app.
+  // Cleared unconditionally by handleReset() on every Reset/new image.
+  currentRetainedFile: null,
+  // DEPLOY GEOMETRY R1 — Phase B2: bounded canonical-decode evidence
+  // for the current generation only (see _buildPreviewGeometryDiagnostics
+  // and preview-source-geometry-normalizer-v2.js) — never raw pixels.
+  lastCanonicalSourceEvidence: null,
 };
+
+// DEPLOY GEOMETRY R1 — Phase B: one shared normalizer instance for the
+// lifetime of the page, so canonical decode + resource release is
+// tracked consistently across every analysis generation.
+const previewSourceGeometryNormalizer = createPreviewSourceGeometryNormalizerV2();
 
 // EPIC 2E-F Phase C-B: must be declared BEFORE waitForRoot(...) below —
 // waitForRoot's callback (which calls ensureReviewConsoleController(),
@@ -155,6 +172,86 @@ function _qaSafeCount(v) { return typeof v === 'number' && Number.isFinite(v) &&
 // Bounded, string-only, max-5 Reason array (matches the Controller's own
 // REASON_LIMIT — defense in depth, never trusts the source array length).
 function _qaSafeReasons(v) { return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 5) : []; }
+
+// DEPLOY GEOMETRY R1 — Phase A FIX A1/A2: bounded blocker-code
+// diagnostics traced across the real boundary chain
+// (controlledOverlayPreviewSandboxV2 -> buildVisualPreviewRenderPlanV2()
+// -> finalStyleIntent.visualPreviewRenderPlanV2 -> the Visual Preview
+// Comparison controller/renderer). Every returned field is a bounded
+// primitive — never a raw image, pixel buffer, EXIF block, filename, or
+// arbitrary internal object. `blockerCode` is one of a small, stable,
+// documented vocabulary — never collapsed into a generic "under current
+// safety constraints" string. Pure/read-only: never mutates
+// state.lastPreviewSandbox/lastFinalStyleIntent, never affects
+// production output.
+function _qaSafeGenerationId(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') return v;
+  return null;
+}
+function _buildPreviewGeometryDiagnostics(generationId) {
+  const fsi = state.lastFinalStyleIntent ?? null;
+  const sandbox = state.lastPreviewSandbox ?? null;
+  const renderPlan = fsi && typeof fsi === 'object' ? fsi.visualPreviewRenderPlanV2 ?? null : null;
+  const v2Plan = renderPlan && typeof renderPlan === 'object' ? renderPlan.v2RenderPlan ?? null : null;
+
+  const sandboxExists = !!sandbox;
+  // 'human-review-complete' is the canonical gate id produced by the
+  // (LOCKED, read-only-here) Sandbox module's own
+  // _buildHumanReviewChecklist()/previewGateChecks — never re-derived
+  // or guessed at; only ever read.
+  const gateChecks = Array.isArray(sandbox?.previewGateChecks) ? sandbox.previewGateChecks : [];
+  const reviewGate = gateChecks.find((g) => g && typeof g === 'object' && g.id === 'human-review-complete') ?? null;
+  const humanReviewComplete = reviewGate ? reviewGate.passed === true : null;
+  const canGeneratePreview = sandbox?.canGeneratePreview === true ? true : sandbox?.canGeneratePreview === false ? false : null;
+  const simulatedPreviewPresetAvailable = v2Plan?.upstreamEvidence?.simulatedPreviewAvailable === true
+    ? true : v2Plan?.upstreamEvidence?.simulatedPreviewAvailable === false ? false : null;
+  const contradictoryEvidence = v2Plan?.upstreamEvidence?.contradictory === true;
+  const hardStopBlockerText = Array.isArray(renderPlan?.blockers)
+    ? renderPlan.blockers.find((b) => typeof b === 'string' && /hard stop/i.test(b)) : null;
+  const hardStopCount = hardStopBlockerText ? (Number(hardStopBlockerText.match(/^(\d+)/)?.[1]) || 0) : 0;
+  const renderPlanExists = !!renderPlan;
+  const v2PlanExists = !!v2Plan;
+  const v2Available = v2Plan?.available === true;
+  const v2Renderable = v2Plan?.renderable === true;
+  // Identity-fallback eligible: the exact valid-Identity-Preview policy
+  // documented/implemented in core/preview-rendering/visual-preview-render-plan-v2.js
+  // (read-only here, never re-derived): available + renderable + never
+  // contradictory + zero concrete supported adjustments.
+  const supportedAdjustments = Array.isArray(v2Plan?.adjustmentModel?.supportedAdjustments) ? v2Plan.adjustmentModel.supportedAdjustments : null;
+  const identityFallbackEligible = v2Available && v2Renderable && !contradictoryEvidence
+    && Array.isArray(supportedAdjustments) && supportedAdjustments.length === 0;
+
+  const otherFailedRequiredGates = gateChecks.filter((g) => g && typeof g === 'object' && g.required && g.passed !== true && g.id !== 'human-review-complete');
+  const reviewGateFailed = reviewGate ? reviewGate.passed !== true : false;
+
+  let blockerCode = null;
+  if (!renderPlanExists) blockerCode = 'V2_PLAN_BUILD_FAILED';
+  else if (!sandboxExists) blockerCode = 'SANDBOX_MISSING';
+  else if (contradictoryEvidence) blockerCode = 'CONTRADICTORY_SAFETY_EVIDENCE';
+  else if (hardStopCount > 0) blockerCode = 'HARD_SAFETY_STOP';
+  else if (reviewGateFailed && otherFailedRequiredGates.length === 0) blockerCode = 'REVIEW_INCOMPLETE';
+  else if (otherFailedRequiredGates.length > 0) blockerCode = 'SANDBOX_NOT_ELIGIBLE';
+  else if (!simulatedPreviewPresetAvailable && !v2Available) blockerCode = 'SIMULATED_PRESET_UNAVAILABLE';
+  else if (v2Available && !v2Renderable) blockerCode = 'SANDBOX_NOT_ELIGIBLE';
+  // else: no known blocker — V2 is genuinely eligible (blockerCode stays null).
+
+  return {
+    generationId: _qaSafeGenerationId(generationId),
+    sandboxExists,
+    humanReviewComplete,
+    canGeneratePreview,
+    simulatedPreviewPresetAvailable,
+    contradictoryEvidence,
+    hardStopCount,
+    renderPlanExists,
+    v2PlanExists,
+    v2Available,
+    v2Renderable,
+    identityFallbackEligible,
+    blockerCode,
+  };
+}
 
 function ensureQaSnapshotHook() {
   let qaEnabled = false;
@@ -284,6 +381,36 @@ function ensureQaSnapshotHook() {
         v2State: _qaSafeStr(v2Plan?.state),
         visualAdjustmentsApplied: _qaSafeBool(v2Plan?.visualAdjustmentsApplied),
       },
+      // DEPLOY GEOMETRY R1 — Phase A1/A2: bounded blocker-code evidence,
+      // traced from the same Sandbox/Render Plan already read above —
+      // never a second independent read, never a raw internal object.
+      previewGeometryDiagnostics: _buildPreviewGeometryDiagnostics(analysisRenderGeneration),
+      // DEPLOY GEOMETRY R1 — Phase B2: bounded canonical-decode evidence
+      // for the CURRENT generation only — re-projected defensively
+      // through the same _qaSafe* helpers used everywhere else in this
+      // hook, even though preview-source-geometry-normalizer-v2.js
+      // already only returns bounded primitives. Never raw pixels,
+      // never an ImageBitmap/canvas reference, never a filename/path.
+      canonicalSourceGeometry: (() => {
+        const ev = state.lastCanonicalSourceEvidence;
+        if (!ev || typeof ev !== 'object') {
+          return {
+            generationId: null, decodePath: null, encodedOrientation: null,
+            orientationAppliedByDecoder: null, canonicalWidth: null, canonicalHeight: null,
+            sourceAspectRatio: null, decodeComplete: null,
+          };
+        }
+        return {
+          generationId: _qaSafeGenerationId(ev.generationId),
+          decodePath: _qaSafeStr(ev.decodePath),
+          encodedOrientation: _qaSafeStr(ev.encodedOrientation),
+          orientationAppliedByDecoder: _qaSafeBool(ev.orientationAppliedByDecoder),
+          canonicalWidth: _qaSafeNum(ev.canonicalWidth),
+          canonicalHeight: _qaSafeNum(ev.canonicalHeight),
+          sourceAspectRatio: _qaSafeNum(ev.sourceAspectRatio),
+          decodeComplete: _qaSafeBool(ev.decodeComplete),
+        };
+      })(),
       visualPreview: {
         legacyState: _qaSafeStr(legacyPlan?.renderable === true ? 'renderable' : (legacyPlan ? 'not-renderable' : null)),
         controlledV2State: _qaSafeStr(v2Plan?.renderable === true ? 'renderable' : (v2Plan ? 'not-renderable' : null)),
@@ -651,8 +778,12 @@ function loadFile(file) {
   // asynchronously, causing visible display glitches. handleReset()
   // already clears every state.last* field and hides all analysis
   // panels — safe to call unconditionally here since the code below
-  // immediately re-shows the correct "loading" UI afterward.
+  // immediately re-shows the correct "loading" UI afterward. It also
+  // clears the PREVIOUS image's retained File/canonical-decode
+  // resources (DEPLOY GEOMETRY R1 — Phase B1/B4); this line then
+  // retains the NEW file, exactly once.
   handleReset();
+  state.currentRetainedFile = file;
 
   const reader = new FileReader();
   reader.onload = e => {
@@ -1120,10 +1251,28 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
     // explicit context requirements, not a safety anomaly in themselves).
     const safetyBlocked = typeof rawState === 'string' && rawState === 'blocked' && rawBlockedReason === 'safety';
 
+    // DEPLOY GEOMETRY R1 — Phase D: Observation may be enabled only
+    // when the two sides' canonical SOURCE pixel dimensions are proven
+    // EXACTLY identical — a strictly stronger requirement than
+    // Interactive Before/After's own 'ready' gate, which may still
+    // enter 'ready' after a one-time display-size normalization
+    // (compatible aspect ratio, not necessarily identical source
+    // pixels). Reading the real two-dims alignment object (never
+    // re-derived here) rather than trusting `rawInteractive` alone.
+    const rawAlignment = safeGetVisualPreviewProperty(ibaState, 'alignment');
+    const alignExactPixelMatch = safeGetVisualPreviewProperty(rawAlignment, 'exactSourcePixelMatch');
+    const alignLegacyW = safeGetVisualPreviewProperty(rawAlignment, 'sourceLegacyWidth');
+    const alignLegacyH = safeGetVisualPreviewProperty(rawAlignment, 'sourceLegacyHeight');
+    const alignV2W = safeGetVisualPreviewProperty(rawAlignment, 'sourceV2Width');
+    const alignV2H = safeGetVisualPreviewProperty(rawAlignment, 'sourceV2Height');
+    const alignDimsNonZero = Number.isFinite(alignLegacyW) && alignLegacyW > 0 && Number.isFinite(alignLegacyH) && alignLegacyH > 0
+      && Number.isFinite(alignV2W) && alignV2W > 0 && Number.isFinite(alignV2H) && alignV2H > 0;
+    const observationExactPixelMatchOk = rawInteractive === true && alignExactPixelMatch === true && alignDimsNonZero;
+
     interactivePreviewObservationController.setContext({
       generationId,
       interactiveState: typeof rawState === 'string' ? rawState : null,
-      interactiveReady: rawInteractive === true,
+      interactiveReady: observationExactPixelMatchOk,
       safetyBlocked,
       // FIX 4 (EPIC 2E-J-A-F): preserve the real blockedReason so the
       // Observation layer can distinguish safety/alignment/preview-state
@@ -1142,10 +1291,20 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
     const alignSameRatio = safeGetVisualPreviewProperty(rawAlignment, 'sameAspectRatio');
     const alignNormalized = safeGetVisualPreviewProperty(rawAlignment, 'displayDimensionsNormalized');
     const alignExactMatch = safeGetVisualPreviewProperty(rawAlignment, 'exactSourcePixelMatch');
+    // DEPLOY GEOMETRY R1 — Phase A FIX A3: "Blocked geometry" is reserved
+    // for a GENUINE mismatch — both previews rendered and their real
+    // canonical geometry was actually compared and found to differ
+    // (alignSameRatio === false, a real Boolean verdict from
+    // _computeAlignment(legacyDims, v2Dims) with two real dims). When
+    // geometry has not been evaluated yet (only one/neither preview
+    // rendered), alignSameRatio/alignExactMatch are honestly `null` —
+    // this must read "Not evaluated", never be conflated with a real
+    // geometry failure.
     let alignmentStatusText;
     if (alignSameRatio === false) alignmentStatusText = 'Blocked geometry';
     else if (alignNormalized === true) alignmentStatusText = 'Normalized once';
     else if (alignExactMatch === true) alignmentStatusText = 'Exact dimensions';
+    else if (alignSameRatio === null && alignExactMatch === null) alignmentStatusText = 'Not evaluated — both previews are required';
     else alignmentStatusText = 'Unknown';
 
     const obsStateForContext = interactivePreviewObservationController.getState();
@@ -1779,11 +1938,37 @@ async function runAnalysis() {
           // show a stale "Waiting for analysis and Render Plan" message
           // while pixel rendering is actively starting.
           renderVisualPreviewComparison(vprInner, buildRenderingPlaceholderState());
+          // DEPLOY GEOMETRY R1 — Phase A FIX A1/A4: compute the bounded
+          // blocker-code diagnostic ONCE here (this is the only place with
+          // access to BOTH state.lastPreviewSandbox and
+          // state.lastFinalStyleIntent.visualPreviewRenderPlanV2) and pass
+          // it through unchanged — the controller/renderer never
+          // recompute or re-derive it, preserving single-source-of-truth.
+          const _previewGeometryDiagnostics = _buildPreviewGeometryDiagnostics(renderGeneration);
+          // DEPLOY GEOMETRY R1 — Phase B2/B3/C3: decode exactly ONE
+          // canonical source for this generation — createImageBitmap
+          // with explicit `imageOrientation: 'from-image'`, safely
+          // falling back to the already-decoded <img> element if
+          // unavailable/failed. This single returned object is what
+          // gets passed to the controller below, which reuses it
+          // identically for BOTH Legacy and V2 — neither side ever
+          // decodes or infers orientation independently, and neither
+          // ever manually rotates a source the browser already
+          // oriented (which would double-rotate it).
+          const _canonicalDecode = await previewSourceGeometryNormalizer.decodeCanonicalSource(state.currentRetainedFile, renderGeneration, img);
+          state.lastCanonicalSourceEvidence = _canonicalDecode.evidence;
+          // Phase B4: a newer analysis may have started while the
+          // (async) decode above was in flight — never let a stale
+          // generation's canonical source or render commit into a
+          // newer one. Everything else in runAnalysis() before/after
+          // this Visual-Preview-only boundary is unaffected.
+          if (renderGeneration === analysisRenderGeneration) {
           // Fire-and-forget (never awaited here) — see rationale above.
           visualPreviewComparisonController.render({
-            source: img,
+            source: _canonicalDecode.source ?? img,
             renderPlan: visualPreviewRenderPlan,
             analysisGenerationId: renderGeneration,
+            v2BlockerCode: _previewGeometryDiagnostics.blockerCode,
           }).then(vprState => {
             // FIX 8: a newer analysis (Re-analyze / new image) may have
             // already started by the time this resolves — never let a
@@ -1817,6 +2002,7 @@ async function runAnalysis() {
             // enabled.
             if (interactiveBeforeAfterController) interactiveBeforeAfterController.clear();
           });
+          }
         }
       } else if (vprSec) {
         vprSec.style.display = 'none';
@@ -1933,6 +2119,13 @@ function handleReset() {
   state.lastPreviewSandbox = null;
   state.lastPreviewReviewState = null;
   state.lastSideBySideComparison = null;
+  // DEPLOY GEOMETRY R1 — Phase B1/B4: release the retained File
+  // reference and any in-flight/decoded canonical-source resource
+  // (ImageBitmap) unconditionally on every Reset/new image — a stale
+  // generation must never keep memory alive past this point.
+  state.currentRetainedFile = null;
+  state.lastCanonicalSourceEvidence = null;
+  previewSourceGeometryNormalizer.releaseAll();
   if (state.curveEditor) state.curveEditor.resetAll();
   document.getElementById('uploadWrap').style.display  = 'block';
   document.getElementById('previewWrap').style.display = 'none';
