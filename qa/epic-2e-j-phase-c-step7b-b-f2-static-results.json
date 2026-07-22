@@ -1,16 +1,16 @@
 {
-  "suite": "EPIC 2E-J — Step 7B-B-F2-S/F2-S2: static coverage self-test (source audit only, no Chromium)",
-  "generatedAt": "2026-07-22T05:03:00.284Z",
+  "suite": "EPIC 2E-J — Step 7B-B-F2-S/F2-S2/F2-S3: static coverage self-test (source audit only, no Chromium)",
+  "generatedAt": "2026-07-22T05:28:30.374Z",
   "summary": {
-    "total": 31,
-    "pass": 31,
+    "total": 41,
+    "pass": 41,
     "fail": 0
   },
   "results": [
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "66461 bytes"
+      "evidence": "79065 bytes"
     },
     {
       "test": "ui/interactive-preview-observation-renderer-v2.js is readable (for touch-target cross-check)",
@@ -55,7 +55,7 @@
     {
       "test": "The only permitted Contrast NOT_TESTED path is the documented gradient/background-image limitation",
       "result": "PASS",
-      "evidence": "hasDocumentedGradientNotTested=true, total 'NOT_TESTED' string literal occurrences in source=6"
+      "evidence": "hasDocumentedGradientNotTested=true, total 'NOT_TESTED' string literal occurrences in source=8"
     },
     {
       "test": "Normal-text WCAG threshold 4.5:1 exists in the Contrast audit",
@@ -118,9 +118,14 @@
       "evidence": "parseRgbaLocalOccurrences>=3=true, capturesFgRgba=true"
     },
     {
-      "test": "FIX 2: computed opacity is inspected via a bounded ancestor walk, and foreground alpha is genuinely composited over the background (never discarded or assumed 1)",
+      "test": "FIX 2 (F2-S3): computed opacity is inspected via a bounded ancestor walk, and ancestor opacity is NEVER multiplied into the foreground alpha (old fgRgba[3]*opacityValue composite removed; composition uses the foreground's own alpha only)",
       "result": "PASS",
-      "evidence": "hasResolveEffectiveOpacityFn(>=2)=true, hasBoundedWalk=true, hasEffectiveAlphaComposite=true, neverAssumesOpacityOne=true"
+      "evidence": "hasResolveEffectiveOpacityFn(>=2)=true, hasBoundedWalk=true, oldAncestorOpacityMultiplicationGone=true, usesOwnAlphaOnly=true"
+    },
+    {
+      "test": "FIX 2 (F2-S3): any target/ancestor opacity below 1 is honestly NOT_TESTED (\"CSS group opacity requires full foreground/background group compositing\"), never used to fabricate a Ratio",
+      "result": "PASS",
+      "evidence": "present=true"
     },
     {
       "test": "FIX 2: an unresolvable opacity chain is honestly NOT_TESTED with bounded evidence, never silently assumed to be 1",
@@ -138,29 +143,74 @@
       "evidence": "hasGenuineWarningWorkflow=true, hasHonestWarningFailFallback=true, warningNotInMainSweepCollectCalls=true, neverAssignsWarningTextContent=true"
     },
     {
-      "test": "FIX 4: disabled 6th Reason is compared against an enabled Reason across 8 computed-style properties, with honest NOT_TESTED fallback (never a fabricated PASS or CSS change to force a pass)",
+      "test": "FIX 4 (superseded by F2-S3 FIX 1): the old cross-control comparison (disabled color-balance vs. a DIFFERENT enabled Reason) is gone",
       "result": "PASS",
-      "evidence": "hasSnapHelper=true, hasEightProps=true, comparesAgainstEnabledReference=true, hasHonestNotTestedFallback=true, neverAddsClassOrStyleToPass=true"
+      "evidence": "oldSnapHelperGone=true, oldCrossControlComparisonGone=true"
     },
     {
-      "test": "FIX 5: Focus indicator background resolution uses the same robust resolver as Contrast (old simplified while-loop removed)",
+      "test": "FIX 5 (superseded by F2-S3 FIX 4/5/6): the old single-capture (no unfocused/focused comparison) Focus indicator approach is gone",
       "result": "PASS",
-      "evidence": "oldSimplifiedLoopGone=true, focusUsesRobustResolver=true"
-    },
-    {
-      "test": "FIX 5: the ACTUALLY active indicator (outline or box-shadow) is identified and its real color source parsed, never a hard-coded outlineColor read regardless of which mechanism is active",
-      "result": "PASS",
-      "evidence": "hasUsingOutlineUsingBoxShadow=true, hasBoxShadowColorExtraction=true, neverHardcodesOutlineColor=true"
-    },
-    {
-      "test": "FIX 5: Focus indicator fails closed to NOT_TESTED (never a fabricated ratio) when the adjacent background is genuinely undeterminable",
-      "result": "PASS",
-      "evidence": "present=true"
+      "evidence": "oldSimplifiedLoopGone=true, oldSingleCaptureInfoGone=true"
     },
     {
       "test": "FIX 6: a single shared recordContrastEntry() applies identical decision rules to the main Contrast sweep and the standalone Warning check",
       "result": "PASS",
       "evidence": "hasSharedRecordFn=true, mainSweepUsesSharedFn=true, warningUsesSharedFn=true"
+    },
+    {
+      "test": "FIX 1: the SAME color-balance control is captured before (four Reasons selected, enabled) and after (fifth Reason selected, disabled) via one shared snap function",
+      "result": "PASS",
+      "evidence": "hasSharedSnapFn=true, enabledSnapCall=true, disabledSnapCall=true, selectsFourThenFifth=true"
+    },
+    {
+      "test": "FIX 1: color-balance is verified unchecked (checked === false) in both the enabled and disabled snapshots",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 1: cursor, className, and the disabled property itself are captured for evidence only and never counted as visual distinction on their own",
+      "result": "PASS",
+      "evidence": "cursorExcludedFromComparison=true, classNameExcludedFromComparison=true, disabledExcludedFromComparison=true, capturedForEvidenceOnly=true"
+    },
+    {
+      "test": "FIX 1: no CSS/class is added to color-balance merely to force a pass; the NOT_TESTED fallback is honest",
+      "result": "PASS",
+      "evidence": "neverAddsClassOrStyleToPass=true, hasHonestNotTestedFallback=true"
+    },
+    {
+      "test": "FIX 3: every Contrast target (main sweep + Warning) checks display/visibility/non-zero rect/client-rects before measurement; hidden/zero-size targets FAIL, never NOT_TESTED",
+      "result": "PASS",
+      "evidence": "visibilityChecksInSource=1, warningVisibilityCheck=true, hiddenTargetsFailNotNotTested=true"
+    },
+    {
+      "test": "FIX 3: recordContrastEntry() fails closed on a notVisible target before any color/ratio calculation is attempted",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 4: Focus style is captured before (genuine unfocused baseline) and after (real keyboard focus) using the same captureFocusStyle function for both",
+      "result": "PASS",
+      "evidence": "hasSharedCaptureFn=true, hasExplicitBlurStep=true, unfocusedCapture=true, focusedCapture=true"
+    },
+    {
+      "test": "FIX 4: focused style must genuinely differ from unfocused style; a decorative indicator unchanged in both states is explicitly rejected",
+      "result": "PASS",
+      "evidence": "hasOutlineUnchangedCheck=true, hasBoxShadowUnchangedCheck=true, rejectsUnchangedIndicator=true"
+    },
+    {
+      "test": "FIX 5: Focus indicator color is parsed as RGBA and its alpha is genuinely composited over the resolved adjacent background when below 1 (never discarded)",
+      "result": "PASS",
+      "evidence": "hasParseRgbaNodeFn=true, indicatorParsedAsRgba=true, hasIndicatorAlphaComposite=true, neverDiscardsAlpha=true"
+    },
+    {
+      "test": "FIX 6: multiple/ambiguous box-shadow layers fail closed to NOT_TESTED, never assuming the first RGB value or falling back to outlineColor",
+      "result": "PASS",
+      "evidence": "hasSplitBoxShadowLayersFn=true, respectsNestedCommas=true, hasAmbiguousNotTestedPath=true, neverAssumesFirstRgbOrOutlineFallback=true"
+    },
+    {
+      "test": "FIX 6: a decorative box-shadow present unchanged in both unfocused and focused captures cannot satisfy usingBoxShadow (cannot pass as a Focus indicator)",
+      "result": "PASS",
+      "evidence": "present=true"
     }
   ],
   "disclaimer": "This suite audits the SOURCE TEXT of qa/epic-2e-j-phase-c-step7b-b-test.mjs for the presence of required categories/thresholds/wiring. It does NOT execute a browser, does NOT measure real computed colors or element sizes, and does NOT prove real Contrast/Touch-target PASS. A PASS here means \"the required code path is present,\" not \"the real UI meets WCAG.\"",

@@ -108,6 +108,39 @@ function parseRgb(str) {
   const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
   return m ? [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)] : null;
 }
+// Step 7B-B-F2-S3 FIX 5 — Node-side RGBA parse (mirrors the browser-side
+// parseRgbaLocal exactly) so the Focus indicator's own color alpha can be
+// genuinely composited over its resolved adjacent background, never
+// discarded.
+function parseRgbaNode(str) {
+  const m = str && str.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+  if (!m) return null;
+  const r = parseFloat(m[1]), g = parseFloat(m[2]), b = parseFloat(m[3]);
+  const a = m[4] !== undefined ? parseFloat(m[4]) : 1;
+  return [r, g, b, a];
+}
+// Step 7B-B-F2-S3 FIX 6 — splits a computed `box-shadow` value into its
+// individual shadow layers, splitting only on top-level commas (never
+// inside an rgba(...)/rgb(...) color's own commas), so a specific
+// Focus-introduced layer can be isolated rather than guessed at.
+function splitBoxShadowLayers(str) {
+  if (!str || str === 'none') return [];
+  const layers = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of str) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      layers.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) layers.push(current.trim());
+  return layers;
+}
 
 // Step 7B-B-F2-S2 — shared decision logic for one Contrast entry
 // (reused by the main sweep AND the standalone Warning check, so both
@@ -118,6 +151,14 @@ function parseRgb(str) {
 function recordContrastEntry(label, entry, contrastResultsList) {
   if (!entry || entry.missing) {
     record(`Contrast: ${label}`, false, 'required element not found in DOM, or required non-empty text was not present — FAIL (never NOT_TESTED for a missing required element or empty required text, never PASS merely because the element exists)');
+    return;
+  }
+  if (entry.notVisible) {
+    // FIX 3 (F2-S3): a required target that is display:none,
+    // visibility:hidden/collapse, zero-size, effectively zero-opacity,
+    // or has no rendered client rects is FAIL, never NOT_TESTED — a
+    // hidden non-empty Element is never treated as measurable.
+    record(`Contrast: ${label}`, false, entry.notVisibleReason);
     return;
   }
   if (!entry.fgRgba) {
@@ -133,23 +174,36 @@ function recordContrastEntry(label, entry, contrastResultsList) {
     return;
   }
   if (!entry.opacityResolvable) {
-    // FIX 2 (F2-S2): computed opacity on the target or a contributing
-    // ancestor could not be resolved reliably — NOT_TESTED with bounded
-    // evidence, never a silent assumption of opacity=1.
+    // FIX 2 (F2-S2/F2-S3): computed opacity on the target or a
+    // contributing ancestor could not be parsed reliably — NOT_TESTED
+    // with bounded evidence, never a silent assumption of opacity=1.
     record(`Contrast: ${label}`, 'NOT_TESTED', entry.opacityReason);
     return;
   }
-  // FIX 2 (F2-S2): composite the foreground's effective alpha (its own
-  // RGBA alpha times the resolved ancestor-opacity product) over the
-  // resolved background — never silently discarded.
-  const effectiveAlpha = entry.fgRgba[3] * entry.opacityValue;
-  const compositedFg = effectiveAlpha >= 1
+  if (entry.opacityValue !== 1) {
+    // FIX 2 (F2-S3): CSS opacity on the target or an ancestor applies to
+    // the WHOLE rendered group — background layers AND descendants
+    // together — not just the foreground text color's own alpha. It is
+    // never safe to model this as `foregroundAlpha * ancestorOpacity`
+    // against a background that was resolved independently, without
+    // equivalent group compositing of that same background. Rather than
+    // fabricate a Ratio from a partial/incorrect model, this is honestly
+    // NOT_TESTED whenever any target/ancestor computed opacity is below 1.
+    record(`Contrast: ${label}`, 'NOT_TESTED', 'CSS group opacity requires full foreground/background group compositing');
+    return;
+  }
+  // opacityValue === 1 for the target and every ancestor: normal, correct
+  // RGBA foreground composition using ONLY the foreground's own alpha
+  // channel (never multiplied by ancestor opacity, which by construction
+  // contributes nothing further here).
+  const fgAlpha = entry.fgRgba[3];
+  const compositedFg = fgAlpha >= 1
     ? [entry.fgRgba[0], entry.fgRgba[1], entry.fgRgba[2]]
-    : [0, 1, 2].map((i) => Math.round(entry.fgRgba[i] * effectiveAlpha + entry.bg.rgb[i] * (1 - effectiveAlpha)));
+    : [0, 1, 2].map((i) => Math.round(entry.fgRgba[i] * fgAlpha + entry.bg.rgb[i] * (1 - fgAlpha)));
   const ratio = contrastRatio(compositedFg, entry.bg.rgb);
   const threshold = entry.isLargeText ? 3.0 : 4.5;
-  if (contrastResultsList) contrastResultsList.push({ label, ratio: +ratio.toFixed(2), threshold, isLargeText: entry.isLargeText, fontSize: entry.fontSize, fontWeight: entry.fontWeight, text: entry.text, effectiveAlpha: +effectiveAlpha.toFixed(3) });
-  record(`Contrast: ${label} meets ${threshold}:1 (WCAG AA ${entry.isLargeText ? 'large' : 'normal'} text)`, ratio >= threshold, `ratio=${ratio.toFixed(2)}:1, fontSize=${entry.fontSize}px, fontWeight=${entry.fontWeight}, effectiveAlpha=${effectiveAlpha.toFixed(3)}, compositedFg=rgb(${compositedFg.join(',')}), resolvedBg=rgb(${entry.bg.rgb.join(',')}) [hadOpaqueBase=${entry.bg.hadOpaqueBase}, layers=${entry.bg.layerCount}], text="${entry.text}"`);
+  if (contrastResultsList) contrastResultsList.push({ label, ratio: +ratio.toFixed(2), threshold, isLargeText: entry.isLargeText, fontSize: entry.fontSize, fontWeight: entry.fontWeight, text: entry.text, fgAlpha: +fgAlpha.toFixed(3) });
+  record(`Contrast: ${label} meets ${threshold}:1 (WCAG AA ${entry.isLargeText ? 'large' : 'normal'} text)`, ratio >= threshold, `ratio=${ratio.toFixed(2)}:1, fontSize=${entry.fontSize}px, fontWeight=${entry.fontWeight}, fgAlpha=${fgAlpha.toFixed(3)}, compositedFg=rgb(${compositedFg.join(',')}), resolvedBg=rgb(${entry.bg.rgb.join(',')}) [hadOpaqueBase=${entry.bg.hadOpaqueBase}, layers=${entry.bg.layerCount}], text="${entry.text}"`);
 }
 
 // Step 7B-B-F2-S2 — the corrected effective-background resolver
@@ -491,12 +545,27 @@ async function main() {
         const el = document.getElementById('ipoWarning');
         const text = el ? (el.textContent || '').trim() : '';
         if (!el || text.length === 0) return { missing: true };
-        const style = getComputedStyle(el);
-        const fontSize = parseFloat(style.fontSize) || 0;
-        const fontWeight = parseInt(style.fontWeight, 10) || 400;
+        // FIX 3 (F2-S3) — a hidden/zero-size Warning Element with
+        // non-empty text is never treated as measurable: display:none,
+        // visibility:hidden/collapse, zero-size, effectively-zero
+        // opacity, or no rendered client rects all fail closed to FAIL
+        // (via recordContrastEntry's notVisible branch), never keep
+        // silently polling forever and never NOT_TESTED.
+        const cs = getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        const clientRectCount = el.getClientRects().length;
         const opacityResult = resolveEffectiveOpacity(el);
+        const isZeroOpacity = opacityResult.resolvable && opacityResult.value === 0;
+        if (cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse' || rect.width <= 0 || rect.height <= 0 || clientRectCount === 0 || isZeroOpacity) {
+          return {
+            missing: false, notVisible: true,
+            notVisibleReason: `Warning text is present but the element is hidden or zero-size and cannot be measured — display=${cs.display}, visibility=${cs.visibility}, rect=${rect.width}x${rect.height}, clientRects=${clientRectCount}, effectiveOpacityZero=${isZeroOpacity} — FAIL (never NOT_TESTED, never treated as measurable)`,
+          };
+        }
+        const fontSize = parseFloat(cs.fontSize) || 0;
+        const fontWeight = parseInt(cs.fontWeight, 10) || 400;
         return {
-          missing: false, colorRaw: style.color, fgRgba: parseRgbaLocal(style.color),
+          missing: false, colorRaw: cs.color, fgRgba: parseRgbaLocal(cs.color),
           fontSize, fontWeight, text: text.slice(0, 80), isLargeText: isProvenLargeText(fontSize, fontWeight),
           bg: resolveEffectiveBackground(el),
           opacityResolvable: opacityResult.resolvable, opacityValue: opacityResult.resolvable ? opacityResult.value : null, opacityReason: opacityResult.resolvable ? null : opacityResult.reason,
@@ -521,73 +590,103 @@ async function main() {
     await waitForAnalysisCompletion(page, f2WarningGenBeforeReview);
 
     // ══════════════════════════════════════════════════════════════
-    // PART 5 PREP-B — real UI workflow to reach the five-Reason limit
-    // state (genuine disabled 6th Reason, non-empty Reason-limit
-    // message, non-empty Selected Reasons text) so the Contrast and
-    // Touch-target audits below measure REAL rendered content, never a
-    // simulated/injected disabled class. This also drives a genuine
-    // recordObservation() call into the Session for the NEW generation
-    // reached above, so Session Metrics/Top Reasons carry real content.
+    // PART 5 PREP-B (Step 7B-B-F2-S3 FIX 1) — real UI workflow to reach
+    // the five-Reason limit state, capturing the SAME "color-balance"
+    // Reason control's own computed style BEFORE it becomes disabled
+    // (only four Reasons selected, color-balance still enabled and
+    // unchecked) and AFTER it becomes disabled (the fifth Reason
+    // selected, color-balance now disabled and still unchecked) — never
+    // comparing it against a DIFFERENT, already-checked Reason, which
+    // cannot isolate what the disabled transition itself actually
+    // changed. This also drives a genuine recordObservation() call into
+    // the Session for the current generation, so Session Metrics/Top
+    // Reasons carry real content by the time the Contrast sweep runs.
     // ══════════════════════════════════════════════════════════════
-    console.log('=== Reaching five-Reason-limit state for Contrast/Touch-target audits (Step 7B-B-F2) ===');
+    console.log('=== Reaching five-Reason-limit state, capturing color-balance before/after disabling (Step 7B-B-F2-S3 FIX 1) ===');
     await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); });
     await page.waitForTimeout(150);
-    const f2ReasonIds = ['skin-tone', 'white-balance', 'highlight-detail', 'shadow-detail', 'contrast'];
-    for (const r of f2ReasonIds) {
+
+    function snapReasonControl(inputId) {
+      const input = document.getElementById(inputId);
+      if (!input) return null;
+      const label = input.closest('label');
+      const span = label ? label.querySelector('span') : null;
+      const inputStyle = getComputedStyle(input);
+      const labelStyle = label ? getComputedStyle(label) : null;
+      const spanStyle = span ? getComputedStyle(span) : null;
+      return {
+        disabled: input.disabled === true,
+        checked: input.checked === true,
+        inputOpacity: inputStyle.opacity,
+        labelOpacity: labelStyle ? labelStyle.opacity : null,
+        spanOpacity: spanStyle ? spanStyle.opacity : null,
+        color: spanStyle ? spanStyle.color : (labelStyle ? labelStyle.color : null),
+        backgroundColor: labelStyle ? labelStyle.backgroundColor : null,
+        borderColor: labelStyle ? labelStyle.borderColor : null,
+        filter: labelStyle ? labelStyle.filter : inputStyle.filter,
+        textDecoration: labelStyle ? labelStyle.textDecoration : (spanStyle ? spanStyle.textDecoration : null),
+        // Captured for evidence only — FIX 1 (F2-S3) deliberately never
+        // counts cursor or className as visual distinction on their
+        // own: neither is visible page content a user actually sees.
+        cursor: labelStyle ? labelStyle.cursor : inputStyle.cursor,
+        className: `${label ? label.className : ''}|${input.className}`,
+      };
+    }
+
+    const f2FirstFourReasonIds = ['skin-tone', 'white-balance', 'highlight-detail', 'shadow-detail'];
+    for (const r of f2FirstFourReasonIds) {
       const alreadyChecked = await page.evaluate((rid) => document.getElementById(`ipoReason_${rid}`)?.checked === true, r);
       if (!alreadyChecked) await page.click(`#ipoReason_${r}`);
     }
     await page.waitForTimeout(150);
-    const f2SixthDisabled = await page.evaluate(() => document.getElementById('ipoReason_color-balance')?.disabled === true);
-    record('Five-Reason limit re-established for Contrast/Touch-target audits (real UI workflow, not simulated)', f2SixthDisabled, `disabled=${f2SixthDisabled}`);
+
+    // Snapshot #1 — color-balance while still ENABLED (only four
+    // Reasons selected so far; the fifth slot is still open).
+    const colorBalanceEnabledSnap = await page.evaluate(snapReasonControl, 'ipoReason_color-balance');
+    record('color-balance captured while enabled (four Reasons selected, real UI workflow, not simulated)', colorBalanceEnabledSnap?.disabled === false, `snap=${JSON.stringify(colorBalanceEnabledSnap)}`);
+
+    // Select the fifth Reason — the real UI action that transitions
+    // color-balance from enabled to disabled.
+    const f2FifthReasonAlreadyChecked = await page.evaluate(() => document.getElementById('ipoReason_contrast')?.checked === true);
+    if (!f2FifthReasonAlreadyChecked) await page.click('#ipoReason_contrast');
+    await page.waitForTimeout(150);
+
+    // Snapshot #2 — the SAME color-balance control, now DISABLED.
+    const colorBalanceDisabledSnap = await page.evaluate(snapReasonControl, 'ipoReason_color-balance');
+    record('Five-Reason limit re-established for Contrast/Touch-target audits (real UI workflow, not simulated)', colorBalanceDisabledSnap?.disabled === true, `disabled=${colorBalanceDisabledSnap?.disabled}`);
+    record('color-balance captured while disabled (fifth Reason selected, SAME control as the enabled snapshot above)', colorBalanceDisabledSnap?.disabled === true, `snap=${JSON.stringify(colorBalanceDisabledSnap)}`);
 
     // ══════════════════════════════════════════════════════════════
-    // FIX 4 (Step 7B-B-F2-S2) — disabled Reason visual distinction.
-    // Compares the genuinely disabled 6th Reason against a genuinely
-    // enabled Reason across a real set of computed-style properties.
-    // Honestly reports NOT_TESTED (never a fabricated PASS) when every
-    // compared property is identical, since this app's CSS authors no
-    // explicit disabled style for these labels and native browser
-    // disabled-checkbox rendering is not reliably introspectable via
-    // getComputedStyle.
+    // FIX 1 (Step 7B-B-F2-S3) — disabled Reason visual distinction,
+    // isolated to color-balance's OWN before/after transition (never a
+    // different Reason as a stand-in reference). Only genuinely visible
+    // properties count as distinguishing evidence — cursor, className,
+    // and the `disabled` property itself are deliberately excluded from
+    // the comparison set used to decide PASS/NOT_TESTED, since none of
+    // them is visible page content.
     // ══════════════════════════════════════════════════════════════
-    console.log('=== Disabled Reason visual distinction (Step 7B-B-F2-S2 FIX 4) ===');
-    const disabledDistinctionCheck = await page.evaluate(() => {
-      function snap(input) {
-        if (!input) return null;
-        const label = input.closest('label');
-        const span = label ? label.querySelector('span') : null;
-        const inputStyle = getComputedStyle(input);
-        const labelStyle = label ? getComputedStyle(label) : null;
-        const spanStyle = span ? getComputedStyle(span) : null;
-        return {
-          disabled: input.disabled === true,
-          inputOpacity: inputStyle.opacity,
-          labelOpacity: labelStyle ? labelStyle.opacity : null,
-          spanOpacity: spanStyle ? spanStyle.opacity : null,
-          color: spanStyle ? spanStyle.color : (labelStyle ? labelStyle.color : null),
-          backgroundColor: labelStyle ? labelStyle.backgroundColor : null,
-          borderColor: labelStyle ? labelStyle.borderColor : null,
-          filter: labelStyle ? labelStyle.filter : inputStyle.filter,
-          cursor: labelStyle ? labelStyle.cursor : inputStyle.cursor,
-          className: `${label ? label.className : ''}|${input.className}`,
-        };
-      }
-      return { disabledSnap: snap(document.getElementById('ipoReason_color-balance')), enabledSnap: snap(document.getElementById('ipoReason_skin-tone')) };
-    });
-    const dSnap = disabledDistinctionCheck.disabledSnap;
-    const eSnap = disabledDistinctionCheck.enabledSnap;
-    if (!dSnap || !eSnap) {
-      record('Disabled sixth Reason is genuinely disabled (real UI workflow, not simulated)', false, `dSnap=${JSON.stringify(dSnap)}, eSnap=${JSON.stringify(eSnap)}`);
-      record('Disabled sixth Reason is visually distinguishable from an enabled Reason', false, 'required elements not found — FAIL');
+    console.log('=== Disabled Reason visual distinction — same control, before vs. after (Step 7B-B-F2-S3 FIX 1) ===');
+    if (!colorBalanceEnabledSnap || !colorBalanceDisabledSnap) {
+      record('color-balance same-control before/after comparison requires both snapshots', false, `enabledSnap=${JSON.stringify(colorBalanceEnabledSnap)}, disabledSnap=${JSON.stringify(colorBalanceDisabledSnap)}`);
     } else {
-      record('Disabled sixth Reason is genuinely disabled (real UI workflow, not simulated)', dSnap.disabled === true, `disabled=${dSnap.disabled}`);
-      const propsToCompare = ['inputOpacity', 'labelOpacity', 'spanOpacity', 'color', 'backgroundColor', 'borderColor', 'filter', 'cursor'];
-      const differences = propsToCompare.filter((p) => dSnap[p] !== eSnap[p]);
-      if (differences.length > 0) {
-        record('Disabled sixth Reason is visually distinguishable from an enabled Reason (measurable via computed style)', true, `differing properties: ${JSON.stringify(differences)}, disabled=${JSON.stringify(dSnap)}, enabled=${JSON.stringify(eSnap)}`);
+      const enabledStateCorrect = colorBalanceEnabledSnap.disabled === false;
+      const disabledStateCorrect = colorBalanceDisabledSnap.disabled === true;
+      const bothUnchecked = colorBalanceEnabledSnap.checked === false && colorBalanceDisabledSnap.checked === false;
+      record('color-balance enabled snapshot has disabled === false', enabledStateCorrect, `disabled=${colorBalanceEnabledSnap.disabled}`);
+      record('color-balance disabled snapshot has disabled === true', disabledStateCorrect, `disabled=${colorBalanceDisabledSnap.disabled}`);
+      record('color-balance remains unchecked (checked === false) in both the enabled and disabled snapshots', bothUnchecked, `enabledChecked=${colorBalanceEnabledSnap.checked}, disabledChecked=${colorBalanceDisabledSnap.checked}`);
+
+      // Only genuinely visible properties count toward distinction —
+      // cursor/className/disabled are captured above for evidence only
+      // and are deliberately never included in this comparison set.
+      const propsToCompare = ['inputOpacity', 'labelOpacity', 'spanOpacity', 'color', 'backgroundColor', 'borderColor', 'filter', 'textDecoration'];
+      const differences = propsToCompare.filter((p) => colorBalanceEnabledSnap[p] !== colorBalanceDisabledSnap[p]);
+      if (!enabledStateCorrect || !disabledStateCorrect || !bothUnchecked) {
+        record('Disabled sixth Reason (color-balance) is visually distinguishable from its own enabled state (measurable via computed style)', false, 'the before/after snapshots did not isolate a genuine disabled-only transition of the same control — FAIL');
+      } else if (differences.length > 0) {
+        record('Disabled sixth Reason (color-balance) is visually distinguishable from its own enabled state (measurable via computed style)', true, `differing VISIBLE properties: ${JSON.stringify(differences)}, enabledSnap=${JSON.stringify(colorBalanceEnabledSnap)}, disabledSnap=${JSON.stringify(colorBalanceDisabledSnap)}`);
       } else {
-        record('Disabled sixth Reason is visually distinguishable from an enabled Reason (measurable via computed style)', 'NOT_TESTED', `all ${propsToCompare.length} compared computed-style properties are identical between disabled and enabled Reason labels (${JSON.stringify(propsToCompare)}) — this application's CSS authors no explicit disabled style for these labels, and native browser disabled-checkbox rendering is not reliably introspectable via getComputedStyle — reported honestly as a tool limitation, never fabricated as PASS`);
+        record('Disabled sixth Reason (color-balance) is visually distinguishable from its own enabled state (measurable via computed style)', 'NOT_TESTED', `all ${propsToCompare.length} compared VISIBLE computed-style properties are identical between color-balance's own enabled and disabled snapshots (${JSON.stringify(propsToCompare)}) — cursor/className/the disabled property itself are deliberately excluded from this comparison since they are not visible page content — this application's CSS authors no explicit disabled style for these labels, and native browser disabled-checkbox rendering is not reliably introspectable via getComputedStyle — reported honestly as a tool limitation, never fabricated as PASS, and no CSS/class was added merely to force a pass`);
       }
     }
 
@@ -646,17 +745,30 @@ async function main() {
       }
       function isProvenLargeText(fontSizePx, fontWeight) { return fontSizePx >= 24 || (fontSizePx >= 18.66 && fontWeight >= 700); }
 
-      // FIX 3 — `requireNonEmptyText` targets are treated as `missing`
-      // (never PASS merely because the element exists) when their
-      // rendered text is empty at measurement time.
+      // FIX 3 (F2-S3) — `requireNonEmptyText` targets are treated as
+      // `missing` (never PASS merely because the element exists) when
+      // their rendered text is empty at measurement time. Every target
+      // — required text or not — must also pass a real-visibility gate
+      // (display, visibility, non-zero rendered size, non-zero
+      // effective opacity, rendered client rects) BEFORE contrast is
+      // calculated: a hidden/zero-size Element is never measurable.
       function collect(elOrNull, label, requireNonEmptyText) {
         if (!elOrNull) return { label, missing: true };
         const style = getComputedStyle(elOrNull);
+        const rect = elOrNull.getBoundingClientRect();
+        const clientRectCount = elOrNull.getClientRects().length;
+        const opacityResult = resolveEffectiveOpacity(elOrNull);
+        const isZeroOpacity = opacityResult.resolvable && opacityResult.value === 0;
+        if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse' || rect.width <= 0 || rect.height <= 0 || clientRectCount === 0 || isZeroOpacity) {
+          return {
+            label, missing: false, notVisible: true,
+            notVisibleReason: `required target "${label}" is hidden or zero-size and cannot be measured — display=${style.display}, visibility=${style.visibility}, rect=${rect.width}x${rect.height}, clientRects=${clientRectCount}, effectiveOpacityZero=${isZeroOpacity} — FAIL (never NOT_TESTED for a hidden/zero-size required target, never treated as measurable)`,
+          };
+        }
         const text = (elOrNull.textContent || '').trim().slice(0, 80);
         if (requireNonEmptyText && text.length === 0) return { label, missing: true };
         const fontSize = parseFloat(style.fontSize) || 0;
         const fontWeight = parseInt(style.fontWeight, 10) || 400;
-        const opacityResult = resolveEffectiveOpacity(elOrNull);
         return {
           label, missing: false, colorRaw: style.color, fgRgba: parseRgbaLocal(style.color),
           fontSize, fontWeight, text, isLargeText: isProvenLargeText(fontSize, fontWeight),
@@ -713,19 +825,71 @@ async function main() {
     for (const entry of contrastAudit) recordContrastEntry(entry.label, entry, contrastResults);
 
     // ══════════════════════════════════════════════════════════════
-    // PART 5B — Focus indicator contrast (Step 7B-B-F2-S2 FIX 5: uses
-    // the SAME robust effective-background resolver as the Contrast
-    // audit above — never the old simplified first-non-transparent-
-    // parent lookup — and measures whichever indicator is ACTUALLY
-    // active: outline color when an outline is present, or the real
-    // parsed box-shadow color when box-shadow is the active indicator
-    // instead, never reporting box-shadow presence while measuring an
-    // unrelated outlineColor). Real keyboard focus only: for the radio,
-    // a click first selects it within its roving-tabindex group, then
-    // a genuine Shift+Tab/Tab pair lands real keyboard focus on it —
-    // the same technique used for the other targets below.
+    // PART 5B — Focus indicator contrast (Step 7B-B-F2-S3 FIX 4/5/6).
+    // FIX 4: style is captured TWICE per target — once genuinely
+    // UNFOCUSED, once genuinely FOCUSED via real keyboard input — and
+    // the Focus indicator must be NEWLY present or MEASURABLY CHANGED
+    // between those two captures; a static/decorative outline or
+    // box-shadow present unchanged in both states never counts. FIX 5:
+    // the active indicator's color is parsed as RGBA and, when its own
+    // alpha is below 1, genuinely composited over the resolved adjacent
+    // background (via the same robust, gradient/image-aware resolver
+    // used by the Contrast audit) — alpha is never discarded. FIX 6:
+    // when the indicator is a box-shadow, the SPECIFIC shadow layer
+    // introduced/changed by focus is isolated by diffing the unfocused
+    // and focused box-shadow layer lists; if that isolation is not
+    // reliable (ambiguous layer counts, more than one layer differing),
+    // this is honestly NOT_TESTED — never assuming the first RGB value
+    // and never falling back to an unrelated outlineColor.
     // ══════════════════════════════════════════════════════════════
-    console.log('=== Focus indicator contrast (real keyboard focus) ===');
+    console.log('=== Focus indicator contrast (real keyboard focus, before/after comparison) ===');
+
+    // Defined once and reused as the SAME function reference for both
+    // the unfocused and focused captures below, so the two snapshots
+    // are guaranteed to be produced by byte-identical logic.
+    function captureFocusStyle(elId) {
+      const el = document.getElementById(elId);
+      const styledEl = el.closest('label') || el;
+      const style = getComputedStyle(styledEl);
+      const ownOverflow = style.overflow;
+      const parentOverflow = styledEl.parentElement ? getComputedStyle(styledEl.parentElement).overflow : 'visible';
+      return {
+        isFocused: document.activeElement === el,
+        outlineWidth: parseFloat(style.outlineWidth) || 0,
+        outlineStyle: style.outlineStyle,
+        outlineColorRaw: style.outlineColor,
+        boxShadow: style.boxShadow,
+        notClipped: !/hidden|clip/.test(ownOverflow) && !/hidden|clip/.test(parentOverflow),
+      };
+    }
+    function resolveAdjacentBackground(elId) {
+      function parseRgbaLocal(str) {
+        const m = str && str.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+        if (!m) return null;
+        return [parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]), m[4] !== undefined ? parseFloat(m[4]) : 1];
+      }
+      function resolveEffectiveBackground(startEl) {
+        const layers = [];
+        let contributingBgImage = null;
+        let el = startEl;
+        let foundOpaque = false;
+        while (el) {
+          const style = getComputedStyle(el);
+          if (style.backgroundImage && style.backgroundImage !== 'none' && contributingBgImage === null) contributingBgImage = style.backgroundImage;
+          const rgba = parseRgbaLocal(style.backgroundColor);
+          if (rgba && rgba[3] > 0) { layers.push(rgba); if (rgba[3] >= 1) { foundOpaque = true; break; } }
+          el = el.parentElement;
+        }
+        if (contributingBgImage) return { undeterminable: true, reason: `background-image present ("${contributingBgImage.slice(0, 80)}") on a contributing element — cannot be safely ignored even though an opaque color exists` };
+        let r = 255, g = 255, b = 255;
+        for (let i = layers.length - 1; i >= 0; i--) { const [lr, lg, lb, la] = layers[i]; r = lr * la + r * (1 - la); g = lg * la + g * (1 - la); b = lb * la + b * (1 - la); }
+        return { undeterminable: false, rgb: [Math.round(r), Math.round(g), Math.round(b)], hadOpaqueBase: foundOpaque, layerCount: layers.length };
+      }
+      const el = document.getElementById(elId);
+      const styledEl = el.closest('label') || el;
+      return resolveEffectiveBackground(styledEl.parentElement || styledEl);
+    }
+
     const focusIndicatorTargets = [
       { id: 'ipoOption_prefer-legacy', label: 'Observation radio (prefer-legacy)', isRadio: true },
       { id: 'ipoReason_skin-tone', label: 'Reason checkbox (skin-tone)', isRadio: false },
@@ -736,6 +900,18 @@ async function main() {
     for (const target of focusIndicatorTargets) {
       const elExists = await page.evaluate((elId) => !!document.getElementById(elId), target.id);
       if (!elExists) { record(`Focus indicator: ${target.label}`, false, 'required element not found in DOM — FAIL'); continue; }
+
+      // FIX 4 — establish a genuinely UNFOCUSED baseline first (blur if
+      // some earlier step left focus on this exact element), then
+      // capture its "before" style.
+      await page.evaluate((elId) => { const el = document.getElementById(elId); if (document.activeElement === el) document.body.focus(); }, target.id);
+      await page.waitForTimeout(30);
+      const unfocusedInfo = await page.evaluate(captureFocusStyle, target.id);
+
+      // Real keyboard focus landing (unchanged technique): for the
+      // radio, a click first selects it within its roving-tabindex
+      // group (radios cannot be reached by Tab unless checked), then a
+      // genuine Shift+Tab/Tab pair lands real keyboard focus on it.
       if (target.isRadio) {
         await page.click(`#${target.id}`);
         await page.waitForTimeout(80);
@@ -744,82 +920,95 @@ async function main() {
       }
       await page.keyboard.press('Shift+Tab');
       await page.keyboard.press('Tab');
-      const info = await page.evaluate((elId) => {
-        function parseRgbaLocal(str) {
-          const m = str && str.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
-          if (!m) return null;
-          return [parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]), m[4] !== undefined ? parseFloat(m[4]) : 1];
-        }
-        function resolveEffectiveBackground(startEl) {
-          const layers = [];
-          let contributingBgImage = null;
-          let el = startEl;
-          let foundOpaque = false;
-          while (el) {
-            const style = getComputedStyle(el);
-            if (style.backgroundImage && style.backgroundImage !== 'none' && contributingBgImage === null) contributingBgImage = style.backgroundImage;
-            const rgba = parseRgbaLocal(style.backgroundColor);
-            if (rgba && rgba[3] > 0) { layers.push(rgba); if (rgba[3] >= 1) { foundOpaque = true; break; } }
-            el = el.parentElement;
-          }
-          if (contributingBgImage) return { undeterminable: true, reason: `background-image present ("${contributingBgImage.slice(0, 80)}") on a contributing element — cannot be safely ignored even though an opaque color exists` };
-          let r = 255, g = 255, b = 255;
-          for (let i = layers.length - 1; i >= 0; i--) { const [lr, lg, lb, la] = layers[i]; r = lr * la + r * (1 - la); g = lg * la + g * (1 - la); b = lb * la + b * (1 - la); }
-          return { undeterminable: false, rgb: [Math.round(r), Math.round(g), Math.round(b)], hadOpaqueBase: foundOpaque, layerCount: layers.length };
-        }
+      const focusedInfo = await page.evaluate(captureFocusStyle, target.id);
 
-        const el = document.getElementById(elId);
-        const styledEl = el.closest('label') || el;
-        const style = getComputedStyle(styledEl);
-        const outlineWidth = parseFloat(style.outlineWidth) || 0;
-        const outlineStyle = style.outlineStyle;
-        const outlineColor = style.outlineColor;
-        const boxShadow = style.boxShadow;
-        const usingOutline = outlineWidth > 0 && outlineStyle !== 'none';
-        const usingBoxShadow = !usingOutline && !!boxShadow && boxShadow !== 'none';
-        const hasVisibleIndicator = usingOutline || usingBoxShadow;
-        // FIX 5 — measure whichever indicator is ACTUALLY active. A
-        // computed box-shadow value is a space-separated shape string
-        // that embeds exactly one color component (e.g. "rgb(74, 158,
-        // 255) 0px 0px 0px 2px") — extract that color, never fall back
-        // to the unrelated outlineColor when box-shadow is the real
-        // indicator.
-        let indicatorColorRaw = null;
-        if (usingOutline) {
-          indicatorColorRaw = outlineColor;
-        } else if (usingBoxShadow) {
-          const m = boxShadow.match(/rgba?\([^)]*\)/);
-          indicatorColorRaw = m ? m[0] : null;
+      if (!focusedInfo.isFocused) { record(`Focus indicator: ${target.label}`, false, `element did not receive real keyboard focus — unfocused=${JSON.stringify(unfocusedInfo)}, focused=${JSON.stringify(focusedInfo)}`); continue; }
+
+      // FIX 4 — the indicator must be NEWLY present or MEASURABLY
+      // CHANGED between the unfocused and focused captures. A static
+      // decorative outline/box-shadow that exists identically in both
+      // states is never accepted as evidence of a real Focus indicator.
+      const focusedHasOutline = focusedInfo.outlineWidth > 0 && focusedInfo.outlineStyle !== 'none';
+      const unfocusedHasOutline = unfocusedInfo.outlineWidth > 0 && unfocusedInfo.outlineStyle !== 'none';
+      const outlineUnchanged = focusedHasOutline && unfocusedHasOutline && unfocusedInfo.outlineWidth === focusedInfo.outlineWidth && unfocusedInfo.outlineStyle === focusedInfo.outlineStyle && unfocusedInfo.outlineColorRaw === focusedInfo.outlineColorRaw;
+      const usingOutline = focusedHasOutline && !outlineUnchanged;
+
+      const focusedHasBoxShadow = !!focusedInfo.boxShadow && focusedInfo.boxShadow !== 'none';
+      const boxShadowUnchanged = focusedHasBoxShadow && unfocusedInfo.boxShadow === focusedInfo.boxShadow;
+      const usingBoxShadow = !usingOutline && focusedHasBoxShadow && !boxShadowUnchanged;
+
+      if (!usingOutline && !usingBoxShadow) {
+        record(`Focus indicator: ${target.label}`, false, `no newly-introduced or measurably-changed Focus indicator between the unfocused and focused captures — a static/decorative indicator present unchanged in both states does not count (unfocused=${JSON.stringify(unfocusedInfo)}, focused=${JSON.stringify(focusedInfo)})`);
+        continue;
+      }
+      if (!focusedInfo.notClipped) { record(`Focus indicator: ${target.label}`, false, 'indicator is clipped by an ancestor overflow:hidden/clip'); continue; }
+
+      let indicatorColorRaw = null;
+      let indicatorSource = null;
+      if (usingOutline) {
+        indicatorColorRaw = focusedInfo.outlineColorRaw;
+        indicatorSource = 'outline (newly present or changed vs. unfocused state)';
+      } else {
+        // FIX 6 — isolate the SPECIFIC box-shadow layer introduced or
+        // changed by focus, splitting on top-level commas only (never
+        // inside an rgba(...)'s own commas) so multi-shadow values are
+        // handled correctly.
+        const unfocusedLayers = splitBoxShadowLayers(unfocusedInfo.boxShadow);
+        const focusedLayers = splitBoxShadowLayers(focusedInfo.boxShadow);
+        let ambiguousEvidence = null;
+        if (focusedLayers.length === unfocusedLayers.length) {
+          const diffIdx = [];
+          for (let i = 0; i < focusedLayers.length; i++) if (focusedLayers[i] !== unfocusedLayers[i]) diffIdx.push(i);
+          if (diffIdx.length === 1) {
+            indicatorColorRaw = (focusedLayers[diffIdx[0]].match(/rgba?\([^)]*\)/) || [null])[0];
+            indicatorSource = `box-shadow (layer ${diffIdx[0]} changed vs. unfocused state)`;
+          } else {
+            ambiguousEvidence = `${diffIdx.length} box-shadow layers differ between the unfocused and focused captures (expected exactly 1) — cannot isolate the Focus-introduced layer reliably`;
+          }
+        } else if (focusedLayers.length === unfocusedLayers.length + 1) {
+          const newLayers = focusedLayers.filter((l) => !unfocusedLayers.includes(l));
+          if (newLayers.length === 1) {
+            indicatorColorRaw = (newLayers[0].match(/rgba?\([^)]*\)/) || [null])[0];
+            indicatorSource = 'box-shadow (newly added layer isolated vs. unfocused state)';
+          } else {
+            ambiguousEvidence = `the focused capture has exactly one more box-shadow layer than the unfocused capture, but ${newLayers.length} layers are not present in the unfocused set (expected exactly 1 new layer) — cannot isolate reliably`;
+          }
+        } else {
+          ambiguousEvidence = `box-shadow layer counts (unfocused=${unfocusedLayers.length}, focused=${focusedLayers.length}) do not match a simple single-layer-added or single-layer-changed pattern — cannot isolate the Focus-introduced component reliably`;
         }
-        const ownOverflow = style.overflow;
-        const parentOverflow = styledEl.parentElement ? getComputedStyle(styledEl.parentElement).overflow : 'visible';
-        const notClipped = !/hidden|clip/.test(ownOverflow) && !/hidden|clip/.test(parentOverflow);
-        // FIX 5 — adjacent background now uses the SAME robust resolver
-        // as the Contrast audit (gradient/image-aware), never the old
-        // simplified first-non-transparent-parent lookup.
-        const adjacentBgResult = resolveEffectiveBackground(styledEl.parentElement || styledEl);
-        return {
-          isFocused: document.activeElement === el,
-          hasVisibleIndicator, usingOutline, usingBoxShadow, outlineWidth, outlineStyle, boxShadow,
-          indicatorColorRaw, notClipped, adjacentBgResult,
-        };
-      }, target.id);
-      if (!info.isFocused) { record(`Focus indicator: ${target.label}`, false, `element did not receive real keyboard focus — ${JSON.stringify(info)}`); continue; }
-      if (!info.hasVisibleIndicator) { record(`Focus indicator: ${target.label}`, false, `no visible non-zero indicator (outlineWidth=${info.outlineWidth}, outlineStyle=${info.outlineStyle}, boxShadow=${info.boxShadow})`); continue; }
-      if (!info.notClipped) { record(`Focus indicator: ${target.label}`, false, 'indicator is clipped by an ancestor overflow:hidden/clip'); continue; }
-      if (info.adjacentBgResult.undeterminable) {
+        if (ambiguousEvidence) {
+          record(`Focus indicator: ${target.label} contrast against adjacent background meets 3:1`, 'NOT_TESTED', `${ambiguousEvidence} (never assuming the first RGB value, never falling back to an unrelated outlineColor) — unfocusedBoxShadow="${unfocusedInfo.boxShadow}", focusedBoxShadow="${focusedInfo.boxShadow}"`);
+          continue;
+        }
+      }
+      if (!indicatorColorRaw) {
+        record(`Focus indicator: ${target.label}`, false, `could not parse the ACTUAL active indicator color (source=${indicatorSource}, raw=${indicatorColorRaw}) — FAIL, not NOT_TESTED`);
+        continue;
+      }
+      const indicatorRgba = parseRgbaNode(indicatorColorRaw);
+      if (!indicatorRgba) {
+        record(`Focus indicator: ${target.label}`, false, `could not parse the ACTUAL active indicator color as RGBA (source=${indicatorSource}, raw=${indicatorColorRaw}) — FAIL, not NOT_TESTED`);
+        continue;
+      }
+
+      const adjacentBgResult = await page.evaluate(resolveAdjacentBackground, target.id);
+      if (adjacentBgResult.undeterminable) {
         // FIX 5 — fail closed: never fabricate a ratio against a
         // genuinely non-computable background.
-        record(`Focus indicator: ${target.label} contrast against adjacent background meets 3:1`, 'NOT_TESTED', info.adjacentBgResult.reason);
+        record(`Focus indicator: ${target.label} contrast against adjacent background meets 3:1`, 'NOT_TESTED', adjacentBgResult.reason);
         continue;
       }
-      const indicatorRgb = info.indicatorColorRaw ? parseRgb(info.indicatorColorRaw) : null;
-      if (!indicatorRgb) {
-        record(`Focus indicator: ${target.label}`, false, `could not parse the ACTUAL active indicator color (usingOutline=${info.usingOutline}, usingBoxShadow=${info.usingBoxShadow}, indicatorColorRaw=${info.indicatorColorRaw}) — FAIL, not NOT_TESTED`);
-        continue;
-      }
-      const ratio = contrastRatio(indicatorRgb, info.adjacentBgResult.rgb);
-      record(`Focus indicator: ${target.label} contrast against adjacent background meets 3:1`, ratio >= 3.0, `ratio=${ratio.toFixed(2)}:1, indicatorSource=${info.usingOutline ? 'outline' : 'box-shadow'}, indicatorColor=${info.indicatorColorRaw}, adjacentBg=rgb(${info.adjacentBgResult.rgb.join(',')}) [hadOpaqueBase=${info.adjacentBgResult.hadOpaqueBase}, layers=${info.adjacentBgResult.layerCount}], notClipped=${info.notClipped}`);
+
+      // FIX 5 — parse the indicator color as RGBA and, when its own
+      // alpha is below 1, composite it over the resolved adjacent
+      // background — never discard alpha, never treat a semi-
+      // transparent indicator as opaque.
+      const [ir, ig, ib, ia] = indicatorRgba;
+      const compositedIndicator = ia >= 1
+        ? [ir, ig, ib]
+        : [0, 1, 2].map((i) => Math.round(indicatorRgba[i] * ia + adjacentBgResult.rgb[i] * (1 - ia)));
+      const ratio = contrastRatio(compositedIndicator, adjacentBgResult.rgb);
+      record(`Focus indicator: ${target.label} contrast against adjacent background meets 3:1`, ratio >= 3.0, `ratio=${ratio.toFixed(2)}:1, indicatorSource=${indicatorSource}, indicatorColorRaw=${indicatorColorRaw}, indicatorAlpha=${ia.toFixed(3)}, compositedIndicator=rgb(${compositedIndicator.join(',')}), adjacentBg=rgb(${adjacentBgResult.rgb.join(',')}) [hadOpaqueBase=${adjacentBgResult.hadOpaqueBase}, layers=${adjacentBgResult.layerCount}], notClipped=${focusedInfo.notClipped}`);
     }
 
     // ══════════════════════════════════════════════════════════════

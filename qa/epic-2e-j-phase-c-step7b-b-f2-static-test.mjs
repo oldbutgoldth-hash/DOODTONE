@@ -275,20 +275,31 @@ const requiredContrastCategories = [
   const capturesFgRgba = testSrc.includes('fgRgba: parseRgbaLocal(style.color)');
   record('FIX 2: foreground color is parsed as RGBA (4-tuple with alpha), not just opaque RGB', hasParseRgbaLocal && capturesFgRgba, `parseRgbaLocalOccurrences>=3=${hasParseRgbaLocal}, capturesFgRgba=${capturesFgRgba}`);
 }
-// FIX 2 continued — computed opacity on the target AND its ancestors
-// is inspected via a bounded walk, and the foreground's effective
-// alpha (own alpha × resolved ancestor-opacity product) is composited
-// over the resolved background — never silently discarded/assumed 1.
+// FIX 2 continued — computed opacity on the target AND its ancestors is
+// inspected via a bounded walk. Step 7B-B-F2-S3 FIX 2: ancestor opacity
+// is NEVER multiplied into the foreground's own alpha (CSS group
+// opacity applies to the whole rendered group, not just the foreground
+// text color) — the old `fgRgba[3] * opacityValue` composite is gone;
+// composition now uses ONLY the foreground's own alpha, and only when
+// opacityValue is exactly 1 everywhere.
 {
   const hasResolveEffectiveOpacityFn = (testSrc.match(/function resolveEffectiveOpacity\(startEl\)/g) || []).length >= 2;
   const hasBoundedWalk = testSrc.includes('const MAX_STEPS = 25;') && testSrc.includes('steps < MAX_STEPS');
-  const hasEffectiveAlphaComposite = testSrc.includes('const effectiveAlpha = entry.fgRgba[3] * entry.opacityValue;') && testSrc.includes('const compositedFg = effectiveAlpha >= 1');
-  const neverAssumesOpacityOne = !/opacity\s*=\s*1;?\s*\/\/.*assum/i.test(testSrc);
+  const oldAncestorOpacityMultiplicationGone = !testSrc.includes('entry.fgRgba[3] * entry.opacityValue');
+  const usesOwnAlphaOnly = testSrc.includes('const fgAlpha = entry.fgRgba[3];') && testSrc.includes('const compositedFg = fgAlpha >= 1');
   record(
-    'FIX 2: computed opacity is inspected via a bounded ancestor walk, and foreground alpha is genuinely composited over the background (never discarded or assumed 1)',
-    hasResolveEffectiveOpacityFn && hasBoundedWalk && hasEffectiveAlphaComposite && neverAssumesOpacityOne,
-    `hasResolveEffectiveOpacityFn(>=2)=${hasResolveEffectiveOpacityFn}, hasBoundedWalk=${hasBoundedWalk}, hasEffectiveAlphaComposite=${hasEffectiveAlphaComposite}, neverAssumesOpacityOne=${neverAssumesOpacityOne}`
+    'FIX 2 (F2-S3): computed opacity is inspected via a bounded ancestor walk, and ancestor opacity is NEVER multiplied into the foreground alpha (old fgRgba[3]*opacityValue composite removed; composition uses the foreground\'s own alpha only)',
+    hasResolveEffectiveOpacityFn && hasBoundedWalk && oldAncestorOpacityMultiplicationGone && usesOwnAlphaOnly,
+    `hasResolveEffectiveOpacityFn(>=2)=${hasResolveEffectiveOpacityFn}, hasBoundedWalk=${hasBoundedWalk}, oldAncestorOpacityMultiplicationGone=${oldAncestorOpacityMultiplicationGone}, usesOwnAlphaOnly=${usesOwnAlphaOnly}`
   );
+}
+// FIX 2 continued (F2-S3) — any target/ancestor opacity below 1 is
+// honestly NOT_TESTED ("CSS group opacity requires full
+// foreground/background group compositing") rather than fabricating a
+// Ratio from a partial/incorrect model.
+{
+  const hasGroupOpacityNotTested = testSrc.includes("if (entry.opacityValue !== 1) {") && testSrc.includes("record(`Contrast: ${label}`, 'NOT_TESTED', 'CSS group opacity requires full foreground/background group compositing');");
+  record('FIX 2 (F2-S3): any target/ancestor opacity below 1 is honestly NOT_TESTED ("CSS group opacity requires full foreground/background group compositing"), never used to fabricate a Ratio', hasGroupOpacityNotTested, `present=${hasGroupOpacityNotTested}`);
 }
 // FIX 2 continued — an unresolvable opacity chain is honestly
 // NOT_TESTED with bounded evidence, never silently treated as
@@ -330,52 +341,37 @@ const requiredContrastCategories = [
   );
 }
 
-// FIX 4 — disabled 6th Reason is compared against an enabled Reason
-// across a real set of computed-style properties, with an honest
-// NOT_TESTED fallback (never a fabricated PASS, never a CSS/class
-// change merely to pass the test) when native disabled styling can't
-// be measured.
+// FIX 4 (F2-S2, superseded by F2-S3 FIX 1) — disabled 6th Reason
+// distinction is now isolated to color-balance's OWN before/after
+// transition rather than a different enabled Reason as a stand-in. See
+// the dedicated F2-S3 FIX 1 block below for the current assertions;
+// this block confirms the OLD cross-control comparison approach is
+// genuinely gone.
 {
-  const hasSnapHelper = testSrc.includes('function snap(input)');
-  const hasEightProps = testSrc.includes("const propsToCompare = ['inputOpacity', 'labelOpacity', 'spanOpacity', 'color', 'backgroundColor', 'borderColor', 'filter', 'cursor'];");
-  const comparesAgainstEnabledReference = testSrc.includes("document.getElementById('ipoReason_skin-tone')");
-  const hasHonestNotTestedFallback = testSrc.includes("not reliably introspectable via getComputedStyle — reported honestly as a tool limitation, never fabricated as PASS");
-  const neverAddsClassOrStyleToPass = !/ipoReason_color-balance['"]\)\.(classList\.add|style\.\w+\s*=)/.test(testSrc);
+  const oldSnapHelperGone = !testSrc.includes('function snap(input)');
+  const oldCrossControlComparisonGone = !testSrc.includes("disabledSnap: snap(document.getElementById('ipoReason_color-balance')), enabledSnap: snap(document.getElementById('ipoReason_skin-tone'))");
   record(
-    'FIX 4: disabled 6th Reason is compared against an enabled Reason across 8 computed-style properties, with honest NOT_TESTED fallback (never a fabricated PASS or CSS change to force a pass)',
-    hasSnapHelper && hasEightProps && comparesAgainstEnabledReference && hasHonestNotTestedFallback && neverAddsClassOrStyleToPass,
-    `hasSnapHelper=${hasSnapHelper}, hasEightProps=${hasEightProps}, comparesAgainstEnabledReference=${comparesAgainstEnabledReference}, hasHonestNotTestedFallback=${hasHonestNotTestedFallback}, neverAddsClassOrStyleToPass=${neverAddsClassOrStyleToPass}`
+    'FIX 4 (superseded by F2-S3 FIX 1): the old cross-control comparison (disabled color-balance vs. a DIFFERENT enabled Reason) is gone',
+    oldSnapHelperGone && oldCrossControlComparisonGone,
+    `oldSnapHelperGone=${oldSnapHelperGone}, oldCrossControlComparisonGone=${oldCrossControlComparisonGone}`
   );
 }
 
-// FIX 5 — Focus indicator background resolution uses the SAME robust
-// resolver as Contrast (duplicated inline in the Focus-indicator
-// page.evaluate), never the old simplified first-non-transparent-
-// parent while-loop.
+// FIX 5 (F2-S2, superseded by F2-S3 FIX 4/5/6) — Focus indicator no
+// longer measures a single static capture; it now captures unfocused
+// AND focused style and requires a genuine change. This block confirms
+// the OLD single-capture approach is gone; the dedicated F2-S3 FIX
+// 4/5/6 block below covers the current implementation.
 {
   const oldSimplifiedLoopGone = !testSrc.includes("while ((!rgba || rgba[3] === 0) && bgEl.parentElement)");
-  const focusUsesRobustResolver = testSrc.includes('const adjacentBgResult = resolveEffectiveBackground(styledEl.parentElement || styledEl);');
-  record('FIX 5: Focus indicator background resolution uses the same robust resolver as Contrast (old simplified while-loop removed)', oldSimplifiedLoopGone && focusUsesRobustResolver, `oldSimplifiedLoopGone=${oldSimplifiedLoopGone}, focusUsesRobustResolver=${focusUsesRobustResolver}`);
-}
-// FIX 5 continued — the ACTUALLY active indicator (outline OR
-// box-shadow) is correctly identified and its real color parsed —
-// never reporting box-shadow presence while measuring an unrelated
-// outlineColor.
-{
-  const hasUsingOutlineUsingBoxShadow = testSrc.includes('const usingOutline = outlineWidth > 0 && outlineStyle !== \'none\';') && testSrc.includes('const usingBoxShadow = !usingOutline && !!boxShadow');
-  const hasBoxShadowColorExtraction = testSrc.includes("const m = boxShadow.match(/rgba?\\([^)]*\\)/);") && testSrc.includes('indicatorColorRaw = m ? m[0] : null;');
-  const neverHardcodesOutlineColor = !/indicatorColorRaw\s*=\s*info\.outlineColor/.test(testSrc) && !testSrc.includes('const outlineRgb = parseRgb(info.outlineColor);\n      if (!outlineRgb ||');
-  record(
-    'FIX 5: the ACTUALLY active indicator (outline or box-shadow) is identified and its real color source parsed, never a hard-coded outlineColor read regardless of which mechanism is active',
-    hasUsingOutlineUsingBoxShadow && hasBoxShadowColorExtraction && neverHardcodesOutlineColor,
-    `hasUsingOutlineUsingBoxShadow=${hasUsingOutlineUsingBoxShadow}, hasBoxShadowColorExtraction=${hasBoxShadowColorExtraction}, neverHardcodesOutlineColor=${neverHardcodesOutlineColor}`
-  );
-}
-// FIX 5 continued — an undeterminable adjacent background (gradient/
-// image) fails closed to NOT_TESTED rather than fabricating a ratio.
-{
-  const hasFocusUndeterminableNotTested = testSrc.includes('if (info.adjacentBgResult.undeterminable) {') && testSrc.includes("'NOT_TESTED', info.adjacentBgResult.reason);");
-  record('FIX 5: Focus indicator fails closed to NOT_TESTED (never a fabricated ratio) when the adjacent background is genuinely undeterminable', hasFocusUndeterminableNotTested, `present=${hasFocusUndeterminableNotTested}`);
+  // The old F2-S2 Focus-indicator single-capture callback began with
+  // an inline parseRgbaLocal definition immediately inside the
+  // page.evaluate((elId) => {...}) body — a distinct fingerprint from
+  // the unrelated Part 3 keyboard-focus-validation block elsewhere in
+  // the file, which also declares `const info = await page.evaluate(...)`
+  // but never defines parseRgbaLocal inside it.
+  const oldSingleCaptureInfoGone = !testSrc.includes('const info = await page.evaluate((elId) => {\n        function parseRgbaLocal(str) {');
+  record('FIX 5 (superseded by F2-S3 FIX 4/5/6): the old single-capture (no unfocused/focused comparison) Focus indicator approach is gone', oldSimplifiedLoopGone && oldSingleCaptureInfoGone, `oldSimplifiedLoopGone=${oldSimplifiedLoopGone}, oldSingleCaptureInfoGone=${oldSingleCaptureInfoGone}`);
 }
 
 // FIX 6 — a single shared decision function (`recordContrastEntry`)
@@ -389,11 +385,147 @@ const requiredContrastCategories = [
   record('FIX 6: a single shared recordContrastEntry() applies identical decision rules to the main Contrast sweep and the standalone Warning check', hasSharedRecordFn && mainSweepUsesSharedFn && warningUsesSharedFn, `hasSharedRecordFn=${hasSharedRecordFn}, mainSweepUsesSharedFn=${mainSweepUsesSharedFn}, warningUsesSharedFn=${warningUsesSharedFn}`);
 }
 
+// ══════════════════════════════════════════════════════════════════
+// Step 7B-B-F2-S3 FIX 7 — new static assertions covering FIX 1-6.
+// ══════════════════════════════════════════════════════════════════
+
+// FIX 1 — the SAME color-balance control is captured before (enabled)
+// and after (disabled) selecting the fifth Reason, via a single shared
+// snapReasonControl() helper reused for both snapshots.
+{
+  const hasSharedSnapFn = testSrc.includes('function snapReasonControl(inputId)');
+  const enabledSnapCall = testSrc.includes("const colorBalanceEnabledSnap = await page.evaluate(snapReasonControl, 'ipoReason_color-balance');");
+  const disabledSnapCall = testSrc.includes("const colorBalanceDisabledSnap = await page.evaluate(snapReasonControl, 'ipoReason_color-balance');");
+  const selectsFourThenFifth = testSrc.includes("const f2FirstFourReasonIds = ['skin-tone', 'white-balance', 'highlight-detail', 'shadow-detail'];") && testSrc.includes("document.getElementById('ipoReason_contrast')?.checked === true");
+  record(
+    'FIX 1: the SAME color-balance control is captured before (four Reasons selected, enabled) and after (fifth Reason selected, disabled) via one shared snap function',
+    hasSharedSnapFn && enabledSnapCall && disabledSnapCall && selectsFourThenFifth,
+    `hasSharedSnapFn=${hasSharedSnapFn}, enabledSnapCall=${enabledSnapCall}, disabledSnapCall=${disabledSnapCall}, selectsFourThenFifth=${selectsFourThenFifth}`
+  );
+}
+// FIX 1 continued — color-balance is verified unchecked in BOTH
+// snapshots (never conflating a checked-state change with the
+// disabled-state change being isolated).
+{
+  const hasBothUncheckedCheck = testSrc.includes("const bothUnchecked = colorBalanceEnabledSnap.checked === false && colorBalanceDisabledSnap.checked === false;") && testSrc.includes("'color-balance remains unchecked (checked === false) in both the enabled and disabled snapshots'");
+  record('FIX 1: color-balance is verified unchecked (checked === false) in both the enabled and disabled snapshots', hasBothUncheckedCheck, `present=${hasBothUncheckedCheck}`);
+}
+// FIX 1 continued — cursor and className are captured for evidence
+// only and are NEVER included in the comparison set used to decide
+// visual distinction (only genuinely visible properties count).
+{
+  const propsToCompareLine = testSrc.match(/const propsToCompare = \[[^\]]*\];\s*\n\s*const differences = propsToCompare\.filter\(\(p\) => colorBalanceEnabledSnap/);
+  const cursorExcludedFromComparison = !!propsToCompareLine && !propsToCompareLine[0].includes("'cursor'");
+  const classNameExcludedFromComparison = !!propsToCompareLine && !propsToCompareLine[0].includes("'className'");
+  const disabledExcludedFromComparison = !!propsToCompareLine && !propsToCompareLine[0].includes("'disabled'");
+  const capturedForEvidenceOnly = testSrc.includes('Captured for evidence only — FIX 1 (F2-S3) deliberately never');
+  record(
+    'FIX 1: cursor, className, and the disabled property itself are captured for evidence only and never counted as visual distinction on their own',
+    cursorExcludedFromComparison && classNameExcludedFromComparison && disabledExcludedFromComparison && capturedForEvidenceOnly,
+    `cursorExcludedFromComparison=${cursorExcludedFromComparison}, classNameExcludedFromComparison=${classNameExcludedFromComparison}, disabledExcludedFromComparison=${disabledExcludedFromComparison}, capturedForEvidenceOnly=${capturedForEvidenceOnly}`
+  );
+}
+// FIX 1 continued — no CSS/class is added merely to force a pass, and
+// the NOT_TESTED fallback is honest when all visible properties match.
+{
+  const neverAddsClassOrStyleToPass = !/ipoReason_color-balance['"]\)\.(classList\.add|style\.\w+\s*=)/.test(testSrc);
+  const hasHonestNotTestedFallback = testSrc.includes('reported honestly as a tool limitation, never fabricated as PASS, and no CSS/class was added merely to force a pass');
+  record('FIX 1: no CSS/class is added to color-balance merely to force a pass; the NOT_TESTED fallback is honest', neverAddsClassOrStyleToPass && hasHonestNotTestedFallback, `neverAddsClassOrStyleToPass=${neverAddsClassOrStyleToPass}, hasHonestNotTestedFallback=${hasHonestNotTestedFallback}`);
+}
+
+// FIX 3 — every Contrast target (main sweep's collect() AND the
+// standalone Warning capture) checks display, visibility, and
+// non-zero rendered rect/client-rects before contrast is calculated;
+// hidden/zero-size targets FAIL, never NOT_TESTED.
+{
+  const visibilityChecksInSource = (testSrc.match(/style\.display === 'none' \|\| style\.visibility === 'hidden' \|\| style\.visibility === 'collapse' \|\| rect\.width <= 0 \|\| rect\.height <= 0 \|\| clientRectCount === 0 \|\| isZeroOpacity/g) || []).length;
+  const warningVisibilityCheck = testSrc.includes("cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse' || rect.width <= 0 || rect.height <= 0 || clientRectCount === 0 || isZeroOpacity");
+  const hiddenTargetsFailNotNotTested = testSrc.includes('FAIL (never NOT_TESTED for a hidden/zero-size required target, never treated as measurable)') && testSrc.includes('FAIL (never NOT_TESTED, never treated as measurable)');
+  record(
+    'FIX 3: every Contrast target (main sweep + Warning) checks display/visibility/non-zero rect/client-rects before measurement; hidden/zero-size targets FAIL, never NOT_TESTED',
+    visibilityChecksInSource >= 1 && warningVisibilityCheck && hiddenTargetsFailNotNotTested,
+    `visibilityChecksInSource=${visibilityChecksInSource}, warningVisibilityCheck=${warningVisibilityCheck}, hiddenTargetsFailNotNotTested=${hiddenTargetsFailNotNotTested}`
+  );
+}
+// FIX 3 continued — recordContrastEntry() itself fails closed on the
+// notVisible flag before ever attempting a color/ratio calculation.
+{
+  const hasNotVisibleGate = testSrc.includes('if (entry.notVisible) {') && testSrc.includes('record(`Contrast: ${label}`, false, entry.notVisibleReason);');
+  record('FIX 3: recordContrastEntry() fails closed on a notVisible target before any color/ratio calculation is attempted', hasNotVisibleGate, `present=${hasNotVisibleGate}`);
+}
+
+// FIX 4 — Focus style is captured BEFORE (genuinely unfocused, via an
+// explicit blur-if-focused step) and AFTER (genuinely focused, via
+// real keyboard input) using the SAME captureFocusStyle function
+// reference for both captures.
+{
+  const hasSharedCaptureFn = testSrc.includes('function captureFocusStyle(elId)');
+  const hasExplicitBlurStep = testSrc.includes("if (document.activeElement === el) document.body.focus();");
+  const unfocusedCapture = testSrc.includes('const unfocusedInfo = await page.evaluate(captureFocusStyle, target.id);');
+  const focusedCapture = testSrc.includes('const focusedInfo = await page.evaluate(captureFocusStyle, target.id);');
+  record(
+    'FIX 4: Focus style is captured before (genuine unfocused baseline) and after (real keyboard focus) using the same captureFocusStyle function for both',
+    hasSharedCaptureFn && hasExplicitBlurStep && unfocusedCapture && focusedCapture,
+    `hasSharedCaptureFn=${hasSharedCaptureFn}, hasExplicitBlurStep=${hasExplicitBlurStep}, unfocusedCapture=${unfocusedCapture}, focusedCapture=${focusedCapture}`
+  );
+}
+// FIX 4 continued — the focused style must genuinely DIFFER from the
+// unfocused style (outline newly present/changed, or box-shadow newly
+// present/changed) — a decorative indicator unchanged in both states
+// is explicitly rejected, never counted as PASS evidence.
+{
+  const hasOutlineUnchangedCheck = testSrc.includes('const outlineUnchanged = focusedHasOutline && unfocusedHasOutline && unfocusedInfo.outlineWidth === focusedInfo.outlineWidth');
+  const hasBoxShadowUnchangedCheck = testSrc.includes('const boxShadowUnchanged = focusedHasBoxShadow && unfocusedInfo.boxShadow === focusedInfo.boxShadow;');
+  const rejectsUnchangedIndicator = testSrc.includes('a static/decorative indicator present unchanged in both states does not count');
+  record(
+    'FIX 4: focused style must genuinely differ from unfocused style; a decorative indicator unchanged in both states is explicitly rejected',
+    hasOutlineUnchangedCheck && hasBoxShadowUnchangedCheck && rejectsUnchangedIndicator,
+    `hasOutlineUnchangedCheck=${hasOutlineUnchangedCheck}, hasBoxShadowUnchangedCheck=${hasBoxShadowUnchangedCheck}, rejectsUnchangedIndicator=${rejectsUnchangedIndicator}`
+  );
+}
+
+// FIX 5 — the Focus indicator's own color is parsed as RGBA (via the
+// Node-side parseRgbaNode) and its alpha is genuinely composited over
+// the resolved adjacent background when below 1 — never discarded.
+{
+  const hasParseRgbaNodeFn = testSrc.includes('function parseRgbaNode(str)');
+  const indicatorParsedAsRgba = testSrc.includes('const indicatorRgba = parseRgbaNode(indicatorColorRaw);');
+  const hasIndicatorAlphaComposite = testSrc.includes('const compositedIndicator = ia >= 1') && testSrc.includes('indicatorRgba[i] * ia + adjacentBgResult.rgb[i] * (1 - ia)');
+  const neverDiscardsAlpha = testSrc.includes('never discard alpha, never treat a semi-') || testSrc.includes('never discard alpha');
+  record(
+    'FIX 5: Focus indicator color is parsed as RGBA and its alpha is genuinely composited over the resolved adjacent background when below 1 (never discarded)',
+    hasParseRgbaNodeFn && indicatorParsedAsRgba && hasIndicatorAlphaComposite && neverDiscardsAlpha,
+    `hasParseRgbaNodeFn=${hasParseRgbaNodeFn}, indicatorParsedAsRgba=${indicatorParsedAsRgba}, hasIndicatorAlphaComposite=${hasIndicatorAlphaComposite}, neverDiscardsAlpha=${neverDiscardsAlpha}`
+  );
+}
+
+// FIX 6 — multiple/ambiguous box-shadow layers fail closed to
+// NOT_TESTED (never assuming the first RGB value, never falling back
+// to outlineColor), via a dedicated layer-splitting helper that
+// respects nested rgba(...) commas.
+{
+  const hasSplitBoxShadowLayersFn = testSrc.includes('function splitBoxShadowLayers(str)');
+  const respectsNestedCommas = testSrc.includes("if (ch === '(') depth++;") && testSrc.includes("if (ch === ')') depth--;") && testSrc.includes("if (ch === ',' && depth === 0)");
+  const hasAmbiguousNotTestedPath = testSrc.includes('if (ambiguousEvidence) {') && testSrc.includes("'NOT_TESTED', `${ambiguousEvidence}");
+  const neverAssumesFirstRgbOrOutlineFallback = testSrc.includes('never assuming the first RGB value, never falling back to an unrelated outlineColor');
+  record(
+    'FIX 6: multiple/ambiguous box-shadow layers fail closed to NOT_TESTED, never assuming the first RGB value or falling back to outlineColor',
+    hasSplitBoxShadowLayersFn && respectsNestedCommas && hasAmbiguousNotTestedPath && neverAssumesFirstRgbOrOutlineFallback,
+    `hasSplitBoxShadowLayersFn=${hasSplitBoxShadowLayersFn}, respectsNestedCommas=${respectsNestedCommas}, hasAmbiguousNotTestedPath=${hasAmbiguousNotTestedPath}, neverAssumesFirstRgbOrOutlineFallback=${neverAssumesFirstRgbOrOutlineFallback}`
+  );
+}
+// FIX 6 continued — a decorative, unchanged box-shadow present in both
+// the unfocused and focused captures cannot satisfy usingBoxShadow.
+{
+  const hasBoxShadowUnchangedExclusion = testSrc.includes('const usingBoxShadow = !usingOutline && focusedHasBoxShadow && !boxShadowUnchanged;');
+  record('FIX 6: a decorative box-shadow present unchanged in both unfocused and focused captures cannot satisfy usingBoxShadow (cannot pass as a Focus indicator)', hasBoxShadowUnchangedExclusion, `present=${hasBoxShadowUnchangedExclusion}`);
+}
+
 const passCount = results.filter((r) => r.result === 'PASS').length;
 const failCount = results.filter((r) => r.result === 'FAIL').length;
 
 const output = {
-  suite: 'EPIC 2E-J — Step 7B-B-F2-S/F2-S2: static coverage self-test (source audit only, no Chromium)',
+  suite: 'EPIC 2E-J — Step 7B-B-F2-S/F2-S2/F2-S3: static coverage self-test (source audit only, no Chromium)',
   generatedAt: new Date().toISOString(),
   summary: { total: results.length, pass: passCount, fail: failCount },
   results,
