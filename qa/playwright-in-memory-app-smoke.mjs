@@ -123,6 +123,19 @@ async function main() {
     unresolvedImports: [],
     rejectedSpecifiers: [],
     duplicateCanonicalIds: [],
+    storageCompatibility: {
+      status: null,
+      localStorageAccessibleBefore: null,
+      sessionStorageAccessibleBefore: null,
+      localStorageErrorName: null,
+      sessionStorageErrorName: null,
+      localStoragePrototypeCompatible: null,
+      sessionStoragePrototypeCompatible: null,
+      localSessionIsolated: null,
+      prototypeInstrumentationCompatible: null,
+      secondContextStartsEmpty: null,
+      appStorageKeysObserved: [],
+    },
     finalDecision: null,
   };
 
@@ -157,6 +170,11 @@ async function main() {
   // ── Build the in-memory app BEFORE launching a Browser — this part
   // is pure Node/fs work and never touches the network. ──
   const { buildInMemoryApp, toEvidenceSummary } = await import('./helpers/playwright-in-memory-app.mjs');
+  const {
+    buildProbeInvocationSource,
+    buildInstallerInvocationSource,
+    buildFullVerificationInvocationSource,
+  } = await import('./helpers/playwright-opaque-origin-storage.mjs');
   let app;
   let evidence;
   try {
@@ -212,6 +230,83 @@ async function main() {
     record('PART 1/7: navigate to about:blank?qa=1 (the only navigation target used anywhere in this harness)', aboutBlankResult === 'SUCCEEDED' ? 'PASS' : 'FAIL', `aboutBlankResult=${aboutBlankResult}`);
 
     if (aboutBlankResult === 'SUCCEEDED') {
+      // ── ENV-B1B-F1 PART 1 — storage access detection, BEFORE setContent.
+      // about:blank has an opaque origin: real Chromium throws a
+      // SecurityError the instant window.localStorage/sessionStorage are
+      // even READ there. Detected on the CURRENT about:blank document
+      // (the same window setContent will render into), never on a
+      // hypothetical future document. ──
+      const probeBefore = await page.evaluate(buildProbeInvocationSource()).catch((e) => ({
+        localStorageAccessible: false, sessionStorageAccessible: false,
+        localStorageErrorName: 'EVALUATE_THREW', sessionStorageErrorName: String((e && e.message) || e).slice(0, 60),
+      }));
+      output.storageCompatibility.localStorageAccessibleBefore = probeBefore.localStorageAccessible;
+      output.storageCompatibility.sessionStorageAccessibleBefore = probeBefore.sessionStorageAccessible;
+      output.storageCompatibility.localStorageErrorName = probeBefore.localStorageErrorName;
+      output.storageCompatibility.sessionStorageErrorName = probeBefore.sessionStorageErrorName;
+      record(
+        'ENV-B1B-F1 PART 1: storage access detected on about:blank before setContent (errorName only, never a full stack)',
+        'PASS', // detection itself always succeeds regardless of outcome — this just records what was found
+        JSON.stringify(probeBefore)
+      );
+
+      const nativeStorageAvailable = probeBefore.localStorageAccessible && probeBefore.sessionStorageAccessible;
+      if (nativeStorageAvailable) {
+        output.storageCompatibility.status = 'NATIVE_STORAGE_AVAILABLE';
+        record('ENV-B1B-F1: native Storage is accessible on this opaque origin — compatibility layer NOT installed (never replace working native Storage)', 'PASS', 'nativeStorageAvailable=true');
+      } else {
+        // Register for future documents too (defense in depth — see
+        // qa/helpers/playwright-opaque-origin-storage.mjs header comment
+        // for why the installer is idempotent and safe to invoke twice),
+        // then install immediately on the CURRENT about:blank document —
+        // per PART 5's required sequence: install/verify BEFORE
+        // page.setContent().
+        await context.addInitScript({ content: buildInstallerInvocationSource() });
+        const installResult = await page.evaluate(buildInstallerInvocationSource()).catch((e) => ({ installed: false, reason: String((e && e.message) || e).slice(0, 120) }));
+        output.storageCompatibility.status = installResult && installResult.installed ? 'OPAQUE_ORIGIN_MEMORY_STORAGE_INSTALLED' : 'FAIL_STORAGE_INSTALL';
+        record('ENV-B1B-F1: Test-only in-memory Storage compatibility layer installed (native Storage inaccessible on this opaque origin)', installResult && installResult.installed ? 'PASS' : 'FAIL', JSON.stringify(installResult));
+
+        const probeAfter = await page.evaluate(buildProbeInvocationSource()).catch(() => ({ localStorageAccessible: false, sessionStorageAccessible: false }));
+        record('ENV-B1B-F1: window.localStorage/sessionStorage are accessible immediately after install (SecurityError eliminated)', probeAfter.localStorageAccessible && probeAfter.sessionStorageAccessible ? 'PASS' : 'FAIL', JSON.stringify(probeAfter));
+
+        // ── PART 2/4/7 — full Storage semantics + prototype +
+        // instrumentation-compatibility verification, run for real inside
+        // this Browser, BEFORE setContent (PART 5 step 6). ──
+        const verification = await page.evaluate(buildFullVerificationInvocationSource()).catch((e) => ({ checks: [], allPassed: false, evaluateError: String((e && e.message) || e) }));
+        const vChecks = verification.checks || [];
+        const findCheck = (needle) => vChecks.find((c) => c.test.includes(needle));
+        const prototypeCheckL = findCheck('localStorage instanceof Storage');
+        const prototypeCheckS = findCheck('sessionStorage instanceof Storage');
+        const isolationCheckA = findCheck('sessionStorage.getItem("a") === null');
+        const isolationCheckB = findCheck('localStorage.getItem("b") === null');
+        const instrumentationChecks = vChecks.filter((c) => c.test.startsWith('PART 4:'));
+        output.storageCompatibility.localStoragePrototypeCompatible = !!(prototypeCheckL && prototypeCheckL.result === 'PASS');
+        output.storageCompatibility.sessionStoragePrototypeCompatible = !!(prototypeCheckS && prototypeCheckS.result === 'PASS');
+        output.storageCompatibility.localSessionIsolated = !!(isolationCheckA && isolationCheckA.result === 'PASS' && isolationCheckB && isolationCheckB.result === 'PASS');
+        output.storageCompatibility.prototypeInstrumentationCompatible = instrumentationChecks.length === 3 && instrumentationChecks.every((c) => c.result === 'PASS');
+        record('ENV-B1B-F1 PART 7: full Storage runtime self-test (A-F) plus PART 4 instrumentation-compatibility proof', verification.allPassed ? 'PASS' : 'FAIL', JSON.stringify({ totalChecks: vChecks.length, failCount: vChecks.filter((c) => c.result === 'FAIL').length, evaluateError: verification.evaluateError }));
+
+        // ── PART 6 — zero-persistence contract: a second, independent
+        // BrowserContext must start with completely empty Storage (no
+        // leaked data from this context's shim). ──
+        let secondContextStartsEmpty = false;
+        let secondContext = null;
+        try {
+          secondContext = await browser.newContext({ serviceWorkers: 'block' });
+          const secondPage = await secondContext.newPage();
+          await secondPage.goto(ABOUT_BLANK_URL, { waitUntil: 'domcontentloaded', timeout: 10000 });
+          await secondPage.evaluate(buildInstallerInvocationSource());
+          const secondProbe = await secondPage.evaluate(() => ({ localLength: window.localStorage.length, sessionLength: window.sessionStorage.length, hasFirstContextKey: window.localStorage.getItem('a') !== null || window.localStorage.getItem('probe') !== null }));
+          secondContextStartsEmpty = secondProbe.localLength === 0 && secondProbe.sessionLength === 0 && !secondProbe.hasFirstContextKey;
+          await secondPage.close();
+        } catch { /* leave secondContextStartsEmpty = false, recorded as FAIL below with no fabrication */ }
+        finally {
+          if (secondContext) await secondContext.close();
+        }
+        output.storageCompatibility.secondContextStartsEmpty = secondContextStartsEmpty;
+        record('ENV-B1B-F1 PART 6: a second, independent BrowserContext\'s Storage starts completely empty (page-memory-only, never shared across Contexts)', secondContextStartsEmpty ? 'PASS' : 'FAIL', `secondContextStartsEmpty=${secondContextStartsEmpty}`);
+      }
+
       let setContentOk = false;
       let setContentError = null;
       try {
@@ -266,6 +361,27 @@ async function main() {
         record('PART 9: expected LUMIXA UI elements exist (#aiWorkflowHeaderVersion, #viewerViewport, #previewImg, #btnRedeem)', uiElementsOk ? 'PASS' : 'FAIL', JSON.stringify(domChecks));
         const qaQueryOk = !!(domChecks && domChecks.locationSearch === '?qa=1');
         record('PART 9: the QA query is visible through location.search', qaQueryOk ? 'PASS' : 'FAIL', `locationSearch=${domChecks && domChecks.locationSearch}`);
+
+        // ── ENV-B1B-F1 PART 8 — App storage key observation. Key NAMES
+        // only, never values, per spec. ──
+        const storageKeyNames = await page.evaluate(() => {
+          const collect = (store) => {
+            const keys = [];
+            try {
+              for (let i = 0; i < store.length; i++) keys.push(store.key(i));
+            } catch { /* leave keys as whatever was collected so far */ }
+            return keys;
+          };
+          return { localStorageKeys: collect(window.localStorage), sessionStorageKeys: collect(window.sessionStorage) };
+        }).catch(() => ({ localStorageKeys: [], sessionStorageKeys: [] }));
+        const appStorageKeysObserved = Array.from(new Set([...(storageKeyNames.localStorageKeys || []), ...(storageKeyNames.sessionStorageKeys || [])]));
+        output.storageCompatibility.appStorageKeysObserved = appStorageKeysObserved;
+        const looksLikeObservationOrSessionPersistence = appStorageKeysObserved.some((k) => /observ|reason/i.test(k));
+        record(
+          'ENV-B1B-F1 PART 8: App startup storage writes stay within the in-memory shim; only key NAMES recorded (never values); no Observation/Reason persistence key appears during Smoke startup (Theme "dm" / Language "lang" writes are normal and not misclassified)',
+          !looksLikeObservationOrSessionPersistence ? 'PASS' : 'FAIL',
+          `appStorageKeysObserved=${JSON.stringify(appStorageKeysObserved)}`
+        );
 
         // Small flush wait so any trailing microtask-scheduled console/page errors surface before we snapshot.
         await page.waitForTimeout(200);

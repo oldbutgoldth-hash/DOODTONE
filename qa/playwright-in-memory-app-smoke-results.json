@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test",
-  "generatedAt": "2026-07-22T10:16:45.232Z",
+  "generatedAt": "2026-07-22T10:38:47.485Z",
   "results": [
     {
       "test": "PART 1: Playwright Node package resolvability",
@@ -31,5 +31,18 @@
   "unresolvedImports": [],
   "rejectedSpecifiers": [],
   "duplicateCanonicalIds": [],
+  "storageCompatibility": {
+    "status": null,
+    "localStorageAccessibleBefore": null,
+    "sessionStorageAccessibleBefore": null,
+    "localStorageErrorName": null,
+    "sessionStorageErrorName": null,
+    "localStoragePrototypeCompatible": null,
+    "sessionStoragePrototypeCompatible": null,
+    "localSessionIsolated": null,
+    "prototypeInstrumentationCompatible": null,
+    "secondContextStartsEmpty": null,
+    "appStorageKeysObserved": []
+  },
   "finalDecision": "BROWSER_BINARY_UNAVAILABLE"
 }

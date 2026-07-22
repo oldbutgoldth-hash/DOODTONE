@@ -1,9 +1,9 @@
 {
   "suite": "EPIC 2E-J ENV-B1B PART 11 — In-Memory App Harness static/functional self-test",
-  "generatedAt": "2026-07-22T10:16:44.783Z",
+  "generatedAt": "2026-07-22T10:38:46.970Z",
   "summary": {
-    "total": 36,
-    "pass": 36,
+    "total": 56,
+    "pass": 56,
     "fail": 0
   },
   "results": [
@@ -118,6 +118,106 @@
       "evidence": "{\"before\":{\"index.html\":\"06ca7c4785808c41edc253e3c37a61f4f81ce6494edebf00b51bdb615ee0f740\",\"ui/app.js\":\"c93d6a36f57a6cdad4775f17a7ab93f63b8bb5b3ae2a98cafacb834ec959243e\",\"core/histogram-engine/index.js\":\"b2872fe3eb35de5d138b1eec3b85d305540d43c856a190513aa3cac7e6ef6615\",\"core/lightroom-mapping-engine/index.js\":\"f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099\",\"core/xmp-validator/index.js\":\"ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f\"},\"after\":{\"index.html\":\"06ca7c4785808c41edc253e3c37a61f4f81ce6494edebf00b51bdb615ee0f740\",\"ui/app.js\":\"c93d6a36f57a6cdad4775f17a7ab93f63b8bb5b3ae2a98cafacb834ec959243e\",\"core/histogram-engine/index.js\":\"b2872fe3eb35de5d138b1eec3b85d305540d43c856a190513aa3cac7e6ef6615\",\"core/lightroom-mapping-engine/index.js\":\"f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099\",\"core/xmp-validator/index.js\":\"ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f\"}}"
     },
     {
+      "test": "10a. probeStorageAccess reports SecurityError (name only) on an opaque-origin window, before any install — reproduces the real about:blank failure mode",
+      "result": "PASS",
+      "evidence": "{\"localStorageAccessible\":false,\"sessionStorageAccessible\":false,\"localStorageErrorName\":\"SecurityError\",\"sessionStorageErrorName\":\"SecurityError\"}"
+    },
+    {
+      "test": "10b. compatibility layer install eliminates the SecurityError — native accessible Storage is never what gets replaced (this path only ever runs when access already failed)",
+      "result": "PASS",
+      "evidence": "{\"installResult\":{\"installed\":true,\"reason\":null},\"after\":{\"localStorageAccessible\":true,\"sessionStorageAccessible\":true,\"localStorageErrorName\":null,\"sessionStorageErrorName\":null}}"
+    },
+    {
+      "test": "10c. probeStorageAccess reports NATIVE_STORAGE_AVAILABLE-equivalent (both accessible) when Storage already works — this is the condition under which the smoke test never installs the layer",
+      "result": "PASS",
+      "evidence": "{\"localStorageAccessible\":true,\"sessionStorageAccessible\":true,\"localStorageErrorName\":null,\"sessionStorageErrorName\":null}"
+    },
+    {
+      "test": "10d. localStorage and sessionStorage use separate stores (functional, not just structural)",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "10e. methods live on Storage.prototype (getItem/setItem/removeItem/clear/key), not as own properties on the instances",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "10f. objects do not define own setItem/removeItem/clear that would bypass Storage.prototype (re-verified directly, not only inside runFullStorageVerification)",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "10g. values (and keys) are String-coerced",
+      "result": "PASS",
+      "evidence": "got=\"true\""
+    },
+    {
+      "test": "10h. getItem returns null for a missing key",
+      "result": "PASS",
+      "evidence": "got=null"
+    },
+    {
+      "test": "10i. exact Reference restoration is checked (strict === on Storage.prototype.setItem after wrap+restore)",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "10j. runFullStorageVerification (the exact function invoked in-Browser) passes all A-F + PART 4 checks against the fake opaque-origin window",
+      "result": "PASS",
+      "evidence": "totalChecks=22, failCount=0"
+    },
+    {
+      "test": "10k. the Browser-invocation sources are self-contained (bind only to window/Storage, capture no outer-scope module state)",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "qa/helpers/playwright-opaque-origin-storage.mjs is readable",
+      "result": "PASS",
+      "evidence": "12784 bytes"
+    },
+    {
+      "test": "10l. no fs write anywhere in the Storage compatibility helper (it never imports node:fs at all — pure in-memory logic)",
+      "result": "PASS",
+      "evidence": "present(noFsWrite)=true"
+    },
+    {
+      "test": "10m. no Network use anywhere in the Storage compatibility helper, and it never imports \"playwright\" itself",
+      "result": "PASS",
+      "evidence": "present(noNetwork)=true"
+    },
+    {
+      "test": "10n. outside of comments, the Storage compatibility helper never references any core/, ui/, or index.html path (it only ever touches window/Storage objects passed in by the caller)",
+      "result": "PASS",
+      "evidence": "present(noProductionTouch)=true"
+    },
+    {
+      "test": "10o. source order: the compatibility layer is installed AFTER the about:blank navigation and BEFORE page.setContent (matches the required PART 5 sequence)",
+      "result": "PASS",
+      "evidence": "gotoIdx=10884, installCallIdx=13656, setContentIdx=18214"
+    },
+    {
+      "test": "10p. when native Storage is already accessible, the smoke test never calls the installer (native accessible Storage is not replaced)",
+      "result": "PASS",
+      "evidence": "hasNativeBranch=true, nativeBranchNeverInstalls=true"
+    },
+    {
+      "test": "10q. the in-memory smoke test never uses the legacy NOT_RUN_ENVIRONMENT_BLOCKED decision (retired now that the in-memory Browser path is available)",
+      "result": "PASS",
+      "evidence": "present=false"
+    },
+    {
+      "test": "10r. a second, independent BrowserContext is created and checked for Storage isolation (PART 6 zero-persistence contract)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "10s. App storage observation records key NAMES only (store.key(i)), never calls getItem to read values into the result",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
       "test": "qa/helpers/playwright-in-memory-app.mjs is readable",
       "result": "PASS",
       "evidence": "25840 bytes"
@@ -125,7 +225,7 @@
     {
       "test": "qa/playwright-in-memory-app-smoke.mjs is readable",
       "result": "PASS",
-      "evidence": "18229 bytes"
+      "evidence": "27043 bytes"
     },
     {
       "test": "The in-memory app helper never imports \"playwright\" itself — statically testable even when the package is unavailable",
@@ -175,7 +275,7 @@
     {
       "test": "Every record() call in the new smoke test passes a PASS/FAIL/NOT_TESTED string (learned from the ENV-B1A-R Part 12 fix — never repeat the boolean-record bug in new code)",
       "result": "PASS",
-      "evidence": "totalRecordCalls=19, offenders=[]"
+      "evidence": "totalRecordCalls=25, offenders=[]"
     },
     {
       "test": "The final-decision computation filters on the string 'FAIL'",
