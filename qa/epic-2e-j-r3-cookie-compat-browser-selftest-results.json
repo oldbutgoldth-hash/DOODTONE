@@ -1,13 +1,13 @@
 {
-  "suite": "EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test",
-  "runId": "d834d475-d905-4f93-acb2-4c321f97b91a",
-  "startedAt": "2026-07-22T17:12:17.542Z",
-  "completedAt": "2026-07-22T17:12:17.542Z",
+  "suite": "COMBINED CLOSEOUT R3 — Phase A FIX A4: Cookie compatibility real-Browser self-test",
+  "runId": "ecae7fb1-35e6-40ff-b33a-c4d9ac5e0ece",
+  "startedAt": "2026-07-22T17:12:11.769Z",
+  "completedAt": "2026-07-22T17:12:11.769Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-22T17:12:17.542Z",
+  "generatedAt": "2026-07-22T17:12:11.769Z",
   "summary": {
     "total": 1,
     "pass": 0,

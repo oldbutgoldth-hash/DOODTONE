@@ -1,73 +1,103 @@
 {
-  "suite": "EPIC 2E-J Phase C - Final Machine-Readable Result",
-  "generatedAt": "2026-07-21T00:00:00.000Z",
-  "step7A": {
-    "decision": "PASS",
-    "total": 51,
-    "pass": 51,
-    "fail": 0,
-    "notTested": 0
-  },
-  "step7BA": {
-    "decision": "PASS",
-    "total": 56,
-    "pass": 56,
-    "fail": 0,
-    "notTested": 0
-  },
-  "step7BB": {
-    "decision": "CONDITIONAL_PASS",
-    "total": 29,
-    "pass": 28,
-    "fail": 0,
-    "notTested": 1
-  },
-  "focusedCoreRegression": {
-    "total": 137,
-    "pass": 137,
+  "suite": "EPIC 2E-J Phase C — Final Machine-Readable Result (COMBINED CLOSEOUT R3)",
+  "runId": "e5e39757-9422-44f7-98d2-635157c12864",
+  "generatedAt": "2026-07-22T17:15:05.391Z",
+  "completed": true,
+  "syntax": {
+    "ran": true,
+    "total": 101,
     "fail": 0
   },
-  "totalAutomatedTests": 273,
-  "totalPassed": 272,
-  "totalFailed": 0,
-  "totalNotTested": 1,
-  "manualTestsNotPerformed": [
-    "Physical mobile device",
-    "Physical touch hardware",
-    "NVDA",
-    "JAWS",
-    "VoiceOver",
-    "Long-duration memory profiling",
-    "Real-user privacy study",
-    "Real-user usability study",
-    "Multi-tab synchronization"
-  ],
-  "productionSource": "legacy",
-  "mappingResult": "PASS — unchanged, verified via union-key comparison with/without Review state",
-  "xmpResult": "PASS — exact text/length/SHA-256 identical before and after complete Observation/Session/Generation-handoff workflow",
-  "privacyResult": "PASS — zero storage/network/messaging/clipboard/download calls from Observation actions; Session schema data-minimization proven via real getQaSchemaSnapshot() projection",
-  "accessibilityResult": "CONDITIONAL_PASS — keyboard navigation, focus indicators, ARIA structure, contrast (5/5 targets >=4.5:1), and touch targets (17/17 >=44px, after a genuine defect fix) all PASS; only physical touch hardware remains untested",
-  "securityResult": "PASS — zero non-comment dangerous-API consumers in Observation/Session modules; zero Observation/Session identifiers in core/; malformed/hostile renderer input (11+6 cases) and HTML/script injection (5 payloads) all safely handled after a genuine defect fix",
-  "defectsFoundAndFixed": [
+  "focusedCoreRegression": {
+    "ran": true,
+    "parsed": true,
+    "pass": 137,
+    "total": 137,
+    "fail": 0
+  },
+  "gates": [
     {
-      "defect": "_safeArray() in ui/interactive-preview-observation-renderer-v2.js only checked Array.isArray() and returned the caller's array unchanged, so a hostile array with a throwing index getter crashed downstream .filter()/.includes() calls",
-      "fix": "Rewrote to perform genuine safe bounded projection (per-index try/catch, bounded length, never for...of/spread on the caller's array)",
-      "filesAffected": ["ui/interactive-preview-observation-renderer-v2.js"]
+      "key": "liveApp",
+      "label": "Live App",
+      "decision": "BROWSER_BINARY_UNAVAILABLE",
+      "summary": {
+        "total": 1,
+        "pass": 0,
+        "fail": 0,
+        "notTested": 1
+      },
+      "runId": "df951eda-72ff-43cc-9df9-a53d2fb913b4",
+      "generatedAt": "2026-07-22T17:12:17.003Z",
+      "ok": false,
+      "reasons": [
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence"
+      ]
     },
     {
-      "defect": "Clear Observation, Clear Reasons, and Clear Session buttons measured only ~26px tall (below the ~44px touch-target guideline)",
-      "fix": "Added min-height:44px and flex centering to all three buttons",
-      "filesAffected": ["ui/interactive-preview-observation-renderer-v2.js"]
+      "key": "observationSmoke",
+      "label": "Observation Smoke",
+      "decision": "BROWSER_BINARY_UNAVAILABLE",
+      "summary": {
+        "total": 1,
+        "pass": 0,
+        "fail": 0,
+        "notTested": 1
+      },
+      "runId": "d834d475-d905-4f93-acb2-4c321f97b91a",
+      "generatedAt": "2026-07-22T17:12:17.542Z",
+      "ok": false,
+      "reasons": [
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence"
+      ]
+    },
+    {
+      "key": "step7bA",
+      "label": "Step 7B-A",
+      "decision": "BROWSER_BINARY_UNAVAILABLE",
+      "summary": {
+        "total": 1,
+        "pass": 0,
+        "fail": 0,
+        "notTested": 1
+      },
+      "runId": "fdb27a30-ddd4-4947-b511-0ca6d4a07671",
+      "generatedAt": "2026-07-22T17:12:24.255Z",
+      "ok": false,
+      "reasons": [
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence"
+      ]
+    },
+    {
+      "key": "step7bB",
+      "label": "Step 7B-B",
+      "decision": "BROWSER_BINARY_UNAVAILABLE",
+      "summary": {
+        "total": 1,
+        "pass": 0,
+        "fail": 0,
+        "notTested": 1
+      },
+      "runId": "9893fadb-858c-4216-a89f-4cb4d9e637a9",
+      "generatedAt": "2026-07-22T17:12:18.609Z",
+      "ok": false,
+      "reasons": [
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (CONDITIONAL_PASS/PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence"
+      ]
     }
   ],
-  "testsNotPerformed": [
-    "Physical mobile device",
+  "manualTestsNotPerformed": [
     "Physical touch hardware",
-    "Real NVDA/JAWS/VoiceOver screen reader testing",
-    "Long-duration memory profiling",
-    "Real-user privacy study",
-    "Real-user usability study",
-    "Multi-tab synchronization"
+    "Real screen-reader verification (NVDA/JAWS/VoiceOver)",
+    "Physical mobile device verification"
   ],
-  "finalDecision": "CONDITIONAL PASS — Ready for EPIC 2E-J Phase D Release Closeout pending only physical-device/touch-hardware/screen-reader verification"
+  "productionSource": "legacy",
+  "controlledTestState": "disabled",
+  "decision": "BLOCKED_AUTOMATED_ACCEPTANCE_NOT_MET",
+  "blockingReasons": [
+    "Live App: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
+    "Observation Smoke: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
+    "Step 7B-A: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
+    "Step 7B-B: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (CONDITIONAL_PASS/PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence"
+  ],
+  "finalDecisionNarrative": "NOT a CONDITIONAL_PASS. One or more automated acceptance gates were not satisfied by current, fresh evidence in this run — see blockingReasons. This is reported honestly rather than reusing/copying forward any older Final PASS/CONDITIONAL_PASS result."
 }

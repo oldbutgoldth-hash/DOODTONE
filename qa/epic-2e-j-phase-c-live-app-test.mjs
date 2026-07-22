@@ -38,6 +38,9 @@ import {
   writeResultAtomic,
   buildRuntimeCrashRow,
   writeBrowserUnavailableResult,
+  qaSnapshot,
+  passAllReviewItems,
+  waitForAnalysisCompletion,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -74,44 +77,23 @@ function record(test, result, evidence) {
   console.log(`${icon} [${normalizedResult}] ${test} — ${evidence}`);
 }
 
-async function qaSnapshot(page) {
-  return page.evaluate(() => (window.__LUMIXA_QA__ ? window.__LUMIXA_QA__.getPreviewPipelineSnapshot() : null));
-}
-
-async function passAllReviewItems(page) {
-  const itemIds = await page.evaluate(() => [...new Set(Array.from(document.querySelectorAll('#reviewConsoleInner [data-review-item-id]')).map((i) => i.dataset.reviewItemId))]);
-  for (const itemId of itemIds) {
-    await page.evaluate((id) => {
-      const container = document.querySelector(`#reviewConsoleInner [data-review-item-id="${id}"]`);
-      const btn = container ? container.querySelector('button[data-review-action="pass"]') : null;
-      if (btn) btn.click();
-    }, itemId);
-    await page.waitForTimeout(80);
-  }
-  return itemIds.length;
-}
-
-async function waitForAnalysisCompletion(page, priorGeneration, maxWaitMs = 25000) {
-  const start = Date.now();
-  const transientInteractiveStates = new Set(['cancelled', 'preparing', null, undefined]);
-  while (Date.now() - start < maxWaitMs) {
-    const snapshot = await qaSnapshot(page);
-    if (snapshot && snapshot.analysisGeneration > priorGeneration && snapshot.previewSandbox.exists && !transientInteractiveStates.has(snapshot.interactive?.state)) {
-      return { completed: true, snapshot };
-    }
-    await page.waitForTimeout(300);
-  }
-  const finalSnapshot = await qaSnapshot(page);
-  return { completed: finalSnapshot?.previewSandbox?.exists === true, snapshot: finalSnapshot };
-}
-
+// COMBINED CLOSEOUT R3 — Phase C FIX C2: qaSnapshot/passAllReviewItems/
+// waitForAnalysisCompletion are now imported from the shared runtime
+// helper (qa/helpers/playwright-lumixa-test-runtime.mjs) rather than
+// defined locally — Observation Smoke uses the exact same functions.
+// This local wrapper only resolves the fixture filename against this
+// suite's own FIXTURES_DIR and delegates everything else unchanged, so
+// existing call sites (which pass a bare fixture filename) and this
+// suite's 51/51 passing behavior are both preserved exactly.
 async function importAndReachReady(page, fixture, priorGeneration) {
-  await page.setInputFiles('#fileIn', path.join(FIXTURES_DIR, fixture));
-  await waitForAnalysisCompletion(page, priorGeneration);
-  const genBeforeReview = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? priorGeneration);
-  await passAllReviewItems(page);
-  await page.click('#btnReanalyze');
-  const result = await waitForAnalysisCompletion(page, genBeforeReview);
+  const result = await (async () => {
+    await page.setInputFiles('#fileIn', path.join(FIXTURES_DIR, fixture));
+    await waitForAnalysisCompletion(page, priorGeneration);
+    const genBeforeReview = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? priorGeneration);
+    await passAllReviewItems(page);
+    await page.click('#btnReanalyze');
+    return waitForAnalysisCompletion(page, genBeforeReview);
+  })();
   return result;
 }
 
@@ -554,7 +536,7 @@ async function main() {
   await writeResultAtomic(RESULTS_PATH, output);
   await writeResultAtomic(EVIDENCE_RESULTS_PATH, { runId, generatedAt: new Date().toISOString(), liveEvidenceRecords });
   console.log(`\n${passCount}/${results.length} PASS, ${failCount} FAIL, ${notTestedCount} NOT_TESTED`);
-  console.log(`Step 7A Final Decision: ${output.decision}`);
+  console.log(`Live App Final Decision: ${output.decision}`);
   console.log('Results written to qa/epic-2e-j-phase-c-live-app-results.json');
   process.exit(output.decision === 'FAIL' ? 1 : 0);
 }

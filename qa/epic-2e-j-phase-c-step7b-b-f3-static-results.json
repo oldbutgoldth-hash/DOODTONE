@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J — Step 7B-B-F3-S: static coverage self-test (source audit only, no Chromium)",
-  "generatedAt": "2026-07-22T15:32:46.565Z",
+  "generatedAt": "2026-07-22T17:12:00.667Z",
   "summary": {
     "total": 68,
     "pass": 68,

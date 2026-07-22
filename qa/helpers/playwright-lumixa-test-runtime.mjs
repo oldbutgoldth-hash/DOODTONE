@@ -432,3 +432,64 @@ export async function writeBrowserUnavailableResult(finalPath, { suite, status, 
   await writeResultAtomic(finalPath, output);
   return output;
 }
+
+// ══════════════════════════════════════════════════════════════════
+// COMBINED CLOSEOUT R3 — Phase C FIX C2: the deterministic Human
+// Review completion workflow, factored out of the Live App suite (it
+// already reaches Ready/51-51 this way) so Observation Smoke can use
+// the SAME real DOM-driven sequence — real Review Console "Pass"
+// clicks + a real "Re-analyze" click — instead of a bare fixture
+// upload followed by a fixed timeout. Behavior is unchanged from the
+// Live App suite's own prior local copies of these functions; this is
+// a pure extraction, never a rewrite.
+// ══════════════════════════════════════════════════════════════════
+
+/** Reads the safe, read-only `?qa=1` snapshot hook (or null if absent). */
+export async function qaSnapshot(page) {
+  return page.evaluate(() => (window.__LUMIXA_QA__ ? window.__LUMIXA_QA__.getPreviewPipelineSnapshot() : null));
+}
+
+/** Clicks every real Review Console "Pass" button currently present. */
+export async function passAllReviewItems(page) {
+  const itemIds = await page.evaluate(() => [...new Set(Array.from(document.querySelectorAll('#reviewConsoleInner [data-review-item-id]')).map((i) => i.dataset.reviewItemId))]);
+  for (const itemId of itemIds) {
+    await page.evaluate((id) => {
+      const container = document.querySelector(`#reviewConsoleInner [data-review-item-id="${id}"]`);
+      const btn = container ? container.querySelector('button[data-review-action="pass"]') : null;
+      if (btn) btn.click();
+    }, itemId);
+    await page.waitForTimeout(80);
+  }
+  return itemIds.length;
+}
+
+/** Polls the QA snapshot until a NEW, non-transient analysis Generation with an existing previewSandbox is observed (or times out). */
+export async function waitForAnalysisCompletion(page, priorGeneration, maxWaitMs = 25000) {
+  const start = Date.now();
+  const transientInteractiveStates = new Set(['cancelled', 'preparing', null, undefined]);
+  while (Date.now() - start < maxWaitMs) {
+    const snapshot = await qaSnapshot(page);
+    if (snapshot && snapshot.analysisGeneration > priorGeneration && snapshot.previewSandbox.exists && !transientInteractiveStates.has(snapshot.interactive?.state)) {
+      return { completed: true, snapshot };
+    }
+    await page.waitForTimeout(300);
+  }
+  const finalSnapshot = await qaSnapshot(page);
+  return { completed: finalSnapshot?.previewSandbox?.exists === true, snapshot: finalSnapshot };
+}
+
+/**
+ * The full deterministic Ready-reachability workflow: upload the given
+ * fixture (an ABSOLUTE path), wait for the initial analysis, click
+ * every real Review Console "Pass" button, click the real "Re-analyze"
+ * button, then wait for the resulting analysis to complete. Returns the
+ * same shape as `waitForAnalysisCompletion()`.
+ */
+export async function importAndReachReady(page, fixtureAbsolutePath, priorGeneration) {
+  await page.setInputFiles('#fileIn', fixtureAbsolutePath);
+  await waitForAnalysisCompletion(page, priorGeneration);
+  const genBeforeReview = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? priorGeneration);
+  await passAllReviewItems(page);
+  await page.click('#btnReanalyze');
+  return waitForAnalysisCompletion(page, genBeforeReview);
+}

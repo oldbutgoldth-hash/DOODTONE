@@ -1,13 +1,13 @@
 {
   "suite": "EPIC 2E-J-C-F2 Step 7A (complete, incl. F3) - Full Application Reachability + Actual UI Workflow",
-  "runId": "4f2d5133-7676-4edf-b1fb-89346e588d81",
-  "startedAt": "2026-07-22T15:32:59.382Z",
-  "completedAt": "2026-07-22T15:32:59.382Z",
+  "runId": "df951eda-72ff-43cc-9df9-a53d2fb913b4",
+  "startedAt": "2026-07-22T17:12:17.003Z",
+  "completedAt": "2026-07-22T17:12:17.003Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-22T15:32:59.382Z",
+  "generatedAt": "2026-07-22T17:12:17.003Z",
   "summary": {
     "total": 1,
     "pass": 0,

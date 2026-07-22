@@ -44,9 +44,19 @@ import {
 // helper installs a Test-only in-memory cookie ONLY when native access
 // genuinely fails, and provides exact-cleanup removal. Same pattern as
 // qa/helpers/playwright-opaque-origin-storage.mjs.
+// COMBINED CLOSEOUT R3 — Phase A: exact descriptor lifecycle. Patch
+// detection (FIX A1), descriptor storage/restoration using valid
+// {get,set,configurable,enumerable} keys (FIX A2), and two distinct
+// restoration stages — instrumentation vs. compatibility cleanup
+// (FIX A3) — all live in the shared helper so the SAME logic is
+// exercised here and by the real-Browser self-test (FIX A4).
 import {
   ensureCookieCompatibility,
   removeOpaqueOriginMemoryCookie,
+  evaluateCookiePatchSuccess,
+  installCookieSetterCountingWrapper,
+  restoreCookieInstrumentation,
+  verifyCompatibilityCleanup,
 } from './helpers/playwright-opaque-origin-cookie.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -259,44 +269,54 @@ const INSTALL_INSTRUMENTATION_JS = `
     history.forward = function (...args) { counts.history.forward++; return orig.forward.apply(history, args); };
     history.go = function (...args) { counts.history.go++; return orig.go.apply(history, args); };
 
-    // COMBINED CLOSEOUT R2 — Phase D FIX D1/D2/D3: on the opaque
-    // \`about:blank\` origin, even READING \`document.cookie\` throws
-    // SecurityError — this crashed the suite before any instrumentation
-    // could run. \`ensureCookieCompatibility\` probes real access FIRST
-    // and installs a Test-only in-memory cookie ONLY when native access
-    // genuinely fails; when it works natively, nothing is installed
-    // (NATIVE_COOKIE_AVAILABLE). Required sequence step 2/3: probe/
-    // install, then capture the EFFECTIVE descriptor (the just-installed
-    // own descriptor when compatibility was installed, otherwise the
-    // real native prototype descriptor) — the native opaque-origin
-    // getter is NEVER called again once a compatibility descriptor is
-    // in place.
+    // COMBINED CLOSEOUT R2 — Phase D FIX D1/D2/D3, extended by R3 Phase
+    // A: on the opaque \`about:blank\` origin, even READING
+    // \`document.cookie\` throws SecurityError — this crashed the suite
+    // before any instrumentation could run. \`ensureCookieCompatibility\`
+    // probes real access FIRST and installs a Test-only in-memory
+    // cookie ONLY when native access genuinely fails; when it works
+    // natively, nothing is installed (NATIVE_COOKIE_AVAILABLE).
+    //
+    // FIX A2: the pristine, pre-instrumentation shape is captured
+    // BEFORE ensureCookieCompatibility ever touches \`document\`
+    // (\`hadOwnPropertyBeforeAnyInstallation\`) — this is the ORIGINAL
+    // shape Stage 2 cleanup must restore, never the temporary
+    // compatibility descriptor. The patch/restore/cleanup logic itself
+    // is the shared, already-proven \`installCookieSetterCountingWrapper\`
+    // / \`restoreCookieInstrumentation\` / \`verifyCompatibilityCleanup\`
+    // trio — the SAME functions exercised standalone by the FIX A4
+    // real-Browser self-test.
     ${ensureCookieCompatibility.toString()}
+    ${evaluateCookiePatchSuccess.toString()}
+    ${installCookieSetterCountingWrapper.toString()}
     optional.cookieSetter = { supported: false, patched: false };
     window.__step7bCookieCompat = { status: 'NATIVE_COOKIE_AVAILABLE', cookieAccessibleBefore: true, cookieErrorNameBefore: null };
     try {
+      const hadOwnPropertyBeforeAnyInstallation = Object.prototype.hasOwnProperty.call(document, 'cookie');
       const compat = ensureCookieCompatibility(document);
       window.__step7bCookieCompat = compat;
-      const hadOwnProperty = Object.prototype.hasOwnProperty.call(document, 'cookie');
-      const ownDescBefore = hadOwnProperty ? Object.getOwnPropertyDescriptor(document, 'cookie') : null;
-      // FIX D3: the EFFECTIVE descriptor — own compatibility descriptor
+      const hadOwnBeforeInstrumentation = Object.prototype.hasOwnProperty.call(document, 'cookie');
+      // FIX A2: store the actual descriptor using valid {get,set,
+      // configurable,enumerable} keys — never {getter,setter}, which
+      // Object.defineProperty() silently ignores.
+      const originalOwnDescriptor = hadOwnBeforeInstrumentation ? Object.getOwnPropertyDescriptor(document, 'cookie') : null;
+      // The EFFECTIVE descriptor — own compatibility descriptor
       // (already installed by ensureCookieCompatibility, safe in-memory
       // get/set) when compatibility was installed; otherwise the real
       // native prototype descriptor, exactly as before.
       const effectiveDesc = compat.status === 'OPAQUE_ORIGIN_MEMORY_COOKIE_INSTALLED'
-        ? Object.getOwnPropertyDescriptor(document, 'cookie')
+        ? originalOwnDescriptor
         : (Object.getOwnPropertyDescriptor(Document.prototype, 'cookie') || Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie'));
-      if (effectiveDesc && effectiveDesc.set && effectiveDesc.get) {
-        window.__step7bCookieShapeBefore = { hadOwnProperty, ownDescBefore: ownDescBefore ? { configurable: ownDescBefore.configurable, enumerable: ownDescBefore.enumerable, getter: ownDescBefore.get, setter: ownDescBefore.set } : null };
+      if (effectiveDesc && typeof effectiveDesc.get === 'function' && typeof effectiveDesc.set === 'function') {
+        window.__step7bCookieShapeBefore = { hadOwnPropertyBeforeAnyInstallation, hadOwnBeforeInstrumentation, originalOwnDescriptor: originalOwnDescriptor ? { get: originalOwnDescriptor.get, set: originalOwnDescriptor.set, configurable: originalOwnDescriptor.configurable, enumerable: originalOwnDescriptor.enumerable } : null };
         orig.cookieEffectiveDescriptor = effectiveDesc;
-        Object.defineProperty(document, 'cookie', {
-          configurable: true,
-          enumerable: true,
-          get: effectiveDesc.get,
-          set(v) { counts.cookie.setterCalls++; return effectiveDesc.set.call(document, v); },
-        });
-        const patchedDesc = Object.getOwnPropertyDescriptor(document, 'cookie');
-        optional.cookieSetter = { supported: true, patched: typeof patchedDesc?.set === 'function' && patchedDesc.get !== effectiveDesc.get };
+        const wrap = installCookieSetterCountingWrapper(document, effectiveDesc, counts.cookie);
+        window.__step7bCookiePatchEvidence = wrap.evidence;
+        // FIX A1: patched only when the getter is PRESERVED, the setter
+        // is CHANGED, both remain Functions, and configurable/enumerable
+        // are unchanged — each condition recorded independently inside
+        // \`wrap.evidence\`, never a single opaque boolean.
+        optional.cookieSetter = { supported: true, patched: wrap.evidence.setterPatched === true };
       }
     } catch (e) { optional.cookieSetter = { supported: false, patched: false, error: String(e && e.message || e) }; }
 
@@ -365,61 +385,56 @@ const RESTORE_AND_VERIFY_JS = `
     history.go = orig.go;
     restoration.history = history.pushState === orig.pushState && history.replaceState === orig.replaceState && history.back === orig.back && history.forward === orig.forward && history.go === orig.go;
 
+    // COMBINED CLOSEOUT R3 — Phase A FIX A3: TWO DISTINCT restoration
+    // stages, never conflated. STAGE 1 (instrumentation restoration)
+    // undoes ONLY the counting wrapper, back to the exact descriptor
+    // that existed right before it was installed. STAGE 2
+    // (compatibility cleanup) removes the Test-only compatibility
+    // property entirely and is verified against the ORIGINAL pristine
+    // shape captured before ANY instrumentation touched \`document\` —
+    // never against the temporary compatibility descriptor.
+    ${restoreCookieInstrumentation.toString()}
+    ${removeOpaqueOriginMemoryCookie.toString()}
+    ${verifyCompatibilityCleanup.toString()}
     if (orig.cookieEffectiveDescriptor) {
       const shapeBefore = window.__step7bCookieShapeBefore;
       const compat = window.__step7bCookieCompat;
-      let restoredCorrectly = false;
+      let stage1 = { instrumentationRestoredExactly: false };
       try {
-        if (shapeBefore.hadOwnProperty) {
-          // An own property existed before instrumentation — restore
-          // that EXACT descriptor (this is the compatibility-installed
-          // own property when compat.status is
-          // OPAQUE_ORIGIN_MEMORY_COOKIE_INSTALLED, or a genuine
-          // pre-existing own property in the NATIVE_COOKIE_AVAILABLE case).
-          Object.defineProperty(document, 'cookie', shapeBefore.ownDescBefore);
-        } else {
-          // No own property existed before instrumentation wrapped it —
-          // DELETE the temporary own (counting) property entirely, so
-          // lookup falls back to the prototype descriptor again (never
-          // leave a copied descriptor behind as a stray own property).
-          delete document.cookie;
-        }
-        const hasOwnAfter = Object.prototype.hasOwnProperty.call(document, 'cookie');
-        const ownDescAfter = hasOwnAfter ? Object.getOwnPropertyDescriptor(document, 'cookie') : null;
-        const protoDescAfter = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie') || Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie');
-        if (shapeBefore.hadOwnProperty) {
-          restoredCorrectly = hasOwnAfter === true
-            && ownDescAfter.get === shapeBefore.ownDescBefore.getter
-            && ownDescAfter.set === shapeBefore.ownDescBefore.setter
-            && ownDescAfter.configurable === shapeBefore.ownDescBefore.configurable
-            && ownDescAfter.enumerable === shapeBefore.ownDescBefore.enumerable;
-        } else {
-          restoredCorrectly = hasOwnAfter === false
-            && protoDescAfter.get === orig.cookieEffectiveDescriptor.get
-            && protoDescAfter.set === orig.cookieEffectiveDescriptor.set;
-        }
-        restoration.cookieDescriptorShape = { hadOwnPropertyBefore: shapeBefore.hadOwnProperty, hasOwnPropertyAfter: hasOwnAfter, restoredCorrectly };
-      } catch (e) { restoration.cookieDescriptorShape = { restoredCorrectly: false, error: String(e && e.message || e) }; }
-      restoration.cookieSetter = restoredCorrectly;
+        stage1 = restoreCookieInstrumentation(document, {
+          hadOwnBefore: shapeBefore.hadOwnBeforeInstrumentation,
+          originalOwnDescriptor: shapeBefore.originalOwnDescriptor,
+        });
+      } catch (e) { stage1 = { instrumentationRestoredExactly: false, error: String(e && e.message || e) }; }
+      restoration.cookieSetter = stage1.instrumentationRestoredExactly === true;
+      restoration.cookieInstrumentationStage = stage1;
 
-      // FIX D3 sequence step 8/9 — remove the compatibility descriptor
-      // entirely (if one was installed) so \`document\` returns to
-      // genuinely having NO own "cookie" property, then verify that
-      // exact original no-own-property shape is restored.
-      ${removeOpaqueOriginMemoryCookie.toString()}
-      let compatibilityDescriptorRemoved = true; // vacuously true when nothing was installed
+      // STAGE 2 — compatibility cleanup. Only meaningful (and only
+      // performed) when compatibility was actually installed; a vacuous
+      // pass when the native cookie was accessible all along, since
+      // there is nothing Test-only to clean up.
+      let stage2 = { compatibilityDescriptorRemoved: true, markerRemoved: true, originalShapeRestored: true };
       if (compat && compat.status === 'OPAQUE_ORIGIN_MEMORY_COOKIE_INSTALLED') {
         try {
           const removal = removeOpaqueOriginMemoryCookie(document);
-          compatibilityDescriptorRemoved = removal.removed === true && removal.hasOwnPropertyAfterRemoval === false;
-        } catch (e) { compatibilityDescriptorRemoved = false; }
+          stage2 = verifyCompatibilityCleanup(document, removal, { hadOwnPropertyBeforeAnyInstallation: shapeBefore.hadOwnPropertyBeforeAnyInstallation });
+        } catch (e) { stage2 = { compatibilityDescriptorRemoved: false, markerRemoved: false, originalShapeRestored: false, error: String(e && e.message || e) }; }
       }
-      restoration.compatibilityDescriptorRemoved = compatibilityDescriptorRemoved;
+      restoration.compatibilityDescriptorRemoved = stage2.compatibilityDescriptorRemoved;
+      restoration.markerRemoved = stage2.markerRemoved;
+      restoration.originalShapeRestored = stage2.originalShapeRestored;
+      restoration.cookieCompatibilityStage = stage2;
     }
 
-    const booleanRestorationValues = Object.entries(restoration).filter(([k]) => k !== 'cookieDescriptorShape').map(([, v]) => v);
-    const cookieShapeOk = !restoration.cookieDescriptorShape || restoration.cookieDescriptorShape.restoredCorrectly === true;
-    return { restoration, allRestoredTrue: booleanRestorationValues.every((v) => v === true) && cookieShapeOk };
+    // COMBINED CLOSEOUT R3 — the two nested per-cookie diagnostic
+    // objects (cookieInstrumentationStage/cookieCompatibilityStage) are
+    // excluded from the flat boolean sweep below; every OTHER key in
+    // \`restoration\` (including the newly-added cookieSetter/
+    // compatibilityDescriptorRemoved/markerRemoved/originalShapeRestored
+    // booleans) must still be strictly true for allRestoredTrue.
+    const nestedDiagnosticKeys = new Set(['cookieDescriptorShape', 'cookieInstrumentationStage', 'cookieCompatibilityStage']);
+    const booleanRestorationValues = Object.entries(restoration).filter(([k]) => !nestedDiagnosticKeys.has(k)).map(([, v]) => v);
+    return { restoration, allRestoredTrue: booleanRestorationValues.every((v) => v === true) };
   })()
 `;
 
@@ -621,6 +636,7 @@ async function main() {
     finalCounts = await page.evaluate(() => window.__step7bCounts);
     optionalApiMatrix = await page.evaluate(() => window.__step7bOptional);
     const cookieCompat = await page.evaluate(() => window.__step7bCookieCompat);
+    const cookiePatchEvidence = await page.evaluate(() => window.__step7bCookiePatchEvidence);
     const cookieUnchanged = await page.evaluate(() => document.cookie === window.__step7bCookieBefore);
     const searchUnchanged = await page.evaluate(() => location.search === window.__step7bSearchBefore);
     const hashUnchanged = await page.evaluate(() => location.hash === window.__step7bHashBefore);
@@ -675,22 +691,41 @@ async function main() {
     }
     record('document.cookie text identical before/after (secondary evidence, always checked)', cookieUnchanged, `unchanged=${cookieUnchanged}`);
 
-    // COMBINED CLOSEOUT R2 — Phase D FIX D4: bounded cookie-compatibility
-    // evidence — never any Cookie VALUE, only status/name/counts/booleans.
+    // COMBINED CLOSEOUT R2 — Phase D FIX D4, extended by R3 Phase A FIX
+    // A5: bounded cookie-compatibility evidence — never any Cookie
+    // VALUE, only status/name/counts/booleans. Every one of the nine
+    // required FIX A5 evidence fields is included, each independently
+    // recorded so a failure ever points at exactly which stage broke.
     cookieCompatibilityEvidence = {
+      compatibilityInstalled: cookieCompat?.status === 'OPAQUE_ORIGIN_MEMORY_COOKIE_INSTALLED',
+      setterPatched: cookiePatchEvidence?.setterPatched === true,
+      getterPreserved: cookiePatchEvidence?.getterPreserved === true,
+      setterChanged: cookiePatchEvidence?.setterChanged === true,
+      descriptorFlagsPreserved: cookiePatchEvidence?.descriptorFlagsPreserved === true,
+      instrumentationRestoredExactly: restorationResult.restoration.cookieSetter === true,
+      compatibilityDescriptorRemoved: restorationResult.restoration.compatibilityDescriptorRemoved === true,
+      markerRemoved: restorationResult.restoration.markerRemoved === true,
+      originalShapeRestored: restorationResult.restoration.originalShapeRestored === true,
+      // Additional bounded evidence (status/counts, never a Cookie value).
       cookieCompatibilityStatus: cookieCompat?.status ?? null,
       cookieAccessibleBefore: cookieCompat?.cookieAccessibleBefore ?? null,
       cookieErrorNameBefore: cookieCompat?.cookieErrorNameBefore ?? null,
       cookieSetterInstrumented: optionalApiMatrix.cookieSetter?.supported === true,
       cookieSetterCalls: finalCounts.cookie.setterCalls,
-      instrumentationRestoredExactly: restorationResult.restoration.cookieSetter === true,
-      compatibilityDescriptorRemoved: restorationResult.restoration.compatibilityDescriptorRemoved !== false,
     };
+    const cookieCompatibilityAllPass = cookieCompatibilityEvidence.compatibilityInstalled === true
+      && cookieCompatibilityEvidence.setterPatched === true
+      && cookieCompatibilityEvidence.getterPreserved === true
+      && cookieCompatibilityEvidence.setterChanged === true
+      && cookieCompatibilityEvidence.descriptorFlagsPreserved === true
+      && cookieCompatibilityEvidence.instrumentationRestoredExactly === true
+      && cookieCompatibilityEvidence.compatibilityDescriptorRemoved === true
+      && cookieCompatibilityEvidence.markerRemoved === true
+      && cookieCompatibilityEvidence.originalShapeRestored === true
+      && cookieCompatibilityEvidence.cookieSetterCalls === 0;
     record(
-      'FIX D1-D4: opaque-origin cookie compatibility — probed/installed correctly, effective descriptor instrumented without crashing, and exactly restored/removed on cleanup',
-      cookieCompatibilityEvidence.cookieCompatibilityStatus !== null
-        && cookieCompatibilityEvidence.instrumentationRestoredExactly === true
-        && cookieCompatibilityEvidence.compatibilityDescriptorRemoved === true,
+      'FIX A1-A5: Cookie descriptor lifecycle — patch detection correct (getter preserved, setter changed), two-stage restoration exact, compatibility marker/shape fully cleaned up, zero setter calls',
+      cookieCompatibilityAllPass,
       JSON.stringify(cookieCompatibilityEvidence)
     );
 

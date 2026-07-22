@@ -1,9 +1,9 @@
 {
   "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
-  "generatedAt": "2026-07-22T15:32:47.990Z",
+  "generatedAt": "2026-07-22T17:16:03.529Z",
   "summary": {
-    "total": 62,
-    "pass": 62,
+    "total": 95,
+    "pass": 95,
     "fail": 0,
     "notTested": 0
   },
@@ -11,12 +11,12 @@
     {
       "test": "generateRunId() returns a non-empty string",
       "result": "PASS",
-      "evidence": "idA=4e98066a-27ec-498a-ad6b-254953b5a927"
+      "evidence": "idA=2205696a-e319-4039-a17b-5b4ad5c6706c"
     },
     {
       "test": "generateRunId() returns a fresh value on each call (never reused)",
       "result": "PASS",
-      "evidence": "idA=4e98066a-27ec-498a-ad6b-254953b5a927, idB=78016a3c-8814-4fb2-8a9a-eb46be2cd1a2"
+      "evidence": "idA=2205696a-e319-4039-a17b-5b4ad5c6706c, idB=4ada5bf6-bf81-416e-a8b0-d65a50078495"
     },
     {
       "test": "computeSourceHash() is deterministic for identical inputs",
@@ -131,7 +131,7 @@
     {
       "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
       "result": "PASS",
-      "evidence": "oldRunId=1657ab99-8ca2-4121-a9e9-2fce590d2eb2, newRunId=d2a3611a-9a80-4baa-b8f9-6c20ea7d6041"
+      "evidence": "oldRunId=bce20f54-259e-4456-bcbd-2470bb8670a2, newRunId=c0eab065-09a5-441c-b492-104a2b9e14ad"
     },
     {
       "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",
@@ -317,6 +317,171 @@
       "test": "epic-2e-j-phase-c-step7b-a-test.mjs: SOURCE_HASH_INPUTS includes playwright-opaque-origin-cookie.mjs (a source change there must invalidate this suite's prior result freshness)",
       "result": "PASS",
       "evidence": "present=true"
+    },
+    {
+      "test": "R3-1: computeObservationSmokeDecision() (real imported fn) REJECTS a raw Boolean `false` Result value — never NOT_TESTED, never PASS",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"FAIL\",\"reasons\":[\"MALFORMED_ROWS=1\",\"BOOLEAN_RESULT_ROWS=1\"]}"
+    },
+    {
+      "test": "R3-1: computeObservationSmokeDecision() (real imported fn) REJECTS a raw Boolean `true` Result value the same way (never silently accepted as PASS)",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"FAIL\",\"reasons\":[\"MALFORMED_ROWS=1\",\"BOOLEAN_RESULT_ROWS=1\"]}"
+    },
+    {
+      "test": "R3-2: recordCondition() maps condition===true to PASS and EVERY other value (including false) to FAIL — never NOT_TESTED",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "R3-2: no un-migrated inline Boolean-ternary result assignment remains outside the strict recordStatus/recordCondition API",
+      "result": "PASS",
+      "evidence": "present(no stray pattern found)=true"
+    },
+    {
+      "test": "R3-3: computeObservationSmokeDecision() (real imported fn) REJECTS 22 unexpected NOT_TESTED rows (the exact historical defect count)",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"FAIL\",\"reasons\":[\"UNEXPECTED_NOT_TESTED=22\"]}"
+    },
+    {
+      "test": "R3-4: a single false/FAIL condition anywhere in the Result set prevents Decision PASS (see R3-1 Boolean-false and the one-FAIL case in Part 5 above)",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"FAIL\",\"reasons\":[\"MALFORMED_ROWS=1\",\"BOOLEAN_RESULT_ROWS=1\"]}"
+    },
+    {
+      "test": "R3-5: computeObservationSmokeDecision() (real imported fn) REJECTS a malformed row (blank test name)",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"FAIL\",\"reasons\":[\"MALFORMED_ROWS=1\"]}"
+    },
+    {
+      "test": "R3-5: computeObservationSmokeDecision() (real imported fn) REJECTS a malformed row (whitespace-only test name)",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"FAIL\",\"reasons\":[\"MALFORMED_ROWS=1\"]}"
+    },
+    {
+      "test": "R3-5: computeObservationSmokeDecision() (real imported fn) REJECTS a malformed row (unrecognized status string)",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"FAIL\",\"reasons\":[\"MALFORMED_ROWS=1\"]}"
+    },
+    {
+      "test": "R3-5: computeObservationSmokeDecision() (real imported fn) REJECTS a malformed row (missing evidence key)",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"FAIL\",\"reasons\":[\"MALFORMED_ROWS=1\"]}"
+    },
+    {
+      "test": "R3-6: installCookieSetterCountingWrapper() (real imported fn) preserves the ORIGINAL getter by exact reference (getterPreserved)",
+      "result": "PASS",
+      "evidence": "{\"getterPreserved\":true,\"setterChanged\":true,\"bothFunctions\":true,\"descriptorFlagsPreserved\":true,\"setterPatched\":true}"
+    },
+    {
+      "test": "R3-7: evaluateCookiePatchSuccess() (real imported fn) correctly detects a CHANGED setter (setterChanged) — the correctly-oriented check (not the R3 root-cause-A1 inverted check)",
+      "result": "PASS",
+      "evidence": "{\"getterPreserved\":true,\"setterChanged\":true,\"bothFunctions\":true,\"descriptorFlagsPreserved\":true,\"setterPatched\":true}"
+    },
+    {
+      "test": "R3-7: evaluateCookiePatchSuccess() reports setterPatched=true only when getter preserved AND setter changed AND both are Functions AND configurable/enumerable preserved",
+      "result": "PASS",
+      "evidence": "{\"getterPreserved\":true,\"setterChanged\":true,\"bothFunctions\":true,\"descriptorFlagsPreserved\":true,\"setterPatched\":true}"
+    },
+    {
+      "test": "R3-7: evaluateCookiePatchSuccess() (real imported fn) correctly reports setterPatched=false when the getter was ALSO changed (proves the ROOT CAUSE A1 inversion bug is fixed, not reintroduced)",
+      "result": "PASS",
+      "evidence": "{\"getterPreserved\":false,\"setterChanged\":true,\"bothFunctions\":true,\"descriptorFlagsPreserved\":true,\"setterPatched\":false}"
+    },
+    {
+      "test": "R3-6: the installed descriptor is a genuine get/set accessor pair (never a corrupted {value:undefined} data property from a {getter,setter}-keyed object)",
+      "result": "PASS",
+      "evidence": "{\"hasGet\":\"function\",\"hasSet\":\"function\",\"hasValueKey\":false}"
+    },
+    {
+      "test": "R3-8 setup: ensureCookieCompatibility() (real imported fn) installs the Test-only compatibility cookie when native access throws",
+      "result": "PASS",
+      "evidence": "{\"status\":\"OPAQUE_ORIGIN_MEMORY_COOKIE_INSTALLED\",\"cookieAccessibleBefore\":false,\"cookieErrorNameBefore\":\"SecurityError\",\"alreadyInstalled\":false}"
+    },
+    {
+      "test": "R3-8: restoreCookieInstrumentation() (real imported fn) restores the EXACT pre-wrapping descriptor by strict Function reference (get/set/configurable/enumerable all identical)",
+      "result": "PASS",
+      "evidence": "{\"restoreResult\":{\"instrumentationRestoredExactly\":true,\"hasOwnAfter\":true},\"setterCallsDuringWrap\":1}"
+    },
+    {
+      "test": "R3-8: the counting wrapper genuinely counted exactly one setter invocation before restoration",
+      "result": "PASS",
+      "evidence": "setterCalls=1"
+    },
+    {
+      "test": "R3-9: verifyCompatibilityCleanup() (real imported fn) confirms the __opaqueOriginCookieInstalled marker is fully removed (not merely set to false)",
+      "result": "PASS",
+      "evidence": "{\"markerRemoved\":true,\"compatibilityDescriptorRemoved\":true,\"originalShapeRestored\":true}"
+    },
+    {
+      "test": "R3-9: verifyCompatibilityCleanup() confirms the compatibility own-property descriptor itself is removed",
+      "result": "PASS",
+      "evidence": "{\"markerRemoved\":true,\"compatibilityDescriptorRemoved\":true,\"originalShapeRestored\":true}"
+    },
+    {
+      "test": "R3-9: verifyCompatibilityCleanup() confirms the final shape matches the PRISTINE pre-any-installation shape (never compared against the temporary compatibility descriptor)",
+      "result": "PASS",
+      "evidence": "{\"markerRemoved\":true,\"compatibilityDescriptorRemoved\":true,\"originalShapeRestored\":true}"
+    },
+    {
+      "test": "R3-10: qa/helpers/playwright-opaque-origin-cookie.mjs exports runRealBrowserCookieSelfTest() — a real Chromium/about:blank runtime self-test (FIX A4), not only fake-Document tests",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "R3-10: the real-Browser Cookie self-test proves a second Page begins clean",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "R3-10: the real-Browser Cookie self-test verifies no Cookie value is written into its own Result JSON",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "R3-10: the cookie helper is directly runnable as a standalone script (node qa/helpers/playwright-opaque-origin-cookie.mjs) and writes its own current result file",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "R3-11: epic-2e-j-phase-c-live-app-test.mjs logs \"Live App Final Decision\" (FIX C1)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "R3-11: epic-2e-j-phase-c-live-app-test.mjs no longer contains the incorrect \"Step 7A Final Decision\" label",
+      "result": "PASS",
+      "evidence": "present(no stale label)=true"
+    },
+    {
+      "test": "R3-12: ui/app.js is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)",
+      "result": "PASS",
+      "evidence": "baseHash=b19cda0d92d76a4441ce90068fec2e2b031a4e89ffebb0b904a7f865f90e1019, curHash=b19cda0d92d76a4441ce90068fec2e2b031a4e89ffebb0b904a7f865f90e1019"
+    },
+    {
+      "test": "R3-12: ui/interactive-preview-observation-controller-v2.js is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)",
+      "result": "PASS",
+      "evidence": "baseHash=371164bf6e5923cd9d1c0c07e69673608e50c4a02458b4e817dc5d12329c24f6, curHash=371164bf6e5923cd9d1c0c07e69673608e50c4a02458b4e817dc5d12329c24f6"
+    },
+    {
+      "test": "R3-12: ui/interactive-preview-observation-renderer-v2.js is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)",
+      "result": "PASS",
+      "evidence": "baseHash=d733feb368698a2ed85233e51284a70beed10c7423f6a68a2048d27e24ed186c, curHash=d733feb368698a2ed85233e51284a70beed10c7423f6a68a2048d27e24ed186c"
+    },
+    {
+      "test": "R3-12: ui/interactive-preview-observation-session-v2.js is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)",
+      "result": "PASS",
+      "evidence": "baseHash=aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9, curHash=aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9"
+    },
+    {
+      "test": "R3-12: index.html is byte-for-byte identical to the LU6A09~1 baseline (SHA-256 match)",
+      "result": "PASS",
+      "evidence": "baseHash=06ca7c4785808c41edc253e3c37a61f4f81ce6494edebf00b51bdb615ee0f740, curHash=06ca7c4785808c41edc253e3c37a61f4f81ce6494edebf00b51bdb615ee0f740"
+    },
+    {
+      "test": "R3-12: core/ directory is byte-for-byte identical to the LU6A09~1 baseline (every file, path-relative SHA-256 comparison)",
+      "result": "PASS",
+      "evidence": "match"
     }
   ],
   "disclaimer": "This suite proves the Phase E toolkit (generateRunId, computeSourceHash, writeResultAtomic, buildRunIdentity, buildRuntimeCrashRow, validateResultFreshness, writeBrowserUnavailableResult) via real functional calls in a throwaway temp directory, plus source-text audits proving all four real Browser suites are actually wired to use it. It does not launch a Browser and does not prove real end-to-end crash-handler behavior under an actual Playwright runtime exception — that remains the job of the real Browser suites themselves (which, in this sandbox, can only be exercised along the Browser-unavailable path, confirmed separately by actually running each suite)."

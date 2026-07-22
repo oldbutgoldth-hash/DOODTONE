@@ -49,6 +49,13 @@ import {
   writeResultAtomic,
   buildRuntimeCrashRow,
   writeBrowserUnavailableResult,
+  // COMBINED CLOSEOUT R3 — Phase B FIX B4: the same deterministic Human
+  // Review completion workflow Live App uses (real Review Console "Pass"
+  // clicks + real Re-analyze + a real analysisGeneration poll) rather
+  // than a fragile fixed-timeout + fieldset-disabled guess. This is the
+  // shared helper, not a duplicated local copy.
+  qaSnapshot,
+  importAndReachReady,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
 import { CANONICAL_ORIGIN } from './helpers/playwright-in-memory-app.mjs';
 
@@ -82,10 +89,108 @@ let startedAt = null;
 let sourceHash = null;
 
 const results = [];
-function record(test, result, evidence) {
-  results.push({ test, result, evidence });
+
+// COMBINED CLOSEOUT R3 — Phase B FIX B1: STRICT result API. Every
+// existing Boolean `record()` call site has been converted to one of
+// the two functions below — no code path anywhere in this file may
+// store a raw Boolean into `results` anymore.
+const ALLOWED_STATUSES = new Set(['PASS', 'FAIL', 'NOT_TESTED', 'NOT_APPLICABLE']);
+
+function pushRow(test, result, evidence) {
   const icon = result === 'PASS' ? '✓' : result === 'FAIL' ? '✗' : '•';
-  console.log(`${icon} [${result}] ${test} — ${evidence}`);
+  let safeEvidence;
+  try {
+    safeEvidence = String(evidence);
+  } catch (evidenceErr) {
+    // FIX B1: a thrown evidence formatter must never crash the result
+    // writer — fall back to a bounded, honest placeholder instead.
+    safeEvidence = `[evidence formatting threw: ${evidenceErr && evidenceErr.name ? evidenceErr.name : 'UnknownError'}]`;
+  }
+  results.push({ test, result, evidence: safeEvidence });
+  console.log(`${icon} [${result}] ${test} — ${safeEvidence}`);
+}
+
+/**
+ * FIX B1 — records a genuine STATUS value directly. `status` MUST be
+ * one of PASS/FAIL/NOT_TESTED/NOT_APPLICABLE (a bounded, closed
+ * vocabulary) — anything else (including any Boolean, undefined, or an
+ * unrecognized string) is recorded as FAIL, never silently coerced or
+ * dropped. A blank/whitespace-only `test` name is also forced to FAIL,
+ * since a nameless row can never be meaningfully audited later.
+ */
+function recordStatus(test, status, evidence) {
+  const testOk = typeof test === 'string' && test.trim().length > 0;
+  if (!testOk) {
+    pushRow(typeof test === 'string' ? test : '[MISSING_TEST_NAME]', 'FAIL', `Blank/invalid test name rejected. evidence=${evidence}`);
+    return;
+  }
+  if (typeof status !== 'string' || !ALLOWED_STATUSES.has(status)) {
+    pushRow(test, 'FAIL', `Malformed/unrecognized status value rejected (never a Boolean, never coerced): ${JSON.stringify(status)}. evidence=${evidence}`);
+    return;
+  }
+  pushRow(test, status, evidence);
+}
+
+/**
+ * FIX B1 — records a Boolean CONDITION. `condition === true` becomes
+ * PASS; every other value (including `false`, `undefined`, `null`, a
+ * truthy non-boolean, or anything else) becomes FAIL. This is the
+ * canonical way every condition-driven assertion in this file reports
+ * its result — no Boolean is ever pushed into `results` directly.
+ */
+function recordCondition(test, condition, evidence) {
+  recordStatus(test, condition === true ? 'PASS' : 'FAIL', evidence);
+}
+
+/**
+ * FIX B2 — the fail-closed automated Decision. Exported (pure, no
+ * captured outer-scope state) so Phase D's static evidence tests can
+ * call this EXACT function directly with fabricated result sets —
+ * never a regex-only source check. Decision is 'PASS' only when every
+ * one of the following holds; otherwise 'FAIL' with the specific
+ * reasons listed:
+ *   1. resultRows is a non-empty array
+ *   2. every row is well-formed: test is a non-empty string, result is
+ *      a STRING drawn from ALLOWED_STATUSES (never a raw Boolean —
+ *      Boolean rows are counted and reported separately), evidence key
+ *      is present
+ *   3. FAIL count is zero
+ *   4. "unexpected" NOT_TESTED count is zero — a NOT_TESTED row is only
+ *      ever permitted when its test name appears in the explicit
+ *      `permittedNotTestedTests` allow-list (default: none)
+ *   5. Browser execution actually completed (`completed === true`)
+ *   6. sourceHash matches currentSourceHash (freshness — never a stale
+ *      artifact standing in as if it were current)
+ */
+export function computeObservationSmokeDecision(resultRows, { completed, sourceHash: resultSourceHash, currentSourceHash, permittedNotTestedTests = [] } = {}) {
+  const reasons = [];
+  if (!Array.isArray(resultRows) || resultRows.length === 0) {
+    return { decision: 'FAIL', reasons: ['EMPTY_RESULT_SET'] };
+  }
+  const permittedSet = new Set(permittedNotTestedTests);
+  let failCount = 0;
+  let unexpectedNotTestedCount = 0;
+  let booleanResultCount = 0;
+  let malformedRowCount = 0;
+  for (const row of resultRows) {
+    const testOk = !!row && typeof row.test === 'string' && row.test.trim().length > 0;
+    const resultIsBoolean = !!row && typeof row.result === 'boolean';
+    if (resultIsBoolean) booleanResultCount += 1;
+    const resultOk = !!row && typeof row.result === 'string' && ALLOWED_STATUSES.has(row.result);
+    const evidenceOk = !!row && Object.prototype.hasOwnProperty.call(row, 'evidence');
+    if (!testOk || !resultOk || !evidenceOk) { malformedRowCount += 1; continue; }
+    if (row.result === 'FAIL') failCount += 1;
+    if (row.result === 'NOT_TESTED' && !permittedSet.has(row.test)) unexpectedNotTestedCount += 1;
+  }
+  if (malformedRowCount > 0) reasons.push(`MALFORMED_ROWS=${malformedRowCount}`);
+  if (booleanResultCount > 0) reasons.push(`BOOLEAN_RESULT_ROWS=${booleanResultCount}`);
+  if (failCount > 0) reasons.push(`FAIL_COUNT=${failCount}`);
+  if (unexpectedNotTestedCount > 0) reasons.push(`UNEXPECTED_NOT_TESTED=${unexpectedNotTestedCount}`);
+  if (completed !== true) reasons.push('BROWSER_EXECUTION_NOT_COMPLETED');
+  if (typeof resultSourceHash !== 'string' || resultSourceHash.length === 0 || typeof currentSourceHash !== 'string' || resultSourceHash !== currentSourceHash) {
+    reasons.push('SOURCE_HASH_MISMATCH_OR_MISSING');
+  }
+  return { decision: reasons.length === 0 ? 'PASS' : 'FAIL', reasons };
 }
 
 // FIX 2 (EPIC 2E-J-C-F): element-level bounding-rect containment check —
@@ -243,43 +348,59 @@ async function main() {
     const readyErrors = [];
     readyPage.on('pageerror', (e) => readyErrors.push(String(e)));
     await readyPage.waitForTimeout(600);
-    // COMBINED CLOSEOUT R2 — Phase C FIX C1: exactly ONE resolved,
-    // project-owned, deterministic fixture (verified to exist as a
-    // regular file BEFORE this point — see the fail-closed check in
-    // main() below) — never a machine-specific /tmp path or a real user
-    // file/screenshot.
+    // COMBINED CLOSEOUT R3 — Phase B FIX B4: use the SAME deterministic
+    // Human Review completion workflow Live App uses (real Review
+    // Console "Pass" clicks + real Re-analyze + a real analysisGeneration
+    // poll via the shared `importAndReachReady` helper) instead of a
+    // fixed 16s timeout + fieldset-disabled guess. This is what actually
+    // reaches "Ready" reliably (proven by Live App's 51/51). Exactly ONE
+    // resolved, project-owned, deterministic fixture (verified to exist
+    // as a regular file BEFORE this point — see the fail-closed check in
+    // main() above) — never a machine-specific /tmp path or a real user
+    // file/screenshot. State is read only from the real ?qa=1 snapshot
+    // hook and real DOM — never fabricated through Controller internals.
     let fixtureUsed = null;
+    let genBefore = 0;
     try {
-      await readyPage.setInputFiles('#fileIn', OBSERVATION_FIXTURE_PATH);
+      genBefore = await qaSnapshot(readyPage).then((s) => s?.analysisGeneration ?? 0);
       fixtureUsed = OBSERVATION_FIXTURE_PATH;
     } catch (fixtureErr) {
-      record('Full application Ready reachability — fixture available', 'FAIL', `Deterministic fixture ${OBSERVATION_FIXTURE_PATH} could not be used: ${fixtureErr.message}`);
+      recordStatus('Full application Ready reachability — fixture available','FAIL',`Deterministic fixture ${OBSERVATION_FIXTURE_PATH} could not be used: ${fixtureErr.message}`);
     }
     if (fixtureUsed) {
-      await readyPage.waitForTimeout(16000);
-      const pipelineState = await readyPage.evaluate(() => {
-        const ibaMsgs = document.getElementById('ibaMessages');
-        const ibaStatus = document.getElementById('ibaStatusBadge');
-        const obsStatus = document.getElementById('ipoStatus');
-        return {
-          interactiveState: ibaStatus ? ibaStatus.textContent : null,
-          interactiveBlockerMessage: ibaMsgs ? ibaMsgs.textContent : null,
-          observationStatus: obsStatus ? obsStatus.textContent : null,
-        };
-      });
-      // Honest determination: Observation is enabled only if its radio
-      // group is NOT disabled — that is the ground truth of "Ready was
-      // reached", not any status text alone.
-      const obsEnabled = await readyPage.evaluate(() => {
-        const fieldset = document.getElementById('ipoFieldset');
-        return fieldset ? !fieldset.disabled : false;
-      });
-      if (obsEnabled) {
+      let readyOutcome = null;
+      let readyEvidence = null;
+      try {
+        readyOutcome = await importAndReachReady(readyPage, OBSERVATION_FIXTURE_PATH, genBefore);
+      } catch (readyErr) {
+        readyEvidence = `importAndReachReady threw: ${readyErr.message}`;
+      }
+      const snapshotAfter = readyOutcome?.snapshot ?? (await qaSnapshot(readyPage).catch(() => null));
+      const analysisCompleted = readyOutcome?.completed === true;
+      const legacyRendered = snapshotAfter?.visualPreview?.legacyState === 'renderable';
+      const controlledV2Rendered = snapshotAfter?.visualPreview?.controlledV2State === 'renderable';
+      const interactiveReady = snapshotAfter?.interactive?.state === 'ready';
+      const observationEnabled = snapshotAfter?.observation?.enabled === true;
+      const productionSourceLegacy = snapshotAfter?.previewSandbox?.selectedOutputSource === 'legacy';
+      const controlledTestDisabled = snapshotAfter?.testGate?.canEnterControlledTest === false;
+      const readyFailedFields = [];
+      if (!analysisCompleted) readyFailedFields.push(`analysisCompleted=${analysisCompleted}`);
+      if (!legacyRendered) readyFailedFields.push(`legacyPreviewState=${snapshotAfter?.visualPreview?.legacyState}`);
+      if (!controlledV2Rendered) readyFailedFields.push(`controlledV2PreviewState=${snapshotAfter?.visualPreview?.controlledV2State}`);
+      if (!interactiveReady) readyFailedFields.push(`interactiveState=${snapshotAfter?.interactive?.state}`);
+      if (!observationEnabled) readyFailedFields.push(`observationEnabled=${snapshotAfter?.observation?.enabled}`);
+      if (!productionSourceLegacy) readyFailedFields.push(`selectedOutputSource=${snapshotAfter?.previewSandbox?.selectedOutputSource}`);
+      if (!controlledTestDisabled) readyFailedFields.push(`canEnterControlledTest=${snapshotAfter?.testGate?.canEnterControlledTest}`);
+      const readyPasses = readyEvidence === null && readyFailedFields.length === 0;
+      const readyRecordEvidence = readyEvidence ?? (readyPasses
+        ? `Reached Ready through the real Human Review workflow: ${JSON.stringify(snapshotAfter)}`
+        : `FAILED FIELDS: ${readyFailedFields.join(', ')} — full snapshot: ${JSON.stringify(snapshotAfter)}`);
+      if (readyPasses) {
         coverage.fullApplicationWorkflow = 'PASS';
-        record('Full application Ready reachability', 'PASS', `Observation controls enabled through the real unmodified pipeline. State: ${JSON.stringify(pipelineState)}`);
+        recordStatus('Full application Ready reachability','PASS',readyRecordEvidence);
       } else {
-        coverage.fullApplicationWorkflow = 'NOT_TESTED';
-        record('Full application Ready reachability', 'NOT_TESTED', `Real pipeline did not reach a state that enables Observation (expected, documented, pre-existing Render Plan limitation — Controlled V2 has no concrete adjustment data for this fixture). Blocker state: ${JSON.stringify(pipelineState)}`);
+        coverage.fullApplicationWorkflow = 'FAIL';
+        recordStatus('Full application Ready reachability','FAIL',readyRecordEvidence);
       }
     }
     await readyRuntime.cleanup();
@@ -317,52 +438,52 @@ async function main() {
     await page.waitForTimeout(200);
 
     const initialState = await page.evaluate(() => window.__testController.getState().state);
-    record('[Controller/Renderer/Session integration harness] Initial unavailable state', initialState === 'unavailable' ? 'PASS' : 'FAIL', `state="${initialState}"`);
+    recordCondition('[Controller/Renderer/Session integration harness] Initial unavailable state',initialState === 'unavailable',`state="${initialState}"`);
 
     await page.evaluate(() => window.__testController.setContext({ generationId: 1, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null }));
     const readyState = await page.evaluate(() => window.__testController.getState().state);
-    record('[Controller/Renderer/Session integration harness] Ready state reachable', readyState === 'ready' ? 'PASS' : 'FAIL', `state="${readyState}"`);
+    recordCondition('[Controller/Renderer/Session integration harness] Ready state reachable',readyState === 'ready',`state="${readyState}"`);
 
     for (const value of ['prefer-legacy', 'prefer-v2', 'no-visible-difference', 'unsure']) {
       const r = await page.evaluate((v) => window.__testController.selectObservation(v), value);
-      record(`[Controller/Renderer/Session integration harness] Select observation "${value}"`, r.observation === value ? 'PASS' : 'FAIL', `observation="${r.observation}"`);
+      recordCondition(`[Controller/Renderer/Session integration harness] Select observation "${value}"`,r.observation === value,`observation="${r.observation}"`);
     }
 
     await page.evaluate(() => window.__testController.selectObservation('prefer-legacy'));
     await page.evaluate(() => { window.__testController.toggleReason('skin-tone'); window.__testController.toggleReason('contrast'); window.__testController.toggleReason('shadow-detail'); window.__testController.toggleReason('highlight-detail'); window.__testController.toggleReason('saturation'); });
     const at5 = await page.evaluate(() => window.__testController.getState());
-    record('Five-reason limit reached', at5.reasons.length === 5 && at5.reasonLimitReached === true ? 'PASS' : 'FAIL', `count=${at5.reasons.length}, limitReached=${at5.reasonLimitReached}`);
+    recordCondition('Five-reason limit reached',at5.reasons.length === 5 && at5.reasonLimitReached === true,`count=${at5.reasons.length}, limitReached=${at5.reasonLimitReached}`);
     await page.evaluate(() => window.__testController.toggleReason('color-balance'));
     const after6th = await page.evaluate(() => window.__testController.getState().reasons.length);
-    record('Sixth reason rejected', after6th === 5 ? 'PASS' : 'FAIL', `count=${after6th}`);
+    recordCondition('Sixth reason rejected',after6th === 5,`count=${after6th}`);
     await page.evaluate(() => window.__testController.toggleReason('no-specific-reason'));
     const afterGeneric = await page.evaluate(() => window.__testController.getState().reasons);
-    record('No-specific-reason exclusivity', afterGeneric.length === 1 && afterGeneric[0] === 'no-specific-reason' ? 'PASS' : 'FAIL', `reasons=${JSON.stringify(afterGeneric)}`);
+    recordCondition('No-specific-reason exclusivity',afterGeneric.length === 1 && afterGeneric[0] === 'no-specific-reason',`reasons=${JSON.stringify(afterGeneric)}`);
 
     await page.evaluate(() => window.__testController.clearReasons());
     const afterClearReasons = await page.evaluate(() => window.__testController.getState());
-    record('Clear Reasons keeps Observation selected', afterClearReasons.reasons.length === 0 && afterClearReasons.observation === 'prefer-legacy' ? 'PASS' : 'FAIL', `reasons=${afterClearReasons.reasons.length}, observation="${afterClearReasons.observation}"`);
+    recordCondition('Clear Reasons keeps Observation selected',afterClearReasons.reasons.length === 0 && afterClearReasons.observation === 'prefer-legacy',`reasons=${afterClearReasons.reasons.length}, observation="${afterClearReasons.observation}"`);
 
     await page.evaluate(() => window.__testController.clearObservation());
     const afterClearObs = await page.evaluate(() => window.__testController.getState());
-    record('Clear Observation', afterClearObs.observation === null ? 'PASS' : 'FAIL', `observation=${afterClearObs.observation}`);
+    recordCondition('Clear Observation',afterClearObs.observation === null,`observation=${afterClearObs.observation}`);
 
     await page.evaluate(() => window.__testController.selectObservation('prefer-v2'));
     await page.evaluate(() => { window.__gen = 2; window.__testController.setContext({ generationId: 1, interactiveState: 'preparing', interactiveReady: false, safetyBlocked: false, blockedReason: null }); });
     const invalidatedState = await page.evaluate(() => window.__testController.getState());
-    record('Generation invalidation clears Observation', invalidatedState.observation === null && invalidatedState.state === 'unavailable' ? 'PASS' : 'FAIL', `state="${invalidatedState.state}"`);
+    recordCondition('Generation invalidation clears Observation',invalidatedState.observation === null && invalidatedState.state === 'unavailable',`state="${invalidatedState.state}"`);
     await page.evaluate(() => window.__testController.setContext({ generationId: 2, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null }));
     const afterRecoveryState = await page.evaluate(() => window.__testController.getState());
-    record('Stale selection does not revive', afterRecoveryState.observation === null && afterRecoveryState.state === 'ready' ? 'PASS' : 'FAIL', `state="${afterRecoveryState.state}"`);
+    recordCondition('Stale selection does not revive',afterRecoveryState.observation === null && afterRecoveryState.state === 'ready',`state="${afterRecoveryState.state}"`);
 
     const sessionSummary1 = await page.evaluate(() => window.__testSession.getSummary());
-    record('Session invalidated count', sessionSummary1.invalidated >= 1 ? 'PASS' : 'FAIL', `invalidated=${sessionSummary1.invalidated}`);
+    recordCondition('Session invalidated count',sessionSummary1.invalidated >= 1,`invalidated=${sessionSummary1.invalidated}`);
     await page.evaluate(() => window.__testController.selectObservation('unsure'));
     const sessionSummary2 = await page.evaluate(() => window.__testSession.getSummary());
-    record('Session active count after new selection', sessionSummary2.activeObservations === 1 && sessionSummary2.unsure === 1 ? 'PASS' : 'FAIL', `active=${sessionSummary2.activeObservations}, unsure=${sessionSummary2.unsure}`);
+    recordCondition('Session active count after new selection',sessionSummary2.activeObservations === 1 && sessionSummary2.unsure === 1,`active=${sessionSummary2.activeObservations}, unsure=${sessionSummary2.unsure}`);
     await page.evaluate(() => window.__testController.clearObservation());
     const sessionSummary3 = await page.evaluate(() => window.__testSession.getSummary());
-    record('Session cleared count', sessionSummary3.cleared >= 1 ? 'PASS' : 'FAIL', `cleared=${sessionSummary3.cleared}`);
+    recordCondition('Session cleared count',sessionSummary3.cleared >= 1,`cleared=${sessionSummary3.cleared}`);
 
     // ══════════════════════════════════════════════════════════════
     // FIX 4 (EPIC 2E-J-C-F): App-level Session Clear + current
@@ -379,7 +500,7 @@ async function main() {
       window.__testController.toggleReason('contrast');
     });
     const beforeClear = await page.evaluate(() => window.__testSession.getSummary());
-    record('[App-level] Session Clear pre-check: active observation present', beforeClear.activeObservations >= 1 ? 'PASS' : 'FAIL', `active=${beforeClear.activeObservations}`);
+    recordCondition('[App-level] Session Clear pre-check: active observation present',beforeClear.activeObservations >= 1,`active=${beforeClear.activeObservations}`);
 
     const afterAppLevelSessionClear = await page.evaluate(() => {
       // Exact same App-level integration logic as ui/app.js's Session
@@ -393,12 +514,12 @@ async function main() {
       }
       return window.__testSession.getSummary();
     });
-    record('[App-level] Session Clear + current re-record: history reset', afterAppLevelSessionClear.cleared === 0 && afterAppLevelSessionClear.invalidated === 0 ? 'PASS' : 'FAIL', `cleared=${afterAppLevelSessionClear.cleared}, invalidated=${afterAppLevelSessionClear.invalidated}`);
-    record('[App-level] Session Clear + current re-record: current Observation preserved', afterAppLevelSessionClear.totalObserved === 1 && afterAppLevelSessionClear.activeObservations === 1 && afterAppLevelSessionClear.preferLegacy === 1 ? 'PASS' : 'FAIL', JSON.stringify(afterAppLevelSessionClear));
+    recordCondition('[App-level] Session Clear + current re-record: history reset',afterAppLevelSessionClear.cleared === 0 && afterAppLevelSessionClear.invalidated === 0,`cleared=${afterAppLevelSessionClear.cleared}, invalidated=${afterAppLevelSessionClear.invalidated}`);
+    recordCondition('[App-level] Session Clear + current re-record: current Observation preserved',afterAppLevelSessionClear.totalObserved === 1 && afterAppLevelSessionClear.activeObservations === 1 && afterAppLevelSessionClear.preferLegacy === 1,JSON.stringify(afterAppLevelSessionClear));
     const reasonsAfterReRecord = afterAppLevelSessionClear.reasonCounts;
-    record('[App-level] Session Clear + current re-record: Reasons preserved', reasonsAfterReRecord.skinTone === 1 && reasonsAfterReRecord.contrast === 1 ? 'PASS' : 'FAIL', JSON.stringify(reasonsAfterReRecord));
+    recordCondition('[App-level] Session Clear + current re-record: Reasons preserved',reasonsAfterReRecord.skinTone === 1 && reasonsAfterReRecord.contrast === 1,JSON.stringify(reasonsAfterReRecord));
     const radioStillChecked = await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy').checked);
-    record('[App-level] Session Clear + current re-record: radio remains checked', radioStillChecked === true ? 'PASS' : 'FAIL', `checked=${radioStillChecked}`);
+    recordCondition('[App-level] Session Clear + current re-record: radio remains checked',radioStillChecked === true,`checked=${radioStillChecked}`);
 
     // ── Provider unavailable / mismatch ──
     // COMBINED CLOSEOUT R1 — Phase E: the module is imported by its
@@ -418,7 +539,7 @@ async function main() {
         return { state: s.state, generationConfirmed: s.metadata.generationConfirmed, warnings: s.warnings };
       });
     }, CANONICAL_ORIGIN);
-    record('Provider unavailable produces neutral warning, stays usable', providerTestResult.state === 'ready' && providerTestResult.generationConfirmed === false && providerTestResult.warnings.length > 0 ? 'PASS' : 'FAIL', JSON.stringify(providerTestResult));
+    recordCondition('Provider unavailable produces neutral warning, stays usable',providerTestResult.state === 'ready' && providerTestResult.generationConfirmed === false && providerTestResult.warnings.length > 0,JSON.stringify(providerTestResult));
     const mismatchResult = await providerUnavailablePage.evaluate((origin) => {
       return import(`${origin}/ui/interactive-preview-observation-controller-v2.js`).then(({ createInteractivePreviewObservationControllerV2 }) => {
         let gen = 1;
@@ -431,7 +552,7 @@ async function main() {
         return { state: r.state, observation: r.observation };
       });
     }, CANONICAL_ORIGIN);
-    record('Provider mismatch clears observation via getState', mismatchResult.state === 'unavailable' && mismatchResult.observation === null ? 'PASS' : 'FAIL', JSON.stringify(mismatchResult));
+    recordCondition('Provider mismatch clears observation via getState',mismatchResult.state === 'unavailable' && mismatchResult.observation === null,JSON.stringify(mismatchResult));
     await providerRuntime.cleanup();
 
     // ── No duplicate IDs ──
@@ -439,7 +560,7 @@ async function main() {
       const ids = Array.from(document.querySelectorAll('[id]')).map((e) => e.id);
       return { total: ids.length, unique: new Set(ids).size };
     });
-    record('No duplicate element IDs', dupIds.total === dupIds.unique ? 'PASS' : 'FAIL', `total=${dupIds.total}, unique=${dupIds.unique}`);
+    recordCondition('No duplicate element IDs',dupIds.total === dupIds.unique,`total=${dupIds.total}, unique=${dupIds.unique}`);
 
     // ══════════════════════════════════════════════════════════════
     // FIX 9 (EPIC 2E-J-C-F): accessibility expansion via REAL DOM
@@ -448,38 +569,38 @@ async function main() {
     await page.evaluate(() => { window.__gen = 3; window.__testController.setContext({ generationId: 3, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null }); });
     await page.locator('#ipoOption_prefer-legacy').focus();
     let focusedId = await page.evaluate(() => document.activeElement.id);
-    record('Tab reaches Observation radio group', focusedId === 'ipoOption_prefer-legacy' ? 'PASS' : 'FAIL', `activeElement.id="${focusedId}"`);
+    recordCondition('Tab reaches Observation radio group',focusedId === 'ipoOption_prefer-legacy',`activeElement.id="${focusedId}"`);
 
     await page.keyboard.press('ArrowDown');
     const afterArrow = await page.evaluate(() => ({ id: document.activeElement.id, checked: document.activeElement.checked }));
-    record('Arrow keys change selected radio', afterArrow.id !== 'ipoOption_prefer-legacy' && afterArrow.checked === true ? 'PASS' : 'FAIL', JSON.stringify(afterArrow));
+    recordCondition('Arrow keys change selected radio',afterArrow.id !== 'ipoOption_prefer-legacy' && afterArrow.checked === true,JSON.stringify(afterArrow));
 
     await page.evaluate(() => { window.__testController.selectObservation('prefer-legacy'); window.__testController.clearReasons(); });
     await page.waitForFunction(() => document.getElementById('ipoReason_skin-tone') && !document.getElementById('ipoReason_skin-tone').disabled && !document.getElementById('ipoReason_skin-tone').checked);
     await page.locator('#ipoReason_skin-tone').focus();
     await page.keyboard.press('Space');
     const reasonChecked = await page.evaluate(() => document.getElementById('ipoReason_skin-tone').checked);
-    record('Space toggles Reason checkbox', reasonChecked === true ? 'PASS' : 'FAIL', `checked=${reasonChecked}`);
+    recordCondition('Space toggles Reason checkbox',reasonChecked === true,`checked=${reasonChecked}`);
 
     await page.locator('#ipoClearButton').focus();
     focusedId = await page.evaluate(() => document.activeElement.id);
-    record('Tab reaches Clear Observation button', focusedId === 'ipoClearButton' ? 'PASS' : 'FAIL', `activeElement.id="${focusedId}"`);
+    recordCondition('Tab reaches Clear Observation button',focusedId === 'ipoClearButton',`activeElement.id="${focusedId}"`);
     const clearObsOutline = await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle);
 
     await page.locator('#ipoClearReasonsButton').focus();
     focusedId = await page.evaluate(() => document.activeElement.id);
-    record('Tab reaches Clear Reasons button', focusedId === 'ipoClearReasonsButton' ? 'PASS' : 'FAIL', `activeElement.id="${focusedId}"`);
+    recordCondition('Tab reaches Clear Reasons button',focusedId === 'ipoClearReasonsButton',`activeElement.id="${focusedId}"`);
 
     const clearSessionBtn = await page.evaluate(() => !!document.getElementById('ipoClearSessionButton'));
     if (clearSessionBtn) {
       await page.locator('#ipoClearSessionButton').focus();
       focusedId = await page.evaluate(() => document.activeElement.id);
-      record('Tab reaches Clear Session button', focusedId === 'ipoClearSessionButton' ? 'PASS' : 'FAIL', `activeElement.id="${focusedId}"`);
+      recordCondition('Tab reaches Clear Session button',focusedId === 'ipoClearSessionButton',`activeElement.id="${focusedId}"`);
     }
 
     await page.locator('#ipoOption_prefer-legacy').focus();
     const focusOutline = await page.evaluate(() => getComputedStyle(document.activeElement.closest('label') || document.activeElement).outlineStyle);
-    record('Focus-visible has non-zero computed outline style', focusOutline && focusOutline !== 'none' ? 'PASS' : 'FAIL', `outlineStyle="${focusOutline}"`);
+    recordCondition('Focus-visible has non-zero computed outline style',focusOutline && focusOutline !== 'none',`outlineStyle="${focusOutline}"`);
 
     // ══════════════════════════════════════════════════════════════
     // FIX 6/7/8 (EPIC 2E-J-C-F): storage/network method-level
@@ -517,7 +638,7 @@ async function main() {
       return counts;
     });
     const storageTotal = Object.values(storageInstrumentation).reduce((a, b) => a + b, 0);
-    record('Storage instrumentation: zero Observation-related storage calls', storageTotal === 0 ? 'PASS' : 'FAIL', JSON.stringify(storageInstrumentation));
+    recordCondition('Storage instrumentation: zero Observation-related storage calls',storageTotal === 0,JSON.stringify(storageInstrumentation));
 
     const networkInstrumentation = await page.evaluate(async () => {
       const counts = { fetch: 0, xhr: 0, sendBeacon: 0, webSocket: 0, broadcastChannel: 0 };
@@ -547,7 +668,7 @@ async function main() {
       return counts;
     });
     const networkTotal = Object.values(networkInstrumentation).reduce((a, b) => a + b, 0);
-    record('Network instrumentation: zero Observation-related network calls', networkTotal === 0 ? 'PASS' : 'FAIL', JSON.stringify(networkInstrumentation));
+    recordCondition('Network instrumentation: zero Observation-related network calls',networkTotal === 0,JSON.stringify(networkInstrumentation));
 
     // ── No Canvas/drawImage calls ──
     const canvasCheck = await page.evaluate(() => {
@@ -561,7 +682,7 @@ async function main() {
       CanvasRenderingContext2D.prototype.drawImage = orig;
       return drawCalls;
     });
-    record('No Canvas drawImage calls from Observation actions', canvasCheck === 0 ? 'PASS' : 'FAIL', `drawImage calls=${canvasCheck}`);
+    recordCondition('No Canvas drawImage calls from Observation actions',canvasCheck === 0,`drawImage calls=${canvasCheck}`);
 
     // ══════════════════════════════════════════════════════════════
     // Step 7B-B-F3-P1 FIX 6 — focused Controller tests for the
@@ -641,12 +762,12 @@ async function main() {
       c.dispose();
       return { scenarioA, scenarioB, scenarioC, scenarioD, scenarioE, scenarioF };
     }, CANONICAL_ORIGIN);
-    record('FIX 6 Scenario A: Clear Reasons preserves Observation, sets reasonAnnouncement="reasons-cleared", exactly one callback', reasonAnnouncementControllerTest.scenarioA.observationPreserved && reasonAnnouncementControllerTest.scenarioA.reasonsEmpty && reasonAnnouncementControllerTest.scenarioA.announcement === 'reasons-cleared' && reasonAnnouncementControllerTest.scenarioA.callbackCount === 1, JSON.stringify(reasonAnnouncementControllerTest.scenarioA));
-    record('FIX 6 Scenario B: repeated empty clearReasons() does not crash, does not emit a duplicate callback, does not create a new announcement transition', !reasonAnnouncementControllerTest.scenarioB.crashed && reasonAnnouncementControllerTest.scenarioB.callbackCount === 0 && reasonAnnouncementControllerTest.scenarioB.announcementUnchanged, JSON.stringify(reasonAnnouncementControllerTest.scenarioB));
-    record('FIX 6 Scenario C: adding a Reason after Clear Reasons selects the new Reason and clears reasonAnnouncement to null', reasonAnnouncementControllerTest.scenarioC.reasonSelected && reasonAnnouncementControllerTest.scenarioC.announcement === null, JSON.stringify(reasonAnnouncementControllerTest.scenarioC));
-    record('FIX 6 Scenario D: clearing Observation after Clear Reasons empties Reasons and clears reasonAnnouncement to null', reasonAnnouncementControllerTest.scenarioD.observationCleared && reasonAnnouncementControllerTest.scenarioD.reasonsEmpty && reasonAnnouncementControllerTest.scenarioD.announcement === null, JSON.stringify(reasonAnnouncementControllerTest.scenarioD));
-    record('FIX 6 Scenario E: stale generation after Clear Reasons preserves existing stale behavior and clears reasonAnnouncement to null', reasonAnnouncementControllerTest.scenarioE.beforeAnnouncement === 'reasons-cleared' && reasonAnnouncementControllerTest.scenarioE.staleObservationCleared && reasonAnnouncementControllerTest.scenarioE.staleWarningPresent && reasonAnnouncementControllerTest.scenarioE.announcementAfterStale === null, JSON.stringify(reasonAnnouncementControllerTest.scenarioE));
-    record('FIX 6 Scenario F: QA state remains DOM-free, Error-free, and reasonAnnouncement is bounded to exactly the two allowed values', reasonAnnouncementControllerTest.scenarioF.jsonSafe && !reasonAnnouncementControllerTest.scenarioF.hasDomOrErrorRef && reasonAnnouncementControllerTest.scenarioF.tokenTypeBounded, JSON.stringify(reasonAnnouncementControllerTest.scenarioF));
+    recordCondition('FIX 6 Scenario A: Clear Reasons preserves Observation, sets reasonAnnouncement="reasons-cleared", exactly one callback',reasonAnnouncementControllerTest.scenarioA.observationPreserved && reasonAnnouncementControllerTest.scenarioA.reasonsEmpty && reasonAnnouncementControllerTest.scenarioA.announcement === 'reasons-cleared' && reasonAnnouncementControllerTest.scenarioA.callbackCount === 1,JSON.stringify(reasonAnnouncementControllerTest.scenarioA));
+    recordCondition('FIX 6 Scenario B: repeated empty clearReasons() does not crash, does not emit a duplicate callback, does not create a new announcement transition',!reasonAnnouncementControllerTest.scenarioB.crashed && reasonAnnouncementControllerTest.scenarioB.callbackCount === 0 && reasonAnnouncementControllerTest.scenarioB.announcementUnchanged,JSON.stringify(reasonAnnouncementControllerTest.scenarioB));
+    recordCondition('FIX 6 Scenario C: adding a Reason after Clear Reasons selects the new Reason and clears reasonAnnouncement to null',reasonAnnouncementControllerTest.scenarioC.reasonSelected && reasonAnnouncementControllerTest.scenarioC.announcement === null,JSON.stringify(reasonAnnouncementControllerTest.scenarioC));
+    recordCondition('FIX 6 Scenario D: clearing Observation after Clear Reasons empties Reasons and clears reasonAnnouncement to null',reasonAnnouncementControllerTest.scenarioD.observationCleared && reasonAnnouncementControllerTest.scenarioD.reasonsEmpty && reasonAnnouncementControllerTest.scenarioD.announcement === null,JSON.stringify(reasonAnnouncementControllerTest.scenarioD));
+    recordCondition('FIX 6 Scenario E: stale generation after Clear Reasons preserves existing stale behavior and clears reasonAnnouncement to null',reasonAnnouncementControllerTest.scenarioE.beforeAnnouncement === 'reasons-cleared' && reasonAnnouncementControllerTest.scenarioE.staleObservationCleared && reasonAnnouncementControllerTest.scenarioE.staleWarningPresent && reasonAnnouncementControllerTest.scenarioE.announcementAfterStale === null,JSON.stringify(reasonAnnouncementControllerTest.scenarioE));
+    recordCondition('FIX 6 Scenario F: QA state remains DOM-free, Error-free, and reasonAnnouncement is bounded to exactly the two allowed values',reasonAnnouncementControllerTest.scenarioF.jsonSafe && !reasonAnnouncementControllerTest.scenarioF.hasDomOrErrorRef && reasonAnnouncementControllerTest.scenarioF.tokenTypeBounded,JSON.stringify(reasonAnnouncementControllerTest.scenarioF));
 
     // ══════════════════════════════════════════════════════════════
     // Step 7B-B-F3-P1 FIX 7 — focused Renderer tests for the priority
@@ -698,13 +819,13 @@ async function main() {
     }, CANONICAL_ORIGIN);
     const EXPECTED_CLEARED_MESSAGE = 'Reasons cleared. Observation remains selected. Production output was not changed.';
     const EXPECTED_LIMIT_MESSAGE = 'You can select up to five reasons.';
-    record('FIX 7: "reasons-cleared" renders the exact message into #ipoReasonLimit', rendererPriorityTest.clearedText === EXPECTED_CLEARED_MESSAGE, `text="${rendererPriorityTest.clearedText}"`);
-    record('FIX 7: #ipoReasonLimit is set via textContent only (no HTML markup present in innerHTML)', rendererPriorityTest.clearedHtml === EXPECTED_CLEARED_MESSAGE, `innerHTML="${rendererPriorityTest.clearedHtml}"`);
-    record('FIX 7: five-Reason limit still renders the existing limit message when there is no announcement', rendererPriorityTest.limitText === EXPECTED_LIMIT_MESSAGE, `text="${rendererPriorityTest.limitText}"`);
-    record('FIX 7: Clear Reasons message has priority over the limit message when both are simultaneously true', rendererPriorityTest.priorityText === EXPECTED_CLEARED_MESSAGE, `text="${rendererPriorityTest.priorityText}"`);
-    record('FIX 7: null token renders no Clear Reasons message', rendererPriorityTest.nullTokenText === '', `text="${rendererPriorityTest.nullTokenText}"`);
-    record('FIX 7: a hostile string token (HTML-like) is ignored and never rendered as markup', rendererPriorityTest.hostileText === '' && rendererPriorityTest.hostileHtml === '', `text="${rendererPriorityTest.hostileText}", html="${rendererPriorityTest.hostileHtml}"`);
-    record('FIX 7: a hostile non-string (object) token is ignored (only the exact string "reasons-cleared" is ever accepted)', rendererPriorityTest.hostileObjectText === '', `text="${rendererPriorityTest.hostileObjectText}"`);
+    recordCondition('FIX 7: "reasons-cleared" renders the exact message into #ipoReasonLimit',rendererPriorityTest.clearedText === EXPECTED_CLEARED_MESSAGE,`text="${rendererPriorityTest.clearedText}"`);
+    recordCondition('FIX 7: #ipoReasonLimit is set via textContent only (no HTML markup present in innerHTML)',rendererPriorityTest.clearedHtml === EXPECTED_CLEARED_MESSAGE,`innerHTML="${rendererPriorityTest.clearedHtml}"`);
+    recordCondition('FIX 7: five-Reason limit still renders the existing limit message when there is no announcement',rendererPriorityTest.limitText === EXPECTED_LIMIT_MESSAGE,`text="${rendererPriorityTest.limitText}"`);
+    recordCondition('FIX 7: Clear Reasons message has priority over the limit message when both are simultaneously true',rendererPriorityTest.priorityText === EXPECTED_CLEARED_MESSAGE,`text="${rendererPriorityTest.priorityText}"`);
+    recordCondition('FIX 7: null token renders no Clear Reasons message',rendererPriorityTest.nullTokenText === '',`text="${rendererPriorityTest.nullTokenText}"`);
+    recordCondition('FIX 7: a hostile string token (HTML-like) is ignored and never rendered as markup',rendererPriorityTest.hostileText === '' && rendererPriorityTest.hostileHtml === '',`text="${rendererPriorityTest.hostileText}", html="${rendererPriorityTest.hostileHtml}"`);
+    recordCondition('FIX 7: a hostile non-string (object) token is ignored (only the exact string "reasons-cleared" is ever accepted)',rendererPriorityTest.hostileObjectText === '',`text="${rendererPriorityTest.hostileObjectText}"`);
 
     // ══════════════════════════════════════════════════════════════
     // COMBINED CLOSEOUT R1 — Phase G: focused Controller regression
@@ -789,10 +910,10 @@ async function main() {
 
       return { scenarioG1, scenarioG2, scenarioG3, scenarioG4 };
     }, CANONICAL_ORIGIN);
-    record('Phase G Scenario G1: first analysis with no prior Observation never produces a stale-generation warning (neither on preparing nor the following ready)', phaseGControllerTest.scenarioG1.noWarningOnFirstPreparing && phaseGControllerTest.scenarioG1.noWarningOnFirstReady, JSON.stringify(phaseGControllerTest.scenarioG1));
-    record('Phase G Scenario G2: Re-analyze with a selected Observation clears the old Observation/Reasons and emits the stale warning exactly once on preparing, then genuinely clears on the next ready for the same generation', phaseGControllerTest.scenarioG2.beforeObservation === 'prefer-legacy' && phaseGControllerTest.scenarioG2.clearedAfterPreparing && phaseGControllerTest.scenarioG2.warningEmittedOnce && phaseGControllerTest.scenarioG2.warningClearedOnReady, JSON.stringify(phaseGControllerTest.scenarioG2));
-    record('Phase G Scenario G3: setReasons([]) then clearReasons() with no real Reason ever selected produces no announcement and no callback', phaseGControllerTest.scenarioG3.announcementAfterSetEmpty === null && phaseGControllerTest.scenarioG3.announcementAfterClear === null && phaseGControllerTest.scenarioG3.callbackCountAfterClear === 0, JSON.stringify(phaseGControllerTest.scenarioG3));
-    record('Phase G Scenario G4: removing the final Reason then calling clearReasons() on the now-empty set produces no announcement and no callback', phaseGControllerTest.scenarioG4.reasonsEmpty && phaseGControllerTest.scenarioG4.announcement === null && phaseGControllerTest.scenarioG4.callbackCount === 0, JSON.stringify(phaseGControllerTest.scenarioG4));
+    recordCondition('Phase G Scenario G1: first analysis with no prior Observation never produces a stale-generation warning (neither on preparing nor the following ready)',phaseGControllerTest.scenarioG1.noWarningOnFirstPreparing && phaseGControllerTest.scenarioG1.noWarningOnFirstReady,JSON.stringify(phaseGControllerTest.scenarioG1));
+    recordCondition('Phase G Scenario G2: Re-analyze with a selected Observation clears the old Observation/Reasons and emits the stale warning exactly once on preparing, then genuinely clears on the next ready for the same generation',phaseGControllerTest.scenarioG2.beforeObservation === 'prefer-legacy' && phaseGControllerTest.scenarioG2.clearedAfterPreparing && phaseGControllerTest.scenarioG2.warningEmittedOnce && phaseGControllerTest.scenarioG2.warningClearedOnReady,JSON.stringify(phaseGControllerTest.scenarioG2));
+    recordCondition('Phase G Scenario G3: setReasons([]) then clearReasons() with no real Reason ever selected produces no announcement and no callback',phaseGControllerTest.scenarioG3.announcementAfterSetEmpty === null && phaseGControllerTest.scenarioG3.announcementAfterClear === null && phaseGControllerTest.scenarioG3.callbackCountAfterClear === 0,JSON.stringify(phaseGControllerTest.scenarioG3));
+    recordCondition('Phase G Scenario G4: removing the final Reason then calling clearReasons() on the now-empty set produces no announcement and no callback',phaseGControllerTest.scenarioG4.reasonsEmpty && phaseGControllerTest.scenarioG4.announcement === null && phaseGControllerTest.scenarioG4.callbackCount === 0,JSON.stringify(phaseGControllerTest.scenarioG4));
 
     // ══════════════════════════════════════════════════════════════
     // COMBINED CLOSEOUT R1 — Phase G: focused Renderer regression
@@ -813,23 +934,39 @@ async function main() {
       const fiveSelected = ['skin-tone', 'white-balance', 'highlight-detail', 'shadow-detail', 'contrast'];
       renderInteractivePreviewObservationV2(testDiv, { state: 'selected', observation: 'prefer-legacy', reasons: fiveSelected, reasonLimitReached: true, metadata: {} });
 
+      // COMBINED CLOSEOUT R3 — Phase B FIX B3: the Production contract
+      // (R2 Phase A) intentionally keeps label AND text/span opacity at
+      // 1 always, for measurable text Contrast — dimming is confined to
+      // the checkbox input's OWN opacity. Distinction instead comes
+      // from data-ipo-disabled + backgroundColor + borderColor +
+      // cursor. Collect every one of those signals, on both the label
+      // and the input, plus the text span's own computed opacity.
       const disabledInput = inputByValue('color-balance');
       const disabledLabel = labelFor('color-balance');
+      const disabledSpan = disabledLabel.querySelector('span');
       const disabledStyle = {
         disabled: disabledInput.disabled,
+        checked: disabledInput.checked,
         dataAttr: disabledLabel.dataset.ipoDisabled,
-        opacity: disabledLabel.style.opacity,
+        labelOpacity: disabledLabel.style.opacity,
+        spanOpacity: disabledSpan ? getComputedStyle(disabledSpan).opacity : null,
+        inputOpacity: disabledInput.style.opacity,
         backgroundColor: disabledLabel.style.backgroundColor,
+        borderColor: disabledLabel.style.borderColor,
         cursor: disabledLabel.style.cursor,
       };
 
       const checkedInput = inputByValue('skin-tone');
       const checkedLabel = labelFor('skin-tone');
+      const checkedSpan = checkedLabel.querySelector('span');
       const checkedStyle = {
         disabled: checkedInput.disabled,
         checked: checkedInput.checked,
         dataAttrPresent: 'ipoDisabled' in checkedLabel.dataset,
-        opacity: checkedLabel.style.opacity,
+        labelOpacity: checkedLabel.style.opacity,
+        spanOpacity: checkedSpan ? getComputedStyle(checkedSpan).opacity : null,
+        inputOpacity: checkedInput.style.opacity,
+        backgroundColor: checkedLabel.style.backgroundColor,
         cursor: checkedLabel.style.cursor,
       };
 
@@ -843,8 +980,10 @@ async function main() {
       const reEnabledStyle = {
         disabled: reEnabledInput.disabled,
         dataAttrPresent: 'ipoDisabled' in reEnabledLabel.dataset,
-        opacity: reEnabledLabel.style.opacity,
+        labelOpacity: reEnabledLabel.style.opacity,
+        inputOpacity: reEnabledInput.style.opacity,
         backgroundColor: reEnabledLabel.style.backgroundColor,
+        borderColor: reEnabledLabel.style.borderColor,
         cursor: reEnabledLabel.style.cursor,
       };
 
@@ -858,10 +997,49 @@ async function main() {
       return { disabledStyle, checkedStyle, reEnabledStyle, warningText, warningHtml };
     }, CANONICAL_ORIGIN);
     const EXPECTED_STALE_WARNING = 'The previous observation was cleared because a newer analysis is active.';
-    record('Phase G: a disabled unchecked Reason (sixth, over the five-Reason limit) has an explicit measurable visible style distinct from enabled (data-ipo-disabled marker, opacity != 1, distinguishing background, not-allowed cursor)', phaseGRendererTest.disabledStyle.disabled === true && phaseGRendererTest.disabledStyle.dataAttr === 'true' && phaseGRendererTest.disabledStyle.opacity !== '1' && phaseGRendererTest.disabledStyle.cursor === 'not-allowed', JSON.stringify(phaseGRendererTest.disabledStyle));
-    record('Phase G: checked Reasons at the five-Reason limit remain enabled with normal (non-disabled) style', phaseGRendererTest.checkedStyle.disabled === false && phaseGRendererTest.checkedStyle.checked === true && !phaseGRendererTest.checkedStyle.dataAttrPresent && phaseGRendererTest.checkedStyle.opacity === '1' && phaseGRendererTest.checkedStyle.cursor === 'pointer', JSON.stringify(phaseGRendererTest.checkedStyle));
-    record('Phase G: removing one checked Reason restores the previously-disabled Reason to fully enabled with its normal style (no stale disabled attribute/inline style remains)', phaseGRendererTest.reEnabledStyle.disabled === false && !phaseGRendererTest.reEnabledStyle.dataAttrPresent && phaseGRendererTest.reEnabledStyle.opacity === '1' && phaseGRendererTest.reEnabledStyle.backgroundColor === 'transparent' && phaseGRendererTest.reEnabledStyle.cursor === 'pointer', JSON.stringify(phaseGRendererTest.reEnabledStyle));
-    record('Phase G: the exact stale-generation warning message is rendered into #ipoWarning via textContent only (innerHTML equals the same plain text, no markup/injection)', phaseGRendererTest.warningText === EXPECTED_STALE_WARNING && phaseGRendererTest.warningHtml === EXPECTED_STALE_WARNING, `text="${phaseGRendererTest.warningText}", html="${phaseGRendererTest.warningHtml}"`);
+    // COMBINED CLOSEOUT R3 — Phase B FIX B3: updated to match the actual
+    // Production contract (R2 Phase A) rather than a stale assumption
+    // that the LABEL's opacity itself must drop below 1. Label AND
+    // text/span opacity intentionally stay at 1 (required for
+    // measurable Contrast); disabled-vs-enabled distinction comes from
+    // data-ipo-disabled + the INPUT's own opacity + background/border +
+    // cursor — every one of those signals is checked independently.
+    recordCondition(
+      'Phase B FIX B3: a disabled unchecked Reason (sixth, over the five-Reason limit) is visually distinct via data-ipo-disabled + dimmed INPUT opacity + distinguishing background/border + not-allowed cursor, while LABEL and text/span opacity remain exactly 1 for measurable Contrast',
+      phaseGRendererTest.disabledStyle.disabled === true
+        && phaseGRendererTest.disabledStyle.checked === false
+        && phaseGRendererTest.disabledStyle.dataAttr === 'true'
+        && phaseGRendererTest.disabledStyle.labelOpacity === '1'
+        && phaseGRendererTest.disabledStyle.spanOpacity === '1'
+        && parseFloat(phaseGRendererTest.disabledStyle.inputOpacity) < 1
+        && phaseGRendererTest.disabledStyle.backgroundColor !== 'transparent'
+        && phaseGRendererTest.disabledStyle.borderColor !== 'var(--border)'
+        && phaseGRendererTest.disabledStyle.cursor === 'not-allowed',
+      JSON.stringify(phaseGRendererTest.disabledStyle)
+    );
+    recordCondition(
+      'Phase B FIX B3: checked Reasons at the five-Reason limit remain enabled with normal (non-disabled) style — label/span/input opacity all 1',
+      phaseGRendererTest.checkedStyle.disabled === false
+        && phaseGRendererTest.checkedStyle.checked === true
+        && !phaseGRendererTest.checkedStyle.dataAttrPresent
+        && phaseGRendererTest.checkedStyle.labelOpacity === '1'
+        && phaseGRendererTest.checkedStyle.spanOpacity === '1'
+        && phaseGRendererTest.checkedStyle.inputOpacity === '1'
+        && phaseGRendererTest.checkedStyle.cursor === 'pointer',
+      JSON.stringify(phaseGRendererTest.checkedStyle)
+    );
+    recordCondition(
+      'Phase B FIX B3: removing one checked Reason restores the previously-disabled Reason to fully enabled — data attribute absent, input opacity/background/border/cursor all restored',
+      phaseGRendererTest.reEnabledStyle.disabled === false
+        && !phaseGRendererTest.reEnabledStyle.dataAttrPresent
+        && phaseGRendererTest.reEnabledStyle.labelOpacity === '1'
+        && phaseGRendererTest.reEnabledStyle.inputOpacity === '1'
+        && phaseGRendererTest.reEnabledStyle.backgroundColor === 'transparent'
+        && phaseGRendererTest.reEnabledStyle.borderColor === 'var(--border)'
+        && phaseGRendererTest.reEnabledStyle.cursor === 'pointer',
+      JSON.stringify(phaseGRendererTest.reEnabledStyle)
+    );
+    recordCondition('Phase G: the exact stale-generation warning message is rendered into #ipoWarning via textContent only (innerHTML equals the same plain text, no markup/injection)',phaseGRendererTest.warningText === EXPECTED_STALE_WARNING && phaseGRendererTest.warningHtml === EXPECTED_STALE_WARNING,`text="${phaseGRendererTest.warningText}", html="${phaseGRendererTest.warningHtml}"`);
 
     await harnessRuntime.cleanup();
     coverage.syntheticIntegrationHarness = results.filter((r) => r.result === 'FAIL').length === 0 ? 'PASS' : 'FAIL';
@@ -883,11 +1061,11 @@ async function main() {
       await p.waitForTimeout(200);
       const overflow = await p.evaluate(ELEMENT_OVERFLOW_CHECK_JS(width));
       const pass = overflow.findings.length === 0 && overflow.docScrollW <= overflow.docClientW;
-      record(`Element-level overflow containment at ${width}px`, pass ? 'PASS' : 'FAIL', pass ? `docScrollW=${overflow.docScrollW}, no clipped children` : JSON.stringify(overflow.findings));
+      recordCondition(`Element-level overflow containment at ${width}px`,pass,pass ? `docScrollW=${overflow.docScrollW}, no clipped children` : JSON.stringify(overflow.findings));
       await pRuntime.cleanup();
     }
 
-    record('Console errors across entire smoke test', consoleErrors.length === 0 ? 'PASS' : 'FAIL', consoleErrors.length === 0 ? '(none)' : consoleErrors.join('; '));
+    recordCondition('Console errors across entire smoke test',consoleErrors.length === 0,consoleErrors.length === 0 ? '(none)' : consoleErrors.join('; '));
 
   } finally {
     await browser.close();
@@ -902,6 +1080,24 @@ async function main() {
     'Long-duration memory profiling',
     'Real user privacy study',
   ];
+  // FIX B2 — the automated Decision is now computed by the same
+  // fail-closed, exported pure function Phase D's static evidence tests
+  // call directly. `completed: true` reflects that main()'s try/finally
+  // ran to this point without throwing (a thrown error is instead
+  // caught by the outer main().catch() below, which writes its own
+  // bounded completed:false crash result and never reaches here).
+  // sourceHash vs currentSourceHash: sourceHash was computed fresh from
+  // the CURRENT on-disk sources at the top of this very run, so within
+  // a single run it is always self-consistent by construction — the
+  // meaningful staleness check happens later, when Phase F's final
+  // aggregator re-reads this JSON and recomputes the hash against
+  // whatever sources exist AT THAT TIME (see validateResultFreshness).
+  const decisionResult = computeObservationSmokeDecision(results, {
+    completed: true,
+    sourceHash,
+    currentSourceHash: sourceHash,
+    permittedNotTestedTests: [],
+  });
   const output = {
     suite: 'EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test',
     runId,
@@ -916,36 +1112,49 @@ async function main() {
     coverage,
     manualTestsNotPerformed,
     results,
-    decision: failCount > 0 ? 'FAIL' : 'PASS',
+    decision: decisionResult.decision,
+    decisionReasons: decisionResult.reasons,
   };
   await mkdir(path.join(PROJECT_ROOT, 'qa'), { recursive: true });
   await writeResultAtomic(RESULTS_PATH, output);
   console.log(`\n${passCount}/${results.length} PASS, ${failCount} FAIL`);
   console.log('Coverage:', JSON.stringify(coverage));
+  console.log(`Decision: ${decisionResult.decision}${decisionResult.reasons.length ? ` (${decisionResult.reasons.join(', ')})` : ''}`);
   console.log('Results written to qa/epic-2e-j-phase-c-results.json');
-  process.exit(failCount > 0 ? 1 : 0);
+  process.exit(decisionResult.decision === 'PASS' ? 0 : 1);
 }
 
-main().catch(async (err) => {
-  console.error('Smoke test crashed:', err && err.name ? err.name : err);
-  try {
-    const nowIso = new Date().toISOString();
-    await writeResultAtomic(RESULTS_PATH, {
-      suite: 'EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test',
-      runId,
-      startedAt,
-      completedAt: nowIso,
-      completed: false,
-      sourceHash,
-      browserExecutablePath: null,
-      browserVersion: null,
-      generatedAt: nowIso,
-      summary: { total: 1, pass: 0, fail: 1, notTested: 0 },
-      results: [buildRuntimeCrashRow(err)],
-      decision: 'FAIL',
-    });
-  } catch (writeErr) {
-    console.error('Failed to write crash result JSON:', writeErr && writeErr.name ? writeErr.name : writeErr);
-  }
-  process.exit(2);
-});
+// COMBINED CLOSEOUT R3 — Phase D: guard the top-level run so importing
+// this file ONLY to reuse its exported pure `computeObservationSmokeDecision`
+// function (as the R2/R3 Phase E static evidence test now does) never
+// triggers a full Browser-suite execution / result-file write as an
+// import-time side effect. Running this file directly (`node
+// qa/epic-2e-j-phase-c-observation-smoke-test.mjs`) is unaffected.
+const isMainModule = (() => {
+  try { return import.meta.url === `file://${process.argv[1]}`; } catch { return false; }
+})();
+if (isMainModule) {
+  main().catch(async (err) => {
+    console.error('Smoke test crashed:', err && err.name ? err.name : err);
+    try {
+      const nowIso = new Date().toISOString();
+      await writeResultAtomic(RESULTS_PATH, {
+        suite: 'EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test',
+        runId,
+        startedAt,
+        completedAt: nowIso,
+        completed: false,
+        sourceHash,
+        browserExecutablePath: null,
+        browserVersion: null,
+        generatedAt: nowIso,
+        summary: { total: 1, pass: 0, fail: 1, notTested: 0 },
+        results: [buildRuntimeCrashRow(err)],
+        decision: 'FAIL',
+      });
+    } catch (writeErr) {
+      console.error('Failed to write crash result JSON:', writeErr && writeErr.name ? writeErr.name : writeErr);
+    }
+    process.exit(2);
+  });
+}

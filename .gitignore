@@ -13,3 +13,16 @@ dist/
 # Logs
 *.log
 npm-debug.log*
+# COMBINED CLOSEOUT R3 — Phase G package hygiene
+*.tmp
+*.bak
+*.pid
+*exit-code*
+# Playwright's downloaded Browser binaries (never committed — this
+# project resolves a system/pre-installed Chromium at test-run time)
+.cache/ms-playwright/
+ms-playwright/
+# Old/backup copies of QA result JSON files (only the current, freshly
+# generated result for each suite is ever current evidence)
+qa/**/*.bak.json
+qa/**/*-results.json.old

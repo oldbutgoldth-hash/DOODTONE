@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J ENV-B2-F1 FIX 10 — Real Browser QA Determinism and Evidence Integrity static/functional self-test",
-  "generatedAt": "2026-07-22T15:32:46.668Z",
+  "generatedAt": "2026-07-22T17:12:00.768Z",
   "summary": {
     "total": 35,
     "pass": 35,
@@ -16,7 +16,7 @@
     {
       "test": "Setup: qa/helpers/playwright-lumixa-test-runtime.mjs is readable",
       "result": "PASS",
-      "evidence": "19298 bytes"
+      "evidence": "22493 bytes"
     },
     {
       "test": "Setup: qa/playwright-in-memory-app-smoke.mjs is readable",
