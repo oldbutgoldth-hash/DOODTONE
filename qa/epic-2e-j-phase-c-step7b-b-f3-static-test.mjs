@@ -92,7 +92,7 @@ function noClickBetween(a, b) {
   record('Part 1: `.focus()`/`page.evaluate(...focus...)` calls are used only for setup/cleanup (never as Tab-order acceptance proof) and are labeled as such', neverUsesFocusAsProof && focusCallsAreLabeled, `neverUsesFocusAsProof=${neverUsesFocusAsProof}, focusCallsAreLabeled=${focusCallsAreLabeled}`);
 }
 {
-  const hasNoTrapCheck = testSrc.includes('Part 1.8 / FIX 9: no keyboard trap detected');
+  const hasNoTrapCheck = testSrc.includes('Part 1.8 / FIX 9 / FIX 7 (F3-S3): no keyboard trap detected');
   record('Part 1: no-keyboard-trap check exists', hasNoTrapCheck, `present=${hasNoTrapCheck}`);
 }
 
@@ -272,13 +272,13 @@ function noClickBetween(a, b) {
 {
   const instrumentsCanvas = testSrc.includes('async function installCanvasInstrumentation(page)') && testSrc.includes("proto.drawImage = function") && testSrc.includes("proto.getImageData = function") && testSrc.includes("proto.putImageData = function");
   const restoresCanvasExactly = testSrc.includes('async function restoreCanvasInstrumentation(page)') && testSrc.includes('proto.drawImage = orig.drawImage;') && testSrc.includes('proto.getImageData = orig.getImageData;') && testSrc.includes('proto.putImageData = orig.putImageData;');
-  const checksCanvasZero = testSrc.includes('Part 9 / FIX 7: zero Canvas drawImage/getImageData/putImageData calls occurred in the non-Analysis Keyboard/ARIA action window AFTER Scenario D');
-  const checksRestoredState = testSrc.includes('Part 9 / FIX 8: instrumented Canvas methods were restored exactly, proven via Function identity');
+  const checksCanvasZero = testSrc.includes('FIX 2 (F3-S3): post-D non-Analysis window shows zero Canvas drawImage/getImageData/putImageData calls') && testSrc.includes("FIX 1 (F3-S3): pre-D non-Analysis Canvas calls are zero");
+  const checksRestoredState = testSrc.includes('FIX 2 (F3-S3): post-D Canvas methods restored exactly, proven via Function identity') && testSrc.includes('FIX 1 (F3-S3): pre-D Canvas methods restored exactly');
   record('Part 9: Canvas drawImage/getImageData/putImageData are instrumented, calls are verified zero during the non-Analysis Keyboard/ARIA action window, and instrumented methods are restored exactly', instrumentsCanvas && restoresCanvasExactly && checksCanvasZero && checksRestoredState, `instrumentsCanvas=${instrumentsCanvas}, restoresCanvasExactly=${restoresCanvasExactly}, checksCanvasZero=${checksCanvasZero}, checksRestoredState=${checksRestoredState}`);
 }
 {
-  const checksSliderUnchanged = testSrc.includes('function slidersUnchanged(before, after)') && testSrc.includes('Part 9: Interactive slider values were unchanged');
-  const checksGenerationIsolation = testSrc.includes('Part 9: Analysis generation was unchanged across Parts 1-7 except the one deliberate Scenario D stale-generation transition');
+  const checksSliderUnchanged = testSrc.includes('function slidersUnchanged(before, after)') && testSrc.includes('FIX 2 (F3-S3): pre-D non-Analysis window shows unchanged Slider values') && testSrc.includes('FIX 2 (F3-S3): post-D non-Analysis window shows unchanged Slider values');
+  const checksGenerationIsolation = testSrc.includes('FIX 2 (F3-S3): pre-D non-Analysis window shows unchanged Analysis generation') && testSrc.includes('FIX 2 (F3-S3): post-D non-Analysis window shows unchanged Analysis generation') && testSrc.includes('FIX 3 (F3-S3): exact generation accounting holds across all three windows');
   const perPartGenerationChecks = (testSrc.match(/(no Analysis rerun during|Analysis generation does not change during) Clear \w+ keyboard activation/g) || []).length >= 3;
   const perPartSliderChecks = (testSrc.match(/no Slider movement during Clear \w+ keyboard activation/g) || []).length >= 3;
   record('Part 9: Slider values and Analysis generation are checked unchanged overall AND per-Part (Clear Reasons/Observation/Session), except the one deliberate Scenario D generation change', checksSliderUnchanged && checksGenerationIsolation && perPartGenerationChecks && perPartSliderChecks, `checksSliderUnchanged=${checksSliderUnchanged}, checksGenerationIsolation=${checksGenerationIsolation}, perPartGenerationChecks=${perPartGenerationChecks}, perPartSliderChecks=${perPartSliderChecks}`);
@@ -333,13 +333,15 @@ function noClickBetween(a, b) {
   record('FIX 6: a real Keyboard re-activation of the already-selected Observation state is performed, verifying application state is unchanged and no duplicate identical announcement is produced, without calling the Renderer/Controller directly', hasRepeatedStateAction && neverCallsRendererOrControllerDirectly, `hasRepeatedStateAction=${hasRepeatedStateAction}, neverCallsRendererOrControllerDirectly=${neverCallsRendererOrControllerDirectly}`);
 }
 {
-  // FIX 7: Canvas counters are read and instrumentation exactly
-  // restored BEFORE the deliberate Scenario D Analysis window, and
-  // fresh zeroed instrumentation is reinstalled immediately after.
-  const excludesAnalysisWindow = testSrc.includes('const f3CanvasCallsBeforeD = await readCanvasInstrumentation(page);') && testSrc.includes('const f3CanvasRestoredBeforeD = await restoreCanvasInstrumentation(page);') && testSrc.includes("await page.click('#btnReanalyze'); // deliberate real Analysis/Canvas window — see FIX 7 above/below");
+  // FIX 7 (F3-S2) / FIX 1-2 (F3-S3): Canvas counters are read and
+  // instrumentation exactly restored BEFORE the deliberate Scenario D
+  // Analysis window, and fresh zeroed instrumentation is reinstalled
+  // immediately after, with the Analysis window's own accounting
+  // explicitly recorded (excludedFromKeyboardAriaIsolation: true).
+  const excludesAnalysisWindow = testSrc.includes('const f3PreDCanvasCalls = await readCanvasInstrumentation(page);') && testSrc.includes('const f3CanvasRestoredBeforeD = await restoreCanvasInstrumentation(page);') && testSrc.includes("await page.click('#btnReanalyze'); // deliberate real Analysis/Canvas window — Re-analyze #1");
   const reinstallsAfter = (testSrc.match(/await installCanvasInstrumentation\(page\);/g) || []).length >= 2;
-  const reportsExclusionExplicitly = testSrc.includes('the deliberate Analysis window is explicitly excluded, not silently ignored');
-  record('FIX 7: the deliberate Scenario D Re-analyze/Analysis window is explicitly excluded from the zero-Canvas-call assertion (read + restore before, fresh reinstall after), reported as explicitly excluded rather than silently ignored', excludesAnalysisWindow && reinstallsAfter && reportsExclusionExplicitly, `excludesAnalysisWindow=${excludesAnalysisWindow}, reinstallsAfter=${reinstallsAfter}, reportsExclusionExplicitly=${reportsExclusionExplicitly}`);
+  const reportsExclusionExplicitly = testSrc.includes('excludedFromKeyboardAriaIsolation: true');
+  record('FIX 7 (F3-S2) / FIX 1-2 (F3-S3): the deliberate Scenario D Re-analyze/Analysis window is explicitly excluded from the zero-Canvas-call assertion (read + restore before, fresh reinstall after), reported as excludedFromKeyboardAriaIsolation=true rather than silently ignored', excludesAnalysisWindow && reinstallsAfter && reportsExclusionExplicitly, `excludesAnalysisWindow=${excludesAnalysisWindow}, reinstallsAfter=${reinstallsAfter}, reportsExclusionExplicitly=${reportsExclusionExplicitly}`);
 }
 {
   // FIX 8: restoration is proven via EXACT Function identity, computed
@@ -363,7 +365,7 @@ function noClickBetween(a, b) {
   // FIX 9: two-Element (period-2) cycle detection, not just same-ID-3x.
   const periodOneCheck = testSrc.includes('f3TrapSequence[i] === f3TrapSequence[i - 1] && f3TrapSequence[i - 1] === f3TrapSequence[i - 2]');
   const periodTwoCheck = testSrc.includes('f3TrapSequence[i] === f3TrapSequence[i - 2] && f3TrapSequence[i - 1] === f3TrapSequence[i - 3] && f3TrapSequence[i] !== f3TrapSequence[i - 1]');
-  const requiresLeavingSection = testSrc.includes("const f3ReachedOutsideElement = f3TrapSequence.some((id) => id && !id.startsWith('ipo'));");
+  const requiresLeavingSection = testSrc.includes("const f3ReachedOutsideElement = f3ContainmentSequence.some((c) => c.insideObs === false && c.insideSession === false);");
   record('FIX 9: no-keyboard-trap detection catches BOTH a period-1 (same Element repeated) and a period-2 (two-Element cycle) trap, and separately requires focus to eventually leave the section or reach a known outside Element', periodOneCheck && periodTwoCheck && requiresLeavingSection, `periodOneCheck=${periodOneCheck}, periodTwoCheck=${periodTwoCheck}, requiresLeavingSection=${requiresLeavingSection}`);
 }
 {
@@ -371,6 +373,99 @@ function noClickBetween(a, b) {
   // ordinary Selected Reasons text being empty).
   const sessionReasonCountsChecked = testSrc.includes("p2ParsedSession.activeObservationsDerived === 1") && testSrc.includes("p2Session.topReasonsText === ''");
   record('FIX 9: Clear Reasons additionally requires activeObservationsDerived === 1 and empty Session Top Reasons/Reason counts, checked directly rather than relying only on the Selected Reasons text being empty', sessionReasonCountsChecked, `present=${sessionReasonCountsChecked}`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Step 7B-B-F3-S3 — FIX 1 through FIX 8 static self-test extension.
+// Proves (via source audit only) the three-window Canvas/Generation/
+// Slider isolation, the deterministic stale-warning wait, the cross-
+// region duplicate-announcement check, and the real-DOM-containment
+// no-trap check. Existing F1/F2/F3 checks above are kept unchanged.
+// ══════════════════════════════════════════════════════════════════
+{
+  // FIX 1: pre-D Canvas counters are required to equal zero (checked
+  // BEFORE Scenario D, covering Keyboard Parts 1-5 + Scenarios A/B/C).
+  const preDCanvasZeroRequired = testSrc.includes("record('FIX 1 (F3-S3): pre-D non-Analysis Canvas calls are zero") && testSrc.includes('f3PreDCanvasCalls.drawImage === 0 && f3PreDCanvasCalls.getImageData === 0 && f3PreDCanvasCalls.putImageData === 0');
+  record('FIX 1 (F3-S3): pre-D Canvas counters are explicitly required to equal zero, covering Keyboard Parts 1-5 and Scenarios A/B/C (non-Analysis actions are never silently excluded merely because Scenario D follows them)', preDCanvasZeroRequired, `present=${preDCanvasZeroRequired}`);
+}
+{
+  // FIX 2: pre-D Generation and Sliders are unchanged.
+  const preDGenerationUnchanged = testSrc.includes("record('FIX 2 (F3-S3): pre-D non-Analysis window shows unchanged Analysis generation") && testSrc.includes('f3PreDEndGeneration === f3GenAtStart');
+  const preDSlidersUnchanged = testSrc.includes("record('FIX 2 (F3-S3): pre-D non-Analysis window shows unchanged Slider values") && testSrc.includes('slidersUnchanged(f3SlidersAtStart, f3PreDEndSliders)');
+  record('FIX 2 (F3-S3): pre-D Generation is required unchanged from the section start', preDGenerationUnchanged, `present=${preDGenerationUnchanged}`);
+  record('FIX 2 (F3-S3): pre-D Sliders are required unchanged from the section start', preDSlidersUnchanged, `present=${preDSlidersUnchanged}`);
+}
+{
+  // FIX 2: the deliberate Analysis window is separately represented,
+  // with excludedFromKeyboardAriaIsolation, generation before/after,
+  // and the intentional Re-analyze count — Canvas/Sliders NOT asserted here.
+  const analysisWindowRepresented = testSrc.includes('excludedFromKeyboardAriaIsolation: true') && testSrc.includes('const f3AnalysisWindowStartGeneration = f3PreDEndGeneration;') && testSrc.includes('const f3AnalysisWindowEndGeneration = await qaSnapshot(page)') && testSrc.includes('f3IntentionalReanalyzeCount');
+  const canvasNotAssertedInAnalysisWindow = !/(f3AnalysisWindowStartGeneration[\s\S]{0,1500}Canvas.{0,40}=== 0)/.test(testSrc.split('DELIBERATE ANALYSIS WINDOW')[1]?.split('POST-D NON-ANALYSIS WINDOW')[0] || '');
+  record('FIX 2 (F3-S3): the deliberate Analysis window is separately represented (excludedFromKeyboardAriaIsolation, generation before/after, intentional Re-analyze count), with Canvas/Sliders never asserted inside it', analysisWindowRepresented && canvasNotAssertedInAnalysisWindow, `analysisWindowRepresented=${analysisWindowRepresented}, canvasNotAssertedInAnalysisWindow=${canvasNotAssertedInAnalysisWindow}`);
+}
+{
+  // FIX 2: post-D Generation and Sliders are unchanged, Canvas zero.
+  const postDGenerationUnchanged = testSrc.includes("record('FIX 2 (F3-S3): post-D non-Analysis window shows unchanged Analysis generation") && testSrc.includes('f3PostDEndGeneration === f3PostDStartGeneration');
+  const postDSlidersUnchanged = testSrc.includes("record('FIX 2 (F3-S3): post-D non-Analysis window shows unchanged Slider values") && testSrc.includes('slidersUnchanged(f3PostDStartSliders, f3PostDEndSliders)');
+  const postDCanvasZero = testSrc.includes("record('FIX 2 (F3-S3): post-D non-Analysis window shows zero Canvas") && testSrc.includes('f3PostDCanvasCalls.drawImage === 0 && f3PostDCanvasCalls.getImageData === 0 && f3PostDCanvasCalls.putImageData === 0');
+  record('FIX 2 (F3-S3): post-D Generation is required unchanged from the post-D window start', postDGenerationUnchanged, `present=${postDGenerationUnchanged}`);
+  record('FIX 2 (F3-S3): post-D Sliders are required unchanged from the post-D window start (never compared across the deliberate Analysis window boundary)', postDSlidersUnchanged, `present=${postDSlidersUnchanged}`);
+  record('FIX 2 (F3-S3): post-D Canvas counters are required to equal zero', postDCanvasZero, `present=${postDCanvasZero}`);
+}
+{
+  // FIX 3: exactly two intentional Re-analyze actions are recorded,
+  // and the exact generation-accounting object is required (not merely
+  // final > start).
+  const twoReanalyzeActions = (testSrc.match(/f3IntentionalReanalyzeCount\+\+;/g) || []).length === 2 && testSrc.includes('intentionalReanalyzeCount: f3IntentionalReanalyzeCount,') && testSrc.includes('f3GenerationAccounting.intentionalReanalyzeCount === 2');
+  const exactAccountingObject = testSrc.includes('const f3GenerationAccounting = {') && testSrc.includes('preDStartGeneration: f3GenAtStart,') && testSrc.includes('preDEndGeneration: f3PreDEndGeneration,') && testSrc.includes('analysisWindowStartGeneration: f3AnalysisWindowStartGeneration,') && testSrc.includes('analysisWindowEndGeneration: f3AnalysisWindowEndGeneration,') && testSrc.includes('postDStartGeneration: f3PostDStartGeneration,') && testSrc.includes('postDEndGeneration: f3PostDEndGeneration,') && testSrc.includes('intentionalReanalyzeCount: f3IntentionalReanalyzeCount,');
+  const neverMerelyGreaterThan = testSrc.includes('f3GenerationAccounting.preDEndGeneration === f3GenerationAccounting.preDStartGeneration &&') && testSrc.includes('f3GenerationAccounting.analysisWindowEndGeneration > f3GenerationAccounting.analysisWindowStartGeneration &&') && testSrc.includes('f3GenerationAccounting.postDEndGeneration === f3GenerationAccounting.postDStartGeneration &&');
+  record('FIX 3 (F3-S3): exactly two intentional Re-analyze actions are recorded', twoReanalyzeActions, `present=${twoReanalyzeActions}`);
+  record('FIX 3 (F3-S3): the exact generation-accounting object (pre-D/analysis-window/post-D before+after) is required, never merely "final generation greater than starting generation"', exactAccountingObject && neverMerelyGreaterThan, `exactAccountingObject=${exactAccountingObject}, neverMerelyGreaterThan=${neverMerelyGreaterThan}`);
+}
+{
+  // FIX 4: fixed timeout is not the primary stale-warning evidence;
+  // waitForFunction targets the exact stale-warning text.
+  const waitForFunctionTargetsExactText = testSrc.includes("await page.waitForFunction(") && testSrc.includes("(document.getElementById('ipoWarning')?.textContent || '').trim() === expected") && testSrc.includes("const STALE_WARNING_TEXT = 'The previous observation was cleared because a newer analysis is active.';");
+  const fixedTimeoutNotPrimary = testSrc.includes('// A SMALL timeout remains ONLY to flush one MutationObserver') && testSrc.includes('never a fixed timeout as primary evidence') && !testSrc.includes("await page.waitForTimeout(700); // allow the stale-warning render to occur");
+  const failsHonestlyIfMissing = testSrc.includes('FAIL — stale warning text never appeared within the bounded 5000ms timeout (no announcement was fabricated)');
+  record('FIX 4 (F3-S3): waitForFunction targets the EXACT stale-warning text as primary evidence, with a bounded timeout (not a fixed 700ms wait), failing honestly (no fabricated announcement) if the text never appears', waitForFunctionTargetsExactText && fixedTimeoutNotPrimary && failsHonestlyIfMissing, `waitForFunctionTargetsExactText=${waitForFunctionTargetsExactText}, fixedTimeoutNotPrimary=${fixedTimeoutNotPrimary}, failsHonestlyIfMissing=${failsHonestlyIfMissing}`);
+}
+{
+  // FIX 5/6: duplicate detection merges all three Live regions, and is
+  // applied to every scenario (A, B, C, D, E, repeated-state action).
+  const crossRegionFnExists = testSrc.includes('function summarizeCrossRegionWindow(rawAuditsByRegion)') && testSrc.includes('async function readAllLiveRegionAudits(page)');
+  const appliedToAllScenarios = ['Scenario A cross-region duplicate check', 'Scenario B cross-region duplicate check', 'Scenario C cross-region duplicate check', 'Scenario D cross-region duplicate check', 'Scenario E cross-region duplicate check', 'repeated-state action cross-region duplicate check'].every((s) => testSrc.includes(s));
+  record('FIX 5/6 (F3-S3): a cross-region window summary function exists (merging ipoStatus + ipoWarning + ipoReasonLimit), and its duplicate check is applied to Scenarios A, B, C, D, E, and the repeated-state action', crossRegionFnExists && appliedToAllScenarios, `crossRegionFnExists=${crossRegionFnExists}, appliedToAllScenarios=${appliedToAllScenarios}`);
+}
+{
+  // FIX 5: same text in two different regions is considered a
+  // duplicate — proven by the merged single-array Set-based scan
+  // (identical logic path to the whole-window per-region detector,
+  // but fed from allNonEmptyAnnouncements built across ALL regions).
+  const mergesBeforeDeduping = testSrc.includes('const allNonEmptyAnnouncements = [];') && testSrc.includes('allNonEmptyAnnouncements.push(t.to);') && testSrc.includes('for (const t of allNonEmptyAnnouncements) {') && testSrc.includes('if (seen.has(t)) { repeatedIdenticalTexts++; repeatedTexts.push(t); }');
+  const tracksRegionSources = testSrc.includes('regionSources.push({ regionId, text: t.to });') && testSrc.includes('regionSources }');
+  record('FIX 5 (F3-S3): same exact text emitted by two DIFFERENT regions is treated as a duplicate (all regions merged into one list BEFORE the whole-window Set-based scan), with regionSources tracked as evidence', mergesBeforeDeduping && tracksRegionSources, `mergesBeforeDeduping=${mergesBeforeDeduping}, tracksRegionSources=${tracksRegionSources}`);
+}
+{
+  // FIX 7: no-trap exit uses actual DOM containment rather than ID
+  // prefix alone — Node.contains() against the two real section roots.
+  const usesRealContainment = testSrc.includes("const obsRoot = document.getElementById('interactivePreviewObservationInner');") && testSrc.includes("const sessionRoot = document.getElementById('interactivePreviewObservationSessionInner');") && testSrc.includes('obsRoot.contains(activeEl)') && testSrc.includes('sessionRoot.contains(activeEl)');
+  const noLongerUsesIdPrefixHeuristic = !testSrc.includes(`!id.startsWith('ipo')`);
+  const capturedInlineNotReconstructed = testSrc.includes('const f3CaptureContainment = () => page.evaluate(() => {') && testSrc.includes('const activeEl = document.activeElement;');
+  record('FIX 7 (F3-S3): no-trap section-exit is determined via real DOM containment (Node.contains against #interactivePreviewObservationInner and #interactivePreviewObservationSessionInner), captured inline on the live activeElement, never via an ID-prefix heuristic', usesRealContainment && noLongerUsesIdPrefixHeuristic && capturedInlineNotReconstructed, `usesRealContainment=${usesRealContainment}, noLongerUsesIdPrefixHeuristic=${noLongerUsesIdPrefixHeuristic}, capturedInlineNotReconstructed=${capturedInlineNotReconstructed}`);
+}
+{
+  // Clear Reasons named Product gap remains intact (unchanged from F3-S2).
+  const productGapIntact = testSrc.includes('PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT') && testSrc.includes('no Production change was made in this static-only patch');
+  record('FIX 8 (F3-S3): the Clear Reasons named Product-accessibility-gap evidence (PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT) remains intact and is never reinterpreted as PASS', productGapIntact, `present=${productGapIntact}`);
+}
+{
+  // No Production file was modified — this static test only ever reads
+  // qa/epic-2e-j-phase-c-step7b-b-test.mjs; it never opens or asserts
+  // against core/ or ui/ files, and never claims a Production change.
+  const neverReferencesCoreOrUiPaths = !/readFile\([^)]*['"`](\.\.\/)?(core|ui)\//.test(testSrc);
+  const neverClaimsProductionChange = !/Production (was|has been) (changed|modified|updated)/i.test(testSrc);
+  record('FIX 8 (F3-S3): no Production file was modified — this static self-test only reads the qa/ test file itself and never claims a Production change', neverReferencesCoreOrUiPaths && neverClaimsProductionChange, `neverReferencesCoreOrUiPaths=${neverReferencesCoreOrUiPaths}, neverClaimsProductionChange=${neverClaimsProductionChange}`);
 }
 
 // ══════════════════════════════════════════════════════════════════

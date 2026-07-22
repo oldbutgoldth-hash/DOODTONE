@@ -1,16 +1,16 @@
 {
   "suite": "EPIC 2E-J — Step 7B-B-F3-S: static coverage self-test (source audit only, no Chromium)",
-  "generatedAt": "2026-07-22T08:35:12.067Z",
+  "generatedAt": "2026-07-22T08:59:16.171Z",
   "summary": {
-    "total": 35,
-    "pass": 35,
+    "total": 50,
+    "pass": 50,
     "fail": 0
   },
   "results": [
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "138026 bytes"
+      "evidence": "149003 bytes"
     },
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-f1-static-results.json is readable",
@@ -143,7 +143,7 @@
       "evidence": "hasRepeatedStateAction=true, neverCallsRendererOrControllerDirectly=true"
     },
     {
-      "test": "FIX 7: the deliberate Scenario D Re-analyze/Analysis window is explicitly excluded from the zero-Canvas-call assertion (read + restore before, fresh reinstall after), reported as explicitly excluded rather than silently ignored",
+      "test": "FIX 7 (F3-S2) / FIX 1-2 (F3-S3): the deliberate Scenario D Re-analyze/Analysis window is explicitly excluded from the zero-Canvas-call assertion (read + restore before, fresh reinstall after), reported as excludedFromKeyboardAriaIsolation=true rather than silently ignored",
       "result": "PASS",
       "evidence": "excludesAnalysisWindow=true, reinstallsAfter=true, reportsExclusionExplicitly=true"
     },
@@ -171,6 +171,81 @@
       "test": "FIX 9: Clear Reasons additionally requires activeObservationsDerived === 1 and empty Session Top Reasons/Reason counts, checked directly rather than relying only on the Selected Reasons text being empty",
       "result": "PASS",
       "evidence": "present=true"
+    },
+    {
+      "test": "FIX 1 (F3-S3): pre-D Canvas counters are explicitly required to equal zero, covering Keyboard Parts 1-5 and Scenarios A/B/C (non-Analysis actions are never silently excluded merely because Scenario D follows them)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 2 (F3-S3): pre-D Generation is required unchanged from the section start",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 2 (F3-S3): pre-D Sliders are required unchanged from the section start",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 2 (F3-S3): the deliberate Analysis window is separately represented (excludedFromKeyboardAriaIsolation, generation before/after, intentional Re-analyze count), with Canvas/Sliders never asserted inside it",
+      "result": "PASS",
+      "evidence": "analysisWindowRepresented=true, canvasNotAssertedInAnalysisWindow=true"
+    },
+    {
+      "test": "FIX 2 (F3-S3): post-D Generation is required unchanged from the post-D window start",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 2 (F3-S3): post-D Sliders are required unchanged from the post-D window start (never compared across the deliberate Analysis window boundary)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 2 (F3-S3): post-D Canvas counters are required to equal zero",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 3 (F3-S3): exactly two intentional Re-analyze actions are recorded",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 3 (F3-S3): the exact generation-accounting object (pre-D/analysis-window/post-D before+after) is required, never merely \"final generation greater than starting generation\"",
+      "result": "PASS",
+      "evidence": "exactAccountingObject=true, neverMerelyGreaterThan=true"
+    },
+    {
+      "test": "FIX 4 (F3-S3): waitForFunction targets the EXACT stale-warning text as primary evidence, with a bounded timeout (not a fixed 700ms wait), failing honestly (no fabricated announcement) if the text never appears",
+      "result": "PASS",
+      "evidence": "waitForFunctionTargetsExactText=true, fixedTimeoutNotPrimary=true, failsHonestlyIfMissing=true"
+    },
+    {
+      "test": "FIX 5/6 (F3-S3): a cross-region window summary function exists (merging ipoStatus + ipoWarning + ipoReasonLimit), and its duplicate check is applied to Scenarios A, B, C, D, E, and the repeated-state action",
+      "result": "PASS",
+      "evidence": "crossRegionFnExists=true, appliedToAllScenarios=true"
+    },
+    {
+      "test": "FIX 5 (F3-S3): same exact text emitted by two DIFFERENT regions is treated as a duplicate (all regions merged into one list BEFORE the whole-window Set-based scan), with regionSources tracked as evidence",
+      "result": "PASS",
+      "evidence": "mergesBeforeDeduping=true, tracksRegionSources=true"
+    },
+    {
+      "test": "FIX 7 (F3-S3): no-trap section-exit is determined via real DOM containment (Node.contains against #interactivePreviewObservationInner and #interactivePreviewObservationSessionInner), captured inline on the live activeElement, never via an ID-prefix heuristic",
+      "result": "PASS",
+      "evidence": "usesRealContainment=true, noLongerUsesIdPrefixHeuristic=true, capturedInlineNotReconstructed=true"
+    },
+    {
+      "test": "FIX 8 (F3-S3): the Clear Reasons named Product-accessibility-gap evidence (PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT) remains intact and is never reinterpreted as PASS",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 8 (F3-S3): no Production file was modified — this static self-test only reads the qa/ test file itself and never claims a Production change",
+      "result": "PASS",
+      "evidence": "neverReferencesCoreOrUiPaths=true, neverClaimsProductionChange=true"
     },
     {
       "test": "Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)",
