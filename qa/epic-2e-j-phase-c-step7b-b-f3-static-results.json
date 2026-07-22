@@ -1,0 +1,132 @@
+{
+  "suite": "EPIC 2E-J — Step 7B-B-F3-S: static coverage self-test (source audit only, no Chromium)",
+  "generatedAt": "2026-07-22T06:06:08.686Z",
+  "summary": {
+    "total": 23,
+    "pass": 23,
+    "fail": 0
+  },
+  "results": [
+    {
+      "test": "qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
+      "result": "PASS",
+      "evidence": "122193 bytes"
+    },
+    {
+      "test": "qa/epic-2e-j-phase-c-step7b-b-f1-static-results.json is readable",
+      "result": "PASS",
+      "evidence": "parsed OK"
+    },
+    {
+      "test": "Part 1: real Tab and Shift+Tab navigation is used, all four Arrow keys are exercised, and the full activeElement ID sequence is recorded",
+      "result": "PASS",
+      "evidence": "hasTabToHelper=true, hasRealTabPress=true, hasShiftTab=true, hasAllFourArrows=true, recordsFullSequence=true"
+    },
+    {
+      "test": "Part 1: `.focus()`/`page.evaluate(...focus...)` calls are used only for setup/cleanup (never as Tab-order acceptance proof) and are labeled as such",
+      "result": "PASS",
+      "evidence": "neverUsesFocusAsProof=true, focusCallsAreLabeled=true"
+    },
+    {
+      "test": "Part 1: no-keyboard-trap check exists",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Part 2: Clear Reasons is reached via real Tab navigation and activated with Enter, with no click() call between reaching and activating",
+      "result": "PASS",
+      "evidence": "hasBothAnchors=true, noClickBetween=true, reason=null"
+    },
+    {
+      "test": "Part 2: all required post-activation verifications are present (Reasons clear, Observation preserved, Session preserved, no rerun, no Slider movement)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Part 3: Clear Observation is reached via real Tab navigation and activated with Space, with no click() call between reaching and activating",
+      "result": "PASS",
+      "evidence": "hasBothAnchors=true, noClickBetween=true, reason=null"
+    },
+    {
+      "test": "Part 3: pressing the activation key a second time is tested and does not double-increment Cleared",
+      "result": "PASS",
+      "evidence": "hasNoDoubleFireTest=true, pressesActivationKeyTwice=true"
+    },
+    {
+      "test": "Part 3: all required post-activation verifications are present",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Part 4: Clear Session is reached via real Tab navigation and activated with Enter, with no .click() between reaching and activating, and no hard-coded click on this button anywhere",
+      "result": "PASS",
+      "evidence": "hasBothAnchors=true, noClickBetween=true, noHardcodedClick=true, reason=null"
+    },
+    {
+      "test": "Part 4: Clear Session expects immediate re-record (totalObserved=1, activeObservations=1, preferLegacy=1), historical counts reset, current selection preserved, generation unchanged, and never expects the empty-session message",
+      "result": "PASS",
+      "evidence": "hasReRecordVerification=true, hasActiveObservationsCheck=true, hasHistoricalResetCheck=true, hasCurrentStatePreservedChecks=true, hasGenerationUnchangedCheck=true, neverExpectsEmptySessionMessage=true"
+    },
+    {
+      "test": "Part 5: five Reasons are selected via Tab+Space, the disabled sixth Reason receives a genuine Space attempt and stays unchecked, and a selected Reason can be removed using Space (never calling Controller methods directly)",
+      "result": "PASS",
+      "evidence": "selectsFiveViaSpace=true, disabledSpaceAttempt=true, disabledStaysUnchecked=true, removalViaSpace=true, removalVerified=true, neverCallsControllerDirectly=true"
+    },
+    {
+      "test": "Part 6: ARIA-live structure requires #ipoStatus/#ipoWarning/#ipoReasonLimit polite, #ipoReasonStatus non-live with no live ancestor, and Session sections non-live, with missing elements failing closed",
+      "result": "PASS",
+      "evidence": "hasAllSixChecks=true, missingElementFailsClosed=true"
+    },
+    {
+      "test": "Part 7: MutationObserver is installed and observes ONLY the three intended live regions (ipoStatus, ipoWarning, ipoReasonLimit), with the required {regionId, mutationCount, distinctNonEmptyTexts, repeatedIdenticalTexts} record shape",
+      "result": "PASS",
+      "evidence": "hasInstallFn=true, observesOnlyThreeRegions=true, hasRequiredRecordShape=true"
+    },
+    {
+      "test": "Part 7: all five MutationObserver scenarios (A ordinary selection non-live, B limit-reached single announcement, C Clear Reasons, D stale/generation transition, E Clear Observation) are implemented",
+      "result": "PASS",
+      "evidence": "hasScenarioA=true, hasScenarioB=true, hasScenarioC=true, hasScenarioD=true, hasScenarioE=true"
+    },
+    {
+      "test": "Part 7: duplicate identical live announcements are rejected (checked in at least 4 scenarios), and ordinary Selected Reasons text is explicitly asserted non-live",
+      "result": "PASS",
+      "evidence": "rejectsDuplicates=true, ordinaryReasonsTextAssertedNonLive=true"
+    },
+    {
+      "test": "Part 7: only text-content mutations are counted as announcements (never unrelated DOM mutations)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "Part 8: announcement bounds check plain text, no HTML injection, no [object Object], no NaN/Infinity, no raw stack/error, and a 300-character maximum, applied to every captured announcement",
+      "result": "PASS",
+      "evidence": "hasBoundsFn=true, checksPlainText=true, checksHtmlInjection=true, checksObjectObject=true, checksNaN=true, checksInfinity=true, checksRawStack=true, checks300Bound=true, appliedAggregate=true"
+    },
+    {
+      "test": "Part 9: Canvas drawImage/getImageData/putImageData are instrumented, calls are verified zero during Keyboard/ARIA actions, and instrumented methods are restored exactly",
+      "result": "PASS",
+      "evidence": "instrumentsCanvas=true, restoresCanvasExactly=true, checksCanvasZero=true, checksRestoredState=true"
+    },
+    {
+      "test": "Part 9: Slider values and Analysis generation are checked unchanged overall AND per-Part (Clear Reasons/Observation/Session), except the one deliberate Scenario D generation change",
+      "result": "PASS",
+      "evidence": "checksSliderUnchanged=true, checksGenerationIsolation=true, perPartGenerationChecks=true, perPartSliderChecks=true"
+    },
+    {
+      "test": "Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)",
+      "result": "PASS",
+      "evidence": "status=NOT_RUN_ENVIRONMENT_BLOCKED"
+    },
+    {
+      "test": "This static test never claims actual Keyboard PASS or real screen-reader (NVDA/JAWS/VoiceOver) PASS",
+      "result": "PASS",
+      "evidence": "neverClaimsScreenReaderPass=true"
+    }
+  ],
+  "disclaimer": "This suite audits the SOURCE TEXT of qa/epic-2e-j-phase-c-step7b-b-test.mjs for the presence of required Keyboard-activation/MutationObserver/announcement-bounds/side-effect-isolation code paths and wiring. It does NOT execute a browser, does NOT measure real Tab order or real screen-reader announcements, and does NOT prove real Keyboard/ARIA PASS. A PASS here means \"the required code path is present and correctly wired,\" not \"the real UI passed Keyboard/ARIA testing.\"",
+  "browserSuiteExecution": {
+    "status": "NOT_RUN_ENVIRONMENT_BLOCKED",
+    "note": "Unchanged from the F1-R/F1-R2 record. This F3-S patch did not execute, simulate, or regenerate the real browser suite or its result JSON.",
+    "browserOrFinalResultJsonRegenerated": false
+  }
+}

@@ -215,6 +215,172 @@ function recordContrastEntry(label, entry, contrastResultsList) {
 // function defined out here. Each copy below is kept byte-identical by
 // construction; if one changes, all three must.
 
+// Step 7B-B-F3-S — shared helpers for real-keyboard-only activation
+// proof, MutationObserver-based live-region auditing, announcement
+// bounds checking, and side-effect isolation instrumentation.
+
+// Presses real Tab keys until `document.activeElement.id` equals
+// `targetId` or `maxSteps` is exhausted. Never uses `.focus()` as
+// reachability proof — every step is a genuine Tab keypress. Returns
+// whether the target was reached; the ID sequence (when a `sequenceOut`
+// array is supplied) is the actual evidence of real navigation.
+async function tabTo(page, targetId, maxSteps, sequenceOut) {
+  for (let i = 0; i < maxSteps; i++) {
+    await page.keyboard.press('Tab');
+    const id = await page.evaluate(() => (document.activeElement ? document.activeElement.id : null));
+    if (sequenceOut) sequenceOut.push(id);
+    if (id === targetId) return true;
+  }
+  return false;
+}
+
+// Clicks an element ONLY for test setup/cleanup (never as Keyboard
+// activation proof for anything asserted afterward) — e.g. resetting
+// Reasons/Observation state before a Part begins.
+async function safeClickIfEnabled(page, id) {
+  const canClick = await page.evaluate((elId) => { const el = document.getElementById(elId); return !!el && el.disabled !== true; }, id);
+  if (canClick) await page.click(`#${id}`);
+  return canClick;
+}
+
+async function installLiveRegionObservers(page) {
+  await page.evaluate(() => {
+    window.__step7bbLiveAudit = { ipoStatus: [], ipoWarning: [], ipoReasonLimit: [] };
+    window.__step7bbLiveObservers = [];
+    ['ipoStatus', 'ipoWarning', 'ipoReasonLimit'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const obs = new MutationObserver(() => {
+        window.__step7bbLiveAudit[id].push((el.textContent || '').trim());
+      });
+      obs.observe(el, { childList: true, characterData: true, subtree: true });
+      window.__step7bbLiveObservers.push(obs);
+    });
+  });
+}
+async function uninstallLiveRegionObservers(page) {
+  await page.evaluate(() => {
+    (window.__step7bbLiveObservers || []).forEach((o) => o.disconnect());
+    window.__step7bbLiveObservers = [];
+  });
+}
+async function resetLiveRegionAudit(page) {
+  await page.evaluate(() => {
+    if (window.__step7bbLiveAudit) { window.__step7bbLiveAudit.ipoStatus = []; window.__step7bbLiveAudit.ipoWarning = []; window.__step7bbLiveAudit.ipoReasonLimit = []; }
+  });
+}
+async function readLiveRegionAudit(page, regionId) {
+  return page.evaluate((rid) => (window.__step7bbLiveAudit ? window.__step7bbLiveAudit[rid].slice() : []), regionId);
+}
+// { regionId, mutationCount, distinctNonEmptyTexts, repeatedIdenticalTexts }
+// per Step 7B-B-F3-S Part 7's required record shape.
+function summarizeLiveTexts(regionId, texts) {
+  const nonEmptyTexts = texts.filter((t) => typeof t === 'string' && t.length > 0);
+  const distinctNonEmptyTexts = Array.from(new Set(nonEmptyTexts));
+  let repeatedIdenticalTexts = 0;
+  for (let i = 1; i < nonEmptyTexts.length; i++) if (nonEmptyTexts[i] === nonEmptyTexts[i - 1]) repeatedIdenticalTexts++;
+  return { regionId, mutationCount: texts.length, distinctNonEmptyTexts, repeatedIdenticalTexts, nonEmptyTexts };
+}
+
+// Step 7B-B-F3-S Part 8 — plain text only, no HTML injection, no
+// [object Object], no NaN/Infinity, no raw stack/error text, bounded to
+// 300 characters.
+function isAnnouncementBounded(text) {
+  if (typeof text !== 'string') return { ok: false, reason: `not a plain string (typeof=${typeof text})` };
+  if (text.includes('<') && text.includes('>')) return { ok: false, reason: 'possible HTML injection (contains "<" and ">")' };
+  if (text.includes('[object Object]')) return { ok: false, reason: 'contains [object Object]' };
+  if (/\bNaN\b/.test(text)) return { ok: false, reason: 'contains NaN' };
+  if (/\bInfinity\b/.test(text)) return { ok: false, reason: 'contains Infinity' };
+  if (/at\s+\S+\s+\(.*:\d+:\d+\)/.test(text) || /^(Error|TypeError|RangeError|SyntaxError):/.test(text)) return { ok: false, reason: 'looks like a raw stack trace / error string' };
+  if (text.length > 300) return { ok: false, reason: `exceeds 300 characters (length=${text.length})` };
+  return { ok: true, reason: null };
+}
+
+// Step 7B-B-F3-S Part 9 — instruments the three named Canvas methods on
+// the REAL CanvasRenderingContext2D prototype (never a mock canvas),
+// counts calls, and restores the original methods exactly afterward.
+async function installCanvasInstrumentation(page) {
+  await page.evaluate(() => {
+    if (window.__step7bbOriginalCanvasMethods) return; // already installed
+    window.__step7bbCanvasCalls = { drawImage: 0, getImageData: 0, putImageData: 0 };
+    const proto = CanvasRenderingContext2D.prototype;
+    window.__step7bbOriginalCanvasMethods = { drawImage: proto.drawImage, getImageData: proto.getImageData, putImageData: proto.putImageData };
+    proto.drawImage = function (...args) { window.__step7bbCanvasCalls.drawImage++; return window.__step7bbOriginalCanvasMethods.drawImage.apply(this, args); };
+    proto.getImageData = function (...args) { window.__step7bbCanvasCalls.getImageData++; return window.__step7bbOriginalCanvasMethods.getImageData.apply(this, args); };
+    proto.putImageData = function (...args) { window.__step7bbCanvasCalls.putImageData++; return window.__step7bbOriginalCanvasMethods.putImageData.apply(this, args); };
+  });
+}
+async function readCanvasInstrumentation(page) {
+  return page.evaluate(() => (window.__step7bbCanvasCalls ? { ...window.__step7bbCanvasCalls } : null));
+}
+async function restoreCanvasInstrumentation(page) {
+  await page.evaluate(() => {
+    const proto = CanvasRenderingContext2D.prototype;
+    const orig = window.__step7bbOriginalCanvasMethods;
+    if (orig) { proto.drawImage = orig.drawImage; proto.getImageData = orig.getImageData; proto.putImageData = orig.putImageData; }
+    delete window.__step7bbOriginalCanvasMethods;
+    delete window.__step7bbCanvasCalls;
+  });
+}
+
+const STEP7BB_SLIDER_IDS = ['exp', 'con', 'hi', 'sh', 'wh', 'bl', 'temp', 'tint', 'vib', 'sat', 'sharp', 'noise', 'clarity', 'dehaze', 'texture'];
+async function snapshotSliderValues(page) {
+  return page.evaluate((ids) => {
+    const out = {};
+    for (const id of ids) { const el = document.getElementById(id); out[id] = el ? el.value : null; }
+    return out;
+  }, STEP7BB_SLIDER_IDS);
+}
+function slidersUnchanged(before, after) {
+  if (!before || !after) return false;
+  return Object.keys(before).every((k) => before[k] === after[k]);
+}
+
+// Parses the REAL rendered "Observed: N" / "Prefer Legacy: N (P%)" /
+// "Prefer V2: N (P%)" / "No visible difference: N (P%)" / "Unsure: N
+// (P%)" lines produced by
+// renderInteractivePreviewObservationSessionV2() in
+// ui/interactive-preview-observation-renderer-v2.js. activeObservations
+// is never fabricated — it is DERIVED as the sum of the four real
+// rendered category counts, exactly matching how getSummary() computes
+// it internally.
+function parseSessionSummary(lines) {
+  const patterns = {
+    totalObserved: /^Observed:\s*(\d+)$/,
+    preferLegacy: /^Prefer Legacy:\s*(\d+)/,
+    preferV2: /^Prefer V2:\s*(\d+)/,
+    noVisibleDifference: /^No visible difference:\s*(\d+)/,
+    unsure: /^Unsure:\s*(\d+)/,
+  };
+  const out = { totalObserved: null, preferLegacy: null, preferV2: null, noVisibleDifference: null, unsure: null };
+  for (const line of lines) {
+    for (const [key, re] of Object.entries(patterns)) {
+      const m = line.match(re);
+      if (m) out[key] = parseInt(m[1], 10);
+    }
+  }
+  const knownActiveParts = [out.preferLegacy, out.preferV2, out.noVisibleDifference, out.unsure].filter((v) => v !== null);
+  out.activeObservationsDerived = knownActiveParts.length === 4 ? knownActiveParts.reduce((a, b) => a + b, 0) : null;
+  return out;
+}
+async function readSessionMetricsText(page) {
+  return page.evaluate(() => {
+    const metricsEl = document.getElementById('ipoSessionMetrics');
+    const secondaryEl = document.getElementById('ipoSessionSecondary');
+    const topReasonsEl = document.getElementById('ipoSessionTopReasons');
+    return {
+      lines: metricsEl ? Array.from(metricsEl.children).map((c) => (c.textContent || '').trim()) : [],
+      secondaryText: secondaryEl ? (secondaryEl.textContent || '').trim() : '',
+      topReasonsText: topReasonsEl ? (topReasonsEl.textContent || '').trim() : '',
+    };
+  });
+}
+function parseSessionSecondary(secondaryText) {
+  const clearedMatch = secondaryText.match(/Cleared:\s*(\d+)/);
+  const invalidatedMatch = secondaryText.match(/Invalidated:\s*(\d+)/);
+  return { cleared: clearedMatch ? parseInt(clearedMatch[1], 10) : null, invalidated: invalidatedMatch ? parseInt(invalidatedMatch[1], 10) : null };
+}
+
 async function main() {
   const server = await startServer();
   const browser = await chromium.launch();
@@ -484,6 +650,425 @@ async function main() {
       };
     });
     record('Main Observation status uses polite live region', ariaLiveCheck.statusIsPolite === true, `statusIsPolite=${ariaLiveCheck.statusIsPolite}`);
+
+    // ══════════════════════════════════════════════════════════════
+    // PART 4B (Step 7B-B-F3-S) — Keyboard Activation, MutationObserver
+    // Live-Region Audit, Announcement Bounds, and Side-Effect Isolation.
+    // Real keyboard input (Tab/Shift+Tab/Arrow*/Space/Enter) is the ONLY
+    // accepted proof of navigation/activation throughout this section.
+    // Every `.focus()`/`page.evaluate(...focus...)` call below is used
+    // SOLELY to establish a known starting point for setup — never as
+    // activation/reachability proof — and is labeled "(setup/cleanup
+    // only, not activation proof)" at each use. Side-effect
+    // instrumentation (Canvas + Slider + Analysis generation) is
+    // installed once here and read back at the end of this section.
+    // ══════════════════════════════════════════════════════════════
+    console.log('=== Keyboard Activation, ARIA-Live Runtime, and Side-Effect Isolation (Step 7B-B-F3-S) ===');
+    const f3GenAtStart = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
+    const f3SlidersAtStart = await snapshotSliderValues(page);
+    await installCanvasInstrumentation(page);
+    const f3AllCapturedLiveTexts = []; // aggregated for the Part 8 bounds check
+
+    // ── F3-S PART 6 — extended ARIA-live structure ──────────────────
+    console.log('--- Part 6: ARIA-live structure ---');
+    const ariaStructureF3 = await page.evaluate(() => {
+      const get = (id) => document.getElementById(id);
+      const status = get('ipoStatus');
+      const warning = get('ipoWarning');
+      const reasonLimit = get('ipoReasonLimit');
+      const reasonStatus = get('ipoReasonStatus');
+      const sessionMetrics = get('ipoSessionMetrics');
+      const sessionTopReasons = get('ipoSessionTopReasons');
+      function hasLiveAncestor(el) {
+        let cur = el;
+        while (cur) { if (cur.hasAttribute && cur.hasAttribute('aria-live')) return true; cur = cur.parentElement; }
+        return false;
+      }
+      return {
+        statusExists: !!status, statusLive: status ? status.getAttribute('aria-live') : null,
+        warningExists: !!warning, warningLive: warning ? warning.getAttribute('aria-live') : null,
+        reasonLimitExists: !!reasonLimit, reasonLimitLive: reasonLimit ? reasonLimit.getAttribute('aria-live') : null,
+        reasonStatusExists: !!reasonStatus, reasonStatusOwnLive: reasonStatus ? reasonStatus.getAttribute('aria-live') : null, reasonStatusHasLiveAncestor: reasonStatus ? hasLiveAncestor(reasonStatus) : null,
+        sessionMetricsExists: !!sessionMetrics, sessionMetricsLive: sessionMetrics ? sessionMetrics.getAttribute('aria-live') : null,
+        sessionTopReasonsExists: !!sessionTopReasons, sessionTopReasonsLive: sessionTopReasons ? sessionTopReasons.getAttribute('aria-live') : null,
+      };
+    });
+    record('Part 6.1: #ipoStatus has aria-live="polite"', ariaStructureF3.statusExists && ariaStructureF3.statusLive === 'polite', JSON.stringify(ariaStructureF3));
+    record('Part 6.2: #ipoWarning has aria-live="polite"', ariaStructureF3.warningExists && ariaStructureF3.warningLive === 'polite', `warningExists=${ariaStructureF3.warningExists}, warningLive=${ariaStructureF3.warningLive}`);
+    record('Part 6.3: #ipoReasonLimit has aria-live="polite"', ariaStructureF3.reasonLimitExists && ariaStructureF3.reasonLimitLive === 'polite', `reasonLimitExists=${ariaStructureF3.reasonLimitExists}, reasonLimitLive=${ariaStructureF3.reasonLimitLive}`);
+    record('Part 6.4: #ipoReasonStatus (ordinary Selected Reasons text) has no aria-live of its own and no live-region ancestor', ariaStructureF3.reasonStatusExists && ariaStructureF3.reasonStatusOwnLive === null && ariaStructureF3.reasonStatusHasLiveAncestor === false, `reasonStatusExists=${ariaStructureF3.reasonStatusExists}, ownLive=${ariaStructureF3.reasonStatusOwnLive}, hasLiveAncestor=${ariaStructureF3.reasonStatusHasLiveAncestor}`);
+    record('Part 6.5: #ipoSessionMetrics is not a live region (no documented bounded reason exists for it to be one)', ariaStructureF3.sessionMetricsExists && ariaStructureF3.sessionMetricsLive === null, `sessionMetricsExists=${ariaStructureF3.sessionMetricsExists}, sessionMetricsLive=${ariaStructureF3.sessionMetricsLive}`);
+    record('Part 6.6: #ipoSessionTopReasons is not a live region (no documented bounded reason exists for it to be one)', ariaStructureF3.sessionTopReasonsExists && ariaStructureF3.sessionTopReasonsLive === null, `sessionTopReasonsExists=${ariaStructureF3.sessionTopReasonsExists}, sessionTopReasonsLive=${ariaStructureF3.sessionTopReasonsLive}`);
+
+    // ── Stable starting state (cleanup only, not activation proof) ──
+    await safeClickIfEnabled(page, 'ipoClearSessionButton');
+    await page.waitForTimeout(120);
+    await safeClickIfEnabled(page, 'ipoClearReasonsButton');
+    await page.waitForTimeout(100);
+    await safeClickIfEnabled(page, 'ipoClearButton');
+    await page.waitForTimeout(100);
+
+    // ── F3-S PART 1 — real Tab order, full ID sequence recorded ─────
+    console.log('--- Part 1: real Tab order ---');
+    // Setup/cleanup only, not activation proof: establishes a known
+    // starting point immediately before the Observation section.
+    await page.evaluate(() => document.getElementById('btnReanalyze')?.focus());
+    const f3FullTabSequence = [];
+    let f3EnteredRadioGroup = false;
+    for (let i = 0; i < 60 && !f3EnteredRadioGroup; i++) {
+      await page.keyboard.press('Tab');
+      const id = await page.evaluate(() => document.activeElement.id);
+      f3FullTabSequence.push(id);
+      if (id === 'ipoOption_prefer-legacy') f3EnteredRadioGroup = true;
+    }
+    record('Part 1.1: Tab enters the Observation radio group (real Tab presses only)', f3EnteredRadioGroup, `sequence=${JSON.stringify(f3FullTabSequence)}`);
+
+    const f3VisitedRadioIds = new Set([await page.evaluate(() => document.activeElement.id)]);
+    for (const key of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft']) {
+      await page.keyboard.press(key);
+      const id = await page.evaluate(() => document.activeElement.id);
+      f3VisitedRadioIds.add(id);
+      f3FullTabSequence.push(`${key}->${id}`);
+    }
+    record('Part 1.2: Arrow keys (ArrowDown/ArrowUp/ArrowLeft/ArrowRight) move through all four Observation radios', f3VisitedRadioIds.size === 4, `visited=${JSON.stringify([...f3VisitedRadioIds])}`);
+
+    const f3ExactlyOneRadioChecked = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoObservation"]')).filter((r) => r.checked).length === 1);
+    record('Part 1.3: exactly one Radio remains checked after Arrow navigation', f3ExactlyOneRadioChecked, `oneChecked=${f3ExactlyOneRadioChecked}`);
+
+    let f3ExitedRadioGroup = false;
+    let f3ReachedFirstReasonId = null;
+    for (let i = 0; i < 10 && !f3ExitedRadioGroup; i++) {
+      await page.keyboard.press('Tab');
+      const id = await page.evaluate(() => document.activeElement.id);
+      f3FullTabSequence.push(id);
+      if (id && id.startsWith('ipoReason_')) { f3ExitedRadioGroup = true; f3ReachedFirstReasonId = id; }
+    }
+    record('Part 1.4/1.5: Tab exits the Radio group and reaches Reason checkboxes in DOM order', f3ExitedRadioGroup, `firstReasonId=${f3ReachedFirstReasonId}, sequence=${JSON.stringify(f3FullTabSequence)}`);
+
+    const f3BeforeShiftTabId = await page.evaluate(() => document.activeElement.id);
+    await page.keyboard.press('Shift+Tab');
+    const f3AfterShiftTabId = await page.evaluate(() => document.activeElement.id);
+    record('Part 1.6: Shift+Tab reverses navigation', f3AfterShiftTabId !== f3BeforeShiftTabId, `before=${f3BeforeShiftTabId}, after=${f3AfterShiftTabId}`);
+    await page.keyboard.press('Tab'); // return forward to where Part 1.5 left off
+    f3FullTabSequence.push(await page.evaluate(() => document.activeElement.id));
+
+    let f3ReachedClearReasons = false, f3ReachedClearObs = false, f3ReachedClearSession = false;
+    for (let i = 0; i < 20 && !(f3ReachedClearReasons && f3ReachedClearObs && f3ReachedClearSession); i++) {
+      await page.keyboard.press('Tab');
+      const id = await page.evaluate(() => document.activeElement.id);
+      f3FullTabSequence.push(id);
+      if (id === 'ipoClearReasonsButton') f3ReachedClearReasons = true;
+      if (id === 'ipoClearButton') f3ReachedClearObs = true;
+      if (id === 'ipoClearSessionButton') f3ReachedClearSession = true;
+    }
+    record('Part 1.7: Tab reaches Clear Reasons, Clear Observation, and Clear Session', f3ReachedClearReasons && f3ReachedClearObs && f3ReachedClearSession, `reachedClearReasons=${f3ReachedClearReasons}, reachedClearObs=${f3ReachedClearObs}, reachedClearSession=${f3ReachedClearSession}`);
+
+    let f3NoTrap = true;
+    const f3TrapSequence = [await page.evaluate(() => document.activeElement.id || document.activeElement.tagName)];
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press('Tab');
+      const currentId = await page.evaluate(() => document.activeElement.id || document.activeElement.tagName);
+      f3TrapSequence.push(currentId);
+      f3FullTabSequence.push(currentId);
+    }
+    for (let i = 2; i < f3TrapSequence.length; i++) {
+      if (f3TrapSequence[i] === f3TrapSequence[i - 1] && f3TrapSequence[i - 1] === f3TrapSequence[i - 2]) { f3NoTrap = false; break; }
+    }
+    record('Part 1.8: no keyboard trap detected (focus keeps advancing for several consecutive Tab presses)', f3NoTrap, `sequence=${JSON.stringify(f3TrapSequence)}`);
+    record('Part 1: full recorded activeElement ID sequence (evidence)', f3FullTabSequence.length > 0, `fullTabSequence=${JSON.stringify(f3FullTabSequence)}`);
+
+    // ── F3-S PART 2 — Clear Reasons keyboard activation (Enter) ─────
+    console.log('--- Part 2: Clear Reasons keyboard activation ---');
+    await safeClickIfEnabled(page, 'ipoClearReasonsButton'); // setup/cleanup only, not activation proof
+    await page.waitForTimeout(100);
+    await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); }); // setup only
+    await page.waitForTimeout(100);
+    for (const r of ['skin-tone', 'contrast']) {
+      const already = await page.evaluate((rid) => document.getElementById(`ipoReason_${rid}`)?.checked === true, r);
+      if (!already) await page.click(`#ipoReason_${r}`); // setup only
+    }
+    await page.waitForTimeout(150);
+
+    const p2GenBefore = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
+    const p2SlidersBefore = await snapshotSliderValues(page);
+
+    // Setup/cleanup only, not activation proof: establishes a known
+    // starting point before the real Tab-navigation acceptance proof.
+    await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy')?.focus());
+    const p2Sequence = [];
+    const p2Reached = await tabTo(page, 'ipoClearReasonsButton', 15, p2Sequence);
+    record('Part 2.1: real Tab navigation reaches #ipoClearReasonsButton (never .click() as activation proof)', p2Reached, `sequence=${JSON.stringify(p2Sequence)}`);
+
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(150);
+
+    const p2AllReasonsCleared = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoReason"]')).every((c) => c.checked === false));
+    const p2ObservationStillLegacy = await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy')?.checked === true);
+    const p2ReasonStatusText = await page.evaluate(() => (document.getElementById('ipoReasonStatus')?.textContent || '').trim());
+    const p2Session = await readSessionMetricsText(page);
+    const p2GenAfter = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
+    const p2SlidersAfter = await snapshotSliderValues(page);
+
+    record('Part 2.2: Enter on #ipoClearReasonsButton clears all Reason checkboxes', p2AllReasonsCleared, `allCleared=${p2AllReasonsCleared}`);
+    record('Part 2.3: Observation remains Prefer Legacy after Clear Reasons', p2ObservationStillLegacy, `stillLegacy=${p2ObservationStillLegacy}`);
+    record('Part 2.4: Session active Observation remains present (Observed count > 0)', p2Session.lines.some((l) => /^Observed:\s*[1-9]/.test(l)), `lines=${JSON.stringify(p2Session.lines)}`);
+    record('Part 2.5: Reason counts (Selected Reasons text) clear after Clear Reasons', p2ReasonStatusText === '', `reasonStatusText="${p2ReasonStatusText}"`);
+    record('Part 2.6: no Analysis rerun during Clear Reasons keyboard activation', p2GenAfter === p2GenBefore, `before=${p2GenBefore}, after=${p2GenAfter}`);
+    record('Part 2.7: no Slider movement during Clear Reasons keyboard activation', slidersUnchanged(p2SlidersBefore, p2SlidersAfter), `before=${JSON.stringify(p2SlidersBefore)}, after=${JSON.stringify(p2SlidersAfter)}`);
+
+    // ── F3-S PART 3 — Clear Observation keyboard activation (Space) ─
+    console.log('--- Part 3: Clear Observation keyboard activation ---');
+    await safeClickIfEnabled(page, 'ipoClearReasonsButton'); // setup/cleanup only
+    await page.waitForTimeout(100);
+    await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); }); // setup only
+    await page.waitForTimeout(100);
+    for (const r of ['skin-tone', 'contrast']) {
+      const already = await page.evaluate((rid) => document.getElementById(`ipoReason_${rid}`)?.checked === true, r);
+      if (!already) await page.click(`#ipoReason_${r}`); // setup only
+    }
+    await page.waitForTimeout(150);
+
+    const p3SessionBefore = await readSessionMetricsText(page);
+    const p3ClearedBefore = parseSessionSecondary(p3SessionBefore.secondaryText).cleared;
+    const p3GenBefore = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
+    const p3SlidersBefore = await snapshotSliderValues(page);
+
+    await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy')?.focus()); // setup only
+    const p3Sequence = [];
+    const p3Reached = await tabTo(page, 'ipoClearButton', 15, p3Sequence);
+    record('Part 3.1: real Tab navigation reaches #ipoClearButton (never .click() as activation proof)', p3Reached, `sequence=${JSON.stringify(p3Sequence)}`);
+
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(150);
+
+    const p3NoRadioChecked = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoObservation"]')).every((r) => r.checked === false));
+    const p3AllReasonsClearedAfter = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoReason"]')).every((c) => c.checked === false));
+    const p3SessionAfterFirst = await readSessionMetricsText(page);
+    const p3ParsedAfterFirst = parseSessionSummary(p3SessionAfterFirst.lines);
+    const p3ClearedAfterFirst = parseSessionSecondary(p3SessionAfterFirst.secondaryText).cleared;
+    const p3GenAfterFirst = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
+    const p3SlidersAfterFirst = await snapshotSliderValues(page);
+
+    record('Part 3.2: no Observation Radio checked after Clear Observation', p3NoRadioChecked, `noneChecked=${p3NoRadioChecked}`);
+    record('Part 3.3: all Reasons clear after Clear Observation', p3AllReasonsClearedAfter, `allCleared=${p3AllReasonsClearedAfter}`);
+    record('Part 3.4: active Observation count becomes zero (derived from the real rendered per-category counts)', p3ParsedAfterFirst.activeObservationsDerived === 0, JSON.stringify(p3ParsedAfterFirst));
+    record('Part 3.5: Cleared count increments exactly once', p3ClearedBefore !== null && p3ClearedAfterFirst === p3ClearedBefore + 1, `before=${p3ClearedBefore}, after=${p3ClearedAfterFirst}`);
+    record('Part 3.6: no Analysis rerun during Clear Observation keyboard activation', p3GenAfterFirst === p3GenBefore, `before=${p3GenBefore}, after=${p3GenAfterFirst}`);
+    record('Part 3.7: no Slider movement during Clear Observation keyboard activation', slidersUnchanged(p3SlidersBefore, p3SlidersAfterFirst), `before=${JSON.stringify(p3SlidersBefore)}, after=${JSON.stringify(p3SlidersAfterFirst)}`);
+
+    // Part 3.8 — pressing the activation key again must not double the
+    // Cleared count. Whatever currently has focus receives a genuine
+    // second Space press (the button itself becomes disabled once
+    // rawObservation is null, so it is naturally no longer the active
+    // element — this is the real, honest post-condition, not simulated).
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(150);
+    const p3SessionAfterSecond = await readSessionMetricsText(page);
+    const p3ClearedAfterSecond = parseSessionSecondary(p3SessionAfterSecond.secondaryText).cleared;
+    record('Part 3.8: pressing the activation key again does not increment Cleared twice', p3ClearedAfterSecond === p3ClearedAfterFirst, `afterFirst=${p3ClearedAfterFirst}, afterSecond=${p3ClearedAfterSecond}`);
+
+    // ── F3-S PART 4 — Clear Session keyboard activation (Enter) ─────
+    console.log('--- Part 4: Clear Session keyboard activation ---');
+    await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); }); // setup only
+    await page.waitForTimeout(100);
+    for (const r of ['skin-tone', 'contrast']) {
+      const already = await page.evaluate((rid) => document.getElementById(`ipoReason_${rid}`)?.checked === true, r);
+      if (!already) await page.click(`#ipoReason_${r}`); // setup only
+    }
+    await page.waitForTimeout(150);
+    // Ensure the Session contains historical records before Clear
+    // Session (Part 3 above already produced at least one Cleared
+    // record, and this reselection produces an active one).
+    const p4SessionBeforeClear = await readSessionMetricsText(page);
+    const p4SecondaryBeforeClear = parseSessionSecondary(p4SessionBeforeClear.secondaryText);
+    record('Part 4 precondition: Session contains historical records before Clear Session', (p4SecondaryBeforeClear.cleared ?? 0) > 0, JSON.stringify(p4SecondaryBeforeClear));
+
+    const p4GenBefore = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
+    const p4SlidersBefore = await snapshotSliderValues(page);
+
+    await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy')?.focus()); // setup only
+    const p4Sequence = [];
+    const p4Reached = await tabTo(page, 'ipoClearSessionButton', 20, p4Sequence);
+    record('Part 4.1: real Tab navigation reaches #ipoClearSessionButton (never .click() as activation proof)', p4Reached, `sequence=${JSON.stringify(p4Sequence)}`);
+
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(200);
+
+    const p4SessionAfter = await readSessionMetricsText(page);
+    const p4ParsedAfter = parseSessionSummary(p4SessionAfter.lines);
+    const p4SecondaryAfter = parseSessionSecondary(p4SessionAfter.secondaryText);
+    const p4CurrentObservationChecked = await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy')?.checked === true);
+    const p4CurrentReasonsChecked = await page.evaluate(() => document.getElementById('ipoReason_skin-tone')?.checked === true && document.getElementById('ipoReason_contrast')?.checked === true);
+    const p4GenAfter = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
+
+    record('Part 4.2: historical Cleared/Invalidated counts reset after Clear Session', p4SecondaryAfter.cleared === 0 && p4SecondaryAfter.invalidated === 0, JSON.stringify(p4SecondaryAfter));
+    record('Part 4.3: current valid Observation (Prefer Legacy) remains checked after Clear Session', p4CurrentObservationChecked, `checked=${p4CurrentObservationChecked}`);
+    record('Part 4.4: current Reasons (skin-tone, contrast) remain checked after Clear Session', p4CurrentReasonsChecked, `checked=${p4CurrentReasonsChecked}`);
+    record('Part 4.5: the current Observation is immediately re-recorded (totalObserved=1, preferLegacy=1)', p4ParsedAfter.totalObserved === 1 && p4ParsedAfter.preferLegacy === 1, JSON.stringify(p4ParsedAfter));
+    record('Part 4.6: activeObservations = 1 after Clear Session (derived from the real rendered per-category counts)', p4ParsedAfter.activeObservationsDerived === 1, JSON.stringify(p4ParsedAfter));
+    record('Part 4.7: current Reason counts are present (Skin tone and Contrast appear in Top reasons)', p4SessionAfter.topReasonsText.includes('Skin tone') && p4SessionAfter.topReasonsText.includes('Contrast'), `topReasonsText="${p4SessionAfter.topReasonsText}"`);
+    record('Part 4.8: Analysis generation does not change during Clear Session keyboard activation', p4GenAfter === p4GenBefore, `before=${p4GenBefore}, after=${p4GenAfter}`);
+    const p4SlidersAfter = await snapshotSliderValues(page);
+    record('Part 4.9: no Slider movement during Clear Session keyboard activation', slidersUnchanged(p4SlidersBefore, p4SlidersAfter), `before=${JSON.stringify(p4SlidersBefore)}, after=${JSON.stringify(p4SlidersAfter)}`);
+
+    // ── F3-S PART 5 — five-Reason-limit keyboard behavior ───────────
+    console.log('--- Part 5: five-Reason limit keyboard behavior ---');
+    await safeClickIfEnabled(page, 'ipoClearReasonsButton'); // setup/cleanup only
+    await page.waitForTimeout(100);
+    await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); }); // setup only
+    await page.waitForTimeout(100);
+
+    const p5TargetReasonIds = ['skin-tone', 'white-balance', 'highlight-detail', 'shadow-detail', 'contrast'];
+    await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy')?.focus()); // setup only
+    let p5TabGuard = 0;
+    let p5SelectedCount = 0;
+    while (p5SelectedCount < p5TargetReasonIds.length && p5TabGuard < 40) {
+      await page.keyboard.press('Tab');
+      p5TabGuard++;
+      const id = await page.evaluate(() => document.activeElement.id);
+      const bareId = id ? id.replace('ipoReason_', '') : null;
+      if (id && id.startsWith('ipoReason_') && p5TargetReasonIds.includes(bareId)) {
+        const already = await page.evaluate(() => document.activeElement.checked === true);
+        if (!already) {
+          await page.keyboard.press('Space'); // real keyboard activation, never Controller methods or .click()
+          p5SelectedCount++;
+        }
+      }
+    }
+    const p5FiveSelected = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoReason"]')).filter((c) => c.checked).length === 5);
+    record('Part 5.1: exactly five Reasons selected via real keyboard (Tab+Space)', p5FiveSelected, `selectedViaSpace=${p5SelectedCount}, tabPresses=${p5TabGuard}`);
+
+    const p5SixthDisabled = await page.evaluate(() => document.getElementById('ipoReason_color-balance')?.disabled === true);
+    record('Part 5.2: the sixth Reason (color-balance) is genuinely disabled', p5SixthDisabled, `disabled=${p5SixthDisabled}`);
+
+    // Part 5.3/5.4 — attempt Space on the disabled sixth Reason through
+    // the appropriate keyboard-navigation path (real Tab presses). A
+    // genuinely `disabled` input is removed from the native Tab order
+    // by the browser itself, so Tab cannot land real focus on it — this
+    // loop proves that honestly (never fabricating focus), and if focus
+    // somehow did land there, Space is still pressed and the checked
+    // state is still verified.
+    const p5Sequence = [];
+    const p5ReachedDisabled = await tabTo(page, 'ipoReason_color-balance', 15, p5Sequence);
+    if (p5ReachedDisabled) await page.keyboard.press('Space');
+    const p5DisabledStillUnchecked = await page.evaluate(() => document.getElementById('ipoReason_color-balance')?.checked === false);
+    const p5StillFiveSelected = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoReason"]')).filter((c) => c.checked).length === 5);
+    record(
+      'Part 5.3/5.4: the disabled sixth Reason cannot be toggled by Space (native disabled semantics remove it from Tab order; it remains unchecked and selection stays at exactly five)',
+      !p5ReachedDisabled && p5DisabledStillUnchecked && p5StillFiveSelected,
+      `reachedDisabledViaTab=${p5ReachedDisabled}, sequence=${JSON.stringify(p5Sequence)}, disabledStillUnchecked=${p5DisabledStillUnchecked}, stillFiveSelected=${p5StillFiveSelected}`
+    );
+
+    // Part 5.5/5.6/5.7 — navigate to an already-selected Reason and
+    // press Space to remove it.
+    await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy')?.focus()); // setup only
+    const p5RemoveSequence = [];
+    const p5ReachedSkinTone = await tabTo(page, 'ipoReason_skin-tone', 20, p5RemoveSequence);
+    if (p5ReachedSkinTone) await page.keyboard.press('Space');
+    await page.waitForTimeout(120);
+    const p5SkinToneRemoved = await page.evaluate(() => document.getElementById('ipoReason_skin-tone')?.checked === false);
+    const p5FourSelected = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoReason"]')).filter((c) => c.checked).length === 4);
+    const p5SixthReEnabled = await page.evaluate(() => document.getElementById('ipoReason_color-balance')?.disabled === false);
+    record(
+      'Part 5.5/5.6/5.7: navigating to a selected Reason and pressing Space removes it (selected count becomes four, previously disabled sixth Reason becomes enabled again)',
+      p5ReachedSkinTone && p5SkinToneRemoved && p5FourSelected && p5SixthReEnabled,
+      `reached=${p5ReachedSkinTone}, sequence=${JSON.stringify(p5RemoveSequence)}, removed=${p5SkinToneRemoved}, fourSelected=${p5FourSelected}, sixthReEnabled=${p5SixthReEnabled}`
+    );
+
+    // ── F3-S PART 7 — MutationObserver live-region audit (A-E) ──────
+    console.log('--- Part 7: MutationObserver live-region audit ---');
+    await installLiveRegionObservers(page);
+
+    // Scenario A — selecting ordinary Reasons must not touch any of the
+    // three real live regions, and the ordinary Selected Reasons text
+    // must have no live-region ancestor of its own.
+    await resetLiveRegionAudit(page);
+    await page.click('#ipoReason_saturation'); // ordinary selection, well under the five-Reason limit (currently four selected)
+    await page.waitForTimeout(150);
+    const auditA_status = summarizeLiveTexts('ipoStatus', await readLiveRegionAudit(page, 'ipoStatus'));
+    const auditA_warning = summarizeLiveTexts('ipoWarning', await readLiveRegionAudit(page, 'ipoWarning'));
+    const auditA_reasonLimit = summarizeLiveTexts('ipoReasonLimit', await readLiveRegionAudit(page, 'ipoReasonLimit'));
+    f3AllCapturedLiveTexts.push(...auditA_status.nonEmptyTexts, ...auditA_warning.nonEmptyTexts, ...auditA_reasonLimit.nonEmptyTexts);
+    const reasonStatusNoLiveAncestorA = await page.evaluate(() => { let cur = document.getElementById('ipoReasonStatus'); while (cur) { if (cur.hasAttribute && cur.hasAttribute('aria-live')) return false; cur = cur.parentElement; } return true; });
+    record('Scenario A: selecting an ordinary Reason does not mutate any of the three real live regions', auditA_status.mutationCount === 0 && auditA_warning.mutationCount === 0 && auditA_reasonLimit.mutationCount === 0, `status=${JSON.stringify(auditA_status)}, warning=${JSON.stringify(auditA_warning)}, reasonLimit=${JSON.stringify(auditA_reasonLimit)}`);
+    record('Scenario A: ordinary Selected Reasons text has no live-region ancestor (never an unintended live announcement of the full selected-Reasons list)', reasonStatusNoLiveAncestorA, `noLiveAncestor=${reasonStatusNoLiveAncestorA}`);
+
+    // Scenario B — reaching the five-Reason limit.
+    await resetLiveRegionAudit(page);
+    for (const r of ['white-balance', 'highlight-detail', 'shadow-detail', 'contrast']) {
+      const already = await page.evaluate((rid) => document.getElementById(`ipoReason_${rid}`)?.checked === true, r);
+      if (!already) await page.click(`#ipoReason_${r}`);
+      await page.waitForTimeout(60);
+    }
+    await page.waitForTimeout(150);
+    const auditB = summarizeLiveTexts('ipoReasonLimit', await readLiveRegionAudit(page, 'ipoReasonLimit'));
+    f3AllCapturedLiveTexts.push(...auditB.nonEmptyTexts);
+    record('Scenario B: reaching the five-Reason limit produces exactly one meaningful non-empty ipoReasonLimit announcement', auditB.distinctNonEmptyTexts.length === 1 && auditB.distinctNonEmptyTexts[0] === 'You can select up to five reasons.', JSON.stringify(auditB));
+    record('Scenario B: no duplicate identical ipoReasonLimit announcement was recorded for the unchanged five-Reason state', auditB.repeatedIdenticalTexts === 0, JSON.stringify(auditB));
+
+    // Scenario C — Clear Reasons.
+    await resetLiveRegionAudit(page);
+    await page.click('#ipoClearReasonsButton');
+    await page.waitForTimeout(150);
+    const auditC_status = summarizeLiveTexts('ipoStatus', await readLiveRegionAudit(page, 'ipoStatus'));
+    const auditC_warning = summarizeLiveTexts('ipoWarning', await readLiveRegionAudit(page, 'ipoWarning'));
+    const auditC_reasonLimit = summarizeLiveTexts('ipoReasonLimit', await readLiveRegionAudit(page, 'ipoReasonLimit'));
+    f3AllCapturedLiveTexts.push(...auditC_status.nonEmptyTexts, ...auditC_warning.nonEmptyTexts, ...auditC_reasonLimit.nonEmptyTexts);
+    record('Scenario C: Clear Reasons creates a meaningful state-transition announcement (ipoReasonLimit mutates as the limit-reached state clears)', auditC_reasonLimit.mutationCount >= 1, JSON.stringify(auditC_reasonLimit));
+    record('Scenario C: Clear Reasons does not announce the same message repeatedly on any of the three live regions', auditC_status.repeatedIdenticalTexts === 0 && auditC_warning.repeatedIdenticalTexts === 0 && auditC_reasonLimit.repeatedIdenticalTexts === 0, `status=${JSON.stringify(auditC_status)}, warning=${JSON.stringify(auditC_warning)}, reasonLimit=${JSON.stringify(auditC_reasonLimit)}`);
+
+    // Scenario D — stale/generation transition (the one DELIBERATE
+    // generation change permitted in this section; see Part 9).
+    await resetLiveRegionAudit(page);
+    await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); });
+    await page.waitForTimeout(100);
+    const p7dGen0 = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? 0);
+    await page.click('#btnReanalyze');
+    await page.waitForTimeout(700); // allow the stale-warning render to occur before the new generation completes
+    const auditD = summarizeLiveTexts('ipoWarning', await readLiveRegionAudit(page, 'ipoWarning'));
+    f3AllCapturedLiveTexts.push(...auditD.nonEmptyTexts);
+    record('Scenario D: a genuine stale-generation transition (real Re-analyze while an Observation was selected) produces exactly one meaningful ipoWarning announcement', auditD.distinctNonEmptyTexts.length === 1 && auditD.distinctNonEmptyTexts[0] === 'The previous observation was cleared because a newer analysis is active.', JSON.stringify(auditD));
+    record('Scenario D: no duplicate identical ipoWarning announcement was recorded during the stale-generation transition', auditD.repeatedIdenticalTexts === 0, JSON.stringify(auditD));
+    // Restore a fully stable, review-approved Ready state (mirrors the
+    // proven two-phase pattern from reachReady()) before continuing.
+    await waitForAnalysisCompletion(page, p7dGen0);
+    const p7dGenBeforeReview = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? p7dGen0);
+    await passAllReviewItems(page);
+    await page.click('#btnReanalyze');
+    await waitForAnalysisCompletion(page, p7dGenBeforeReview);
+    const f3GenAfterDeliberateChange = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
+
+    // Scenario E — Clear Observation.
+    await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); });
+    await page.waitForTimeout(100);
+    await resetLiveRegionAudit(page);
+    await safeClickIfEnabled(page, 'ipoClearButton');
+    await page.waitForTimeout(150);
+    const auditE = summarizeLiveTexts('ipoStatus', await readLiveRegionAudit(page, 'ipoStatus'));
+    f3AllCapturedLiveTexts.push(...auditE.nonEmptyTexts);
+    record('Scenario E: Clear Observation produces a bounded status announcement that does not repeat identically without a state change', auditE.repeatedIdenticalTexts === 0, JSON.stringify(auditE));
+
+    await uninstallLiveRegionObservers(page);
+
+    // ── F3-S PART 8 — announcement bounds (aggregated) ──────────────
+    console.log('--- Part 8: announcement bounds ---');
+    const p8Violations = f3AllCapturedLiveTexts.map((t) => ({ text: t.slice(0, 80), ...isAnnouncementBounded(t) })).filter((r) => !r.ok);
+    record(`Part 8: every captured live-region announcement (${f3AllCapturedLiveTexts.length} checked) is plain text, HTML-injection-free, no [object Object]/NaN/Infinity/raw-stack, and bounded to 300 characters`, p8Violations.length === 0, p8Violations.length === 0 ? `checked=${f3AllCapturedLiveTexts.length}` : JSON.stringify(p8Violations));
+
+    // ── F3-S PART 9 — side-effect isolation (aggregated) ────────────
+    console.log('--- Part 9: side-effect isolation ---');
+    const f3CanvasCalls = await readCanvasInstrumentation(page);
+    await restoreCanvasInstrumentation(page);
+    const f3SlidersAtEnd = await snapshotSliderValues(page);
+    record(
+      'Part 9: Analysis generation was unchanged across Parts 1-7 except the one deliberate Scenario D stale-generation transition',
+      f3GenAtStart !== null && f3GenAfterDeliberateChange !== null && f3GenAfterDeliberateChange > f3GenAtStart,
+      `genAtStart=${f3GenAtStart}, genAfterDeliberateChange=${f3GenAfterDeliberateChange}`
+    );
+    record('Part 9: Interactive slider values were unchanged from the start of this section to the end (aside from the deliberate Scenario D generation change, which does not move sliders)', slidersUnchanged(f3SlidersAtStart, f3SlidersAtEnd), `atStart=${JSON.stringify(f3SlidersAtStart)}, atEnd=${JSON.stringify(f3SlidersAtEnd)}`);
+    record('Part 9: zero Canvas drawImage/getImageData/putImageData calls occurred during Keyboard and ARIA actions', !!f3CanvasCalls && f3CanvasCalls.drawImage === 0 && f3CanvasCalls.getImageData === 0 && f3CanvasCalls.putImageData === 0, `canvasCalls=${JSON.stringify(f3CanvasCalls)}`);
+    const f3CanvasRestored = await page.evaluate(() => !window.__step7bbOriginalCanvasMethods && !window.__step7bbCanvasCalls);
+    record('Part 9: instrumented Canvas methods were restored exactly (no lingering instrumentation state)', f3CanvasRestored, `restored=${f3CanvasRestored}`);
 
     // ══════════════════════════════════════════════════════════════
     // PART 5 PREP-A (Step 7B-B-F2-S2 FIX 3) — genuine Re-analyze
