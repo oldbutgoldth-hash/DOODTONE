@@ -175,6 +175,14 @@ async function main() {
     buildInstallerInvocationSource,
     buildFullVerificationInvocationSource,
   } = await import('./helpers/playwright-opaque-origin-storage.mjs');
+  // FIX 8 (ENV-B2-F1): the canonical, reusable fail-closed decision
+  // function — a non-empty result set where EVERY row is a well-formed
+  // { result: string } and every result is exactly 'PASS' — replacing
+  // this file's own brittle `results.filter(r => r.result === 'FAIL')
+  // .length === 0` logic below, which silently treated an EMPTY result
+  // array, a malformed row (missing/non-string `result`), a boolean, or
+  // an unknown result string as passing.
+  const { computeInMemoryHarnessDecision } = await import('./helpers/playwright-lumixa-test-runtime.mjs');
   let app;
   let evidence;
   try {
@@ -405,8 +413,13 @@ async function main() {
     record('PART 10: no unresolved/rejected import in the graph (module-path-resolution or module-read failures)', evidence.rejectedSpecifiers.filter((r) => r.context === 'module-path-resolution' || r.context === 'module-read').length === 0 ? 'PASS' : 'FAIL', `rejectedSpecifiers=${JSON.stringify(evidence.rejectedSpecifiers)}`);
     record('PART 10: no duplicate canonical module ID in the graph', evidence.duplicateCanonicalIds.length === 0 ? 'PASS' : 'FAIL', `duplicateCanonicalIds=${JSON.stringify(evidence.duplicateCanonicalIds)}`);
 
-    const allPassed = results.filter((r) => r.result === 'FAIL').length === 0;
-    output.finalDecision = allPassed ? 'PASS_IN_MEMORY_HARNESS_READY' : 'FAIL_IN_MEMORY_HARNESS';
+    // FIX 8 (ENV-B2-F1): replaces the previous
+    // `results.filter(r => r.result === 'FAIL').length === 0` check,
+    // which incorrectly reported PASS for an empty results array, for
+    // a malformed row (e.g. `{ result: true }` or `{ result: undefined
+    // }`), or for a NOT_TESTED/unknown-string row — none of those are
+    // 'FAIL', so the old check silently let them through.
+    output.finalDecision = computeInMemoryHarnessDecision(results);
 
     await page.close();
     await context.close();

@@ -37,6 +37,7 @@ import {
   buildProbeInvocationSource,
   buildFullVerificationInvocationSource,
 } from './helpers/playwright-opaque-origin-storage.mjs';
+import { computeInMemoryHarnessDecision } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -501,8 +502,54 @@ try {
   record('Every record() call in the new smoke test passes a PASS/FAIL/NOT_TESTED string (learned from the ENV-B1A-R Part 12 fix — never repeat the boolean-record bug in new code)', recordCallsSmoke.length > 0 && offenders.length === 0, `totalRecordCalls=${recordCallsSmoke.length}, offenders=${JSON.stringify(offenders)}`);
 }
 {
-  const filterUsesFailString = /results\.filter\(\s*\(r\)\s*=>\s*r\.result\s*===\s*'FAIL'\s*\)/.test(smokeSrc);
-  record('The final-decision computation filters on the string \'FAIL\'', filterUsesFailString, `present=${filterUsesFailString}`);
+  // FIX 8 (ENV-B2-F1): the smoke test's own brittle
+  // `results.filter(r => r.result === 'FAIL').length === 0` decision
+  // logic (which silently reported PASS for an empty results array, a
+  // malformed row, or a NOT_TESTED/boolean/unknown-string row) has been
+  // replaced with a call to the canonical, reusable
+  // computeInMemoryHarnessDecision() from
+  // qa/helpers/playwright-lumixa-test-runtime.mjs. This check proves
+  // the OLD brittle pattern is gone and the NEW canonical call is
+  // present, by source-text audit.
+  const oldBrittlePatternGone = !/results\.filter\(\s*\(r\)\s*=>\s*r\.result\s*===\s*'FAIL'\s*\)\s*\.length\s*===\s*0/.test(smokeSrc);
+  const importsCanonicalDecision = /computeInMemoryHarnessDecision/.test(smokeSrc) && /playwright-lumixa-test-runtime\.mjs/.test(smokeSrc);
+  const callsCanonicalDecision = /output\.finalDecision\s*=\s*computeInMemoryHarnessDecision\(results\)/.test(smokeSrc);
+  record('FIX 8 (ENV-B2-F1): the smoke test no longer uses the old brittle `results.filter(FAIL).length===0` decision pattern, and instead imports + calls the canonical computeInMemoryHarnessDecision(results)', oldBrittlePatternGone && importsCanonicalDecision && callsCanonicalDecision, `oldBrittlePatternGone=${oldBrittlePatternGone}, importsCanonicalDecision=${importsCanonicalDecision}, callsCanonicalDecision=${callsCanonicalDecision}`);
+}
+{
+  // FIX 8/11 (ENV-B2-F1/F2): real functional proof (not just a
+  // source-text audit) that computeInMemoryHarnessDecision() is
+  // fail-closed against every case the old logic mishandled, PLUS
+  // FIX 11's strengthened requirement that every row have a bounded,
+  // non-empty `test` name: missing test, blank test, missing result, a
+  // boolean result, NOT_TESTED, FAIL, an unknown status, and an empty
+  // Array. Every one of these must produce FAIL_IN_MEMORY_HARNESS,
+  // never PASS_IN_MEMORY_HARNESS_READY.
+  const wellFormedAllPass = [{ test: 'a', result: 'PASS' }, { test: 'b', result: 'PASS' }];
+  const emptyResults = [];
+  const missingTestRow = [{ test: 'a', result: 'PASS' }, { result: 'PASS' /* missing test */ }];
+  const blankTestRow = [{ test: 'a', result: 'PASS' }, { test: '   ', result: 'PASS' /* blank test */ }];
+  const missingResultRow = [{ test: 'a', result: 'PASS' }, { test: 'b' /* missing result */ }];
+  const booleanResultRow = [{ test: 'a', result: 'PASS' }, { test: 'b', result: true }];
+  const notTestedRow = [{ test: 'a', result: 'PASS' }, { test: 'b', result: 'NOT_TESTED' }];
+  const failRow = [{ test: 'a', result: 'PASS' }, { test: 'b', result: 'FAIL' }];
+  const unknownStatusRow = [{ test: 'a', result: 'PASS' }, { test: 'b', result: 'MAYBE' }];
+
+  const cases = [
+    ['non-empty, all-PASS well-formed rows', wellFormedAllPass, 'PASS_IN_MEMORY_HARNESS_READY'],
+    ['empty Array', emptyResults, 'FAIL_IN_MEMORY_HARNESS'],
+    ['a row missing test', missingTestRow, 'FAIL_IN_MEMORY_HARNESS'],
+    ['a row with a blank test', blankTestRow, 'FAIL_IN_MEMORY_HARNESS'],
+    ['a row missing result', missingResultRow, 'FAIL_IN_MEMORY_HARNESS'],
+    ['a boolean result row', booleanResultRow, 'FAIL_IN_MEMORY_HARNESS'],
+    ['a NOT_TESTED row', notTestedRow, 'FAIL_IN_MEMORY_HARNESS'],
+    ['a genuine FAIL row', failRow, 'FAIL_IN_MEMORY_HARNESS'],
+    ['an unknown status row', unknownStatusRow, 'FAIL_IN_MEMORY_HARNESS'],
+  ];
+  for (const [label, input, expected] of cases) {
+    const actual = computeInMemoryHarnessDecision(input);
+    record(`FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() — ${label} — expected ${expected}`, actual === expected, `input=${JSON.stringify(input)}, actual=${actual}`);
+  }
 }
 {
   const doesNotRegenerateExistingResults = !/epic-2e-j-phase-c-step7b-b-results\.json/.test(smokeSrc) && !/epic-2e-j-phase-c-final-results\.json/.test(smokeSrc) && !/epic-2e-j-phase-c-step7b-b-results\.json/.test(helperSrc) && !/epic-2e-j-phase-c-final-results\.json/.test(helperSrc);

@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J — Step 7B-B-F2-S/F2-S2/F2-S3: static coverage self-test (source audit only, no Chromium)",
-  "generatedAt": "2026-07-22T11:18:26.172Z",
+  "generatedAt": "2026-07-22T13:16:17.014Z",
   "summary": {
     "total": 41,
     "pass": 41,
@@ -10,7 +10,7 @@
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "154193 bytes"
+      "evidence": "191673 bytes"
     },
     {
       "test": "ui/interactive-preview-observation-renderer-v2.js is readable (for touch-target cross-check)",

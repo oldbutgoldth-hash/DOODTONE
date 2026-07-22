@@ -28,6 +28,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { detectPlaywrightPackage, detectBrowserExecutable } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -76,15 +77,74 @@ function noClickBetween(a, b) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Part 1 — real Tab order.
+// Part 1 — real Tab order (rebuilt for ENV-B2-F2's Native Sequential
+// Focus Model — the OLD checks below matched the ENV-B2-F1 code shape,
+// which the real Chromium finding proved incomplete: SUMMARY was never
+// modeled as a Tab stop, causing the computed predecessor to diverge
+// from the real Chromium Tab predecessor. Every check here matches the
+// CURRENT canonical implementation instead of a fixed literal anchor.
 // ══════════════════════════════════════════════════════════════════
 {
-  const hasTabToHelper = testSrc.includes('async function tabTo(page, targetId, maxSteps, sequenceOut)');
+  // ROOT CAUSE 1 / FIX 1 (ENV-B2-F2): SUMMARY is modeled as a native
+  // Tab stop (the first <summary> child of a <details> element).
+  const summaryModeledAsTabStop = testSrc.includes("if (tag === 'SUMMARY') return isFirstSummaryOfDetails(el);") && testSrc.includes('function isFirstSummaryOfDetails(el)') && testSrc.includes("details.querySelector('summary') === el");
+  record('FIX 1 (ENV-B2-F2): SUMMARY is modeled as a native Tab stop (the first <summary> child of a <details> element) — ROOT CAUSE 1', summaryModeledAsTabStop, `present=${summaryModeledAsTabStop}`);
+}
+{
+  // FIX 1 (ENV-B2-F2): closed-details descendants are excluded from
+  // sequential focus, EXCEPT the summary itself.
+  const closedDetailsExcluded = testSrc.includes('function isHiddenInsideClosedDetails(el)') && testSrc.includes('if (details.open) return false;') && testSrc.includes('if (el === firstSummary) return false;') && testSrc.includes('return !(firstSummary && firstSummary.contains(el));');
+  record('FIX 1 (ENV-B2-F2): descendants hidden inside a CLOSED <details> element are excluded from sequential focus, except its own focusable <summary>', closedDetailsExcluded, `present=${closedDetailsExcluded}`);
+}
+{
+  // FIX 1 (ENV-B2-F2): positive tabindex ordering (ascending, ties
+  // preserve DOM order) is handled ahead of tabindex=0/native focusables.
+  const positiveTabIndexOrdering = testSrc.includes('const aPositive = a.ti !== null && a.ti > 0;') && testSrc.includes('if (aPositive && bPositive) return a.ti !== b.ti ? a.ti - b.ti : a.domIndex - b.domIndex;') && testSrc.includes('if (aPositive && !bPositive) return -1;');
+  record('FIX 1 (ENV-B2-F2): positive tabindex ordering is handled (positive tabindex first, ascending, ties preserve DOM order; tabindex=0/native focusables follow in DOM order)', positiveTabIndexOrdering, `present=${positiveTabIndexOrdering}`);
+}
+{
+  // FIX 1 (ENV-B2-F2): inert / aria-hidden subtree exclusion, and the
+  // full required native-focusable element set.
+  const inertAriaHiddenExcluded = testSrc.includes('function isInertOrAriaHidden(el)') && testSrc.includes('if (cur.inert) return true;') && testSrc.includes("if (cur.getAttribute && cur.getAttribute('aria-hidden') === 'true') return true;");
+  const requiredElementSet = ["tag === 'INPUT'", "tag === 'BUTTON'", "tag === 'SELECT'", "tag === 'TEXTAREA'", "tag === 'A'", "tag === 'AREA'", "tag === 'IFRAME'", "tag === 'OBJECT'", "tag === 'EMBED'", "tag === 'AUDIO'", "tag === 'VIDEO'"].every((s) => testSrc.includes(s));
+  const contentEditableHandled = testSrc.includes('function isContentEditable(el)') && testSrc.includes("v !== null && v !== 'false'");
+  record('FIX 1 (ENV-B2-F2): inert Elements/descendants and aria-hidden="true" Elements/descendants are excluded, the full required native-focusable element set is recognized, and [contenteditable]:not([contenteditable=false]) is handled', inertAriaHiddenExcluded && requiredElementSet && contentEditableHandled, `inertAriaHiddenExcluded=${inertAriaHiddenExcluded}, requiredElementSet=${requiredElementSet}, contentEditableHandled=${contentEditableHandled}`);
+}
+{
+  // FIX 1 (ENV-B2-F2): radio-group roving Tab stop — checked enabled
+  // Radio is the stop, otherwise the first ENABLED Radio; disabled
+  // Radios never become the stop.
+  const rovingTabStopHandled = testSrc.includes("const groupEls = Array.from(document.getElementsByName(el.name)).filter((r) => r.type === 'radio' && !r.disabled);") && testSrc.includes('const checked = groupEls.find((r) => r.checked);') && testSrc.includes('const stop = checked || groupEls[0];') && testSrc.includes('if (!stop) continue;');
+  record('FIX 1 (ENV-B2-F2): named radio-group roving Tab stop is handled (checked enabled Radio, otherwise first enabled Radio; disabled Radios never become the stop; an all-disabled group contributes no stop)', rovingTabStopHandled, `present=${rovingTabStopHandled}`);
+}
+{
+  // FIX 2 (ENV-B2-F2): each independent scenario resets its OWN Radio
+  // state through the real Clear Observation UI before entering.
+  const hasResetFn = testSrc.includes('async function resetObservationStateViaRealUI(page)') && testSrc.includes("await safeClickIfEnabled(page, 'ipoClearButton'); // setup only");
+  const entryUsesReset = testSrc.includes('const resetState = await resetObservationStateViaRealUI(page);') && testSrc.includes('resetState.allRadiosUnchecked && resetState.allReasonsCleared && stopCheck.firstRadioIsTabStop');
+  record('FIX 2 (ENV-B2-F2): each independent Keyboard scenario resets its own Radio-group state (Clear Observation via the real UI, verified unchecked + Reasons cleared + first Radio is the native Tab stop) before Tab entry — never inheriting the checked Radio from a previous scenario', hasResetFn && entryUsesReset, `hasResetFn=${hasResetFn}, entryUsesReset=${entryUsesReset}`);
+}
+{
+  // FIX 1/2: one real Tab remains the entry acceptance action.
+  const oneRealTabEntry = testSrc.includes("await page.keyboard.press('Tab'); // the ONE real Tab acceptance action") && testSrc.includes('ok: actualAfterTabIdentity === targetId && resetState.allRadiosUnchecked');
+  record('FIX 1/2 (ENV-B2-F2): exactly one real Tab press remains the deterministic-entry acceptance action (never .focus() on the radio itself, never .checked assignment)', oneRealTabEntry, `present=${oneRealTabEntry}`);
+}
+{
+  // FIX 3 (ENV-B2-F2): all four Arrow-key names are exercised, activeElement
+  // IDs are fully recorded, and exactly one checked Radio is verified
+  // after EVERY Arrow action (not just at the end).
+  const hasArrowFn = testSrc.includes('async function runIndependentArrowScenario(page)');
+  const allFourKeyNames = testSrc.includes("const keySequence = ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'];") && testSrc.includes("['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].every((k) => keySequence.includes(k))");
+  const recordsEveryStep = testSrc.includes('steps.push({ key, activeId: state.activeId, checkedIds: state.checkedIds, checkedCount: state.checkedCount });');
+  const exactlyOnePerStep = testSrc.includes('const allExactlyOneChecked = steps.length === keySequence.length && steps.every((s) => s.checkedCount === 1);');
+  const allExpectedVisited = testSrc.includes('const allExpectedVisited = expectedIds.every((id) => visitedIds.has(id));');
+  record('FIX 3 (ENV-B2-F2): all four required Arrow-key names (ArrowDown/ArrowRight/ArrowUp/ArrowLeft) are exercised via real key presses, {key, activeId, checkedIds, checkedCount} is recorded after every action, exactly one checked Radio is required after EVERY action, and every expected Radio ID must be genuinely visited', hasArrowFn && allFourKeyNames && recordsEveryStep && exactlyOnePerStep && allExpectedVisited, `hasArrowFn=${hasArrowFn}, allFourKeyNames=${allFourKeyNames}, recordsEveryStep=${recordsEveryStep}, exactlyOnePerStep=${exactlyOnePerStep}, allExpectedVisited=${allExpectedVisited}`);
+}
+{
   const hasRealTabPress = (testSrc.match(/await page\.keyboard\.press\('Tab'\);/g) || []).length >= 3;
   const hasShiftTab = testSrc.includes("await page.keyboard.press('Shift+Tab');");
-  const hasAllFourArrows = ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].every((k) => testSrc.includes(`'${k}'`));
-  const recordsFullSequence = testSrc.includes('const f3FullTabSequence = [];') && testSrc.includes("record('Part 1: full recorded activeElement ID sequence (evidence)'");
-  record('Part 1: real Tab and Shift+Tab navigation is used, all four Arrow keys are exercised, and the full activeElement ID sequence is recorded', hasTabToHelper && hasRealTabPress && hasShiftTab && hasAllFourArrows && recordsFullSequence, `hasTabToHelper=${hasTabToHelper}, hasRealTabPress=${hasRealTabPress}, hasShiftTab=${hasShiftTab}, hasAllFourArrows=${hasAllFourArrows}, recordsFullSequence=${recordsFullSequence}`);
+  const recordsFullSequence = testSrc.includes('const f3FullTabSequence = [f3Entry.actualAfterTabIdentity') && testSrc.includes("record('Part 1: full recorded activeElement ID sequence (evidence)'");
+  record('Part 1: real Tab and Shift+Tab navigation is used, and the full activeElement ID sequence is recorded', hasRealTabPress && hasShiftTab && recordsFullSequence, `hasRealTabPress=${hasRealTabPress}, hasShiftTab=${hasShiftTab}, recordsFullSequence=${recordsFullSequence}`);
 }
 {
   const neverUsesFocusAsProof = !/record\('Part 1\.\d[^']*',\s*await page\.evaluate\([^)]*\.focus\(/.test(testSrc);
@@ -92,8 +152,17 @@ function noClickBetween(a, b) {
   record('Part 1: `.focus()`/`page.evaluate(...focus...)` calls are used only for setup/cleanup (never as Tab-order acceptance proof) and are labeled as such', neverUsesFocusAsProof && focusCallsAreLabeled, `neverUsesFocusAsProof=${neverUsesFocusAsProof}, focusCallsAreLabeled=${focusCallsAreLabeled}`);
 }
 {
-  const hasNoTrapCheck = testSrc.includes('Part 1.8 / FIX 9 / FIX 7 (F3-S3): no keyboard trap detected');
-  record('Part 1: no-keyboard-trap check exists', hasNoTrapCheck, `present=${hasNoTrapCheck}`);
+  const hasNoTrapCheck = testSrc.includes('No keyboard trap after Clear Session (focus keeps advancing, proven via persistent Element identity)');
+  record('Part 1: no-keyboard-trap check exists (persistent-identity based)', hasNoTrapCheck, `present=${hasNoTrapCheck}`);
+}
+{
+  // FIX 7 (ENV-B2-F2): the old hard-coded 10/25-Tab loops (and the
+  // duplicated, unrelated ad hoc Reason/Clear logic they implemented)
+  // are gone — replaced by ONE canonical evidence source.
+  const oldHardCoded10Loop = /for \(let i = 0; i < 10 && !reachedFirstReasonCheckbox/.test(testSrc) || /for \(let i = 0; i < 10 && !f3ExitedRadioGroup/.test(testSrc);
+  const oldHardCoded25Loop = /for \(let i = 0; i < 25;\)/.test(testSrc) || /for \(let i = 0; i < 25; i\+\+\)/.test(testSrc);
+  const canonicalReasonClearFnExists = testSrc.includes('async function runObservationSelectionReasonAndClearScenario(page)');
+  record('FIX 7 (ENV-B2-F2): the old hard-coded 10-Tab and 25-Tab Keyboard loops are absent, replaced by the ONE canonical runObservationSelectionReasonAndClearScenario() evidence source', !oldHardCoded10Loop && !oldHardCoded25Loop && canonicalReasonClearFnExists, `oldHardCoded10LoopPresent=${oldHardCoded10Loop}, oldHardCoded25LoopPresent=${oldHardCoded25Loop}, canonicalReasonClearFnExists=${canonicalReasonClearFnExists}`);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -130,19 +199,25 @@ function noClickBetween(a, b) {
 // reach, no double-fire).
 // ══════════════════════════════════════════════════════════════════
 {
-  const reachAnchor = "const p3Reached = await tabTo(page, 'ipoClearButton', 15, p3Sequence);";
+  // FIX 8 (ENV-B2-F2): Part 3 now uses
+  // enterObservationRadioGroupWithCurrentSelection() (never resetting
+  // the deliberately-selected baseline) and a DYNAMIC bound
+  // (p3Bound.maxTabs, derived from the real focusable order) rather
+  // than a hard-coded literal "15".
+  const reachAnchor = "const p3Reached = await tabTo(page, 'ipoClearButton', p3Bound.maxTabs, p3Sequence);";
   const activateAnchor = "await page.keyboard.press('Space');\n    await page.waitForTimeout(150);\n\n    const p3NoRadioChecked";
   const hasBothAnchors = testSrc.includes(reachAnchor) && testSrc.includes("await page.keyboard.press('Space');");
+  const usesCurrentSelectionEntry = testSrc.includes("const p3Entry = await enterObservationRadioGroupWithCurrentSelection(page, 'ipoOption_prefer-legacy');") && testSrc.includes('async function enterObservationRadioGroupWithCurrentSelection(page, targetId)');
   const noClick = noClickBetween(reachAnchor, activateAnchor);
   // Note: a page.click('#ipoClearButton') legitimately appears
   // elsewhere in the file (pre-existing Part 2/3 keyboard-navigation
   // cleanup and Part 7 Scenario E's MutationObserver audit are
   // different test concerns, not keyboard-reachability claims) — what
   // matters is THIS acceptance path never uses one, per noClickBetween.
-  record('Part 3: Clear Observation is reached via real Tab navigation and activated with Space, with no click() call between reaching and activating', hasBothAnchors && noClick.ok, `hasBothAnchors=${hasBothAnchors}, noClickBetween=${JSON.stringify(noClick.ok)}, reason=${noClick.reason}`);
+  record('Part 3 / FIX 8 (ENV-B2-F2): Clear Observation is reached via real Tab navigation (a DYNAMIC bound derived from the real focusable order, never a hard-coded 15) and activated with Space, using the currently-checked Prefer Legacy Radio as the native Tab stop (never reset), with no click() call between reaching and activating', hasBothAnchors && usesCurrentSelectionEntry && noClick.ok, `hasBothAnchors=${hasBothAnchors}, usesCurrentSelectionEntry=${usesCurrentSelectionEntry}, noClickBetween=${JSON.stringify(noClick.ok)}, reason=${noClick.reason}`);
 }
 {
-  const hasNoDoubleFireTest = testSrc.includes('Part 3.8: pressing the activation key again does not increment Cleared twice');
+  const hasNoDoubleFireTest = testSrc.includes('Part 3.8 / FIX 5 (ENV-B2-F1): pressing the activation key again does not increment Cleared past 1 (sticky clearedCounted flag)');
   const pressesActivationKeyTwice = (testSrc.match(/await page\.keyboard\.press\('Space'\);/g) || []).length >= 2;
   record('Part 3: pressing the activation key a second time is tested and does not double-increment Cleared', hasNoDoubleFireTest && pressesActivationKeyTwice, `hasNoDoubleFireTest=${hasNoDoubleFireTest}, pressesActivationKeyTwice=${pressesActivationKeyTwice}`);
 }
@@ -150,8 +225,7 @@ function noClickBetween(a, b) {
   const hasAllVerifications = [
     'Part 3.2: no Observation Radio checked after Clear Observation',
     'Part 3.3: all Reasons clear after Clear Observation',
-    'Part 3.4: active Observation count becomes zero',
-    'Part 3.5: Cleared count increments exactly once',
+    'FIX 5 (ENV-B2-F1): active Observation count becomes zero and Cleared becomes exactly 1',
     'Part 3.6: no Analysis rerun during Clear Observation keyboard activation',
     'Part 3.7: no Slider movement during Clear Observation keyboard activation',
   ].every((s) => testSrc.includes(s));
@@ -163,12 +237,16 @@ function noClickBetween(a, b) {
 // immediate re-record verified).
 // ══════════════════════════════════════════════════════════════════
 {
-  const reachAnchor = "const p4Reached = await tabTo(page, 'ipoClearSessionButton', 20, p4Sequence);";
+  // FIX 3/6 (ENV-B2-F1/F2): the reach bound is now DYNAMIC
+  // (p4Bound.maxTabs, derived from the real focusable-order distance),
+  // never a hard-coded literal "20".
+  const reachAnchor = "const p4Reached = await tabTo(page, 'ipoClearSessionButton', p4Bound.maxTabs, p4Sequence);";
+  const usesDynamicBound = testSrc.includes("const p4Bound = await computeBoundedMaxTabs(page, 'ipoOption_prefer-legacy', 'ipoClearSessionButton');");
   const activateAnchor = "await page.keyboard.press('Enter');\n    await page.waitForTimeout(200);";
   const hasBothAnchors = testSrc.includes(reachAnchor) && testSrc.includes(activateAnchor);
   const noClick = noClickBetween(reachAnchor, activateAnchor);
   const noHardcodedClick = !testSrc.includes("page.click('#ipoClearSessionButton')");
-  record('Part 4: Clear Session is reached via real Tab navigation and activated with Enter, with no .click() between reaching and activating, and no hard-coded click on this button anywhere', hasBothAnchors && noClick.ok && noHardcodedClick, `hasBothAnchors=${hasBothAnchors}, noClickBetween=${JSON.stringify(noClick.ok)}, noHardcodedClick=${noHardcodedClick}, reason=${noClick.reason}`);
+  record('Part 4 / FIX 3 (ENV-B2-F1): Clear Session is reached via real Tab navigation within a DYNAMIC bound derived from the real focusable order (never a hard-coded 20) and activated with Enter, with no .click() between reaching and activating, and no hard-coded click on this button anywhere', hasBothAnchors && usesDynamicBound && noClick.ok && noHardcodedClick, `hasBothAnchors=${hasBothAnchors}, usesDynamicBound=${usesDynamicBound}, noClickBetween=${JSON.stringify(noClick.ok)}, noHardcodedClick=${noHardcodedClick}, reason=${noClick.reason}`);
 }
 {
   const hasReRecordVerification = testSrc.includes('Part 4.5: the current Observation is immediately re-recorded (totalObserved=1, preferLegacy=1)') && testSrc.includes('p4ParsedAfter.totalObserved === 1 && p4ParsedAfter.preferLegacy === 1');
@@ -358,14 +436,21 @@ function noClickBetween(a, b) {
   record('FIX 8: Canvas restoration is proven via exact prototype-method Function identity (===), computed and returned as a Boolean BEFORE temporary instrumentation evidence is deleted — never merely inferred from deleted variables', exactIdentityCheck && computedBeforeDelete && returnsBooleanNotInference, `exactIdentityCheck=${exactIdentityCheck}, computedBeforeDelete=${computedBeforeDelete}, returnsBooleanNotInference=${returnsBooleanNotInference}`);
 }
 {
-  // FIX 9: expected-first-Reason-ID check (queried, never assumed).
-  const expectedFirstReasonChecked = testSrc.includes("const f3ExpectedFirstReasonId = await page.evaluate(() => { const first = document.querySelector('input[name=\"ipoReason\"]'); return first ? first.id : null; });") && testSrc.includes('f3ReachedFirstReasonId === f3ExpectedFirstReasonId && f3ExpectedFirstReasonId !== null');
-  record('FIX 9: the first Reason reached via Tab is compared against the ACTUAL expected first DOM Reason, queried directly rather than assumed', expectedFirstReasonChecked, `present=${expectedFirstReasonChecked}`);
+  // FIX 9 (ENV-B2-F2): expected-first-Reason-ID check, now sourced from
+  // the canonical runObservationSelectionReasonAndClearScenario()
+  // evidence object (f3ReasonClear.expectedFirstReasonId /
+  // .firstReasonMatchesExpected) rather than the removed ad hoc
+  // f3ExpectedFirstReasonId variable.
+  const expectedFirstReasonChecked = testSrc.includes('f3ReasonClear.firstReasonMatchesExpected') && testSrc.includes('expectedFirstReasonId=${f3ReasonClear.expectedFirstReasonId}');
+  record('FIX 9 (ENV-B2-F2): the first Reason reached via Tab is compared against the ACTUAL expected first DOM Reason, queried directly rather than assumed', expectedFirstReasonChecked, `present=${expectedFirstReasonChecked}`);
 }
 {
-  // FIX 9: exact-previous-Element Shift+Tab check (not merely "focus changed").
-  const exactPreviousElementCheck = testSrc.includes('f3AfterShiftTabId === f3ElementBeforeReasonCheckbox');
-  record('FIX 9: Shift+Tab is required to return to the EXACT previously-focused Element (recorded before advancing), not merely any different Element', exactPreviousElementCheck, `present=${exactPreviousElementCheck}`);
+  // FIX 9 (ENV-B2-F2): exact-previous-Element Shift+Tab check, now
+  // sourced from f3ReasonClear.reasonSpaceResult.shiftTabReturnsToExactPreviousElement
+  // (persistent Element identity comparison) rather than the removed
+  // f3AfterShiftTabId/f3ElementBeforeReasonCheckbox variables.
+  const exactPreviousElementCheck = testSrc.includes('f3ReasonClear.reasonSpaceResult.shiftTabReturnsToExactPreviousElement === true');
+  record('FIX 9 (ENV-B2-F2): Shift+Tab is required to return to the EXACT previously-focused Element (recorded before advancing, compared via persistent identity), not merely any different Element', exactPreviousElementCheck, `present=${exactPreviousElementCheck}`);
 }
 {
   // FIX 9: two-Element (period-2) cycle detection, not just same-ID-3x.
@@ -547,14 +632,21 @@ function noClickBetween(a, b) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Honest status — Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED.
-// Reads the EXISTING F1 static-results honest-status record — does NOT
-// execute or fabricate a browser run, does NOT regenerate the Browser
-// or Final Phase C result JSON.
+// FIX 9 (ENV-B2-F2) — Honest LIVE environment status. Computed fresh on
+// every run via detectPlaywrightPackage()/detectBrowserExecutable()
+// (the same helpers the smoke/runtime files use) rather than read as a
+// stale value from an old F1 static-results file. Does NOT execute or
+// fabricate a browser run, does NOT regenerate the Browser or Final
+// Phase C result JSON. The legacy term NOT_RUN_ENVIRONMENT_BLOCKED is
+// retired per FIX 9's explicit requirement.
 // ══════════════════════════════════════════════════════════════════
+const livePkgStatus = await detectPlaywrightPackage();
+const liveExeStatus = await detectBrowserExecutable(livePkgStatus.mod ? livePkgStatus.mod.chromium : null);
+const liveBrowserStatus = liveExeStatus.found ? 'BROWSER_BINARY_AVAILABLE' : 'BROWSER_BINARY_UNAVAILABLE';
 {
-  const status = f1StaticResultsRaw?.browserSuiteExecution?.status;
-  record('Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)', status === 'NOT_RUN_ENVIRONMENT_BLOCKED', `status=${status}`);
+  const noLongerUsesLegacyTerm = !testSrc.includes('NOT_RUN_ENVIRONMENT_BLOCKED');
+  const isRecognizedLiveStatus = liveBrowserStatus === 'BROWSER_BINARY_AVAILABLE' || liveBrowserStatus === 'BROWSER_BINARY_UNAVAILABLE';
+  record('FIX 9 (ENV-B2-F2): the real Browser environment status is computed LIVE every run via detectPlaywrightPackage()/detectBrowserExecutable(), and the legacy NOT_RUN_ENVIRONMENT_BLOCKED term is retired from this suite', noLongerUsesLegacyTerm && isRecognizedLiveStatus, `liveBrowserStatus=${liveBrowserStatus}, pkgStatus=${livePkgStatus.status}, found=${liveExeStatus.found}, noLongerUsesLegacyTerm=${noLongerUsesLegacyTerm}`);
 }
 {
   const neverClaimsScreenReaderPass = !/(NVDA|JAWS|VoiceOver)\s+PASS/i.test(testSrc);
@@ -571,12 +663,13 @@ const output = {
   results,
   disclaimer: 'This suite audits the SOURCE TEXT of qa/epic-2e-j-phase-c-step7b-b-test.mjs for the presence of required Keyboard-activation/MutationObserver/announcement-bounds/side-effect-isolation code paths and wiring. It does NOT execute a browser, does NOT measure real Tab order or real screen-reader announcements, and does NOT prove real Keyboard/ARIA PASS. A PASS here means "the required code path is present and correctly wired," not "the real UI passed Keyboard/ARIA testing."',
   browserSuiteExecution: {
-    status: 'NOT_RUN_ENVIRONMENT_BLOCKED',
-    note: 'Unchanged from the F1-R/F1-R2 record. This F3-S patch did not execute, simulate, or regenerate the real browser suite or its result JSON.',
+    status: liveBrowserStatus,
+    note: 'FIX 9 (ENV-B2-F2): computed LIVE this run via detectPlaywrightPackage()/detectBrowserExecutable() rather than copied from a prior static-results record. This F3-S patch did not execute, simulate, or regenerate the real Step 7B-B Browser suite result JSON or the Final Phase C result JSON.',
+    packageStatus: livePkgStatus.status,
     browserOrFinalResultJsonRegenerated: false,
   },
 };
 await writeFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-b-f3-static-results.json'), JSON.stringify(output, null, 2));
 console.log(`\n${passCount}/${results.length} PASS, ${failCount} FAIL`);
-console.log('Browser suite execution: NOT_RUN_ENVIRONMENT_BLOCKED (see output JSON)');
+console.log(`Browser suite execution: ${liveBrowserStatus} (see output JSON)`);
 process.exit(failCount > 0 ? 1 : 0);

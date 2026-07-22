@@ -38,6 +38,7 @@ import {
   openLumixaInMemoryPage,
   observeAppStorageKeys,
   classifyStorageKeyPrivacyRisk,
+  computeInMemoryHarnessDecision,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
 import { CANONICAL_ORIGIN } from './helpers/playwright-in-memory-app.mjs';
 
@@ -240,6 +241,499 @@ async function safeClickIfEnabled(page, id) {
   const canClick = await page.evaluate((elId) => { const el = document.getElementById(elId); return !!el && el.disabled !== true; }, id);
   if (canClick) await page.click(`#${id}`);
   return canClick;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EPIC 2E-J ENV-B2-F1 — shared browser-side test utilities.
+//
+// FIX 4: persistent Focus identity. A Window-scoped WeakMap<Element,
+// number> assigns each real DOM Element a unique, stable sequential
+// identity the FIRST time it is observed, so two different anonymous
+// (id-less) BUTTON Elements can never compare equal merely because
+// they share a tagName — only genuinely re-observing the SAME Element
+// reference produces the SAME identity. Identity format: the
+// Element's own id when present, otherwise "TAGNAME#focus-node-N".
+//
+// FIX 1/2/3: real focusable-order computation, respecting visibility,
+// disabled/aria-hidden state, and native radio-group roving-tabindex
+// semantics (a named radio group occupies exactly ONE Tab stop — the
+// checked radio, or the first if none is checked — never one stop per
+// radio input).
+// ══════════════════════════════════════════════════════════════════
+const STEP7BB_TEST_UTILS_SRC = `(() => {
+  if (window.__step7bbTestUtils) return;
+  const identityMap = new WeakMap();
+  let identitySeq = 0;
+  function identify(el) {
+    if (!el) return null;
+    if (!identityMap.has(el)) {
+      identitySeq += 1;
+      identityMap.set(el, identitySeq);
+    }
+    const seq = identityMap.get(el);
+    return el.id ? el.id : (el.tagName + '#focus-node-' + seq);
+  }
+  function isVisible(el) {
+    if (!(el instanceof Element)) return false;
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+    return true;
+  }
+  // FIX 1 (ENV-B2-F2) — exclude inert Elements and their descendants,
+  // and aria-hidden="true" Elements and their descendants. Walked from
+  // the candidate up to the document root (bounded by real DOM depth).
+  function isInertOrAriaHidden(el) {
+    let cur = el;
+    while (cur) {
+      if (cur.inert) return true;
+      if (cur.getAttribute && cur.getAttribute('aria-hidden') === 'true') return true;
+      cur = cur.parentElement;
+    }
+    return false;
+  }
+  // FIX 1 (ENV-B2-F2) — a CLOSED <details> hides every descendant from
+  // sequential focus except its own first <summary> child, which is
+  // ALWAYS a real, native Tab stop regardless of the details' open/
+  // closed state (this is ROOT CAUSE 1: the previous model omitted
+  // SUMMARY entirely, so the real Chromium predecessor of the
+  // Observation radio group — a <summary> — was never modeled).
+  function isHiddenInsideClosedDetails(el) {
+    const details = el.closest ? el.closest('details') : null;
+    if (!details) return false;
+    if (details.open) return false;
+    const firstSummary = details.querySelector('summary');
+    if (el === firstSummary) return false;
+    return !(firstSummary && firstSummary.contains(el));
+  }
+  function parsedTabIndex(el) {
+    const attr = el.getAttribute('tabindex');
+    if (attr === null) return null;
+    const n = parseInt(attr, 10);
+    return Number.isNaN(n) ? null : n;
+  }
+  function isFirstSummaryOfDetails(el) {
+    if (el.tagName !== 'SUMMARY') return false;
+    const details = el.parentElement;
+    return !!(details && details.tagName === 'DETAILS' && details.querySelector('summary') === el);
+  }
+  // FIX 1 (ENV-B2-F2) — the native-focusability check recognizes the
+  // full required element set: input/button/select/textarea (enabled,
+  // non-hidden-type), a[href], area[href], iframe, object, embed,
+  // audio[controls], video[controls], and the first <summary> child of
+  // a <details> element.
+  function isNativelyFocusable(el) {
+    const tag = el.tagName;
+    if (tag === 'INPUT') return el.type !== 'hidden' && !el.disabled;
+    if (tag === 'BUTTON') return !el.disabled;
+    if (tag === 'SELECT') return !el.disabled;
+    if (tag === 'TEXTAREA') return !el.disabled;
+    if (tag === 'A') return el.hasAttribute('href');
+    if (tag === 'AREA') return el.hasAttribute('href');
+    if (tag === 'IFRAME') return true;
+    if (tag === 'OBJECT') return true;
+    if (tag === 'EMBED') return true;
+    if (tag === 'AUDIO') return el.hasAttribute('controls');
+    if (tag === 'VIDEO') return el.hasAttribute('controls');
+    if (tag === 'SUMMARY') return isFirstSummaryOfDetails(el);
+    return false;
+  }
+  function isContentEditable(el) {
+    const v = el.getAttribute('contenteditable');
+    return v !== null && v !== 'false';
+  }
+  function isKeyboardFocusable(el) {
+    if (!(el instanceof Element)) return false;
+    if (el.hasAttribute('disabled')) return false;
+    if (isInertOrAriaHidden(el)) return false;
+    if (isHiddenInsideClosedDetails(el)) return false;
+    const ti = parsedTabIndex(el);
+    if (ti !== null) {
+      if (ti < 0) return false;
+      return isVisible(el); // [tabindex] where parsed tabindex >= 0
+    }
+    if (isContentEditable(el)) return isVisible(el);
+    if (!isNativelyFocusable(el)) return false;
+    return isVisible(el);
+  }
+  function computeFocusableOrder() {
+    const all = Array.from(document.querySelectorAll('*'));
+    const focusable = all.filter(isKeyboardFocusable);
+    // FIX 1 (ENV-B2-F2) — support positive tabindex ordering: positive
+    // tabindex Elements come FIRST, in ascending tabindex order (equal
+    // tabindex preserves DOM order); tabindex=0 and every native
+    // focusable then follow in real DOM order — matching the actual
+    // Chromium sequential focus navigation algorithm.
+    const withMeta = focusable.map((el, domIndex) => ({ el, domIndex, ti: parsedTabIndex(el) }));
+    withMeta.sort((a, b) => {
+      const aPositive = a.ti !== null && a.ti > 0;
+      const bPositive = b.ti !== null && b.ti > 0;
+      if (aPositive && bPositive) return a.ti !== b.ti ? a.ti - b.ti : a.domIndex - b.domIndex;
+      if (aPositive && !bPositive) return -1;
+      if (!aPositive && bPositive) return 1;
+      return a.domIndex - b.domIndex;
+    });
+    // FIX 1 (ENV-B2-F2) — retain native named-radio-group behavior: a
+    // named Radio group is ONE Tab stop (the checked enabled Radio, or
+    // otherwise the first ENABLED Radio); a disabled Radio never
+    // becomes the group Tab stop; a group with every Radio disabled
+    // contributes no Tab stop at all. Dedup is applied AFTER the
+    // positive-tabindex sort so relative ordering stays correct.
+    const filtered = [];
+    const seenRadioGroups = new Set();
+    for (const { el } of withMeta) {
+      if (el.tagName === 'INPUT' && el.type === 'radio' && el.name) {
+        if (seenRadioGroups.has(el.name)) continue;
+        seenRadioGroups.add(el.name);
+        const groupEls = Array.from(document.getElementsByName(el.name)).filter((r) => r.type === 'radio' && !r.disabled);
+        const checked = groupEls.find((r) => r.checked);
+        const stop = checked || groupEls[0];
+        if (!stop) continue;
+        filtered.push(stop);
+        continue;
+      }
+      filtered.push(el);
+    }
+    const obsRoot = document.getElementById('interactivePreviewObservationInner');
+    const sessionRoot = document.getElementById('interactivePreviewObservationSessionInner');
+    return filtered.map((el, idx) => ({
+      index: idx,
+      element: el,
+      identity: identify(el),
+      id: el.id || null,
+      insideObs: !!(obsRoot && obsRoot.contains(el)),
+      insideSession: !!(sessionRoot && sessionRoot.contains(el)),
+    }));
+  }
+  window.__step7bbTestUtils = { identify, isVisible, isKeyboardFocusable, computeFocusableOrder };
+})();`;
+
+async function installStep7bbTestUtils(page) {
+  await page.evaluate(STEP7BB_TEST_UTILS_SRC);
+}
+
+/**
+ * FIX 2 (ENV-B2-F2) — prepares a known, UNCHECKED Observation state
+ * through the REAL Clear Observation UI (never `.checked = false`
+ * direct assignment, never Controller/Renderer internals). If nothing
+ * is currently selected, Clear Observation is disabled and this is a
+ * safe no-op (safeClickIfEnabled never fabricates a click on a
+ * disabled control).
+ */
+async function resetObservationStateViaRealUI(page) {
+  await safeClickIfEnabled(page, 'ipoClearButton'); // setup only
+  await page.waitForTimeout(120);
+  return page.evaluate(() => {
+    const radios = Array.from(document.querySelectorAll('input[name="ipoObservation"]'));
+    const reasons = Array.from(document.querySelectorAll('input[name="ipoReason"]'));
+    return {
+      allRadiosUnchecked: radios.length > 0 && radios.every((r) => r.checked === false),
+      allReasonsCleared: reasons.length > 0 && reasons.every((r) => r.checked === false),
+      radioCount: radios.length,
+      reasonCount: reasons.length,
+    };
+  });
+}
+
+/**
+ * FIX 1/2 (ENV-B2-F2) — deterministic Tab entry into the Observation
+ * radio group. FIX 2 requires every independent scenario to prepare
+ * its OWN Radio-group state (never inherit a checked Radio from a
+ * previous Arrow scenario): the group is reset to unchecked through
+ * the real Clear Observation UI first, both the unchecked state and
+ * the cleared Reasons are verified, and the first Radio becoming the
+ * native radio-group Tab stop is verified — all BEFORE computing the
+ * real predecessor and pressing the one acceptance Tab. FIX 1 supplies
+ * the spec-aware focusable-order computation this entry relies on
+ * (including native SUMMARY Tab stops per ROOT CAUSE 1), so the
+ * computed real predecessor now matches the real Chromium Tab
+ * predecessor.
+ */
+async function enterObservationRadioGroupDeterministically(page) {
+  const targetId = 'ipoOption_prefer-legacy';
+  const resetState = await resetObservationStateViaRealUI(page);
+  const stopCheck = await page.evaluate((targetId) => {
+    const order = window.__step7bbTestUtils.computeFocusableOrder();
+    return { firstRadioIsTabStop: order.some((o) => o.id === targetId) };
+  }, targetId);
+  const setup = await page.evaluate((targetId) => {
+    const order = window.__step7bbTestUtils.computeFocusableOrder();
+    const targetIndex = order.findIndex((o) => o.id === targetId);
+    if (targetIndex === -1) return { ok: false, reason: 'target-not-found-in-focusable-order', targetIndex: -1, orderLength: order.length };
+    let previousIndex = -1;
+    for (let i = targetIndex - 1; i >= 0; i--) {
+      if (!order[i].insideObs && !order[i].insideSession) { previousIndex = i; break; }
+    }
+    if (previousIndex === -1) return { ok: false, reason: 'no-preceding-focusable-element-outside-both-observation-roots', targetIndex };
+    order[previousIndex].element.focus(); // setup only — never the radio itself
+    return {
+      ok: true,
+      targetFocusableIndex: targetIndex,
+      previousFocusableIndex: previousIndex,
+      previousFocusableIdentity: order[previousIndex].identity,
+      previousFocusableId: order[previousIndex].id,
+    };
+  }, targetId);
+  if (!setup.ok) {
+    return { ok: false, targetId, resetState, stopCheck, previousFocusableIdentity: null, previousFocusableId: null, previousFocusableIndex: setup.previousFocusableIndex ?? null, targetFocusableIndex: setup.targetFocusableIndex ?? null, actualAfterTabIdentity: null, reason: setup.reason };
+  }
+  await page.keyboard.press('Tab'); // the ONE real Tab acceptance action
+  const actualAfterTabIdentity = await page.evaluate(() => window.__step7bbTestUtils.identify(document.activeElement));
+  return {
+    ok: actualAfterTabIdentity === targetId && resetState.allRadiosUnchecked && resetState.allReasonsCleared && stopCheck.firstRadioIsTabStop,
+    targetId,
+    resetState,
+    stopCheck,
+    previousFocusableIdentity: setup.previousFocusableIdentity,
+    previousFocusableId: setup.previousFocusableId,
+    previousFocusableIndex: setup.previousFocusableIndex,
+    targetFocusableIndex: setup.targetFocusableIndex,
+    actualAfterTabIdentity,
+  };
+}
+
+/**
+ * FIX 8 (ENV-B2-F2) — variant of the deterministic entry for scenarios
+ * where the Radio group must ALREADY have a checked Radio as its
+ * native Tab stop (e.g. Part 3's Cleared-count scenario, which
+ * deliberately selects Prefer Legacy as its own baseline setup BEFORE
+ * entering the group — resetting it here would destroy that baseline).
+ * Never resets the group first, unlike
+ * enterObservationRadioGroupDeterministically(). Requires the checked
+ * Radio (targetId) to genuinely already be the real Tab stop; if
+ * nothing is checked, or the checked Radio differs from targetId, this
+ * fails closed (ok:false) rather than silently accepting whatever
+ * Radio Tab happens to land on.
+ */
+async function enterObservationRadioGroupWithCurrentSelection(page, targetId) {
+  const stopCheck = await page.evaluate((targetId) => {
+    const checked = document.getElementById(targetId);
+    return { targetChecked: !!checked && checked.checked === true };
+  }, targetId);
+  const setup = await page.evaluate((targetId) => {
+    const order = window.__step7bbTestUtils.computeFocusableOrder();
+    const targetIndex = order.findIndex((o) => o.id === targetId);
+    if (targetIndex === -1) return { ok: false, reason: 'target-not-found-in-focusable-order', targetIndex: -1, orderLength: order.length };
+    let previousIndex = -1;
+    for (let i = targetIndex - 1; i >= 0; i--) {
+      if (!order[i].insideObs && !order[i].insideSession) { previousIndex = i; break; }
+    }
+    if (previousIndex === -1) return { ok: false, reason: 'no-preceding-focusable-element-outside-both-observation-roots', targetIndex };
+    order[previousIndex].element.focus(); // setup only — never the radio itself
+    return { ok: true, targetFocusableIndex: targetIndex, previousFocusableIndex: previousIndex, previousFocusableIdentity: order[previousIndex].identity, previousFocusableId: order[previousIndex].id };
+  }, targetId);
+  if (!setup.ok) {
+    return { ok: false, targetId, stopCheck, previousFocusableIdentity: null, previousFocusableId: null, previousFocusableIndex: setup.previousFocusableIndex ?? null, targetFocusableIndex: setup.targetFocusableIndex ?? null, actualAfterTabIdentity: null, reason: setup.reason };
+  }
+  await page.keyboard.press('Tab'); // the ONE real Tab acceptance action
+  const actualAfterTabIdentity = await page.evaluate(() => window.__step7bbTestUtils.identify(document.activeElement));
+  return {
+    ok: actualAfterTabIdentity === targetId && stopCheck.targetChecked,
+    targetId,
+    stopCheck,
+    previousFocusableIdentity: setup.previousFocusableIdentity,
+    previousFocusableId: setup.previousFocusableId,
+    previousFocusableIndex: setup.previousFocusableIndex,
+    targetFocusableIndex: setup.targetFocusableIndex,
+    actualAfterTabIdentity,
+  };
+}
+
+/**
+ * FIX 3 (ENV-B2-F2) — canonical independent Arrow-key scenario. Never
+ * inherits focus state OR checked Radio from any preceding scenario:
+ * performs its own state reset + deterministic entry (FIX 2), records
+ * the initial active Radio, then exercises ALL FOUR required Arrow-key
+ * names (ArrowDown x3 — enough forward movement alone to visit every
+ * one of the four Radio IDs — then ArrowRight, ArrowUp, ArrowLeft for
+ * full key-name coverage), recording {key, activeId, checkedIds,
+ * checkedCount} after every single action, and requiring
+ * checkedCount === 1 after EVERY action plus that every expected Radio
+ * ID was genuinely visited. Never uses click()/focus()/direct checked
+ * assignment as Arrow-acceptance proof.
+ */
+async function runIndependentArrowScenario(page) {
+  const entry = await enterObservationRadioGroupDeterministically(page);
+  const initialActiveId = entry.actualAfterTabIdentity;
+  const keySequence = ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'];
+  const steps = [];
+  const visitedIds = new Set(initialActiveId ? [initialActiveId] : []);
+  for (const key of keySequence) {
+    await page.keyboard.press(key);
+    const state = await page.evaluate(() => {
+      const radios = Array.from(document.querySelectorAll('input[name="ipoObservation"]'));
+      const checked = radios.filter((r) => r.checked);
+      return { activeId: document.activeElement.id, checkedIds: checked.map((r) => r.id), checkedCount: checked.length };
+    });
+    visitedIds.add(state.activeId);
+    steps.push({ key, activeId: state.activeId, checkedIds: state.checkedIds, checkedCount: state.checkedCount });
+  }
+  const expectedIds = ['ipoOption_prefer-legacy', 'ipoOption_prefer-v2', 'ipoOption_no-visible-difference', 'ipoOption_unsure'];
+  const allFourKeyNamesExercised = ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].every((k) => keySequence.includes(k));
+  const allExpectedVisited = expectedIds.every((id) => visitedIds.has(id));
+  const allExactlyOneChecked = steps.length === keySequence.length && steps.every((s) => s.checkedCount === 1);
+  return {
+    entry,
+    initialActiveId,
+    keySequence,
+    steps,
+    visitedIds: Array.from(visitedIds),
+    expectedIds,
+    allFourKeyNamesExercised,
+    allExpectedVisited,
+    allExactlyOneChecked,
+    // retained for continuity with prior evidence consumers
+    matchesExpectedOrder: allExpectedVisited,
+    exactlyOneCheckedPerStep: steps.map((s) => s.checkedCount === 1),
+  };
+}
+
+/**
+ * FIX 3 (ENV-B2-F2) helper — a bounded maximum Tab count derived from
+ * the real, CURRENT (live-queried) focusable-order distance between
+ * two Elements (never a hard-coded guess). Used by every Tab-traversal
+ * loop in this suite. FIX 6: when either ID cannot be located in the
+ * current order, `derived:false` is returned — the caller must fail
+ * closed and never treat the `maxTabs:40` fallback as PASS evidence;
+ * the fallback exists only so evidence collection can still occur.
+ */
+async function computeBoundedMaxTabs(page, fromId, toId, margin = 5) {
+  const bounds = await page.evaluate(({ fromId, toId }) => {
+    const order = window.__step7bbTestUtils.computeFocusableOrder();
+    return { fromIndex: order.findIndex((o) => o.id === fromId), toIndex: order.findIndex((o) => o.id === toId) };
+  }, { fromId, toId });
+  if (bounds.fromIndex === -1 || bounds.toIndex === -1) {
+    // The DOM-derived bound itself is unavailable (one of the two IDs
+    // wasn't found in the current focusable order) — this is recorded
+    // honestly via the returned `bounds` object rather than silently
+    // substituting an arbitrary large number without evidence.
+    return { maxTabs: 40, bounds, derived: false };
+  }
+  return { maxTabs: Math.max(1, bounds.toIndex - bounds.fromIndex) + margin, bounds, derived: true };
+}
+
+/**
+ * FIX 4/5/6 (ENV-B2-F2) — canonical Observation-selection + Reason +
+ * Clear-button scenario, and THE single canonical evidence source for
+ * Tab entry / first Reason / Reason Space activation / Shift+Tab
+ * reversal / Clear Reasons / Clear Observation / Clear Session (FIX 7).
+ *
+ * Reasons and Clear Observation are DISABLED until an Observation is
+ * genuinely selected — so any bound computed before selection is
+ * invalid evidence (this was the ENV-B2-F1 defect). This scenario:
+ *   1. resets + enters the Radio group (FIX 2), then selects Prefer
+ *      Legacy via a real Space press (never .click()/.checked).
+ *   2. verifies Prefer Legacy checked, exactly one Radio checked,
+ *      Reason controls enabled, Clear Observation enabled.
+ *   3. recomputes the focusable order AFTER that state change and
+ *      derives every subsequent Tab bound from THIS post-selection
+ *      order (FIX 6 — computeBoundedMaxTabs re-queries the live DOM on
+ *      every call, so it is never stale).
+ *   4. observes (never assumes) the real order: Clear Observation,
+ *      first Reason, remaining Reasons, Clear Reasons, Clear Session.
+ *   5. reaches the first Reason via real Tab, records the immediately
+ *      previous focused Element's persistent identity, presses Space,
+ *      verifies checked, presses Shift+Tab, requires Focus returns to
+ *      the EXACT previous Element (identity, not just ID/tagName —
+ *      FIX 5), Tabs forward again, and continues to Clear Reasons /
+ *      Clear Session.
+ * When a bound cannot be derived, `boundsAllDerived` is false and the
+ * acceptance result must be treated as FAIL by the caller — the
+ * maxTabs:40 fallback exists only to allow evidence collection to
+ * continue, never as substitute PASS evidence (FIX 6).
+ */
+async function runObservationSelectionReasonAndClearScenario(page) {
+  const entry = await enterObservationRadioGroupDeterministically(page);
+
+  await page.keyboard.press('Space'); // real Space activation — never .click()/.checked assignment
+  await page.waitForTimeout(120);
+  const afterSelect = await page.evaluate(() => {
+    const radios = Array.from(document.querySelectorAll('input[name="ipoObservation"]'));
+    const clearObs = document.getElementById('ipoClearButton');
+    const firstReason = document.querySelector('input[name="ipoReason"]');
+    return {
+      preferLegacyChecked: document.getElementById('ipoOption_prefer-legacy')?.checked === true,
+      checkedCount: radios.filter((r) => r.checked).length,
+      clearObservationEnabled: !!clearObs && !clearObs.disabled,
+      firstReasonEnabled: !!firstReason && !firstReason.disabled,
+    };
+  });
+  const selectionOk = entry.ok && afterSelect.preferLegacyChecked && afterSelect.checkedCount === 1 && afterSelect.clearObservationEnabled && afterSelect.firstReasonEnabled;
+
+  const expectedFirstReasonId = await page.evaluate(() => {
+    const first = document.querySelector('input[name="ipoReason"]');
+    return first ? first.id : null;
+  });
+
+  // FIX 4 — focusable order recomputed AFTER the state change.
+  const postSelectOrder = await page.evaluate(() => window.__step7bbTestUtils.computeFocusableOrder().map((o) => ({ index: o.index, id: o.id, identity: o.identity })));
+  const radioIndex = postSelectOrder.findIndex((o) => o.id === 'ipoOption_prefer-legacy');
+  const clearObsIndex = postSelectOrder.findIndex((o) => o.id === 'ipoClearButton');
+  const firstReasonIndex = expectedFirstReasonId ? postSelectOrder.findIndex((o) => o.id === expectedFirstReasonId) : -1;
+  const clearReasonsIndex = postSelectOrder.findIndex((o) => o.id === 'ipoClearReasonsButton');
+  const clearSessionIndex = postSelectOrder.findIndex((o) => o.id === 'ipoClearSessionButton');
+  const observedOrderCorrect = radioIndex >= 0 && clearObsIndex > radioIndex && firstReasonIndex > clearObsIndex && clearReasonsIndex > firstReasonIndex && clearSessionIndex > clearReasonsIndex;
+
+  // FIX 6 — bounds derived from the CURRENT post-selection order.
+  const boundToFirstReason = expectedFirstReasonId ? await computeBoundedMaxTabs(page, 'ipoOption_prefer-legacy', expectedFirstReasonId) : { maxTabs: 0, bounds: {}, derived: false };
+  const boundReasonToClearSession = expectedFirstReasonId ? await computeBoundedMaxTabs(page, expectedFirstReasonId, 'ipoClearSessionButton') : { maxTabs: 0, bounds: {}, derived: false };
+  const boundsAllDerived = boundToFirstReason.derived === true && boundReasonToClearSession.derived === true;
+
+  // ── Phase A: real Tab forward from the selected Radio to the first Reason. ──
+  let reachedClearObs = false;
+  let reachedFirstReasonId = null;
+  const sequenceA = [entry.actualAfterTabIdentity];
+  let previousIdentity = entry.actualAfterTabIdentity;
+  let firstReasonPreviousIdentity = null;
+  for (let i = 0; i < boundToFirstReason.maxTabs && reachedFirstReasonId === null; i++) {
+    await page.keyboard.press('Tab');
+    const state = await page.evaluate(() => ({ id: document.activeElement.id, identity: window.__step7bbTestUtils.identify(document.activeElement) }));
+    sequenceA.push(state.id);
+    if (state.id === 'ipoClearButton') reachedClearObs = true;
+    if (reachedFirstReasonId === null && state.id && state.id.startsWith('ipoReason_')) {
+      reachedFirstReasonId = state.id;
+      firstReasonPreviousIdentity = previousIdentity;
+    }
+    previousIdentity = state.identity;
+  }
+
+  // ── Phase B (FIX 5): Space on the Reason, Shift+Tab identity reversal. ──
+  let reasonSpaceResult = null;
+  if (reachedFirstReasonId !== null) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(100);
+    const reasonChecked = await page.evaluate((id) => document.getElementById(id)?.checked === true, reachedFirstReasonId);
+    await page.keyboard.press('Shift+Tab');
+    const afterShiftTabIdentity = await page.evaluate(() => window.__step7bbTestUtils.identify(document.activeElement));
+    const shiftTabReturnsToExactPreviousElement = firstReasonPreviousIdentity !== null && afterShiftTabIdentity === firstReasonPreviousIdentity;
+    await page.keyboard.press('Tab'); // Tab forward again (back onto the Reason) before continuing
+    reasonSpaceResult = { reasonId: reachedFirstReasonId, reasonChecked, previousIdentity: firstReasonPreviousIdentity, afterShiftTabIdentity, shiftTabReturnsToExactPreviousElement };
+  }
+
+  // ── Phase C: continue real Tab forward to Clear Reasons / Clear Session. ──
+  let reachedClearReasons = false;
+  let reachedClearSession = false;
+  const sequenceC = [];
+  for (let i = 0; i < boundReasonToClearSession.maxTabs && !(reachedClearReasons && reachedClearSession); i++) {
+    await page.keyboard.press('Tab');
+    const id = await page.evaluate(() => document.activeElement.id);
+    sequenceC.push(id);
+    if (id === 'ipoClearReasonsButton') reachedClearReasons = true;
+    if (id === 'ipoClearSessionButton') reachedClearSession = true;
+  }
+
+  return {
+    entry, selectionOk, afterSelect,
+    expectedFirstReasonId, reachedFirstReasonId,
+    firstReasonMatchesExpected: reachedFirstReasonId !== null && reachedFirstReasonId === expectedFirstReasonId,
+    postSelectOrder: { radioIndex, clearObsIndex, firstReasonIndex, clearReasonsIndex, clearSessionIndex },
+    observedOrderCorrect,
+    boundToFirstReason, boundReasonToClearSession, boundsAllDerived,
+    reachedClearObs, reachedClearReasons, reachedClearSession,
+    sequence: [...sequenceA, ...(reasonSpaceResult ? [`SPACE(${reasonSpaceResult.reasonId})`, 'Shift+Tab', 'Tab'] : []), ...sequenceC],
+    reasonSpaceResult,
+  };
 }
 
 // Step 7B-B-F3-S2 FIX 2 — a TEXT-TRANSITION observer: distinguishes the
@@ -498,6 +992,10 @@ async function main() {
   }
 
   const browser = await chromium.launch({ executablePath: browserDetect.found, args: REQUIRED_LAUNCH_ARGS });
+  // FIX 7 (ENV-B2-F1): captured once, immediately after launch, so it
+  // remains available for the bounded `environment` metadata block even
+  // after the Browser is closed in the `finally` block below.
+  const browserVersion = browser.version();
   // Built ONCE per project snapshot (PART 1 step 1) and shared by every
   // in-memory Page this suite opens (the main Page and Part 7's fresh
   // Page), instead of re-reading/re-scanning every project file twice.
@@ -545,6 +1043,11 @@ async function main() {
 
   let mainRuntime = null;
   let part7Runtime = null;
+  // FIX 7 (ENV-B2-F1): hoisted so these remain available for the
+  // bounded `environment` metadata block after the try/finally below.
+  let storageKeysAtReady = null;
+  let privacyRisk = null;
+  let mainPageUrl = null;
   try {
     // ══════════════════════════════════════════════════════════════
     // PART 1 — Reach Ready through the real application (no forced state).
@@ -560,6 +1063,7 @@ async function main() {
     });
     const page = mainRuntime.page;
     attachErrorListeners(page, 'main');
+    await installStep7bbTestUtils(page); // FIX 4 (ENV-B2-F1): persistent Focus identity + real focusable-order computation, installed once, reused throughout
 
     record('ENV-B2 PART 1/5-7: In-Memory runtime storage compatibility for the main Page (native accessible or shim installed, verified before app load)', mainRuntime.storageAccessVerified ? 'PASS' : 'FAIL', `storageStatus=${mainRuntime.storageStatus}, nativeStorageAvailable=${mainRuntime.nativeStorageAvailable}, storageAccessVerified=${mainRuntime.storageAccessVerified}`);
     record('ENV-B2 PART 7: window.localStorage/sessionStorage are read-only Window properties (a replacement assignment never silently replaces the object; a strict-mode throw is also acceptable evidence)', mainRuntime.readOnlyCheck.localStorageReadOnly && mainRuntime.readOnlyCheck.sessionStorageReadOnly && mainRuntime.readOnlyCheck.localIdentityPreserved && mainRuntime.readOnlyCheck.sessionIdentityPreserved ? 'PASS' : 'FAIL', JSON.stringify(mainRuntime.readOnlyCheck));
@@ -578,8 +1082,8 @@ async function main() {
     // only, never values. Theme ("dm") / language ("lang") writes
     // remain allowed; anything that looks like Observation/Session
     // persistence is flagged. ──
-    const storageKeysAtReady = await observeAppStorageKeys(page);
-    const privacyRisk = classifyStorageKeyPrivacyRisk(storageKeysAtReady.allKeys);
+    storageKeysAtReady = await observeAppStorageKeys(page);
+    privacyRisk = classifyStorageKeyPrivacyRisk(storageKeysAtReady.allKeys);
     record(
       'ENV-B2 PART 6: no Observation/Session/interactivePreview/ipo-shaped key appears in Storage at Ready state (Theme "dm" / Language "lang" writes are normal and allowed) — key NAMES only, never values',
       privacyRisk.safe ? 'PASS' : 'FAIL',
@@ -592,89 +1096,110 @@ async function main() {
     // ══════════════════════════════════════════════════════════════
     console.log('=== Keyboard navigation (real key presses) ===');
 
-    // Start from a known focusable element BEFORE Observation, then Tab forward.
-    await page.evaluate(() => document.getElementById('btnReanalyze')?.focus());
-    let reachedRadioGroup = false;
-    let focusedId = null;
-    for (let i = 0; i < 110 && !reachedRadioGroup; i++) {
-      await page.keyboard.press('Tab');
-      focusedId = await page.evaluate(() => document.activeElement.id);
-      if (focusedId === 'ipoOption_prefer-legacy') reachedRadioGroup = true;
-    }
-    record('Tab reaches Observation radio group naturally (real Tab presses)', reachedRadioGroup, `focusedId=${focusedId}`);
+    // FIX 1/2 (ENV-B2-F2) — deterministic Tab entry into the
+    // Observation radio group: the real preceding focusable Element
+    // (outside both Observation roots), located via the spec-aware
+    // focusable-order model (ROOT CAUSE 1: SUMMARY is now modeled as a
+    // real Tab stop), is focused for setup only; the Radio group is
+    // first reset to a known unchecked state through the real Clear
+    // Observation UI; then exactly ONE real Tab press is the
+    // acceptance action.
+    const fix1Entry = await enterObservationRadioGroupDeterministically(page);
+    record(
+      'FIX 1/2 (ENV-B2-F2): deterministic Tab entry into the Observation radio group (Radio-group state reset through the real Clear Observation UI first, spec-aware real preceding focusable Element located and focused for setup only, exactly one real Tab press is the acceptance action, never .focus() on the radio itself, never .checked assignment)',
+      fix1Entry.ok,
+      JSON.stringify(fix1Entry)
+    );
 
-    await page.keyboard.press('ArrowDown');
-    const afterArrowDown = await page.evaluate(() => ({ id: document.activeElement.id, checked: document.activeElement.checked }));
-    record('ArrowDown moves between native radios', afterArrowDown.id !== 'ipoOption_prefer-legacy' && afterArrowDown.checked === true, JSON.stringify(afterArrowDown));
-    await page.keyboard.press('ArrowRight');
-    const afterArrowRight = await page.evaluate(() => ({ id: document.activeElement.id, checked: document.activeElement.checked }));
-    record('ArrowRight moves between native radios', afterArrowRight.checked === true, JSON.stringify(afterArrowRight));
-    await page.keyboard.press('ArrowUp');
-    await page.keyboard.press('ArrowLeft');
-    const exactlyOneChecked = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoObservation"]')).filter((r) => r.checked).length === 1);
-    record('Exactly one radio remains checked after Arrow navigation', exactlyOneChecked, `oneChecked=${exactlyOneChecked}`);
+    // FIX 3 (ENV-B2-F2) — canonical independent Arrow-key scenario:
+    // performs its OWN state reset + deterministic entry (never
+    // inherits a checked Radio from any previous scenario), exercises
+    // all four required Arrow-key names, and requires exactly one
+    // Radio checked after EVERY Arrow action plus that every expected
+    // Radio ID was genuinely visited.
+    const fix2Arrow = await runIndependentArrowScenario(page);
+    record(
+      'FIX 3 (ENV-B2-F2): independent Arrow-key scenario — first Radio active after its OWN state reset + deterministic entry (never inherits the checked Radio from a previous scenario)',
+      fix2Arrow.entry.ok,
+      JSON.stringify(fix2Arrow.entry)
+    );
+    record(
+      'FIX 3 (ENV-B2-F2): all four required Arrow-key names (ArrowDown, ArrowRight, ArrowUp, ArrowLeft) are exercised, and every expected Observation Radio ID (prefer-legacy, prefer-v2, no-visible-difference, unsure) is genuinely visited',
+      fix2Arrow.allFourKeyNamesExercised && fix2Arrow.allExpectedVisited,
+      JSON.stringify({ keySequence: fix2Arrow.keySequence, visitedIds: fix2Arrow.visitedIds, expectedIds: fix2Arrow.expectedIds })
+    );
+    record(
+      'FIX 3 (ENV-B2-F2): exactly one Radio remains checked after EVERY individual Arrow action (not only at the end)',
+      fix2Arrow.allExactlyOneChecked,
+      JSON.stringify(fix2Arrow.steps)
+    );
 
-    // Tab out of the radio group into the Reason fieldset. Note the
-    // REAL DOM order: the Observation fieldset (containing Clear
-    // Observation) is appended BEFORE the Reason fieldset, so Clear
-    // Observation is passed through during this very loop — it must be
-    // recorded here, not only in the later loop.
-    let reachedFirstReasonCheckbox = false;
-    let reachedClearObsInFirstLoop = false;
-    for (let i = 0; i < 10 && !reachedFirstReasonCheckbox; i++) {
-      await page.keyboard.press('Tab');
-      focusedId = await page.evaluate(() => document.activeElement.id);
-      if (focusedId === 'ipoClearButton') reachedClearObsInFirstLoop = true;
-      if (focusedId && focusedId.startsWith('ipoReason_')) reachedFirstReasonCheckbox = true;
-    }
-    record('Tab exits radio group and reaches Reason checkboxes in DOM order', reachedFirstReasonCheckbox, `focusedId=${focusedId}`);
-
-    const firstReasonId = focusedId;
-    await page.keyboard.press('Space');
-    const firstReasonChecked = await page.evaluate((id) => document.getElementById(id).checked, firstReasonId);
-    record('Space toggles a Reason checkbox', firstReasonChecked === true, `id=${firstReasonId}, checked=${firstReasonChecked}`);
-
-    // Tab through remaining reason checkboxes, then to Clear Reasons/Session.
-    let reachedClearReasons = false, reachedClearObs = reachedClearObsInFirstLoop, reachedClearSession = false;
-    const tabSequence = [];
-    for (let i = 0; i < 25; i++) {
-      await page.keyboard.press('Tab');
-      focusedId = await page.evaluate(() => document.activeElement.id);
-      tabSequence.push(focusedId);
-      if (focusedId === 'ipoClearReasonsButton') reachedClearReasons = true;
-      if (focusedId === 'ipoClearButton') reachedClearObs = true;
-      if (focusedId === 'ipoClearSessionButton') reachedClearSession = true;
-      if (reachedClearReasons && reachedClearObs && reachedClearSession) break;
-    }
-    record('Tab reaches Clear Reasons button', reachedClearReasons, `reached=${reachedClearReasons}, sequence=${JSON.stringify(tabSequence)}`);
-    record('Tab reaches Clear Observation button', reachedClearObs, `reached=${reachedClearObs}, sequence=${JSON.stringify(tabSequence)}`);
-    record('Tab reaches Clear Session button', reachedClearSession, `reached=${reachedClearSession}, sequence=${JSON.stringify(tabSequence)}`);
-
-    // Shift+Tab reverses navigation.
-    const beforeShiftTab = await page.evaluate(() => document.activeElement.id);
-    await page.keyboard.press('Shift+Tab');
-    const afterShiftTab = await page.evaluate(() => document.activeElement.id);
-    record('Shift+Tab reverses navigation', afterShiftTab !== beforeShiftTab, `before=${beforeShiftTab}, after=${afterShiftTab}`);
+    // FIX 4/5/6 (ENV-B2-F2) — canonical Observation-selection + Reason
+    // + Clear-button scenario. SUPERSEDES the prior ENV-B2-F1 "FIX 3"
+    // scenario, which entered the Radio group but never SELECTED an
+    // Observation — Reasons/Clear Observation stay disabled until
+    // selected, so any bound computed beforehand was invalid evidence.
+    // This is now the ONE canonical evidence source (FIX 7) for: first
+    // Reason, Reason Space activation, Shift+Tab reversal, Clear
+    // Reasons, Clear Observation, and Clear Session. The old hard-coded
+    // 10-Tab loop, 25-Tab loop, non-identity Shift+Tab check, and
+    // weak-identity no-trap loop that previously followed here are
+    // removed; their historic Test names are mapped onto this
+    // canonical scenario's evidence below instead of being computed
+    // twice by unrelated ad hoc loops.
+    const canonicalReasonClear = await runObservationSelectionReasonAndClearScenario(page);
+    record(
+      'FIX 4 (ENV-B2-F2): Observation genuinely selected via real Space activation before any Reason/Clear bound is computed (Prefer Legacy checked, exactly one Radio checked, Reason controls enabled, Clear Observation enabled)',
+      canonicalReasonClear.selectionOk,
+      JSON.stringify({ entryOk: canonicalReasonClear.entry.ok, afterSelect: canonicalReasonClear.afterSelect })
+    );
+    record(
+      'FIX 4 (ENV-B2-F2): the real post-selection focusable order is OBSERVED (never assumed) to be Clear Observation -> first Reason -> remaining Reasons -> Clear Reasons -> Clear Session',
+      canonicalReasonClear.observedOrderCorrect,
+      JSON.stringify(canonicalReasonClear.postSelectOrder)
+    );
+    record(
+      'FIX 6 (ENV-B2-F2): every Tab bound (Radio->first Reason, first Reason->Clear Session) is derived from the CURRENT post-selection focusable order — when a bound cannot be derived this fails closed (never a fallback-40-as-PASS)',
+      canonicalReasonClear.boundsAllDerived,
+      JSON.stringify({ boundToFirstReason: canonicalReasonClear.boundToFirstReason, boundReasonToClearSession: canonicalReasonClear.boundReasonToClearSession })
+    );
+    // Historic Test name, mapped to the canonical scenario's evidence.
+    record('Tab exits radio group and reaches Reason checkboxes in DOM order', canonicalReasonClear.boundsAllDerived && canonicalReasonClear.reachedClearObs && canonicalReasonClear.reachedFirstReasonId !== null, `reachedClearObs=${canonicalReasonClear.reachedClearObs}, focusedId=${canonicalReasonClear.reachedFirstReasonId}`);
+    // Historic Test name, mapped to the canonical scenario's evidence.
+    record('Space toggles a Reason checkbox', canonicalReasonClear.reasonSpaceResult != null && canonicalReasonClear.reasonSpaceResult.reasonChecked === true, `id=${canonicalReasonClear.reasonSpaceResult?.reasonId}, checked=${canonicalReasonClear.reasonSpaceResult?.reasonChecked}`);
+    // Historic Test names, mapped to the canonical scenario's evidence
+    // (each ANDs in boundsAllDerived per FIX 6 — a fallback bound never
+    // counts as PASS evidence even if the loop happened to reach the
+    // target).
+    record('Tab reaches Clear Reasons button', canonicalReasonClear.boundsAllDerived && canonicalReasonClear.reachedClearReasons, `reached=${canonicalReasonClear.reachedClearReasons}, sequence=${JSON.stringify(canonicalReasonClear.sequence)}`);
+    record('Tab reaches Clear Observation button', canonicalReasonClear.boundsAllDerived && canonicalReasonClear.reachedClearObs, `reached=${canonicalReasonClear.reachedClearObs}, sequence=${JSON.stringify(canonicalReasonClear.sequence)}`);
+    record('Tab reaches Clear Session button', canonicalReasonClear.boundsAllDerived && canonicalReasonClear.reachedClearSession, `reached=${canonicalReasonClear.reachedClearSession}, sequence=${JSON.stringify(canonicalReasonClear.sequence)}`);
+    // FIX 5 (ENV-B2-F2) — historic Test name 'Shift+Tab reverses
+    // navigation', now an identity-based exact-return proof (never
+    // merely "the ID changed") — the required Shift+Tab assertion.
+    record(
+      'FIX 5 (ENV-B2-F2): Shift+Tab from the first Reason returns Focus to the EXACT previous Element (persistent identity comparison, never only an ID or tagName)',
+      canonicalReasonClear.reasonSpaceResult != null && canonicalReasonClear.reasonSpaceResult.shiftTabReturnsToExactPreviousElement === true,
+      JSON.stringify(canonicalReasonClear.reasonSpaceResult)
+    );
 
     // No keyboard trap: Tab forward past Clear Session must keep
     // advancing focus (never get stuck repeating the exact same
-    // element), for several consecutive presses.
-    await page.evaluate(() => document.getElementById('ipoClearSessionButton')?.focus());
+    // Element), for several consecutive presses. Uses the same
+    // persistent-identity utility as every other Focus comparison in
+    // this suite (never a weaker tagName/child-index description).
+    await page.evaluate(() => document.getElementById('ipoClearSessionButton')?.focus()); // setup only, not activation proof
     let noTrapDetected = true;
-    let previousElementHandle = null;
-    const visitedDescriptions = [];
+    let previousIdentity = null;
+    const visitedIdentities = [];
     for (let i = 0; i < 8; i++) {
       await page.keyboard.press('Tab');
-      const isSameElementAsBefore = await page.evaluate((prevWasNull) => {
-        if (prevWasNull) return false;
-        return document.activeElement === window.__step7bbPrevFocused;
-      }, previousElementHandle === null);
-      const description = await page.evaluate(() => { window.__step7bbPrevFocused = document.activeElement; return document.activeElement.id || `${document.activeElement.tagName}[${Array.from(document.activeElement.parentElement?.children ?? []).indexOf(document.activeElement)}]`; });
-      visitedDescriptions.push(description);
-      if (isSameElementAsBefore) { noTrapDetected = false; break; }
-      previousElementHandle = true;
+      const identity = await page.evaluate(() => window.__step7bbTestUtils.identify(document.activeElement));
+      visitedIdentities.push(identity);
+      if (previousIdentity !== null && identity === previousIdentity) { noTrapDetected = false; break; }
+      previousIdentity = identity;
     }
-    record('No keyboard trap after Clear Session (focus keeps advancing)', noTrapDetected, `sequence=${JSON.stringify(visitedDescriptions)}`);
+    record('No keyboard trap after Clear Session (focus keeps advancing, proven via persistent Element identity)', noTrapDetected, `sequence=${JSON.stringify(visitedIdentities)}`);
 
     // Five-Reason limit: sixth reason disabled, selected ones remain removable.
     await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); });
@@ -857,71 +1382,29 @@ async function main() {
 
     // ── F3-S PART 1 — real Tab order, full ID sequence recorded ─────
     console.log('--- Part 1: real Tab order ---');
-    // Setup/cleanup only, not activation proof: establishes a known
-    // starting point immediately before the Observation section.
-    await page.evaluate(() => document.getElementById('btnReanalyze')?.focus());
-    const f3FullTabSequence = [];
-    let f3EnteredRadioGroup = false;
-    for (let i = 0; i < 60 && !f3EnteredRadioGroup; i++) {
-      await page.keyboard.press('Tab');
-      const id = await page.evaluate(() => document.activeElement.id);
-      f3FullTabSequence.push(id);
-      if (id === 'ipoOption_prefer-legacy') f3EnteredRadioGroup = true;
-    }
-    record('Part 1.1: Tab enters the Observation radio group (real Tab presses only)', f3EnteredRadioGroup, `sequence=${JSON.stringify(f3FullTabSequence)}`);
+    // FIX 7 (ENV-B2-F2): this section now reuses the SAME canonical
+    // scenario functions as PART 2 above — never a separate ad hoc
+    // Tab-loop implementation — as a fresh, independent re-run at this
+    // later point in the suite (after Canvas instrumentation + ARIA-
+    // live structure checks). The historic Part 1.1-1.8 Test names are
+    // mapped onto this one canonical evidence source instead of being
+    // computed twice by unrelated hard-coded loops (the old 10-Tab and
+    // 20/25-Tab loops that used to live here are gone).
+    const f3Entry = await enterObservationRadioGroupDeterministically(page);
+    record('Part 1.1 / FIX 1/2 (ENV-B2-F2): Tab enters the Observation radio group via deterministic entry (Radio-group state reset through the real Clear Observation UI first, spec-aware real preceding focusable Element, exactly one real Tab press)', f3Entry.ok, JSON.stringify(f3Entry));
 
-    const f3VisitedRadioIds = new Set([await page.evaluate(() => document.activeElement.id)]);
-    for (const key of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft']) {
-      await page.keyboard.press(key);
-      const id = await page.evaluate(() => document.activeElement.id);
-      f3VisitedRadioIds.add(id);
-      f3FullTabSequence.push(`${key}->${id}`);
-    }
-    record('Part 1.2: Arrow keys (ArrowDown/ArrowUp/ArrowLeft/ArrowRight) move through all four Observation radios', f3VisitedRadioIds.size === 4, `visited=${JSON.stringify([...f3VisitedRadioIds])}`);
+    const f3Arrow = await runIndependentArrowScenario(page);
+    record('Part 1.2 / FIX 3 (ENV-B2-F2): all four required Arrow-key names are exercised and every expected Observation Radio ID is genuinely visited', f3Arrow.allFourKeyNamesExercised && f3Arrow.allExpectedVisited, JSON.stringify({ keySequence: f3Arrow.keySequence, visitedIds: f3Arrow.visitedIds, expectedIds: f3Arrow.expectedIds }));
+    record('Part 1.3 / FIX 3 (ENV-B2-F2): exactly one Radio remains checked after EVERY individual Arrow action', f3Arrow.allExactlyOneChecked, JSON.stringify(f3Arrow.steps));
 
-    const f3ExactlyOneRadioChecked = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoObservation"]')).filter((r) => r.checked).length === 1);
-    record('Part 1.3: exactly one Radio remains checked after Arrow navigation', f3ExactlyOneRadioChecked, `oneChecked=${f3ExactlyOneRadioChecked}`);
+    const f3ReasonClear = await runObservationSelectionReasonAndClearScenario(page);
+    record('Part 1.4/1.5 / FIX 4 (ENV-B2-F2): Observation genuinely selected via real Space activation, and Tab exits the Radio group to reach Reason checkboxes in the real (observed, never assumed) DOM order', f3ReasonClear.selectionOk && f3ReasonClear.reachedFirstReasonId !== null, `selectionOk=${f3ReasonClear.selectionOk}, firstReasonId=${f3ReasonClear.reachedFirstReasonId}`);
+    record('FIX 4 (ENV-B2-F2): the first Reason reached via Tab matches the ACTUAL expected first DOM Reason (queried directly, never assumed)', f3ReasonClear.firstReasonMatchesExpected, `expectedFirstReasonId=${f3ReasonClear.expectedFirstReasonId}, actualFirstReasonId=${f3ReasonClear.reachedFirstReasonId}`);
+    record('Part 1.6 / FIX 5 (ENV-B2-F2): Shift+Tab reverses navigation', f3ReasonClear.reasonSpaceResult != null && f3ReasonClear.reasonSpaceResult.afterShiftTabIdentity !== f3ReasonClear.reasonSpaceResult.reasonId, JSON.stringify(f3ReasonClear.reasonSpaceResult));
+    record('FIX 5 (ENV-B2-F2): Shift+Tab returns to the EXACT expected previous Element (persistent identity comparison, recorded before advancing), not merely a different Element', f3ReasonClear.reasonSpaceResult != null && f3ReasonClear.reasonSpaceResult.shiftTabReturnsToExactPreviousElement === true, JSON.stringify(f3ReasonClear.reasonSpaceResult));
+    record('Part 1.7 / FIX 6 (ENV-B2-F2): Tab reaches Clear Reasons, Clear Observation, and Clear Session within a bound derived from the CURRENT post-selection focusable order (fails closed when not derivable, never a fallback-40-as-PASS)', f3ReasonClear.boundsAllDerived && f3ReasonClear.reachedClearReasons && f3ReasonClear.reachedClearObs && f3ReasonClear.reachedClearSession, `boundsAllDerived=${f3ReasonClear.boundsAllDerived}, reachedClearReasons=${f3ReasonClear.reachedClearReasons}, reachedClearObs=${f3ReasonClear.reachedClearObs}, reachedClearSession=${f3ReasonClear.reachedClearSession}`);
 
-    // FIX 9 (Step 7B-B-F3-S2) — the expected first Reason is queried
-    // directly from the real DOM (never a hard-coded assumption), so
-    // "reaches Reason checkboxes in DOM order" can be verified against
-    // the ACTUAL first Reason, not merely "some" Reason checkbox.
-    const f3ExpectedFirstReasonId = await page.evaluate(() => { const first = document.querySelector('input[name="ipoReason"]'); return first ? first.id : null; });
-
-    let f3ExitedRadioGroup = false;
-    let f3ReachedFirstReasonId = null;
-    // FIX 9 — the exact Element focused immediately BEFORE the
-    // successful Tab press is captured (never assumed), so Shift+Tab's
-    // return target can be verified precisely below.
-    let f3ElementBeforeReasonCheckbox = await page.evaluate(() => document.activeElement.id);
-    for (let i = 0; i < 10 && !f3ExitedRadioGroup; i++) {
-      const beforeThisTab = await page.evaluate(() => document.activeElement.id);
-      await page.keyboard.press('Tab');
-      const id = await page.evaluate(() => document.activeElement.id);
-      f3FullTabSequence.push(id);
-      if (id && id.startsWith('ipoReason_')) { f3ExitedRadioGroup = true; f3ReachedFirstReasonId = id; f3ElementBeforeReasonCheckbox = beforeThisTab; }
-    }
-    record('Part 1.4/1.5: Tab exits the Radio group and reaches Reason checkboxes in DOM order', f3ExitedRadioGroup, `firstReasonId=${f3ReachedFirstReasonId}, sequence=${JSON.stringify(f3FullTabSequence)}`);
-    record('FIX 9: the first Reason reached via Tab matches the ACTUAL expected first DOM Reason (queried directly, never assumed)', f3ReachedFirstReasonId === f3ExpectedFirstReasonId && f3ExpectedFirstReasonId !== null, `expectedFirstReasonId=${f3ExpectedFirstReasonId}, actualFirstReasonId=${f3ReachedFirstReasonId}`);
-
-    const f3BeforeShiftTabId = await page.evaluate(() => document.activeElement.id);
-    await page.keyboard.press('Shift+Tab');
-    const f3AfterShiftTabId = await page.evaluate(() => document.activeElement.id);
-    record('Part 1.6: Shift+Tab reverses navigation', f3AfterShiftTabId !== f3BeforeShiftTabId, `before=${f3BeforeShiftTabId}, after=${f3AfterShiftTabId}`);
-    record('FIX 9: Shift+Tab returns to the EXACT expected previous Element (recorded before advancing), not merely a different Element', f3AfterShiftTabId === f3ElementBeforeReasonCheckbox, `expectedPreviousElement=${f3ElementBeforeReasonCheckbox}, actual=${f3AfterShiftTabId}`);
-    await page.keyboard.press('Tab'); // return forward to where Part 1.5 left off
-    f3FullTabSequence.push(await page.evaluate(() => document.activeElement.id));
-
-    let f3ReachedClearReasons = false, f3ReachedClearObs = false, f3ReachedClearSession = false;
-    for (let i = 0; i < 20 && !(f3ReachedClearReasons && f3ReachedClearObs && f3ReachedClearSession); i++) {
-      await page.keyboard.press('Tab');
-      const id = await page.evaluate(() => document.activeElement.id);
-      f3FullTabSequence.push(id);
-      if (id === 'ipoClearReasonsButton') f3ReachedClearReasons = true;
-      if (id === 'ipoClearButton') f3ReachedClearObs = true;
-      if (id === 'ipoClearSessionButton') f3ReachedClearSession = true;
-    }
-    record('Part 1.7: Tab reaches Clear Reasons, Clear Observation, and Clear Session', f3ReachedClearReasons && f3ReachedClearObs && f3ReachedClearSession, `reachedClearReasons=${f3ReachedClearReasons}, reachedClearObs=${f3ReachedClearObs}, reachedClearSession=${f3ReachedClearSession}`);
+    const f3FullTabSequence = [f3Entry.actualAfterTabIdentity, ...f3Arrow.steps.map((s) => `${s.key}->${s.activeId}`), ...f3ReasonClear.sequence];
 
     // FIX 9 (Step 7B-B-F3-S2) — no-trap detection is strengthened beyond
     // "same ID three times": it also detects a period-2 (two-Element)
@@ -942,11 +1425,20 @@ async function main() {
     // section roots (#interactivePreviewObservationInner,
     // #interactivePreviewObservationSessionInner) — never an ID-prefix
     // heuristic.
+    // FIX 4 (ENV-B2-F1): the tagName-only fallback previously used here
+    // conflated distinct anonymous (id-less) Elements sharing the same
+    // tagName, corrupting period-1/period-2 trap-cycle detection.
+    // Replaced with the shared window.__step7bbTestUtils.identify()
+    // (installed once via installStep7bbTestUtils(page) at Page
+    // setup), which assigns each real DOM Element a persistent, unique
+    // sequential identity via a Window-scoped WeakMap<Element, number>,
+    // formatted as e.g. "BUTTON#focus-node-17" (or element.id when
+    // present) — so distinct anonymous Elements are never confused.
     const f3CaptureContainment = () => page.evaluate(() => {
       const obsRoot = document.getElementById('interactivePreviewObservationInner');
       const sessionRoot = document.getElementById('interactivePreviewObservationSessionInner');
       const activeEl = document.activeElement;
-      const label = (activeEl && activeEl.id) || (activeEl && activeEl.tagName) || null;
+      const label = window.__step7bbTestUtils.identify(activeEl);
       const insideObs = !!(obsRoot && activeEl && obsRoot.contains(activeEl));
       const insideSession = !!(sessionRoot && activeEl && sessionRoot.contains(activeEl));
       return { label, insideObs, insideSession, obsRootExists: !!obsRoot, sessionRootExists: !!sessionRoot };
@@ -1026,9 +1518,39 @@ async function main() {
     record('Part 2.7: no Slider movement during Clear Reasons keyboard activation', slidersUnchanged(p2SlidersBefore, p2SlidersAfter), `before=${JSON.stringify(p2SlidersBefore)}, after=${JSON.stringify(p2SlidersAfter)}`);
 
     // ── F3-S PART 3 — Clear Observation keyboard activation (Space) ─
+    // FIX 5 (ENV-B2-F1): Session counts Cleared at most once per
+    // generation (a sticky `clearedCounted` flag prevents double-count
+    // when the same cleared generation is activated again). The
+    // previous version of this scenario asserted a relative "+1"
+    // increment from a baseline inherited from earlier Parts, which is
+    // not a safe assumption once a sticky per-generation cap exists.
+    // Rebuilt per FIX 5's exact deterministic spec: (1) ensure a valid
+    // Observation is selected, (2) Clear Session as isolated setup —
+    // this yields a known Cleared=0 baseline while leaving the current
+    // valid Observation checked and immediately re-recorded, (3)
+    // verify activeObservationsDerived===1 && cleared===0 BEFORE the
+    // tested action, (4) reach Clear Observation via real Tab (bound
+    // derived from the real focusable order), (5) activate with Space,
+    // (6) verify activeObservationsDerived===0 && cleared===1, (7)
+    // press activation again, verify cleared remains 1. This does not
+    // change Session Production semantics and does not expect more
+    // than one Cleared event per generation.
     console.log('--- Part 3: Clear Observation keyboard activation ---');
-    await safeClickIfEnabled(page, 'ipoClearReasonsButton'); // setup/cleanup only
+    await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); }); // setup only: ensure a valid Observation is selected
     await page.waitForTimeout(100);
+    for (const r of ['skin-tone', 'contrast']) {
+      const already = await page.evaluate((rid) => document.getElementById(`ipoReason_${rid}`)?.checked === true, r);
+      if (!already) await page.click(`#ipoReason_${r}`); // setup only
+    }
+    await page.waitForTimeout(150);
+
+    await safeClickIfEnabled(page, 'ipoClearSessionButton'); // setup only: establishes a known Cleared=0 baseline for this isolated scenario
+    await page.waitForTimeout(150);
+
+    // Clear Session leaves the current valid Observation checked and
+    // immediately re-records it (see Part 4.3/4.5 below); re-select it
+    // explicitly here too, since this scenario's baseline must not
+    // depend on incidental state carried over from a different Part.
     await page.evaluate(() => { const el = document.getElementById('ipoOption_prefer-legacy'); if (el) el.click(); }); // setup only
     await page.waitForTimeout(100);
     for (const r of ['skin-tone', 'contrast']) {
@@ -1037,15 +1559,29 @@ async function main() {
     }
     await page.waitForTimeout(150);
 
-    const p3SessionBefore = await readSessionMetricsText(page);
-    const p3ClearedBefore = parseSessionSecondary(p3SessionBefore.secondaryText).cleared;
+    const p3SessionBaseline = await readSessionMetricsText(page);
+    const p3ParsedBaseline = parseSessionSummary(p3SessionBaseline.lines);
+    const p3SecondaryBaseline = parseSessionSecondary(p3SessionBaseline.secondaryText);
+    record('Part 3.0 / FIX 5 (ENV-B2-F1): known baseline BEFORE the tested action — current Observation re-recorded and Cleared=0 (Clear Session used as isolated setup)', p3ParsedBaseline.activeObservationsDerived === 1 && p3SecondaryBaseline.cleared === 0, JSON.stringify({ parsed: p3ParsedBaseline, secondary: p3SecondaryBaseline }));
+
     const p3GenBefore = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
     const p3SlidersBefore = await snapshotSliderValues(page);
 
-    await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy')?.focus()); // setup only
-    const p3Sequence = [];
-    const p3Reached = await tabTo(page, 'ipoClearButton', 15, p3Sequence);
-    record('Part 3.1: real Tab navigation reaches #ipoClearButton (never .click() as activation proof)', p3Reached, `sequence=${JSON.stringify(p3Sequence)}`);
+    // FIX 8 (ENV-B2-F2): Part 3 deliberately selects Prefer Legacy as
+    // its OWN baseline setup above — the generic
+    // enterObservationRadioGroupDeterministically() would reset that
+    // selection away before this scenario even runs, destroying the
+    // baseline just verified in Part 3.0. This variant instead supports
+    // the CURRENTLY CHECKED Prefer Legacy Radio as the native
+    // radio-group Tab stop (never resetting it), then a bound on the
+    // subsequent Tab distance to #ipoClearButton derived from the real
+    // focusable order (never a hard-coded 15).
+    const p3Entry = await enterObservationRadioGroupWithCurrentSelection(page, 'ipoOption_prefer-legacy');
+    record('Part 3.0b / FIX 8 (ENV-B2-F2): deterministic entry into the Observation radio group, supporting the currently checked Prefer Legacy Radio as the native Tab stop (never reset), before Part 3\'s tested action', p3Entry.ok, JSON.stringify(p3Entry));
+    const p3Bound = await computeBoundedMaxTabs(page, p3Entry.targetId, 'ipoClearButton');
+    const p3Sequence = [p3Entry.actualAfterTabIdentity];
+    const p3Reached = await tabTo(page, 'ipoClearButton', p3Bound.maxTabs, p3Sequence);
+    record('Part 3.1 / FIX 3 (ENV-B2-F1): real Tab navigation reaches #ipoClearButton within a bound derived from the real focusable-order distance (never a hard-coded 15) (never .click() as activation proof)', p3Reached, `sequence=${JSON.stringify(p3Sequence)}, maxTabs=${p3Bound.maxTabs}, bounds=${JSON.stringify(p3Bound.bounds)}`);
 
     await page.keyboard.press('Space');
     await page.waitForTimeout(150);
@@ -1060,21 +1596,22 @@ async function main() {
 
     record('Part 3.2: no Observation Radio checked after Clear Observation', p3NoRadioChecked, `noneChecked=${p3NoRadioChecked}`);
     record('Part 3.3: all Reasons clear after Clear Observation', p3AllReasonsClearedAfter, `allCleared=${p3AllReasonsClearedAfter}`);
-    record('Part 3.4: active Observation count becomes zero (derived from the real rendered per-category counts)', p3ParsedAfterFirst.activeObservationsDerived === 0, JSON.stringify(p3ParsedAfterFirst));
-    record('Part 3.5: Cleared count increments exactly once', p3ClearedBefore !== null && p3ClearedAfterFirst === p3ClearedBefore + 1, `before=${p3ClearedBefore}, after=${p3ClearedAfterFirst}`);
+    record('Part 3.4 / FIX 5 (ENV-B2-F1): active Observation count becomes zero and Cleared becomes exactly 1, verified against the known 0/1 baseline established in Part 3.0 (never a relative "+1" assumption)', p3ParsedAfterFirst.activeObservationsDerived === 0 && p3ClearedAfterFirst === 1, JSON.stringify({ parsed: p3ParsedAfterFirst, clearedAfterFirst: p3ClearedAfterFirst }));
     record('Part 3.6: no Analysis rerun during Clear Observation keyboard activation', p3GenAfterFirst === p3GenBefore, `before=${p3GenBefore}, after=${p3GenAfterFirst}`);
     record('Part 3.7: no Slider movement during Clear Observation keyboard activation', slidersUnchanged(p3SlidersBefore, p3SlidersAfterFirst), `before=${JSON.stringify(p3SlidersBefore)}, after=${JSON.stringify(p3SlidersAfterFirst)}`);
 
-    // Part 3.8 — pressing the activation key again must not double the
-    // Cleared count. Whatever currently has focus receives a genuine
-    // second Space press (the button itself becomes disabled once
-    // rawObservation is null, so it is naturally no longer the active
-    // element — this is the real, honest post-condition, not simulated).
+    // Part 3.8 — pressing the activation key again must not increment
+    // the Cleared count past 1 (the sticky `clearedCounted` flag caps
+    // Cleared at most once per generation). Whatever currently has
+    // focus receives a genuine second Space press (the button itself
+    // becomes disabled once rawObservation is null, so it is naturally
+    // no longer the active element — this is the real, honest
+    // post-condition, not simulated).
     await page.keyboard.press('Space');
     await page.waitForTimeout(150);
     const p3SessionAfterSecond = await readSessionMetricsText(page);
     const p3ClearedAfterSecond = parseSessionSecondary(p3SessionAfterSecond.secondaryText).cleared;
-    record('Part 3.8: pressing the activation key again does not increment Cleared twice', p3ClearedAfterSecond === p3ClearedAfterFirst, `afterFirst=${p3ClearedAfterFirst}, afterSecond=${p3ClearedAfterSecond}`);
+    record('Part 3.8 / FIX 5 (ENV-B2-F1): pressing the activation key again does not increment Cleared past 1 (sticky clearedCounted flag)', p3ClearedAfterFirst === 1 && p3ClearedAfterSecond === 1, `afterFirst=${p3ClearedAfterFirst}, afterSecond=${p3ClearedAfterSecond}`);
 
     // ── F3-S PART 4 — Clear Session keyboard activation (Enter) ─────
     console.log('--- Part 4: Clear Session keyboard activation ---');
@@ -1096,9 +1633,12 @@ async function main() {
     const p4SlidersBefore = await snapshotSliderValues(page);
 
     await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy')?.focus()); // setup only
+    // FIX 3 (ENV-B2-F1): bounded maximum derived from the real
+    // focusable-order distance (never a hard-coded 20).
+    const p4Bound = await computeBoundedMaxTabs(page, 'ipoOption_prefer-legacy', 'ipoClearSessionButton');
     const p4Sequence = [];
-    const p4Reached = await tabTo(page, 'ipoClearSessionButton', 20, p4Sequence);
-    record('Part 4.1: real Tab navigation reaches #ipoClearSessionButton (never .click() as activation proof)', p4Reached, `sequence=${JSON.stringify(p4Sequence)}`);
+    const p4Reached = await tabTo(page, 'ipoClearSessionButton', p4Bound.maxTabs, p4Sequence);
+    record('Part 4.1 / FIX 3 (ENV-B2-F1): real Tab navigation reaches #ipoClearSessionButton within a bound derived from the real focusable-order distance (never a hard-coded 20) (never .click() as activation proof)', p4Reached, `sequence=${JSON.stringify(p4Sequence)}, maxTabs=${p4Bound.maxTabs}, bounds=${JSON.stringify(p4Bound.bounds)}`);
 
     await page.keyboard.press('Enter');
     await page.waitForTimeout(200);
@@ -2017,6 +2557,11 @@ async function main() {
     record('All 17 touch targets pass width>=43.5 AND height>=43.5 (radio/reason labels, Clear buttons)', touchTargetsAllPass && touchTargetCheck.length === 17, `count=${touchTargetCheck.length}, allPass=${touchTargetsAllPass}, targets=${JSON.stringify(touchTargetCheck)}`);
     record('Physical touch hardware', 'NOT_TESTED', 'genuine physical touch hardware was not used');
 
+    // FIX 7 (ENV-B2-F1): captured before cleanup() closes the Page, so
+    // the bounded `environment` metadata block below can report the
+    // real navigated URL (key/value only — never source or bytes).
+    mainPageUrl = page.url();
+
     await mainRuntime.cleanup();
 
     // ══════════════════════════════════════════════════════════════
@@ -2168,6 +2713,39 @@ async function main() {
   record('Zero non-font console/page errors', consoleErrors.length === 0, consoleErrors.length === 0 ? 'zero non-font console/page errors observed' : JSON.stringify(consoleErrors));
   record('Zero non-font resource/network failures', resourceErrors.length === 0, resourceErrors.length === 0 ? 'zero non-font resource/network failures observed' : JSON.stringify(resourceErrors));
 
+  // ══════════════════════════════════════════════════════════════
+  // FIX 6 (ENV-B2-F1): merge the PRE-load Runtime collectors — built
+  // by openLumixaInMemoryPage and attached BEFORE any navigation or
+  // setContent (main Page + Part 7 Page) — together with the POST-load
+  // consoleErrors/resourceErrors captured by attachErrorListeners
+  // above, into ONE final decision. Any HTTP/HTTPS/file/unexpected-
+  // scheme request observed by EITHER collector is an unconditional
+  // FAIL; no Google-Fonts exception is needed here because the
+  // In-Memory Harness is required to make ZERO external requests.
+  // ══════════════════════════════════════════════════════════════
+  const preLoadPageErrors = [...mainRuntime.collectors.pageErrors, ...part7Runtime.collectors.pageErrors];
+  const preLoadConsoleErrors = [...mainRuntime.collectors.consoleErrors, ...part7Runtime.collectors.consoleErrors];
+  const preLoadRequestFailures = [...mainRuntime.collectors.requestFailures, ...part7Runtime.collectors.requestFailures];
+  const preLoadNonAllowedNetworkRequests = [...mainRuntime.collectors.nonAllowedNetworkRequests, ...part7Runtime.collectors.nonAllowedNetworkRequests];
+  const mergedPageConsoleErrorCount = preLoadPageErrors.length + preLoadConsoleErrors.length + consoleErrors.length;
+  const mergedRequestFailureCount = preLoadRequestFailures.length + resourceErrors.length;
+
+  record(
+    'FIX 6 (ENV-B2-F1): zero pre-load+post-load page/console errors (pre-load: Runtime collectors on the main + Part 7 Pages, captured before any navigation/setContent; post-load: attachErrorListeners)',
+    mergedPageConsoleErrorCount === 0,
+    mergedPageConsoleErrorCount === 0 ? 'zero pre-load+post-load page/console errors observed' : JSON.stringify({ preLoadPageErrors, preLoadConsoleErrors, postLoadConsoleErrors: consoleErrors })
+  );
+  record(
+    'FIX 6 (ENV-B2-F1): zero pre-load+post-load request failures (pre-load: Runtime collectors on the main + Part 7 Pages; post-load: attachErrorListeners resourceErrors)',
+    mergedRequestFailureCount === 0,
+    mergedRequestFailureCount === 0 ? 'zero pre-load+post-load request failures observed' : JSON.stringify({ preLoadRequestFailures, postLoadResourceErrors: resourceErrors })
+  );
+  record(
+    'FIX 6 (ENV-B2-F1): zero non-allowed (non data:/about:) network requests observed by the pre-load Runtime collectors on any Page this suite opened — no Google-Fonts exception needed, the In-Memory Harness must make zero external requests',
+    preLoadNonAllowedNetworkRequests.length === 0,
+    preLoadNonAllowedNetworkRequests.length === 0 ? 'zero pre-load non-allowed network requests observed' : JSON.stringify(preLoadNonAllowedNetworkRequests)
+  );
+
   const passCount = results.filter((r) => r.result === 'PASS').length;
   const failCount = results.filter((r) => r.result === 'FAIL').length;
   const notTestedCount = results.filter((r) => r.result === 'NOT_TESTED').length;
@@ -2179,6 +2757,41 @@ async function main() {
   // Console/Resource rows above are all NOT permitted and force FAIL.
   const finalDecision = computeStep7BBDecision(results);
 
+  // ══════════════════════════════════════════════════════════════
+  // FIX 7 (ENV-B2-F1): bounded `environment` metadata block — key
+  // NAMES/counts only, never values, source, data URLs, image bytes,
+  // or full stacks. `inMemoryHarnessDecision` reuses the SAME canonical
+  // fail-closed function (computeInMemoryHarnessDecision) that FIX 8
+  // wires into the in-memory smoke test, applied here to the harness-
+  // level checks this suite itself observed (storage verified on both
+  // Pages, zero pre-load non-allowed network requests).
+  // ══════════════════════════════════════════════════════════════
+  // FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() now requires
+  // every row to include a bounded, non-empty `test` name — every
+  // internal harnessCheckResults row below is updated accordingly.
+  const harnessCheckResults = [
+    { test: 'main Page Storage access verified', result: mainRuntime.storageAccessVerified ? 'PASS' : 'FAIL' },
+    { test: 'Part 7 Page Storage access verified', result: part7Runtime.storageAccessVerified ? 'PASS' : 'FAIL' },
+    { test: 'zero pre-load non-allowed network requests', result: preLoadNonAllowedNetworkRequests.length === 0 ? 'PASS' : 'FAIL' },
+    { test: 'zero merged pre-load+post-load page/console errors', result: mergedPageConsoleErrorCount === 0 ? 'PASS' : 'FAIL' },
+    { test: 'zero merged pre-load+post-load request failures', result: mergedRequestFailureCount === 0 ? 'PASS' : 'FAIL' },
+  ];
+  const environmentMetadata = {
+    browserExecutablePath: browserDetect.found,
+    browserVersion,
+    pageUrl: mainPageUrl,
+    moduleCount: mainRuntime.evidence.moduleCount,
+    importEdgeCount: mainRuntime.evidence.importEdgeCount,
+    storageStatus: mainRuntime.storageStatus,
+    storageReadOnly: !!(mainRuntime.readOnlyCheck.localStorageReadOnly && mainRuntime.readOnlyCheck.sessionStorageReadOnly),
+    // FIX 10 (ENV-B2-F2): a bounded Array of key NAMES (never values),
+    // in the same deterministic order `classifyStorageKeyPrivacyRisk`
+    // produced them; an empty-safe result is `[]`, never `null`.
+    storagePrivacyKeysObserved: privacyRisk ? privacyRisk.flagged : [],
+    networkRequestCount: preLoadNonAllowedNetworkRequests.length,
+    inMemoryHarnessDecision: computeInMemoryHarnessDecision(harnessCheckResults),
+  };
+
   const output = {
     suite: 'EPIC 2E-J-C-F2 Step 7B-B - Keyboard, Accessibility, Security and Final Phase C Closeout',
     generatedAt: new Date().toISOString(),
@@ -2186,6 +2799,7 @@ async function main() {
     contrastResults,
     consoleErrors,
     resourceErrors,
+    environment: environmentMetadata,
     results,
     decision: finalDecision,
   };

@@ -257,23 +257,28 @@ export async function observeAppStorageKeys(page) {
 // ══════════════════════════════════════════════════════════════════
 // PART 5 — fail-closed In-Memory harness decision rule. Exported as a
 // reusable pure function (unit-testable without a Browser): PASS
-// requires a non-empty result set where EVERY row is exactly 'PASS'.
-// Any FAIL, NOT_TESTED, malformed row, or empty set must not produce
-// PASS_IN_MEMORY_HARNESS_READY.
+// requires a non-empty result set where EVERY row is well-formed AND
+// exactly {test: <non-empty string>, result: 'PASS'}. Any missing
+// test, blank test, missing result, boolean result, NOT_TESTED, FAIL,
+// unknown status, or empty Array must not produce
+// PASS_IN_MEMORY_HARNESS_READY (FIX 11, ENV-B2-F2 — strengthens the
+// previous version, which only validated `result` and never required a
+// bounded, non-empty `test` name on every row).
 //
-// NOTE: qa/playwright-in-memory-app-smoke.mjs (the original ENV-B1B/
-// ENV-B1B-F1 smoke test) is outside this round's ALLOWED FILES, so its
-// own inline decision computation is left untouched this round. This
-// corrected rule lives here as the canonical, reusable implementation
-// for any current or future caller (including a later round that
-// re-points the smoke test at it).
+// NOTE (updated ENV-B2-F1 / FIX 8): qa/playwright-in-memory-app-smoke.mjs
+// imports and calls this exact function for its own final decision
+// (replacing its previous inline `results.filter(r => r.result ===
+// 'FAIL').length === 0` logic), and qa/epic-2e-j-phase-c-step7b-b-test.mjs
+// reuses it too for its FIX 7 `environment.inMemoryHarnessDecision`
+// metadata field — this is the single canonical, reusable
+// implementation for every current caller.
 // ══════════════════════════════════════════════════════════════════
 export function computeInMemoryHarnessDecision(results) {
   if (!Array.isArray(results) || results.length === 0) {
     return 'FAIL_IN_MEMORY_HARNESS';
   }
   const allRowsWellFormed = results.every(
-    (r) => r && typeof r === 'object' && typeof r.result === 'string'
+    (r) => r && typeof r === 'object' && typeof r.test === 'string' && r.test.trim().length > 0 && typeof r.result === 'string'
   );
   if (!allRowsWellFormed) return 'FAIL_IN_MEMORY_HARNESS';
 

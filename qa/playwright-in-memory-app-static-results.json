@@ -1,9 +1,9 @@
 {
   "suite": "EPIC 2E-J ENV-B1B PART 11 — In-Memory App Harness static/functional self-test",
-  "generatedAt": "2026-07-22T11:18:27.403Z",
+  "generatedAt": "2026-07-22T13:16:36.252Z",
   "summary": {
-    "total": 56,
-    "pass": 56,
+    "total": 65,
+    "pass": 65,
     "fail": 0
   },
   "results": [
@@ -195,7 +195,7 @@
     {
       "test": "10o. source order: the compatibility layer is installed AFTER the about:blank navigation and BEFORE page.setContent (matches the required PART 5 sequence)",
       "result": "PASS",
-      "evidence": "gotoIdx=10884, installCallIdx=13656, setContentIdx=18214"
+      "evidence": "gotoIdx=11461, installCallIdx=14233, setContentIdx=18791"
     },
     {
       "test": "10p. when native Storage is already accessible, the smoke test never calls the installer (native accessible Storage is not replaced)",
@@ -225,7 +225,7 @@
     {
       "test": "qa/playwright-in-memory-app-smoke.mjs is readable",
       "result": "PASS",
-      "evidence": "27043 bytes"
+      "evidence": "27902 bytes"
     },
     {
       "test": "The in-memory app helper never imports \"playwright\" itself — statically testable even when the package is unavailable",
@@ -278,9 +278,54 @@
       "evidence": "totalRecordCalls=25, offenders=[]"
     },
     {
-      "test": "The final-decision computation filters on the string 'FAIL'",
+      "test": "FIX 8 (ENV-B2-F1): the smoke test no longer uses the old brittle `results.filter(FAIL).length===0` decision pattern, and instead imports + calls the canonical computeInMemoryHarnessDecision(results)",
       "result": "PASS",
-      "evidence": "present=true"
+      "evidence": "oldBrittlePatternGone=true, importsCanonicalDecision=true, callsCanonicalDecision=true"
+    },
+    {
+      "test": "FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() — non-empty, all-PASS well-formed rows — expected PASS_IN_MEMORY_HARNESS_READY",
+      "result": "PASS",
+      "evidence": "input=[{\"test\":\"a\",\"result\":\"PASS\"},{\"test\":\"b\",\"result\":\"PASS\"}], actual=PASS_IN_MEMORY_HARNESS_READY"
+    },
+    {
+      "test": "FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() — empty Array — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "input=[], actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() — a row missing test — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "input=[{\"test\":\"a\",\"result\":\"PASS\"},{\"result\":\"PASS\"}], actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() — a row with a blank test — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "input=[{\"test\":\"a\",\"result\":\"PASS\"},{\"test\":\"   \",\"result\":\"PASS\"}], actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() — a row missing result — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "input=[{\"test\":\"a\",\"result\":\"PASS\"},{\"test\":\"b\"}], actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() — a boolean result row — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "input=[{\"test\":\"a\",\"result\":\"PASS\"},{\"test\":\"b\",\"result\":true}], actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() — a NOT_TESTED row — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "input=[{\"test\":\"a\",\"result\":\"PASS\"},{\"test\":\"b\",\"result\":\"NOT_TESTED\"}], actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() — a genuine FAIL row — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "input=[{\"test\":\"a\",\"result\":\"PASS\"},{\"test\":\"b\",\"result\":\"FAIL\"}], actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 11 (ENV-B2-F2): computeInMemoryHarnessDecision() — an unknown status row — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "input=[{\"test\":\"a\",\"result\":\"PASS\"},{\"test\":\"b\",\"result\":\"MAYBE\"}], actual=FAIL_IN_MEMORY_HARNESS"
     },
     {
       "test": "17/18. Neither new file ever references or regenerates the existing Browser results file or the Final Phase C results file",

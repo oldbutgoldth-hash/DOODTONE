@@ -1,0 +1,183 @@
+{
+  "suite": "EPIC 2E-J ENV-B2-F1 FIX 10 — Real Browser QA Determinism and Evidence Integrity static/functional self-test",
+  "generatedAt": "2026-07-22T13:15:24.737Z",
+  "summary": {
+    "total": 34,
+    "pass": 34,
+    "fail": 0,
+    "notTested": 0
+  },
+  "results": [
+    {
+      "test": "Setup: qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
+      "result": "PASS",
+      "evidence": "191673 bytes"
+    },
+    {
+      "test": "Setup: qa/helpers/playwright-lumixa-test-runtime.mjs is readable",
+      "result": "PASS",
+      "evidence": "12610 bytes"
+    },
+    {
+      "test": "Setup: qa/playwright-in-memory-app-smoke.mjs is readable",
+      "result": "PASS",
+      "evidence": "27902 bytes"
+    },
+    {
+      "test": "FIX 1 (ENV-B2-F1): enterObservationRadioGroupDeterministically() queries the real focusable order, locates the target radio, locates the immediately preceding focusable Element outside BOTH Observation roots, focuses it for setup only (never the radio), presses exactly ONE real Tab, and requires activeElement === target",
+      "result": "PASS",
+      "evidence": "hasFn=true, usesRealFocusableOrder=true, locatesTarget=true, locatesPrecedingOutsideBothRoots=true, focusesSetupOnly=true, exactlyOneTab=true, requiresActiveElementMatch=true"
+    },
+    {
+      "test": "FIX 1 (ENV-B2-F1): the required evidence fields are recorded — {targetId, previousFocusableIdentity, previousFocusableIndex, targetFocusableIndex, actualAfterTabIdentity}",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 1 (ENV-B2-F1): the deterministic entry is reused by PART 2 (main keyboard scenario), FIX 3 (Reason/Clear scenario), and F3-S Part 1 (never re-implemented ad hoc)",
+      "result": "PASS",
+      "evidence": "callSites=5"
+    },
+    {
+      "test": "FIX 2/3 (ENV-B2-F2): runIndependentArrowScenario() performs its OWN deterministic entry (never inherits focus state), presses all SIX real Arrow keys in keySequence (covering all four key names), records {key, activeId, checkedIds, checkedCount} after EVERY step, and requires exactly one Radio checked after every individual Arrow action AND every expected Radio ID genuinely visited",
+      "result": "PASS",
+      "evidence": "hasFn=true, ownEntry=true, fourExactIds=true, recordsEveryStepShape=true, allExactlyOneCheckedCurrent=true, allExpectedVisitedCurrent=true"
+    },
+    {
+      "test": "FIX 3/6 (ENV-B2-F2): every Tab-count bound in this suite (canonical Reason/Clear scenario — TWO independent bounds boundToFirstReason/boundReasonToClearSession — Part 3.1, Part 4.1) is derived from the real focusable-order distance via computeBoundedMaxTabs() — the previous hard-coded 15/20 guesses are all gone",
+      "result": "PASS",
+      "evidence": "hasScenarioFn=true, hasBoundFn=true, genericBoundDerivedFromRealOrder=true, noHardCoded15=true, noHardCoded20=true, p3UsesBound=true, p4UsesBound=true, twoIndependentBoundsDerived=true"
+    },
+    {
+      "test": "FIX 3/6 (ENV-B2-F2): the canonical Reason/Clear scenario requires Tab to reach Clear Reasons, Clear Observation, AND Clear Session — each gated by boundsAllDerived — not merely one of the three, in both PART 2 and F3-S PART 1 call sites",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 4 (ENV-B2-F1): the shared identify() utility assigns each real DOM Element a persistent, unique sequential identity via a Window-scoped WeakMap<Element, number> (format TAGNAME#focus-node-N, or element.id when present), and f3CaptureContainment (trap detection) now calls it instead of the old tagName-only fallback that conflated distinct anonymous Elements",
+      "result": "PASS",
+      "evidence": "identityUsesWeakMap=true, identityFormat=true, f3CaptureUsesIdentify=true, oldFallbackGone=true"
+    },
+    {
+      "test": "FIX 4 (ENV-B2-F1): installStep7bbTestUtils(page) is called exactly once at Page setup and reused throughout (idempotent guard: `if (window.__step7bbTestUtils) return;`)",
+      "result": "PASS",
+      "evidence": "installedOnceReused=true"
+    },
+    {
+      "test": "FIX 5 (ENV-B2-F1): Part 3 (Clear Observation) uses Clear Session as isolated setup to reach a KNOWN 0/1 baseline, verifies that baseline BEFORE the tested action, reaches Clear Observation via real Tab, activates with Space, verifies activeObservationsDerived===0 && cleared===1, and verifies a repeat activation leaves cleared at 1 — the old relative \"+1 from an uncontrolled baseline\" assumption is gone",
+      "result": "PASS",
+      "evidence": "usesClearSessionAsSetup=true, verifiesKnownBaseline=true, verifiesZeroToOneTransition=true, verifiesRepeatDoesNotIncrement=true, oldRelativeAssumptionGone=true"
+    },
+    {
+      "test": "FIX 6 (ENV-B2-F1): pre-load Runtime collectors (pageErrors/consoleErrors/requestFailures/nonAllowedNetworkRequests) from BOTH the main and Part 7 Pages are merged with the post-load consoleErrors/resourceErrors into the final decision, with explicit result rows for zero pre-load+post-load errors/failures/non-allowed requests, and no Google-Fonts exception for non-allowed requests (harness must make zero external requests)",
+      "result": "PASS",
+      "evidence": "mergesMainAndPart7PreLoad=true, mergesConsoleErrors=true, mergesRequestFailures=true, mergesNonAllowedRequests=true, hasThreeRequiredRows=true, noFontExceptionForNonAllowed=true"
+    },
+    {
+      "test": "FIX 10 (ENV-B2-F2): storagePrivacyKeysObserved reports the bounded Array of flagged key NAMES (privacyRisk.flagged), empty-safe as [], never the prior bare privacyRisk.flagged.length count",
+      "result": "PASS",
+      "evidence": "usesFlaggedArrayNotLength=true, noLongerUsesLengthForm=true"
+    },
+    {
+      "test": "FIX 7 (ENV-B2-F1): the environment metadata block exists and defines every required key — {browserExecutablePath, browserVersion, pageUrl, moduleCount, importEdgeCount, storageStatus, storageReadOnly, storagePrivacyKeysObserved, networkRequestCount, inMemoryHarnessDecision}",
+      "result": "PASS",
+      "evidence": "found=true, allKeysPresent=true, keys=[\"browserExecutablePath\",\"browserVersion\",\"pageUrl\",\"moduleCount\",\"importEdgeCount\",\"storageStatus\",\"storageReadOnly\",\"storagePrivacyKeysObserved\",\"networkRequestCount\",\"inMemoryHarnessDecision\"]"
+    },
+    {
+      "test": "FIX 7 (ENV-B2-F1): the environment metadata block contains only key names/bounded counts — never raw source, data: URLs, image bytes, or full stacks",
+      "result": "PASS",
+      "evidence": "envBlockLength=838, noSourceOrDataUrlLeak=true"
+    },
+    {
+      "test": "FIX 7 (ENV-B2-F1): inMemoryHarnessDecision reuses the canonical computeInMemoryHarnessDecision() function, and the `environment` block is included in the written results JSON output",
+      "result": "PASS",
+      "evidence": "reusesCanonicalDecision=true, outputIncludesEnvironment=true"
+    },
+    {
+      "test": "FIX 8 (ENV-B2-F1): qa/playwright-in-memory-app-smoke.mjs no longer uses its own brittle FAIL-count decision logic, and instead imports + calls the canonical computeInMemoryHarnessDecision(results)",
+      "result": "PASS",
+      "evidence": "oldBrittlePatternGone=true, importsCanonical=true, callsCanonical=true"
+    },
+    {
+      "test": "FIX 8/11 (ENV-B2-F2): computeInMemoryHarnessDecision() real functional proof — non-empty, all-PASS well-formed rows — expected PASS_IN_MEMORY_HARNESS_READY",
+      "result": "PASS",
+      "evidence": "actual=PASS_IN_MEMORY_HARNESS_READY"
+    },
+    {
+      "test": "FIX 8/11 (ENV-B2-F2): computeInMemoryHarnessDecision() real functional proof — empty results array — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 8/11 (ENV-B2-F2): computeInMemoryHarnessDecision() real functional proof — a malformed row (no result field) — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 8/11 (ENV-B2-F2): computeInMemoryHarnessDecision() real functional proof — a NOT_TESTED row — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 8/11 (ENV-B2-F2): computeInMemoryHarnessDecision() real functional proof — a boolean result row — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 8/11 (ENV-B2-F2): computeInMemoryHarnessDecision() real functional proof — an unknown result string row — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 8/11 (ENV-B2-F2): computeInMemoryHarnessDecision() real functional proof — FIX 11 (ENV-B2-F2): a missing-test-field row — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 8/11 (ENV-B2-F2): computeInMemoryHarnessDecision() real functional proof — FIX 11 (ENV-B2-F2): a blank-test-field row — expected FAIL_IN_MEMORY_HARNESS",
+      "result": "PASS",
+      "evidence": "actual=FAIL_IN_MEMORY_HARNESS"
+    },
+    {
+      "test": "FIX 9 (ENV-B2-F1): (A) the stale-generation warning test remains a real, honestly-failable waitForFunction-based observation — never hard-coded to PASS",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 9 (ENV-B2-F1): (B) the disabled sixth-Reason visual-distinction test still honestly reports NOT_TESTED as a real tool limitation when no distinguishing style exists — never reinterpreted as PASS, never faked with an added CSS class",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 9 (ENV-B2-F1): (C) \"Physical touch hardware\" remains the one documented, permitted manual NOT_TESTED item — never reinterpreted as PASS",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 9 (ENV-B2-F1): PERMITTED_NOT_TESTED_STEP_7BB is still exactly ['Physical touch hardware'] — no new NOT_TESTED escape hatch was added for either genuine Product finding",
+      "result": "PASS",
+      "evidence": "PERMITTED_NOT_TESTED_STEP_7BB=[\"Physical touch hardware\"]"
+    },
+    {
+      "test": "FIX 9 (ENV-B2-F1): real functional proof — computeStep7BBDecision() still returns FAIL when a genuine stale-warning FAIL or a disabled-Reason NOT_TESTED row is present alongside the one permitted \"Physical touch hardware\" NOT_TESTED row",
+      "result": "PASS",
+      "evidence": "decision=FAIL, rows=[{\"test\":\"FIX 4 (F3-S3): the stale-generation warning text is awaited deterministically via waitForFunction targeting the exact expected text (never a fixed timeout as primary evidence)\",\"result\":\"FAIL\"},{\"test\":\"Disabled sixth Reason (color-balance) is visually distinguishable from its own enabled state (measurable via computed style)\",\"result\":\"NOT_TESTED\"},{\"test\":\"Physical touch hardware\",\"result\":\"NOT_TESTED\"}]"
+    },
+    {
+      "test": "FIX 10 (ENV-B2-F1): no ENV-B2-F1 QA marker string leaked into any Production file (core/, ui/, index.html) — proves this round's edits stayed confined to the ALLOWED FILES list",
+      "result": "PASS",
+      "evidence": "zero markers found in Production files"
+    },
+    {
+      "test": "FIX 10 (ENV-B2-F1): qa/epic-2e-j-phase-c-step7b-b-test.mjs never calls writeFile() with a core/, ui/, or index.html target path",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 10 (ENV-B2-F1): qa/epic-2e-j-phase-c-step7b-b-test.mjs never references/regenerates the Final Phase C results file, and its only results write targets its own step7b-b-results.json",
+      "result": "PASS",
+      "evidence": "doesNotRegenerateFinalPhaseC=true, onlyWritesOwnResultsFile=true"
+    }
+  ],
+  "disclaimer": "This suite proves FIX 1-9 via real functional calls against exported pure logic (computeInMemoryHarnessDecision, computeStep7BBDecision, PERMITTED_NOT_TESTED_STEP_7BB) plus source-text audits of qa/epic-2e-j-phase-c-step7b-b-test.mjs and qa/playwright-in-memory-app-smoke.mjs. It does not launch a Browser and proves nothing about actual real-DOM Tab/Arrow/Space keyboard behavior — that remains the job of the real Step 7B-B Browser suite, which was NOT re-executed by this static test."
+}

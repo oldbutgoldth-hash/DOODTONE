@@ -1,16 +1,16 @@
 {
   "suite": "EPIC 2E-J — Step 7B-B-F3-S: static coverage self-test (source audit only, no Chromium)",
-  "generatedAt": "2026-07-22T11:18:26.226Z",
+  "generatedAt": "2026-07-22T13:12:40.916Z",
   "summary": {
-    "total": 59,
-    "pass": 59,
+    "total": 68,
+    "pass": 68,
     "fail": 0
   },
   "results": [
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "154193 bytes"
+      "evidence": "191673 bytes"
     },
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-f1-static-results.json is readable",
@@ -18,9 +18,49 @@
       "evidence": "parsed OK"
     },
     {
-      "test": "Part 1: real Tab and Shift+Tab navigation is used, all four Arrow keys are exercised, and the full activeElement ID sequence is recorded",
+      "test": "FIX 1 (ENV-B2-F2): SUMMARY is modeled as a native Tab stop (the first <summary> child of a <details> element) — ROOT CAUSE 1",
       "result": "PASS",
-      "evidence": "hasTabToHelper=true, hasRealTabPress=true, hasShiftTab=true, hasAllFourArrows=true, recordsFullSequence=true"
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 1 (ENV-B2-F2): descendants hidden inside a CLOSED <details> element are excluded from sequential focus, except its own focusable <summary>",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 1 (ENV-B2-F2): positive tabindex ordering is handled (positive tabindex first, ascending, ties preserve DOM order; tabindex=0/native focusables follow in DOM order)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 1 (ENV-B2-F2): inert Elements/descendants and aria-hidden=\"true\" Elements/descendants are excluded, the full required native-focusable element set is recognized, and [contenteditable]:not([contenteditable=false]) is handled",
+      "result": "PASS",
+      "evidence": "inertAriaHiddenExcluded=true, requiredElementSet=true, contentEditableHandled=true"
+    },
+    {
+      "test": "FIX 1 (ENV-B2-F2): named radio-group roving Tab stop is handled (checked enabled Radio, otherwise first enabled Radio; disabled Radios never become the stop; an all-disabled group contributes no stop)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 2 (ENV-B2-F2): each independent Keyboard scenario resets its own Radio-group state (Clear Observation via the real UI, verified unchecked + Reasons cleared + first Radio is the native Tab stop) before Tab entry — never inheriting the checked Radio from a previous scenario",
+      "result": "PASS",
+      "evidence": "hasResetFn=true, entryUsesReset=true"
+    },
+    {
+      "test": "FIX 1/2 (ENV-B2-F2): exactly one real Tab press remains the deterministic-entry acceptance action (never .focus() on the radio itself, never .checked assignment)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 3 (ENV-B2-F2): all four required Arrow-key names (ArrowDown/ArrowRight/ArrowUp/ArrowLeft) are exercised via real key presses, {key, activeId, checkedIds, checkedCount} is recorded after every action, exactly one checked Radio is required after EVERY action, and every expected Radio ID must be genuinely visited",
+      "result": "PASS",
+      "evidence": "hasArrowFn=true, allFourKeyNames=true, recordsEveryStep=true, exactlyOnePerStep=true, allExpectedVisited=true"
+    },
+    {
+      "test": "Part 1: real Tab and Shift+Tab navigation is used, and the full activeElement ID sequence is recorded",
+      "result": "PASS",
+      "evidence": "hasRealTabPress=true, hasShiftTab=true, recordsFullSequence=true"
     },
     {
       "test": "Part 1: `.focus()`/`page.evaluate(...focus...)` calls are used only for setup/cleanup (never as Tab-order acceptance proof) and are labeled as such",
@@ -28,9 +68,14 @@
       "evidence": "neverUsesFocusAsProof=true, focusCallsAreLabeled=true"
     },
     {
-      "test": "Part 1: no-keyboard-trap check exists",
+      "test": "Part 1: no-keyboard-trap check exists (persistent-identity based)",
       "result": "PASS",
       "evidence": "present=true"
+    },
+    {
+      "test": "FIX 7 (ENV-B2-F2): the old hard-coded 10-Tab and 25-Tab Keyboard loops are absent, replaced by the ONE canonical runObservationSelectionReasonAndClearScenario() evidence source",
+      "result": "PASS",
+      "evidence": "oldHardCoded10LoopPresent=false, oldHardCoded25LoopPresent=false, canonicalReasonClearFnExists=true"
     },
     {
       "test": "Part 2: Clear Reasons is reached via real Tab navigation and activated with Enter, with no click() call between reaching and activating",
@@ -43,9 +88,9 @@
       "evidence": "present=true"
     },
     {
-      "test": "Part 3: Clear Observation is reached via real Tab navigation and activated with Space, with no click() call between reaching and activating",
+      "test": "Part 3 / FIX 8 (ENV-B2-F2): Clear Observation is reached via real Tab navigation (a DYNAMIC bound derived from the real focusable order, never a hard-coded 15) and activated with Space, using the currently-checked Prefer Legacy Radio as the native Tab stop (never reset), with no click() call between reaching and activating",
       "result": "PASS",
-      "evidence": "hasBothAnchors=true, noClickBetween=true, reason=null"
+      "evidence": "hasBothAnchors=true, usesCurrentSelectionEntry=true, noClickBetween=true, reason=null"
     },
     {
       "test": "Part 3: pressing the activation key a second time is tested and does not double-increment Cleared",
@@ -58,9 +103,9 @@
       "evidence": "present=true"
     },
     {
-      "test": "Part 4: Clear Session is reached via real Tab navigation and activated with Enter, with no .click() between reaching and activating, and no hard-coded click on this button anywhere",
+      "test": "Part 4 / FIX 3 (ENV-B2-F1): Clear Session is reached via real Tab navigation within a DYNAMIC bound derived from the real focusable order (never a hard-coded 20) and activated with Enter, with no .click() between reaching and activating, and no hard-coded click on this button anywhere",
       "result": "PASS",
-      "evidence": "hasBothAnchors=true, noClickBetween=true, noHardcodedClick=true, reason=null"
+      "evidence": "hasBothAnchors=true, usesDynamicBound=true, noClickBetween=true, noHardcodedClick=true, reason=null"
     },
     {
       "test": "Part 4: Clear Session expects immediate re-record (totalObserved=1, activeObservations=1, preferLegacy=1), historical counts reset, current selection preserved, generation unchanged, and never expects the empty-session message",
@@ -153,12 +198,12 @@
       "evidence": "exactIdentityCheck=true, computedBeforeDelete=true, returnsBooleanNotInference=true"
     },
     {
-      "test": "FIX 9: the first Reason reached via Tab is compared against the ACTUAL expected first DOM Reason, queried directly rather than assumed",
+      "test": "FIX 9 (ENV-B2-F2): the first Reason reached via Tab is compared against the ACTUAL expected first DOM Reason, queried directly rather than assumed",
       "result": "PASS",
       "evidence": "present=true"
     },
     {
-      "test": "FIX 9: Shift+Tab is required to return to the EXACT previously-focused Element (recorded before advancing), not merely any different Element",
+      "test": "FIX 9 (ENV-B2-F2): Shift+Tab is required to return to the EXACT previously-focused Element (recorded before advancing, compared via persistent identity), not merely any different Element",
       "result": "PASS",
       "evidence": "present=true"
     },
@@ -293,9 +338,9 @@
       "evidence": "hasControllerScenarios=true, hasRendererChecks=true"
     },
     {
-      "test": "Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)",
+      "test": "FIX 9 (ENV-B2-F2): the real Browser environment status is computed LIVE every run via detectPlaywrightPackage()/detectBrowserExecutable(), and the legacy NOT_RUN_ENVIRONMENT_BLOCKED term is retired from this suite",
       "result": "PASS",
-      "evidence": "status=NOT_RUN_ENVIRONMENT_BLOCKED"
+      "evidence": "liveBrowserStatus=BROWSER_BINARY_UNAVAILABLE, pkgStatus=PLAYWRIGHT_PACKAGE_AVAILABLE, found=null, noLongerUsesLegacyTerm=true"
     },
     {
       "test": "This static test never claims actual Keyboard PASS or real screen-reader (NVDA/JAWS/VoiceOver) PASS",
@@ -305,8 +350,9 @@
   ],
   "disclaimer": "This suite audits the SOURCE TEXT of qa/epic-2e-j-phase-c-step7b-b-test.mjs for the presence of required Keyboard-activation/MutationObserver/announcement-bounds/side-effect-isolation code paths and wiring. It does NOT execute a browser, does NOT measure real Tab order or real screen-reader announcements, and does NOT prove real Keyboard/ARIA PASS. A PASS here means \"the required code path is present and correctly wired,\" not \"the real UI passed Keyboard/ARIA testing.\"",
   "browserSuiteExecution": {
-    "status": "NOT_RUN_ENVIRONMENT_BLOCKED",
-    "note": "Unchanged from the F1-R/F1-R2 record. This F3-S patch did not execute, simulate, or regenerate the real browser suite or its result JSON.",
+    "status": "BROWSER_BINARY_UNAVAILABLE",
+    "note": "FIX 9 (ENV-B2-F2): computed LIVE this run via detectPlaywrightPackage()/detectBrowserExecutable() rather than copied from a prior static-results record. This F3-S patch did not execute, simulate, or regenerate the real Step 7B-B Browser suite result JSON or the Final Phase C result JSON.",
+    "packageStatus": "PLAYWRIGHT_PACKAGE_AVAILABLE",
     "browserOrFinalResultJsonRegenerated": false
   }
 }
