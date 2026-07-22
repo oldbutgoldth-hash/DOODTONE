@@ -1,16 +1,16 @@
 {
   "suite": "EPIC 2E-J — Step 7B-B-F3-S: static coverage self-test (source audit only, no Chromium)",
-  "generatedAt": "2026-07-22T06:06:08.686Z",
+  "generatedAt": "2026-07-22T08:35:12.067Z",
   "summary": {
-    "total": 23,
-    "pass": 23,
+    "total": 35,
+    "pass": 35,
     "fail": 0
   },
   "results": [
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "122193 bytes"
+      "evidence": "138026 bytes"
     },
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-f1-static-results.json is readable",
@@ -73,17 +73,17 @@
       "evidence": "selectsFiveViaSpace=true, disabledSpaceAttempt=true, disabledStaysUnchecked=true, removalViaSpace=true, removalVerified=true, neverCallsControllerDirectly=true"
     },
     {
-      "test": "Part 6: ARIA-live structure requires #ipoStatus/#ipoWarning/#ipoReasonLimit polite, #ipoReasonStatus non-live with no live ancestor, and Session sections non-live, with missing elements failing closed",
+      "test": "Part 6: ARIA-live structure requires #ipoStatus/#ipoWarning/#ipoReasonLimit polite, #ipoReasonStatus non-live with no live ancestor, and Session sections non-live with no live ancestor either, with missing elements failing closed",
       "result": "PASS",
-      "evidence": "hasAllSixChecks=true, missingElementFailsClosed=true"
+      "evidence": "hasAllSixChecks=true, missingElementFailsClosed=true, sessionSectionsCheckLiveAncestorToo=true"
     },
     {
-      "test": "Part 7: MutationObserver is installed and observes ONLY the three intended live regions (ipoStatus, ipoWarning, ipoReasonLimit), with the required {regionId, mutationCount, distinctNonEmptyTexts, repeatedIdenticalTexts} record shape",
+      "test": "Part 7: MutationObserver is installed and observes ONLY the three intended live regions (ipoStatus, ipoWarning, ipoReasonLimit), with the required {regionId, previousText, rawMutationCount, textTransitions, nonEmptyAnnouncements, distinctNonEmptyTexts, repeatedIdenticalTexts, repeatedTexts} record shape",
       "result": "PASS",
       "evidence": "hasInstallFn=true, observesOnlyThreeRegions=true, hasRequiredRecordShape=true"
     },
     {
-      "test": "Part 7: all five MutationObserver scenarios (A ordinary selection non-live, B limit-reached single announcement, C Clear Reasons, D stale/generation transition, E Clear Observation) are implemented",
+      "test": "Part 7: all five MutationObserver scenarios are implemented per F3-S2 (A deterministic ordinary-selection non-live, B deterministic limit-reached single announcement, C Clear Reasons fail-closed, D stale/generation transition with Canvas exclusion, E Clear Observation requires real announcement)",
       "result": "PASS",
       "evidence": "hasScenarioA=true, hasScenarioB=true, hasScenarioC=true, hasScenarioD=true, hasScenarioE=true"
     },
@@ -93,9 +93,9 @@
       "evidence": "rejectsDuplicates=true, ordinaryReasonsTextAssertedNonLive=true"
     },
     {
-      "test": "Part 7: only text-content mutations are counted as announcements (never unrelated DOM mutations)",
+      "test": "Part 7 / FIX 2: only genuine text CHANGES are counted as transitions (a DOM mutation that leaves the same text is never counted as a new announcement), while raw mutation count is tracked separately",
       "result": "PASS",
-      "evidence": "present=true"
+      "evidence": "onlyCountsTextTransitions=true, distinguishesRawFromTransitions=true"
     },
     {
       "test": "Part 8: announcement bounds check plain text, no HTML injection, no [object Object], no NaN/Infinity, no raw stack/error, and a 300-character maximum, applied to every captured announcement",
@@ -103,7 +103,7 @@
       "evidence": "hasBoundsFn=true, checksPlainText=true, checksHtmlInjection=true, checksObjectObject=true, checksNaN=true, checksInfinity=true, checksRawStack=true, checks300Bound=true, appliedAggregate=true"
     },
     {
-      "test": "Part 9: Canvas drawImage/getImageData/putImageData are instrumented, calls are verified zero during Keyboard/ARIA actions, and instrumented methods are restored exactly",
+      "test": "Part 9: Canvas drawImage/getImageData/putImageData are instrumented, calls are verified zero during the non-Analysis Keyboard/ARIA action window, and instrumented methods are restored exactly",
       "result": "PASS",
       "evidence": "instrumentsCanvas=true, restoresCanvasExactly=true, checksCanvasZero=true, checksRestoredState=true"
     },
@@ -111,6 +111,66 @@
       "test": "Part 9: Slider values and Analysis generation are checked unchanged overall AND per-Part (Clear Reasons/Observation/Session), except the one deliberate Scenario D generation change",
       "result": "PASS",
       "evidence": "checksSliderUnchanged=true, checksGenerationIsolation=true, perPartGenerationChecks=true, perPartSliderChecks=true"
+    },
+    {
+      "test": "FIX 1: Scenario A explicitly clears Reasons and selects exactly ONE before selecting the second (deterministic, not reused from Part 5 or Scenario B)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 1: Scenario B explicitly clears Reasons, selects exactly FOUR, verifies the fifth is enabled+unchecked, resets the audit, then selects the fifth via real UI action (deterministic, not reused from Scenario A or Part 5)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 3: duplicate detection uses a whole-window Set (not consecutive-pair comparison), correctly catching A→B→A while A→B alone is not a duplicate",
+      "result": "PASS",
+      "evidence": "usesSetBasedWholeWindowDetection=true, commentsWholeWindowIntent=true"
+    },
+    {
+      "test": "FIX 4: an empty-text Reason-limit clearing cannot satisfy Clear Reasons — zero non-empty announcements records an honest FAIL with evidence PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT, never reinterpreted as PASS, with no Production change",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 5: Clear Observation requires exactly one non-empty ipoStatus announcement matching the real expected cleared-state message with no repeat; zero mutations/messages cannot PASS",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 6: a real Keyboard re-activation of the already-selected Observation state is performed, verifying application state is unchanged and no duplicate identical announcement is produced, without calling the Renderer/Controller directly",
+      "result": "PASS",
+      "evidence": "hasRepeatedStateAction=true, neverCallsRendererOrControllerDirectly=true"
+    },
+    {
+      "test": "FIX 7: the deliberate Scenario D Re-analyze/Analysis window is explicitly excluded from the zero-Canvas-call assertion (read + restore before, fresh reinstall after), reported as explicitly excluded rather than silently ignored",
+      "result": "PASS",
+      "evidence": "excludesAnalysisWindow=true, reinstallsAfter=true, reportsExclusionExplicitly=true"
+    },
+    {
+      "test": "FIX 8: Canvas restoration is proven via exact prototype-method Function identity (===), computed and returned as a Boolean BEFORE temporary instrumentation evidence is deleted — never merely inferred from deleted variables",
+      "result": "PASS",
+      "evidence": "exactIdentityCheck=true, computedBeforeDelete=true, returnsBooleanNotInference=true"
+    },
+    {
+      "test": "FIX 9: the first Reason reached via Tab is compared against the ACTUAL expected first DOM Reason, queried directly rather than assumed",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 9: Shift+Tab is required to return to the EXACT previously-focused Element (recorded before advancing), not merely any different Element",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 9: no-keyboard-trap detection catches BOTH a period-1 (same Element repeated) and a period-2 (two-Element cycle) trap, and separately requires focus to eventually leave the section or reach a known outside Element",
+      "result": "PASS",
+      "evidence": "periodOneCheck=true, periodTwoCheck=true, requiresLeavingSection=true"
+    },
+    {
+      "test": "FIX 9: Clear Reasons additionally requires activeObservationsDerived === 1 and empty Session Top Reasons/Reason counts, checked directly rather than relying only on the Selected Reasons text being empty",
+      "result": "PASS",
+      "evidence": "present=true"
     },
     {
       "test": "Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)",

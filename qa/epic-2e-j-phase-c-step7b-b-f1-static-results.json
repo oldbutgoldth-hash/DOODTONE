@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J — Step 7B-B-F1-R / F1-R2: static decision self-test (no Chromium, no network, no DOM)",
-  "generatedAt": "2026-07-22T06:06:23.767Z",
+  "generatedAt": "2026-07-22T08:35:53.526Z",
   "summary": {
     "total": 37,
     "pass": 37,

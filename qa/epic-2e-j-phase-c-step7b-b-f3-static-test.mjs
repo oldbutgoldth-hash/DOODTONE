@@ -92,7 +92,7 @@ function noClickBetween(a, b) {
   record('Part 1: `.focus()`/`page.evaluate(...focus...)` calls are used only for setup/cleanup (never as Tab-order acceptance proof) and are labeled as such', neverUsesFocusAsProof && focusCallsAreLabeled, `neverUsesFocusAsProof=${neverUsesFocusAsProof}, focusCallsAreLabeled=${focusCallsAreLabeled}`);
 }
 {
-  const hasNoTrapCheck = testSrc.includes('Part 1.8: no keyboard trap detected');
+  const hasNoTrapCheck = testSrc.includes('Part 1.8 / FIX 9: no keyboard trap detected');
   record('Part 1: no-keyboard-trap check exists', hasNoTrapCheck, `present=${hasNoTrapCheck}`);
 }
 
@@ -210,11 +210,12 @@ function noClickBetween(a, b) {
     "Part 6.2: #ipoWarning has aria-live=\"polite\"",
     "Part 6.3: #ipoReasonLimit has aria-live=\"polite\"",
     "Part 6.4: #ipoReasonStatus (ordinary Selected Reasons text) has no aria-live of its own and no live-region ancestor",
-    "Part 6.5: #ipoSessionMetrics is not a live region",
-    "Part 6.6: #ipoSessionTopReasons is not a live region",
+    "Part 6.5: #ipoSessionMetrics has no aria-live of its own and no live-region ancestor",
+    "Part 6.6: #ipoSessionTopReasons has no aria-live of its own and no live-region ancestor",
   ].every((s) => testSrc.includes(s));
   const missingElementFailsClosed = testSrc.includes('ariaStructureF3.statusExists &&') && testSrc.includes('ariaStructureF3.warningExists &&') && testSrc.includes('ariaStructureF3.reasonLimitExists &&');
-  record('Part 6: ARIA-live structure requires #ipoStatus/#ipoWarning/#ipoReasonLimit polite, #ipoReasonStatus non-live with no live ancestor, and Session sections non-live, with missing elements failing closed', hasAllSixChecks && missingElementFailsClosed, `hasAllSixChecks=${hasAllSixChecks}, missingElementFailsClosed=${missingElementFailsClosed}`);
+  const sessionSectionsCheckLiveAncestorToo = testSrc.includes('ariaStructureF3.sessionMetricsHasLiveAncestor === false') && testSrc.includes('ariaStructureF3.sessionTopReasonsHasLiveAncestor === false');
+  record('Part 6: ARIA-live structure requires #ipoStatus/#ipoWarning/#ipoReasonLimit polite, #ipoReasonStatus non-live with no live ancestor, and Session sections non-live with no live ancestor either, with missing elements failing closed', hasAllSixChecks && missingElementFailsClosed && sessionSectionsCheckLiveAncestorToo, `hasAllSixChecks=${hasAllSixChecks}, missingElementFailsClosed=${missingElementFailsClosed}, sessionSectionsCheckLiveAncestorToo=${sessionSectionsCheckLiveAncestorToo}`);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -222,17 +223,17 @@ function noClickBetween(a, b) {
 // ══════════════════════════════════════════════════════════════════
 {
   const hasInstallFn = testSrc.includes('async function installLiveRegionObservers(page)');
-  const observesOnlyThreeRegions = testSrc.includes("['ipoStatus', 'ipoWarning', 'ipoReasonLimit'].forEach((id) => {");
-  const hasRequiredRecordShape = testSrc.includes('function summarizeLiveTexts(regionId, texts)') && testSrc.includes('return { regionId, mutationCount: texts.length, distinctNonEmptyTexts, repeatedIdenticalTexts, nonEmptyTexts };');
-  record('Part 7: MutationObserver is installed and observes ONLY the three intended live regions (ipoStatus, ipoWarning, ipoReasonLimit), with the required {regionId, mutationCount, distinctNonEmptyTexts, repeatedIdenticalTexts} record shape', hasInstallFn && observesOnlyThreeRegions && hasRequiredRecordShape, `hasInstallFn=${hasInstallFn}, observesOnlyThreeRegions=${observesOnlyThreeRegions}, hasRequiredRecordShape=${hasRequiredRecordShape}`);
+  const observesOnlyThreeRegions = testSrc.includes("const regionIds = ['ipoStatus', 'ipoWarning', 'ipoReasonLimit'];");
+  const hasRequiredRecordShape = testSrc.includes('function summarizeLiveTexts(regionId, audit)') && testSrc.includes('regionId,\n    previousText: audit ? audit.previousText : null,\n    rawMutationCount: audit ? audit.rawMutationCount : 0,\n    textTransitions,\n    nonEmptyAnnouncements: nonEmptyAnnouncementTexts.length,\n    distinctNonEmptyTexts,\n    repeatedIdenticalTexts,\n    repeatedTexts,');
+  record('Part 7: MutationObserver is installed and observes ONLY the three intended live regions (ipoStatus, ipoWarning, ipoReasonLimit), with the required {regionId, previousText, rawMutationCount, textTransitions, nonEmptyAnnouncements, distinctNonEmptyTexts, repeatedIdenticalTexts, repeatedTexts} record shape', hasInstallFn && observesOnlyThreeRegions && hasRequiredRecordShape, `hasInstallFn=${hasInstallFn}, observesOnlyThreeRegions=${observesOnlyThreeRegions}, hasRequiredRecordShape=${hasRequiredRecordShape}`);
 }
 {
-  const hasScenarioA = testSrc.includes('Scenario A: selecting an ordinary Reason does not mutate any of the three real live regions') && testSrc.includes('Scenario A: ordinary Selected Reasons text has no live-region ancestor');
-  const hasScenarioB = testSrc.includes('Scenario B: reaching the five-Reason limit produces exactly one meaningful non-empty ipoReasonLimit announcement') && testSrc.includes('Scenario B: no duplicate identical ipoReasonLimit announcement was recorded');
-  const hasScenarioC = testSrc.includes('Scenario C: Clear Reasons creates a meaningful state-transition announcement') && testSrc.includes('Scenario C: Clear Reasons does not announce the same message repeatedly');
+  const hasScenarioA = testSrc.includes('Scenario A precondition 1: exactly one Reason selected before the audited action') && testSrc.includes('Scenario A precondition 2: exactly two Reasons selected (never reaching five)') && testSrc.includes('Scenario A: selecting an ordinary second Reason (well under the limit) produces ZERO live-region TEXT TRANSITIONS') && testSrc.includes('Scenario A: ordinary Selected Reasons text has no live-region ancestor');
+  const hasScenarioB = testSrc.includes('Scenario B precondition 1: exactly four Reasons selected') && testSrc.includes('Scenario B precondition 2: the fifth Reason (contrast) is enabled and unchecked before selection') && testSrc.includes('Scenario B: selecting the fifth Reason through a real UI action reaches exactly five selected') && testSrc.includes('Scenario B: reaching the five-Reason limit produces exactly one meaningful non-empty ipoReasonLimit announcement') && testSrc.includes('Scenario B: no duplicate identical ipoReasonLimit announcement was recorded');
+  const hasScenarioC = testSrc.includes('PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT') && testSrc.includes('Scenario C: Clear Reasons produces at least one meaningful non-empty live announcement describing the action') && testSrc.includes('Scenario C: Clear Reasons produces exactly one distinct, non-empty, non-repeated live announcement describing the action');
   const hasScenarioD = testSrc.includes('Scenario D: a genuine stale-generation transition') && testSrc.includes('Scenario D: no duplicate identical ipoWarning announcement was recorded');
-  const hasScenarioE = testSrc.includes('Scenario E: Clear Observation produces a bounded status announcement that does not repeat identically without a state change');
-  record('Part 7: all five MutationObserver scenarios (A ordinary selection non-live, B limit-reached single announcement, C Clear Reasons, D stale/generation transition, E Clear Observation) are implemented', hasScenarioA && hasScenarioB && hasScenarioC && hasScenarioD && hasScenarioE, `hasScenarioA=${hasScenarioA}, hasScenarioB=${hasScenarioB}, hasScenarioC=${hasScenarioC}, hasScenarioD=${hasScenarioD}, hasScenarioE=${hasScenarioE}`);
+  const hasScenarioE = testSrc.includes('Scenario E: Clear Observation produces exactly one non-empty ipoStatus announcement matching the expected cleared-state message');
+  record('Part 7: all five MutationObserver scenarios are implemented per F3-S2 (A deterministic ordinary-selection non-live, B deterministic limit-reached single announcement, C Clear Reasons fail-closed, D stale/generation transition with Canvas exclusion, E Clear Observation requires real announcement)', hasScenarioA && hasScenarioB && hasScenarioC && hasScenarioD && hasScenarioE, `hasScenarioA=${hasScenarioA}, hasScenarioB=${hasScenarioB}, hasScenarioC=${hasScenarioC}, hasScenarioD=${hasScenarioD}, hasScenarioE=${hasScenarioE}`);
 }
 {
   const rejectsDuplicates = (testSrc.match(/repeatedIdenticalTexts === 0/g) || []).length >= 4;
@@ -240,8 +241,9 @@ function noClickBetween(a, b) {
   record('Part 7: duplicate identical live announcements are rejected (checked in at least 4 scenarios), and ordinary Selected Reasons text is explicitly asserted non-live', rejectsDuplicates && ordinaryReasonsTextAssertedNonLive, `rejectsDuplicates=${rejectsDuplicates}, ordinaryReasonsTextAssertedNonLive=${ordinaryReasonsTextAssertedNonLive}`);
 }
 {
-  const onlyCountsTextAnnouncements = testSrc.includes("window.__step7bbLiveAudit[id].push((el.textContent || '').trim());");
-  record('Part 7: only text-content mutations are counted as announcements (never unrelated DOM mutations)', onlyCountsTextAnnouncements, `present=${onlyCountsTextAnnouncements}`);
+  const onlyCountsTextTransitions = testSrc.includes('if (currentText !== rec.previousText) {') && testSrc.includes('rec.textTransitions.push({ from: rec.previousText, to: currentText });') && testSrc.includes('rec.previousText = currentText;');
+  const distinguishesRawFromTransitions = testSrc.includes('rec.rawMutationCount += mutationList.length;');
+  record('Part 7 / FIX 2: only genuine text CHANGES are counted as transitions (a DOM mutation that leaves the same text is never counted as a new announcement), while raw mutation count is tracked separately', onlyCountsTextTransitions && distinguishesRawFromTransitions, `onlyCountsTextTransitions=${onlyCountsTextTransitions}, distinguishesRawFromTransitions=${distinguishesRawFromTransitions}`);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -269,10 +271,10 @@ function noClickBetween(a, b) {
 // ══════════════════════════════════════════════════════════════════
 {
   const instrumentsCanvas = testSrc.includes('async function installCanvasInstrumentation(page)') && testSrc.includes("proto.drawImage = function") && testSrc.includes("proto.getImageData = function") && testSrc.includes("proto.putImageData = function");
-  const restoresCanvasExactly = testSrc.includes('async function restoreCanvasInstrumentation(page)') && testSrc.includes('proto.drawImage = orig.drawImage; proto.getImageData = orig.getImageData; proto.putImageData = orig.putImageData;');
-  const checksCanvasZero = testSrc.includes('Part 9: zero Canvas drawImage/getImageData/putImageData calls occurred during Keyboard and ARIA actions');
-  const checksRestoredState = testSrc.includes('Part 9: instrumented Canvas methods were restored exactly');
-  record('Part 9: Canvas drawImage/getImageData/putImageData are instrumented, calls are verified zero during Keyboard/ARIA actions, and instrumented methods are restored exactly', instrumentsCanvas && restoresCanvasExactly && checksCanvasZero && checksRestoredState, `instrumentsCanvas=${instrumentsCanvas}, restoresCanvasExactly=${restoresCanvasExactly}, checksCanvasZero=${checksCanvasZero}, checksRestoredState=${checksRestoredState}`);
+  const restoresCanvasExactly = testSrc.includes('async function restoreCanvasInstrumentation(page)') && testSrc.includes('proto.drawImage = orig.drawImage;') && testSrc.includes('proto.getImageData = orig.getImageData;') && testSrc.includes('proto.putImageData = orig.putImageData;');
+  const checksCanvasZero = testSrc.includes('Part 9 / FIX 7: zero Canvas drawImage/getImageData/putImageData calls occurred in the non-Analysis Keyboard/ARIA action window AFTER Scenario D');
+  const checksRestoredState = testSrc.includes('Part 9 / FIX 8: instrumented Canvas methods were restored exactly, proven via Function identity');
+  record('Part 9: Canvas drawImage/getImageData/putImageData are instrumented, calls are verified zero during the non-Analysis Keyboard/ARIA action window, and instrumented methods are restored exactly', instrumentsCanvas && restoresCanvasExactly && checksCanvasZero && checksRestoredState, `instrumentsCanvas=${instrumentsCanvas}, restoresCanvasExactly=${restoresCanvasExactly}, checksCanvasZero=${checksCanvasZero}, checksRestoredState=${checksRestoredState}`);
 }
 {
   const checksSliderUnchanged = testSrc.includes('function slidersUnchanged(before, after)') && testSrc.includes('Part 9: Interactive slider values were unchanged');
@@ -280,6 +282,95 @@ function noClickBetween(a, b) {
   const perPartGenerationChecks = (testSrc.match(/(no Analysis rerun during|Analysis generation does not change during) Clear \w+ keyboard activation/g) || []).length >= 3;
   const perPartSliderChecks = (testSrc.match(/no Slider movement during Clear \w+ keyboard activation/g) || []).length >= 3;
   record('Part 9: Slider values and Analysis generation are checked unchanged overall AND per-Part (Clear Reasons/Observation/Session), except the one deliberate Scenario D generation change', checksSliderUnchanged && checksGenerationIsolation && perPartGenerationChecks && perPartSliderChecks, `checksSliderUnchanged=${checksSliderUnchanged}, checksGenerationIsolation=${checksGenerationIsolation}, perPartGenerationChecks=${perPartGenerationChecks}, perPartSliderChecks=${perPartSliderChecks}`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Step 7B-B-F3-S2 — FIX 1 through FIX 9 static self-test extension.
+// Proves (via source audit only) that the CRITICAL REVIEW FINDINGS
+// from F3-S are actually fixed in the rewritten Parts 7-9. Existing
+// F1/F2/F3 static checks above are kept unchanged and must still pass.
+// ══════════════════════════════════════════════════════════════════
+{
+  // FIX 1: Scenario A explicitly prepares exactly one Reason before
+  // selecting the second (never reusing Part 5's or Scenario B's state).
+  const scenarioAPreparesOneBeforeSecond = testSrc.includes("await page.click(`#ipoReason_${scenarioAReasons[0]}`);") && testSrc.includes('scenarioA_countAfterFirst === 1') && testSrc.includes('await resetLiveRegionAudit(page);\n    await page.click(`#ipoReason_${scenarioAReasons[1]}`);');
+  record('FIX 1: Scenario A explicitly clears Reasons and selects exactly ONE before selecting the second (deterministic, not reused from Part 5 or Scenario B)', scenarioAPreparesOneBeforeSecond, `present=${scenarioAPreparesOneBeforeSecond}`);
+}
+{
+  // FIX 1: Scenario B explicitly clears and selects exactly four Reasons,
+  // verifies the fifth is enabled+unchecked, THEN resets the audit and
+  // selects the fifth — independent of Scenario A/Part 5.
+  const scenarioBDeterministic = testSrc.includes("for (const r of scenarioBFirstFour) {") && testSrc.includes('scenarioB_countAfterFour === 4') && testSrc.includes('scenarioB_fifthEnabledUnchecked') && testSrc.includes("await page.click('#ipoReason_contrast'); // genuine fifth-Reason selection AFTER the audit reset");
+  record('FIX 1: Scenario B explicitly clears Reasons, selects exactly FOUR, verifies the fifth is enabled+unchecked, resets the audit, then selects the fifth via real UI action (deterministic, not reused from Scenario A or Part 5)', scenarioBDeterministic, `present=${scenarioBDeterministic}`);
+}
+{
+  // FIX 3: whole-window (non-consecutive) duplicate detection — the
+  // Set-based `seen` tracker in summarizeLiveTexts catches A→B→A, not
+  // just adjacent-pair repeats, and explicitly comments this intent.
+  const usesSetBasedWholeWindowDetection = testSrc.includes('const seen = new Set();') && testSrc.includes('if (seen.has(t)) { repeatedIdenticalTexts++; repeatedTexts.push(t); }') && testSrc.includes('else seen.add(t);');
+  const commentsWholeWindowIntent = testSrc.includes('FIX 3 — duplicate detection spans the ENTIRE window, not just');
+  record('FIX 3: duplicate detection uses a whole-window Set (not consecutive-pair comparison), correctly catching A→B→A while A→B alone is not a duplicate', usesSetBasedWholeWindowDetection && commentsWholeWindowIntent, `usesSetBasedWholeWindowDetection=${usesSetBasedWholeWindowDetection}, commentsWholeWindowIntent=${commentsWholeWindowIntent}`);
+}
+{
+  // FIX 4: Clear Reasons fails closed with the exact named evidence
+  // string when no meaningful non-empty announcement exists, and is
+  // never reinterpreted as PASS.
+  const failsClosedWithExactEvidence = testSrc.includes("if (auditC_totalNonEmptyAnnouncements === 0) {") && testSrc.includes('PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT') && testSrc.includes("'Scenario C: Clear Reasons produces at least one meaningful non-empty live announcement describing the action',\n        false,");
+  record('FIX 4: an empty-text Reason-limit clearing cannot satisfy Clear Reasons — zero non-empty announcements records an honest FAIL with evidence PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT, never reinterpreted as PASS, with no Production change', failsClosedWithExactEvidence, `present=${failsClosedWithExactEvidence}`);
+}
+{
+  // FIX 5: Clear Observation requires a real non-empty announcement
+  // matching the expected cleared-state message; zero mutations/messages FAIL.
+  const requiresRealAnnouncement = testSrc.includes("auditE.nonEmptyAnnouncements === 1 && auditE.distinctNonEmptyTexts.length === 1 && auditE.distinctNonEmptyTexts[0] === 'Observation cleared. Production output was not changed.' && auditE.repeatedIdenticalTexts === 0");
+  record('FIX 5: Clear Observation requires exactly one non-empty ipoStatus announcement matching the real expected cleared-state message with no repeat; zero mutations/messages cannot PASS', requiresRealAnnouncement, `present=${requiresRealAnnouncement}`);
+}
+{
+  // FIX 6: a real repeated-same-state UI action (Space re-activation of
+  // the already-checked radio), verifying unchanged state and no
+  // duplicate announcement, never calling Renderer/Controller directly.
+  const hasRepeatedStateAction = testSrc.includes("await page.keyboard.press('Space'); // real keyboard re-activation of the SAME already-selected state (never Renderer/Controller called directly)") && testSrc.includes('f3RepeatStateBefore.checkedId === f3RepeatStateAfter.checkedId && f3RepeatStateBefore.statusText === f3RepeatStateAfter.statusText') && testSrc.includes("FIX 6: re-activating the same Observation state produces no duplicate identical live announcement");
+  const neverCallsRendererOrControllerDirectly = !/interactivePreviewObservation(Controller|Renderer)\.\w+\(/.test((testSrc.split('FIX 6 (Step 7B-B-F3-S2)')[1] || '').split('await uninstallLiveRegionObservers')[0]);
+  record('FIX 6: a real Keyboard re-activation of the already-selected Observation state is performed, verifying application state is unchanged and no duplicate identical announcement is produced, without calling the Renderer/Controller directly', hasRepeatedStateAction && neverCallsRendererOrControllerDirectly, `hasRepeatedStateAction=${hasRepeatedStateAction}, neverCallsRendererOrControllerDirectly=${neverCallsRendererOrControllerDirectly}`);
+}
+{
+  // FIX 7: Canvas counters are read and instrumentation exactly
+  // restored BEFORE the deliberate Scenario D Analysis window, and
+  // fresh zeroed instrumentation is reinstalled immediately after.
+  const excludesAnalysisWindow = testSrc.includes('const f3CanvasCallsBeforeD = await readCanvasInstrumentation(page);') && testSrc.includes('const f3CanvasRestoredBeforeD = await restoreCanvasInstrumentation(page);') && testSrc.includes("await page.click('#btnReanalyze'); // deliberate real Analysis/Canvas window — see FIX 7 above/below");
+  const reinstallsAfter = (testSrc.match(/await installCanvasInstrumentation\(page\);/g) || []).length >= 2;
+  const reportsExclusionExplicitly = testSrc.includes('the deliberate Analysis window is explicitly excluded, not silently ignored');
+  record('FIX 7: the deliberate Scenario D Re-analyze/Analysis window is explicitly excluded from the zero-Canvas-call assertion (read + restore before, fresh reinstall after), reported as explicitly excluded rather than silently ignored', excludesAnalysisWindow && reinstallsAfter && reportsExclusionExplicitly, `excludesAnalysisWindow=${excludesAnalysisWindow}, reinstallsAfter=${reinstallsAfter}, reportsExclusionExplicitly=${reportsExclusionExplicitly}`);
+}
+{
+  // FIX 8: restoration is proven via EXACT Function identity, computed
+  // and returned as a Boolean BEFORE instrumentation evidence is deleted.
+  const exactIdentityCheck = testSrc.includes('const restored = proto.drawImage === orig.drawImage && proto.getImageData === orig.getImageData && proto.putImageData === orig.putImageData;');
+  const computedBeforeDelete = /const restored = proto\.drawImage === orig\.drawImage[^;]*;\s*delete window\.__step7bbOriginalCanvasMethods;/.test(testSrc);
+  const returnsBooleanNotInference = testSrc.includes("return { restored, reason: restored ? null : 'prototype methods did not match original References after restoration' };");
+  record('FIX 8: Canvas restoration is proven via exact prototype-method Function identity (===), computed and returned as a Boolean BEFORE temporary instrumentation evidence is deleted — never merely inferred from deleted variables', exactIdentityCheck && computedBeforeDelete && returnsBooleanNotInference, `exactIdentityCheck=${exactIdentityCheck}, computedBeforeDelete=${computedBeforeDelete}, returnsBooleanNotInference=${returnsBooleanNotInference}`);
+}
+{
+  // FIX 9: expected-first-Reason-ID check (queried, never assumed).
+  const expectedFirstReasonChecked = testSrc.includes("const f3ExpectedFirstReasonId = await page.evaluate(() => { const first = document.querySelector('input[name=\"ipoReason\"]'); return first ? first.id : null; });") && testSrc.includes('f3ReachedFirstReasonId === f3ExpectedFirstReasonId && f3ExpectedFirstReasonId !== null');
+  record('FIX 9: the first Reason reached via Tab is compared against the ACTUAL expected first DOM Reason, queried directly rather than assumed', expectedFirstReasonChecked, `present=${expectedFirstReasonChecked}`);
+}
+{
+  // FIX 9: exact-previous-Element Shift+Tab check (not merely "focus changed").
+  const exactPreviousElementCheck = testSrc.includes('f3AfterShiftTabId === f3ElementBeforeReasonCheckbox');
+  record('FIX 9: Shift+Tab is required to return to the EXACT previously-focused Element (recorded before advancing), not merely any different Element', exactPreviousElementCheck, `present=${exactPreviousElementCheck}`);
+}
+{
+  // FIX 9: two-Element (period-2) cycle detection, not just same-ID-3x.
+  const periodOneCheck = testSrc.includes('f3TrapSequence[i] === f3TrapSequence[i - 1] && f3TrapSequence[i - 1] === f3TrapSequence[i - 2]');
+  const periodTwoCheck = testSrc.includes('f3TrapSequence[i] === f3TrapSequence[i - 2] && f3TrapSequence[i - 1] === f3TrapSequence[i - 3] && f3TrapSequence[i] !== f3TrapSequence[i - 1]');
+  const requiresLeavingSection = testSrc.includes("const f3ReachedOutsideElement = f3TrapSequence.some((id) => id && !id.startsWith('ipo'));");
+  record('FIX 9: no-keyboard-trap detection catches BOTH a period-1 (same Element repeated) and a period-2 (two-Element cycle) trap, and separately requires focus to eventually leave the section or reach a known outside Element', periodOneCheck && periodTwoCheck && requiresLeavingSection, `periodOneCheck=${periodOneCheck}, periodTwoCheck=${periodTwoCheck}, requiresLeavingSection=${requiresLeavingSection}`);
+}
+{
+  // FIX 9: Clear Reasons Session Reason-count checks (not merely the
+  // ordinary Selected Reasons text being empty).
+  const sessionReasonCountsChecked = testSrc.includes("p2ParsedSession.activeObservationsDerived === 1") && testSrc.includes("p2Session.topReasonsText === ''");
+  record('FIX 9: Clear Reasons additionally requires activeObservationsDerived === 1 and empty Session Top Reasons/Reason counts, checked directly rather than relying only on the Selected Reasons text being empty', sessionReasonCountsChecked, `present=${sessionReasonCountsChecked}`);
 }
 
 // ══════════════════════════════════════════════════════════════════
