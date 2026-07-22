@@ -1,9 +1,9 @@
 {
-  "suite": "EPIC 2E-J — Step 7B-B-F1-R FIX 4: static decision self-test (no Chromium, no network, no DOM)",
-  "generatedAt": "2026-07-22T03:30:32.861Z",
+  "suite": "EPIC 2E-J — Step 7B-B-F1-R / F1-R2: static decision self-test (no Chromium, no network, no DOM)",
+  "generatedAt": "2026-07-22T04:18:14.590Z",
   "summary": {
-    "total": 13,
-    "pass": 13,
+    "total": 37,
+    "pass": 37,
     "fail": 0
   },
   "results": [
@@ -68,9 +68,129 @@
       "evidence": "exitCode=1"
     },
     {
+      "test": "Case G: empty results Array => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case G: empty results Array => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case H: null results => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case H: null results => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case I: undefined results => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case I: undefined results => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case J: malformed result status (\"UNKNOWN\") => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case J: malformed result status (\"UNKNOWN\") => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case K: missing result field => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case K: missing result field => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case L: missing test field => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case L: missing test field => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case M: blank test field => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case M: blank test field => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case N: null row => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case N: null row => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case O: malformed permittedNotTested does not throw",
+      "result": "PASS",
+      "evidence": "threw=false"
+    },
+    {
+      "test": "Case O: malformed permittedNotTested cannot broaden the permitted set => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case O: malformed permittedNotTested => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Regression: all PASS still => PASS after FIX 1/2 hardening",
+      "result": "PASS",
+      "evidence": "decision=PASS"
+    },
+    {
+      "test": "Regression: only Physical touch hardware NOT_TESTED still => CONDITIONAL_PASS after FIX 1/2 hardening",
+      "result": "PASS",
+      "evidence": "decision=CONDITIONAL_PASS"
+    },
+    {
       "test": "isAllowedExternalFontUrl allows only fonts.googleapis.com/fonts.gstatic.com (lookalikes rejected)",
       "result": "PASS",
       "evidence": "10 cases checked, all correct"
+    },
+    {
+      "test": "Case P: FTP allowed-host URL (\"ftp://fonts.googleapis.com/x\") => rejected",
+      "result": "PASS",
+      "evidence": "actual=false"
+    },
+    {
+      "test": "Case Q: JavaScript scheme URL (\"javascript://fonts.googleapis.com/x\") => rejected",
+      "result": "PASS",
+      "evidence": "actual=false"
+    },
+    {
+      "test": "Case R: Data URL (\"data:text/plain,fonts.googleapis.com\") => rejected",
+      "result": "PASS",
+      "evidence": "actual=false"
     }
   ],
   "browserSuiteExecution": {
