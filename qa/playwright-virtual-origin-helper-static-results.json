@@ -1,0 +1,177 @@
+{
+  "suite": "EPIC 2E-J ENV-B1A-R PART 11 — Virtual-Origin helper static/functional self-test",
+  "generatedAt": "2026-07-22T09:36:51.991Z",
+  "summary": {
+    "total": 33,
+    "pass": 33,
+    "fail": 0
+  },
+  "results": [
+    {
+      "test": "Path normalization: legitimate paths (including \"/\" -> index.html) resolve to the expected project-relative path",
+      "result": "PASS",
+      "evidence": "[{\"ok\":true,\"relativePath\":\"index.html\"},{\"ok\":true,\"relativePath\":\"index.html\"},{\"ok\":true,\"relativePath\":\"ui/app.js\"},{\"ok\":true,\"relativePath\":\"qa/epic-2e-j-phase-c-step7b-b-test.mjs\"}]"
+    },
+    {
+      "test": "Traversal rejection: every required traversal path (literal, encoded, double-encoded, backslash, drive-letter, null-byte) is rejected",
+      "result": "PASS",
+      "evidence": "[{\"path\":\"/../secret.txt\",\"result\":{\"ok\":false,\"reason\":\"parent-directory traversal segment rejected\"}},{\"path\":\"/%2e%2e/secret.txt\",\"result\":{\"ok\":false,\"reason\":\"parent-directory traversal segment rejected\"}},{\"path\":\"/qa/../../secret.txt\",\"result\":{\"ok\":false,\"reason\":\"parent-directory traversal segment rejected\"}},{\"path\":\"/qa/%2e%2e/%2e%2e/secret.txt\",\"result\":{\"ok\":false,\"reason\":\"parent-directory traversal segment rejected\"}},{\"path\":\"/qa%2f..%2fsecret.txt\",\"result\":{\"ok\":false,\"reason\":\"parent-directory traversal segment rejected\"}},{\"path\":\"/qa%5c..%5csecret.txt\",\"result\":{\"ok\":false,\"reason\":\"backslash (literal or encoded) rejected\"}},{\"path\":\"/C:%5csecret.txt\",\"result\":{\"ok\":false,\"reason\":\"backslash (literal or encoded) rejected\"}},{\"path\":\"/%00secret.txt\",\"result\":{\"ok\":false,\"reason\":\"null byte present after decoding\"}},{\"path\":\"/%252e%252e/secret.txt\",\"result\":{\"ok\":false,\"reason\":\"parent-directory traversal segment rejected\"}},{\"path\":\"/qa/..%2f..%2fsecret.txt\",\"result\":{\"ok\":false,\"reason\":\"parent-directory traversal segment rejected\"}}]"
+    },
+    {
+      "test": "resolveSafeLocalPath: a legitimate path resolves strictly inside projectRoot",
+      "result": "PASS",
+      "evidence": "{\"ok\":true,\"filePath\":\"/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_f1r/LUMIXA_AI_EPIC_2E_J_PHASE_C_RECOVERED_DEADCODE_CLEAN/index.html\"}"
+    },
+    {
+      "test": "resolveSafeLocalPath: a traversal attempt is rejected before any filesystem access",
+      "result": "PASS",
+      "evidence": "{\"ok\":false,\"reason\":\"parent-directory traversal segment rejected\"}"
+    },
+    {
+      "test": "decodeFullyOrNull: malformed percent-encoding degrades to null (never throws)",
+      "result": "PASS",
+      "evidence": "result=null"
+    },
+    {
+      "test": "decodeFullyOrNull: double-encoded traversal fully decodes to \"..\"",
+      "result": "PASS",
+      "evidence": "result=\"..\""
+    },
+    {
+      "test": "MIME mapping: all 13 required extensions map to their exact required MIME type",
+      "result": "PASS",
+      "evidence": "[{\"ext\":\".html\",\"got\":\"text/html; charset=utf-8\"},{\"ext\":\".js\",\"got\":\"text/javascript; charset=utf-8\"},{\"ext\":\".mjs\",\"got\":\"text/javascript; charset=utf-8\"},{\"ext\":\".css\",\"got\":\"text/css; charset=utf-8\"},{\"ext\":\".json\",\"got\":\"application/json; charset=utf-8\"},{\"ext\":\".png\",\"got\":\"image/png\"},{\"ext\":\".jpg\",\"got\":\"image/jpeg\"},{\"ext\":\".jpeg\",\"got\":\"image/jpeg\"},{\"ext\":\".webp\",\"got\":\"image/webp\"},{\"ext\":\".svg\",\"got\":\"image/svg+xml\"},{\"ext\":\".txt\",\"got\":\"text/plain; charset=utf-8\"},{\"ext\":\".xmp\",\"got\":\"application/rdf+xml\"},{\"ext\":\".wasm\",\"got\":\"application/wasm\"}]"
+    },
+    {
+      "test": "MIME mapping: an unknown extension falls back to application/octet-stream",
+      "result": "PASS",
+      "evidence": "got=application/octet-stream"
+    },
+    {
+      "test": "MIME mapping: extension matching is case-insensitive",
+      "result": "PASS",
+      "evidence": "got=text/html; charset=utf-8"
+    },
+    {
+      "test": "Origin matching: the origin root itself matches",
+      "result": "PASS",
+      "evidence": "url=http://lumixa.test"
+    },
+    {
+      "test": "Origin matching: a path under the origin matches",
+      "result": "PASS",
+      "evidence": "url=http://lumixa.test/index.html?qa=1"
+    },
+    {
+      "test": "Origin matching: a different host does NOT match (e.g. a prefix-confusable host)",
+      "result": "PASS",
+      "evidence": "url=http://lumixa.test.evil.com/index.html"
+    },
+    {
+      "test": "Origin matching: localhost never matches the virtual origin",
+      "result": "PASS",
+      "evidence": "url=http://localhost:19997/index.html"
+    },
+    {
+      "test": "Google Fonts classification: fonts.googleapis.com stylesheet requests are recognized",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "Google Fonts classification: fonts.gstatic.com asset requests are recognized",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "Google Fonts classification: an unrelated host is never misclassified as Google Fonts",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "External-host classification: a genuinely external host is flagged unexpected",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "External-host classification: the virtual origin itself is never flagged unexpected",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "External-host classification: Google Fonts hosts are never flagged unexpected (they are stubbed, not aborted-and-logged)",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "Localhost/private-IP detection: localhost is flagged",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "Localhost/private-IP detection: 127.0.0.1 is flagged",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "Localhost/private-IP detection: a private 192.168.x.x address is flagged",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "Localhost/private-IP detection: the virtual origin itself is never flagged",
+      "result": "PASS",
+      "evidence": "checked"
+    },
+    {
+      "test": "qa/helpers/playwright-virtual-origin.mjs is readable",
+      "result": "PASS",
+      "evidence": "11572 bytes"
+    },
+    {
+      "test": "qa/playwright-virtual-origin-smoke.mjs is readable",
+      "result": "PASS",
+      "evidence": "15204 bytes"
+    },
+    {
+      "test": "No localhost/127.0.0.1 string is ever used as the navigation target — navigation goes only to the virtual origin",
+      "result": "PASS",
+      "evidence": "navigatesToLocalhost=false, navUrlIsVirtualOrigin=true"
+    },
+    {
+      "test": "No local HTTP server is constructed anywhere in the harness (no http.createServer / .listen(port))",
+      "result": "PASS",
+      "evidence": "constructsLocalServer=false"
+    },
+    {
+      "test": "Neither harness file imports \"node:http\"",
+      "result": "PASS",
+      "evidence": "importsNodeHttp=false"
+    },
+    {
+      "test": "Both harness files reference the exact virtual origin \"http://lumixa.test\"",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "The smoke test creates its BrowserContext with serviceWorkers: \"block\"",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "The helper installs exactly ONE universal route handler (never multiple context.route() calls that could shadow each other via LIFO matching)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "The helper module never imports \"playwright\" itself (only operates on an already-created context) — statically testable even when the package is unavailable",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "The smoke test never attempts to download a Browser (no \"playwright install\" / \"npx playwright\" invocation)",
+      "result": "PASS",
+      "evidence": "present=true"
+    }
+  ],
+  "disclaimer": "This suite calls the helper's real exported pure functions directly (path safety, MIME mapping, origin/external/Google-Fonts classification) and audits the two harness files' source text. It does not launch a Browser and proves nothing about actual Playwright/Chromium behavior — that is the separate runtime smoke test's job."
+}

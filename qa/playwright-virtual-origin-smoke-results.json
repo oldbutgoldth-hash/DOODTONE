@@ -1,0 +1,33 @@
+{
+  "suite": "EPIC 2E-J ENV-B1A-R — Playwright Virtual-Origin Harness smoke test",
+  "generatedAt": "2026-07-22T09:35:27.946Z",
+  "results": [
+    {
+      "test": "PART 1: Playwright Node package resolvability",
+      "result": "PASS",
+      "evidence": "import(\"playwright\") resolved"
+    },
+    {
+      "test": "PART 2: Browser executable detection",
+      "result": "NOT_TESTED",
+      "evidence": "no usable Browser executable found among 6 candidates (never downloaded one): [{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
+    }
+  ],
+  "playwrightPackageStatus": "PLAYWRIGHT_PACKAGE_AVAILABLE",
+  "browserExecutablePath": null,
+  "browserVersion": null,
+  "origin": "http://lumixa.test",
+  "navigationStatus": "NOT_ATTEMPTED_BROWSER_BINARY_UNAVAILABLE",
+  "totalRequests": 0,
+  "jsRequests": 0,
+  "cssRequests": 0,
+  "imageRequests": 0,
+  "local404s": 0,
+  "forbiddenRequests": 0,
+  "unexpectedExternalRequests": 0,
+  "pageErrors": [],
+  "consoleErrors": [],
+  "requestFailures": [],
+  "fontFallbackUsed": false,
+  "finalDecision": "BROWSER_BINARY_UNAVAILABLE"
+}
