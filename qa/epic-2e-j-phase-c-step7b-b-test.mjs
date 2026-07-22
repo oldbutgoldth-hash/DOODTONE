@@ -1202,13 +1202,17 @@ async function main() {
     record('FIX 5/6 (F3-S3): Scenario B cross-region duplicate check (ipoStatus+ipoWarning+ipoReasonLimit combined) shows no duplicate announcement', auditB_cross.repeatedIdenticalTexts === 0, JSON.stringify(auditB_cross));
 
     // Scenario C — Clear Reasons (current state: five selected from
-    // Scenario B). Step 7B-B-F3-S2 FIX 4: an empty-text clearing of the
-    // Reason-limit message is NOT a meaningful announcement — Scenario
-    // C requires at least one genuine non-empty announcement describing
-    // the action, exactly one distinct such announcement, and no
-    // repeat. If the real Production UI produces none, this is an
-    // HONEST, NAMED FAIL — never reinterpreted as PASS, and Production
-    // is NOT modified in this static-only patch.
+    // Scenario B). Step 7B-B-F3-P1 FIX 8: Production now contains the
+    // bounded accessibility fix (reasonAnnouncement="reasons-cleared"
+    // rendered into #ipoReasonLimit) — the named Product-gap honest-FAIL
+    // branch is REMOVED because the actual bounded Production fix now
+    // exists (previously PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT).
+    // PASS requires EXACTLY the bounded message, one distinct
+    // announcement, no duplicate within the region, no duplicate across
+    // all three regions, Observation remains selected, Reason counts
+    // empty, and no Analysis/Slider/Canvas side effect (checked in Part
+    // 9's pre-D window, since Scenario C falls inside it).
+    const REASONS_CLEARED_ANNOUNCEMENT_TEXT = 'Reasons cleared. Observation remains selected. Production output was not changed.';
     await resetLiveRegionAudit(page);
     await page.click('#ipoClearReasonsButton');
     await page.waitForTimeout(150);
@@ -1218,25 +1222,18 @@ async function main() {
     const auditC_reasonLimit = summarizeLiveTexts('ipoReasonLimit', auditC_raw.ipoReasonLimit);
     const auditC_cross = summarizeCrossRegionWindow(auditC_raw);
     const auditC_allDistinctNonEmpty = [...auditC_status.distinctNonEmptyTexts, ...auditC_warning.distinctNonEmptyTexts, ...auditC_reasonLimit.distinctNonEmptyTexts];
-    const auditC_totalNonEmptyAnnouncements = auditC_status.nonEmptyAnnouncements + auditC_warning.nonEmptyAnnouncements + auditC_reasonLimit.nonEmptyAnnouncements;
     f3AllCapturedLiveTexts.push(...auditC_allDistinctNonEmpty);
-    if (auditC_totalNonEmptyAnnouncements === 0) {
-      record(
-        'Scenario C: Clear Reasons produces at least one meaningful non-empty live announcement describing the action',
-        false,
-        `PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT — the real Production UI transitions ipoReasonLimit from "You can select up to five reasons." to "" (empty) and produces no other non-empty announcement on ipoStatus/ipoWarning/ipoReasonLimit; an empty-text transition is not a meaningful announcement and is never reinterpreted as PASS. This honest failure is intended to guide a separate, bounded Production accessibility patch after review — no Production change was made in this static-only patch. status=${JSON.stringify(auditC_status)}, warning=${JSON.stringify(auditC_warning)}, reasonLimit=${JSON.stringify(auditC_reasonLimit)}`
-      );
-    } else {
-      record(
-        'Scenario C: Clear Reasons produces exactly one distinct, non-empty, non-repeated live announcement describing the action',
-        auditC_allDistinctNonEmpty.length === 1 && auditC_cross.repeatedIdenticalTexts === 0,
-        `status=${JSON.stringify(auditC_status)}, warning=${JSON.stringify(auditC_warning)}, reasonLimit=${JSON.stringify(auditC_reasonLimit)}`
-      );
-    }
-    // FIX 6 (F3-S3): applies EVEN in the honest-FAIL case above — Scenario
-    // C's cross-region duplicate protection cannot be defeated merely
-    // because the same text appeared once in two different regions.
-    record('FIX 5/6 (F3-S3): Scenario C cross-region duplicate check (ipoStatus+ipoWarning+ipoReasonLimit combined) shows no duplicate announcement', auditC_cross.repeatedIdenticalTexts === 0, JSON.stringify(auditC_cross));
+    record(
+      'Scenario C / FIX 8 (F3-P1): Clear Reasons produces EXACTLY the bounded accessible message "Reasons cleared. Observation remains selected. Production output was not changed." — one distinct non-empty announcement, no duplicate within ipoReasonLimit',
+      auditC_reasonLimit.nonEmptyAnnouncements === 1 && auditC_reasonLimit.distinctNonEmptyTexts.length === 1 && auditC_reasonLimit.distinctNonEmptyTexts[0] === REASONS_CLEARED_ANNOUNCEMENT_TEXT && auditC_reasonLimit.repeatedIdenticalTexts === 0 && auditC_status.nonEmptyAnnouncements === 0 && auditC_warning.nonEmptyAnnouncements === 0,
+      `status=${JSON.stringify(auditC_status)}, warning=${JSON.stringify(auditC_warning)}, reasonLimit=${JSON.stringify(auditC_reasonLimit)}`
+    );
+    record('FIX 5/6 (F3-S3) / FIX 8 (F3-P1): Scenario C cross-region duplicate check (ipoStatus+ipoWarning+ipoReasonLimit combined) shows no duplicate announcement', auditC_cross.repeatedIdenticalTexts === 0 && auditC_allDistinctNonEmpty.length === 1, JSON.stringify(auditC_cross));
+    const scenarioC_observationAndReasonsState = await page.evaluate(() => ({
+      observationStillChecked: document.querySelector('input[name="ipoObservation"]:checked')?.id === 'ipoOption_prefer-legacy',
+      reasonCount: Array.from(document.querySelectorAll('input[name="ipoReason"]')).filter((c) => c.checked).length,
+    }));
+    record('FIX 8 (F3-P1): after Clear Reasons, the Observation remains selected and Reason counts are empty', scenarioC_observationAndReasonsState.observationStillChecked && scenarioC_observationAndReasonsState.reasonCount === 0, JSON.stringify(scenarioC_observationAndReasonsState));
 
     // ── Step 7B-B-F3-S3 FIX 1/2/3 — PRE-D NON-ANALYSIS WINDOW close ──
     // The pre-D window spans Keyboard Parts 1-5 AND Scenarios A, B, C

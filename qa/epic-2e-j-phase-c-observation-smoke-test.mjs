@@ -470,6 +470,149 @@ async function main() {
     });
     record('No Canvas drawImage calls from Observation actions', canvasCheck === 0 ? 'PASS' : 'FAIL', `drawImage calls=${canvasCheck}`);
 
+    // ══════════════════════════════════════════════════════════════
+    // Step 7B-B-F3-P1 FIX 6 — focused Controller tests for the
+    // reasonAnnouncement token lifecycle. Uses a DEDICATED, freshly
+    // created controller instance (never window.__testController) so
+    // exact state-change callback counting is never disturbed by the
+    // shared harness's own onStateChange wiring used elsewhere in this
+    // file.
+    // ══════════════════════════════════════════════════════════════
+    const reasonAnnouncementControllerTest = await page.evaluate(async () => {
+      const { createInteractivePreviewObservationControllerV2 } = await import('/ui/interactive-preview-observation-controller-v2.js');
+      let callbackCount = 0;
+      let gen = 10;
+      const c = createInteractivePreviewObservationControllerV2({ generationProvider: () => gen, onStateChange: () => { callbackCount++; } });
+      c.setContext({ generationId: gen, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null });
+      c.selectObservation('prefer-legacy');
+      c.toggleReason('skin-tone');
+      c.toggleReason('contrast');
+
+      // Scenario A: selected Observation + two Reasons -> clearReasons().
+      callbackCount = 0;
+      const sA = c.clearReasons();
+      const scenarioA = {
+        observationPreserved: sA.observation === 'prefer-legacy',
+        reasonsEmpty: sA.reasons.length === 0,
+        announcement: sA.reasonAnnouncement,
+        callbackCount,
+      };
+
+      // Scenario B: calling clearReasons() again while already empty.
+      let crashed = false;
+      callbackCount = 0;
+      let sB;
+      try { sB = c.clearReasons(); } catch { crashed = true; sB = c.getState(); }
+      const scenarioB = { crashed, callbackCount, announcementUnchanged: sB.reasonAnnouncement === 'reasons-cleared' };
+
+      // Scenario C: adding a Reason after Clear Reasons.
+      const sC = c.toggleReason('white-balance');
+      const scenarioC = { reasonSelected: sC.reasons.includes('white-balance'), announcement: sC.reasonAnnouncement };
+
+      // Scenario D: clearing Observation after Clear Reasons.
+      // (Re-establish reasonAnnouncement='reasons-cleared' first.)
+      c.toggleReason('white-balance'); // remove it again -> back to empty reasons
+      c.clearReasons(); // no-op (already empty) — announcement stays from Scenario A/C's last real clear
+      c.toggleReason('natural-look');
+      c.clearReasons(); // genuine clear -> sets the token fresh
+      const sD = c.clearObservation();
+      const scenarioD = { observationCleared: sD.observation === null, reasonsEmpty: sD.reasons.length === 0, announcement: sD.reasonAnnouncement };
+
+      // Scenario E: stale generation after Clear Reasons.
+      c.setContext({ generationId: gen, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null });
+      c.selectObservation('prefer-v2');
+      c.toggleReason('clarity-detail');
+      c.clearReasons();
+      const beforeStale = c.getState();
+      gen = 11; // provider now disagrees with context's generationId
+      const sE = c.setContext({ generationId: 10, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null });
+      const scenarioE = {
+        beforeAnnouncement: beforeStale.reasonAnnouncement,
+        staleObservationCleared: sE.observation === null,
+        staleWarningPresent: Array.isArray(sE.warnings) && sE.warnings.length > 0,
+        announcementAfterStale: sE.reasonAnnouncement,
+      };
+
+      // Scenario F: QA state remains DOM-free and bounded.
+      let jsonSafe = true;
+      let hasDomOrErrorRef = false;
+      try {
+        const str = JSON.stringify(sE);
+        if (typeof globalThis.Node === 'function' && (sE.observation instanceof globalThis.Node)) hasDomOrErrorRef = true;
+        if (sE instanceof Error || (sE.reasonAnnouncement instanceof Error)) hasDomOrErrorRef = true;
+        if (str.includes('[object Object]') && !str.includes('"metadata"')) hasDomOrErrorRef = true; // metadata is the one legitimate nested object
+      } catch { jsonSafe = false; }
+      const tokenTypeBounded = sE.reasonAnnouncement === null || sE.reasonAnnouncement === 'reasons-cleared';
+      const scenarioF = { jsonSafe, hasDomOrErrorRef, tokenTypeBounded };
+
+      c.dispose();
+      return { scenarioA, scenarioB, scenarioC, scenarioD, scenarioE, scenarioF };
+    });
+    record('FIX 6 Scenario A: Clear Reasons preserves Observation, sets reasonAnnouncement="reasons-cleared", exactly one callback', reasonAnnouncementControllerTest.scenarioA.observationPreserved && reasonAnnouncementControllerTest.scenarioA.reasonsEmpty && reasonAnnouncementControllerTest.scenarioA.announcement === 'reasons-cleared' && reasonAnnouncementControllerTest.scenarioA.callbackCount === 1, JSON.stringify(reasonAnnouncementControllerTest.scenarioA));
+    record('FIX 6 Scenario B: repeated empty clearReasons() does not crash, does not emit a duplicate callback, does not create a new announcement transition', !reasonAnnouncementControllerTest.scenarioB.crashed && reasonAnnouncementControllerTest.scenarioB.callbackCount === 0 && reasonAnnouncementControllerTest.scenarioB.announcementUnchanged, JSON.stringify(reasonAnnouncementControllerTest.scenarioB));
+    record('FIX 6 Scenario C: adding a Reason after Clear Reasons selects the new Reason and clears reasonAnnouncement to null', reasonAnnouncementControllerTest.scenarioC.reasonSelected && reasonAnnouncementControllerTest.scenarioC.announcement === null, JSON.stringify(reasonAnnouncementControllerTest.scenarioC));
+    record('FIX 6 Scenario D: clearing Observation after Clear Reasons empties Reasons and clears reasonAnnouncement to null', reasonAnnouncementControllerTest.scenarioD.observationCleared && reasonAnnouncementControllerTest.scenarioD.reasonsEmpty && reasonAnnouncementControllerTest.scenarioD.announcement === null, JSON.stringify(reasonAnnouncementControllerTest.scenarioD));
+    record('FIX 6 Scenario E: stale generation after Clear Reasons preserves existing stale behavior and clears reasonAnnouncement to null', reasonAnnouncementControllerTest.scenarioE.beforeAnnouncement === 'reasons-cleared' && reasonAnnouncementControllerTest.scenarioE.staleObservationCleared && reasonAnnouncementControllerTest.scenarioE.staleWarningPresent && reasonAnnouncementControllerTest.scenarioE.announcementAfterStale === null, JSON.stringify(reasonAnnouncementControllerTest.scenarioE));
+    record('FIX 6 Scenario F: QA state remains DOM-free, Error-free, and reasonAnnouncement is bounded to exactly the two allowed values', reasonAnnouncementControllerTest.scenarioF.jsonSafe && !reasonAnnouncementControllerTest.scenarioF.hasDomOrErrorRef && reasonAnnouncementControllerTest.scenarioF.tokenTypeBounded, JSON.stringify(reasonAnnouncementControllerTest.scenarioF));
+
+    // ══════════════════════════════════════════════════════════════
+    // Step 7B-B-F3-P1 FIX 7 — focused Renderer tests for the priority
+    // mapping into #ipoReasonLimit. Uses a DETACHED synthetic container
+    // (never obsInner/sessionInner) with SYNTHETIC state objects so the
+    // priority/textContent/hostile-token logic is tested directly and
+    // in isolation from any live Controller.
+    // ══════════════════════════════════════════════════════════════
+    const rendererPriorityTest = await page.evaluate(async () => {
+      const { ensureInteractivePreviewObservationLayout, renderInteractivePreviewObservationV2 } = await import('/ui/interactive-preview-observation-renderer-v2.js');
+      const testDiv = document.createElement('div');
+      testDiv.id = '__f3p1RendererTestContainer';
+      testDiv.style.display = 'none';
+      document.body.appendChild(testDiv);
+      ensureInteractivePreviewObservationLayout(testDiv);
+      const reasonLimitEl = () => testDiv.querySelector('#ipoReasonLimit');
+
+      const baseSelected = { state: 'selected', observation: 'prefer-legacy', reasons: [], reasonLimitReached: false, metadata: {} };
+
+      // 1. "reasons-cleared" renders the exact message.
+      renderInteractivePreviewObservationV2(testDiv, { ...baseSelected, reasonAnnouncement: 'reasons-cleared' });
+      const clearedText = reasonLimitEl().textContent;
+      const clearedHtml = reasonLimitEl().innerHTML;
+
+      // 2. five-Reason limit still renders the existing limit message
+      //    when there is no announcement.
+      renderInteractivePreviewObservationV2(testDiv, { ...baseSelected, reasonLimitReached: true, reasonAnnouncement: null });
+      const limitText = reasonLimitEl().textContent;
+
+      // 3. Clear Reasons message has priority over the limit message
+      //    ONLY for that state (both flags true simultaneously).
+      renderInteractivePreviewObservationV2(testDiv, { ...baseSelected, reasonLimitReached: true, reasonAnnouncement: 'reasons-cleared' });
+      const priorityText = reasonLimitEl().textContent;
+
+      // 4. null token renders no Clear Reasons message (and no limit
+      //    message either, since reasonLimitReached is false here).
+      renderInteractivePreviewObservationV2(testDiv, { ...baseSelected, reasonAnnouncement: null });
+      const nullTokenText = reasonLimitEl().textContent;
+
+      // 5. hostile/unknown token is ignored (treated exactly like null).
+      renderInteractivePreviewObservationV2(testDiv, { ...baseSelected, reasonAnnouncement: '<img src=x onerror=alert(1)>' });
+      const hostileText = reasonLimitEl().textContent;
+      const hostileHtml = reasonLimitEl().innerHTML;
+      renderInteractivePreviewObservationV2(testDiv, { ...baseSelected, reasonAnnouncement: { toString: () => 'reasons-cleared' } });
+      const hostileObjectText = reasonLimitEl().textContent;
+
+      document.body.removeChild(testDiv);
+      return { clearedText, clearedHtml, limitText, priorityText, nullTokenText, hostileText, hostileHtml, hostileObjectText };
+    });
+    const EXPECTED_CLEARED_MESSAGE = 'Reasons cleared. Observation remains selected. Production output was not changed.';
+    const EXPECTED_LIMIT_MESSAGE = 'You can select up to five reasons.';
+    record('FIX 7: "reasons-cleared" renders the exact message into #ipoReasonLimit', rendererPriorityTest.clearedText === EXPECTED_CLEARED_MESSAGE, `text="${rendererPriorityTest.clearedText}"`);
+    record('FIX 7: #ipoReasonLimit is set via textContent only (no HTML markup present in innerHTML)', rendererPriorityTest.clearedHtml === EXPECTED_CLEARED_MESSAGE, `innerHTML="${rendererPriorityTest.clearedHtml}"`);
+    record('FIX 7: five-Reason limit still renders the existing limit message when there is no announcement', rendererPriorityTest.limitText === EXPECTED_LIMIT_MESSAGE, `text="${rendererPriorityTest.limitText}"`);
+    record('FIX 7: Clear Reasons message has priority over the limit message when both are simultaneously true', rendererPriorityTest.priorityText === EXPECTED_CLEARED_MESSAGE, `text="${rendererPriorityTest.priorityText}"`);
+    record('FIX 7: null token renders no Clear Reasons message', rendererPriorityTest.nullTokenText === '', `text="${rendererPriorityTest.nullTokenText}"`);
+    record('FIX 7: a hostile string token (HTML-like) is ignored and never rendered as markup', rendererPriorityTest.hostileText === '' && rendererPriorityTest.hostileHtml === '', `text="${rendererPriorityTest.hostileText}", html="${rendererPriorityTest.hostileHtml}"`);
+    record('FIX 7: a hostile non-string (object) token is ignored (only the exact string "reasons-cleared" is ever accepted)', rendererPriorityTest.hostileObjectText === '', `text="${rendererPriorityTest.hostileObjectText}"`);
+
     await page.close();
     coverage.syntheticIntegrationHarness = results.filter((r) => r.result === 'FAIL').length === 0 ? 'PASS' : 'FAIL';
 

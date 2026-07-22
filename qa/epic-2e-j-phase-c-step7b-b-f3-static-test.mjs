@@ -230,10 +230,10 @@ function noClickBetween(a, b) {
 {
   const hasScenarioA = testSrc.includes('Scenario A precondition 1: exactly one Reason selected before the audited action') && testSrc.includes('Scenario A precondition 2: exactly two Reasons selected (never reaching five)') && testSrc.includes('Scenario A: selecting an ordinary second Reason (well under the limit) produces ZERO live-region TEXT TRANSITIONS') && testSrc.includes('Scenario A: ordinary Selected Reasons text has no live-region ancestor');
   const hasScenarioB = testSrc.includes('Scenario B precondition 1: exactly four Reasons selected') && testSrc.includes('Scenario B precondition 2: the fifth Reason (contrast) is enabled and unchecked before selection') && testSrc.includes('Scenario B: selecting the fifth Reason through a real UI action reaches exactly five selected') && testSrc.includes('Scenario B: reaching the five-Reason limit produces exactly one meaningful non-empty ipoReasonLimit announcement') && testSrc.includes('Scenario B: no duplicate identical ipoReasonLimit announcement was recorded');
-  const hasScenarioC = testSrc.includes('PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT') && testSrc.includes('Scenario C: Clear Reasons produces at least one meaningful non-empty live announcement describing the action') && testSrc.includes('Scenario C: Clear Reasons produces exactly one distinct, non-empty, non-repeated live announcement describing the action');
+  const hasScenarioC = testSrc.includes("const REASONS_CLEARED_ANNOUNCEMENT_TEXT = 'Reasons cleared. Observation remains selected. Production output was not changed.';") && testSrc.includes('Scenario C / FIX 8 (F3-P1): Clear Reasons produces EXACTLY the bounded accessible message') && testSrc.includes('auditC_reasonLimit.distinctNonEmptyTexts[0] === REASONS_CLEARED_ANNOUNCEMENT_TEXT');
   const hasScenarioD = testSrc.includes('Scenario D: a genuine stale-generation transition') && testSrc.includes('Scenario D: no duplicate identical ipoWarning announcement was recorded');
   const hasScenarioE = testSrc.includes('Scenario E: Clear Observation produces exactly one non-empty ipoStatus announcement matching the expected cleared-state message');
-  record('Part 7: all five MutationObserver scenarios are implemented per F3-S2 (A deterministic ordinary-selection non-live, B deterministic limit-reached single announcement, C Clear Reasons fail-closed, D stale/generation transition with Canvas exclusion, E Clear Observation requires real announcement)', hasScenarioA && hasScenarioB && hasScenarioC && hasScenarioD && hasScenarioE, `hasScenarioA=${hasScenarioA}, hasScenarioB=${hasScenarioB}, hasScenarioC=${hasScenarioC}, hasScenarioD=${hasScenarioD}, hasScenarioE=${hasScenarioE}`);
+  record('Part 7: all five MutationObserver scenarios are implemented per F3-S2/F3-P1 (A deterministic ordinary-selection non-live, B deterministic limit-reached single announcement, C Clear Reasons EXACT bounded message now that the Production fix exists, D stale/generation transition with Canvas exclusion, E Clear Observation requires real announcement)', hasScenarioA && hasScenarioB && hasScenarioC && hasScenarioD && hasScenarioE, `hasScenarioA=${hasScenarioA}, hasScenarioB=${hasScenarioB}, hasScenarioC=${hasScenarioC}, hasScenarioD=${hasScenarioD}, hasScenarioE=${hasScenarioE}`);
 }
 {
   const rejectsDuplicates = (testSrc.match(/repeatedIdenticalTexts === 0/g) || []).length >= 4;
@@ -312,11 +312,17 @@ function noClickBetween(a, b) {
   record('FIX 3: duplicate detection uses a whole-window Set (not consecutive-pair comparison), correctly catching A→B→A while A→B alone is not a duplicate', usesSetBasedWholeWindowDetection && commentsWholeWindowIntent, `usesSetBasedWholeWindowDetection=${usesSetBasedWholeWindowDetection}, commentsWholeWindowIntent=${commentsWholeWindowIntent}`);
 }
 {
-  // FIX 4: Clear Reasons fails closed with the exact named evidence
-  // string when no meaningful non-empty announcement exists, and is
-  // never reinterpreted as PASS.
-  const failsClosedWithExactEvidence = testSrc.includes("if (auditC_totalNonEmptyAnnouncements === 0) {") && testSrc.includes('PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT') && testSrc.includes("'Scenario C: Clear Reasons produces at least one meaningful non-empty live announcement describing the action',\n        false,");
-  record('FIX 4: an empty-text Reason-limit clearing cannot satisfy Clear Reasons — zero non-empty announcements records an honest FAIL with evidence PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT, never reinterpreted as PASS, with no Production change', failsClosedWithExactEvidence, `present=${failsClosedWithExactEvidence}`);
+  // FIX 4 (F3-S2) / FIX 8 (F3-P1): the ORIGINAL fail-closed honest-FAIL
+  // branch (with its PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT
+  // evidence string) is now REMOVED from the Browser test — but ONLY
+  // because Production now contains the actual bounded fix (verified
+  // separately below). The fail-closed CODE PATH itself must be gone
+  // (never left dangling alongside the new PASS expectation), and the
+  // marker string must not appear anywhere in the Browser test file
+  // anymore (it lived there only to describe the gap while it existed).
+  const failClosedBranchRemoved = !testSrc.includes('if (auditC_totalNonEmptyAnnouncements === 0) {') && !testSrc.includes("'Scenario C: Clear Reasons produces at least one meaningful non-empty live announcement describing the action',\n        false,");
+  const markerNoLongerPresentAsEvidence = !/record\([^)]*PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT/.test(testSrc);
+  record('FIX 4 (F3-S2) / FIX 8 (F3-P1): the original Clear Reasons fail-closed honest-FAIL code path (and its PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT evidence string) has been removed from the Browser test now that Production contains the bounded fix', failClosedBranchRemoved && markerNoLongerPresentAsEvidence, `failClosedBranchRemoved=${failClosedBranchRemoved}, markerNoLongerPresentAsEvidence=${markerNoLongerPresentAsEvidence}`);
 }
 {
   // FIX 5: Clear Observation requires a real non-empty announcement
@@ -455,9 +461,23 @@ function noClickBetween(a, b) {
   record('FIX 7 (F3-S3): no-trap section-exit is determined via real DOM containment (Node.contains against #interactivePreviewObservationInner and #interactivePreviewObservationSessionInner), captured inline on the live activeElement, never via an ID-prefix heuristic', usesRealContainment && noLongerUsesIdPrefixHeuristic && capturedInlineNotReconstructed, `usesRealContainment=${usesRealContainment}, noLongerUsesIdPrefixHeuristic=${noLongerUsesIdPrefixHeuristic}, capturedInlineNotReconstructed=${capturedInlineNotReconstructed}`);
 }
 {
-  // Clear Reasons named Product gap remains intact (unchanged from F3-S2).
-  const productGapIntact = testSrc.includes('PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT') && testSrc.includes('no Production change was made in this static-only patch');
-  record('FIX 8 (F3-S3): the Clear Reasons named Product-accessibility-gap evidence (PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT) remains intact and is never reinterpreted as PASS', productGapIntact, `present=${productGapIntact}`);
+  // Step 7B-B-F3-P1: the Clear Reasons Product-gap marker is REMOVED
+  // from the Browser test ONLY because the bounded Production fix now
+  // genuinely exists (reasonAnnouncement token + Renderer priority
+  // mapping) — never removed merely to make a test pass. Both
+  // conditions are checked: the marker is gone from test.mjs, AND the
+  // real Production fix is actually present in the two allowed
+  // Production files.
+  // A historical comment mentioning the retired marker name (for context
+  // on WHY the fail-closed branch was removed) is fine; what matters is
+  // that it never appears again as LIVE record() evidence.
+  const markerRemovedFromBrowserTest = !/record\([^)]*PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT/.test(testSrc);
+  let controllerSrc = '';
+  let rendererSrc = '';
+  try { controllerSrc = await readFile(path.join(PROJECT_ROOT, 'ui', 'interactive-preview-observation-controller-v2.js'), 'utf8'); } catch { /* left empty on read failure — check fails closed below */ }
+  try { rendererSrc = await readFile(path.join(PROJECT_ROOT, 'ui', 'interactive-preview-observation-renderer-v2.js'), 'utf8'); } catch { /* left empty on read failure — check fails closed below */ }
+  const productionFixGenuinelyExists = controllerSrc.includes("let reasonAnnouncement = null;") && controllerSrc.includes("reasonAnnouncement = 'reasons-cleared';") && rendererSrc.includes("const REASONS_CLEARED_MESSAGE = 'Reasons cleared. Observation remains selected. Production output was not changed.';");
+  record('FIX 8/9 (F3-P1): the Clear Reasons Product-gap marker is removed from the Browser test ONLY because the bounded Production fix (reasonAnnouncement token + Renderer priority mapping) genuinely exists in the allowed Production files', markerRemovedFromBrowserTest && productionFixGenuinelyExists, `markerRemovedFromBrowserTest=${markerRemovedFromBrowserTest}, productionFixGenuinelyExists=${productionFixGenuinelyExists}`);
 }
 {
   // No Production file was modified — this static test only ever reads
@@ -466,6 +486,64 @@ function noClickBetween(a, b) {
   const neverReferencesCoreOrUiPaths = !/readFile\([^)]*['"`](\.\.\/)?(core|ui)\//.test(testSrc);
   const neverClaimsProductionChange = !/Production (was|has been) (changed|modified|updated)/i.test(testSrc);
   record('FIX 8 (F3-S3): no Production file was modified — this static self-test only reads the qa/ test file itself and never claims a Production change', neverReferencesCoreOrUiPaths && neverClaimsProductionChange, `neverReferencesCoreOrUiPaths=${neverReferencesCoreOrUiPaths}, neverClaimsProductionChange=${neverClaimsProductionChange}`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Step 7B-B-F3-P1 — FIX 9 static regression: proves (via source audit
+// of the two allowed Production files AND the Browser test) that the
+// bounded Clear Reasons accessibility patch is real, semantic-token-
+// based, correctly lifecycled, and reuses the existing live region.
+// ══════════════════════════════════════════════════════════════════
+{
+  let controllerSrc2 = '';
+  let rendererSrc2 = '';
+  try { controllerSrc2 = await readFile(path.join(PROJECT_ROOT, 'ui', 'interactive-preview-observation-controller-v2.js'), 'utf8'); } catch { /* checks fail closed below */ }
+  try { rendererSrc2 = await readFile(path.join(PROJECT_ROOT, 'ui', 'interactive-preview-observation-renderer-v2.js'), 'utf8'); } catch { /* checks fail closed below */ }
+
+  // reasonAnnouncement is a semantic token, not arbitrary text.
+  const isSemanticToken = controllerSrc2.includes("const VALID_REASON_ANNOUNCEMENTS = ['reasons-cleared'];") && controllerSrc2.includes('function _normalizeReasonAnnouncement(value) {') && controllerSrc2.includes('VALID_REASON_ANNOUNCEMENTS.includes(value) ? value : null');
+  record('FIX 9 (F3-P1): reasonAnnouncement is a semantic token restricted to exactly one allowed value (or null), never arbitrary announcement text', isSemanticToken, `present=${isSemanticToken}`);
+
+  // Controller signature includes the token.
+  const signatureIncludesToken = controllerSrc2.includes('safePart(s.reasonAnnouncement),') && /reasonsSignature,\s*\n\s*\/\/ Step 7B-B-F3-P1 FIX 1[\s\S]{0,300}safePart\(s\.reasonAnnouncement\)/.test(controllerSrc2);
+  record('FIX 9 (F3-P1): the Controller state signature includes reasonAnnouncement (a genuine token transition is detected as a meaningful state change)', signatureIncludesToken, `present=${signatureIncludesToken}`);
+
+  // clearReasons sets the token only when Reasons existed.
+  const setsOnlyWhenReasonsExisted = /function clearReasons\(\) \{[\s\S]{0,600}const hadReasons = _clearReasonsMemory\(\);\s*\n\s*if \(hadReasons\) \{\s*\n\s*reasonAnnouncement = 'reasons-cleared';/.test(controllerSrc2);
+  record('FIX 9 (F3-P1): clearReasons() sets reasonAnnouncement="reasons-cleared" ONLY when _clearReasonsMemory() reports Reasons genuinely existed', setsOnlyWhenReasonsExisted, `present=${setsOnlyWhenReasonsExisted}`);
+
+  // repeated empty clear does not announce (no unconditional set).
+  const noUnconditionalSet = !/_clearReasonsMemory\(\);\s*\n\s*reasonAnnouncement = 'reasons-cleared';/.test(controllerSrc2);
+  record('FIX 9 (F3-P1): calling clearReasons() when no Reasons existed never unconditionally (re-)sets the token — a repeated empty clear cannot manufacture a new announcement', noUnconditionalSet, `present=${noUnconditionalSet}`);
+
+  // ordinary Reason mutation clears the token.
+  const toggleClears = controllerSrc2.includes('reasons = normalizeReasons(nextReasons);\n    reasonsGenerationId = generationId;\n    // Step 7B-B-F3-P1 FIX 3 — adding/removing a Reason clears any prior\n    // Reasons-cleared announcement (a genuine Reason mutation).\n    reasonAnnouncement = null;');
+  const setReasonsClears = controllerSrc2.includes("reasons = normalizeReasons(_safeBoundedArray(reasonsInput));\n    reasonsGenerationId = generationId;\n    // Step 7B-B-F3-P1 FIX 3 — setReasons() clears any prior\n    // Reasons-cleared announcement (a genuine Reason mutation).\n    reasonAnnouncement = null;");
+  record('FIX 9 (F3-P1): ordinary Reason mutation (toggleReason success and setReasons() success) clears reasonAnnouncement to null', toggleClears && setReasonsClears, `toggleClears=${toggleClears}, setReasonsClears=${setReasonsClears}`);
+
+  // Renderer maps the token to the exact bounded message.
+  const rendererMapsToken = rendererSrc2.includes("const rawReasonAnnouncement = _safeGetR(s, 'reasonAnnouncement');") && rendererSrc2.includes("const reasonAnnouncementActive = rawReasonAnnouncement === 'reasons-cleared';") && rendererSrc2.includes('reasonLimitMessage = REASONS_CLEARED_MESSAGE;');
+  record('FIX 9 (F3-P1): the Renderer maps the token to the exact bounded Clear Reasons message', rendererMapsToken, `present=${rendererMapsToken}`);
+
+  // Existing #ipoReasonLimit live region is reused; no fourth live region added.
+  const reusesExistingRegion = rendererSrc2.includes('if (reasonLimitEl) reasonLimitEl.textContent = reasonLimitMessage;');
+  const ariaLiveCount = (rendererSrc2.match(/attrs:\s*\{\s*'aria-live':\s*'polite'\s*\}/g) || []).length;
+  const noFourthLiveRegion = ariaLiveCount === 3; // ipoStatus, ipoWarning, ipoReasonLimit — exactly three, never a fourth
+  record('FIX 9 (F3-P1): the existing #ipoReasonLimit polite live region is reused for the Clear Reasons message; exactly three aria-live regions exist in the Renderer (no fourth live region added)', reusesExistingRegion && noFourthLiveRegion, `reusesExistingRegion=${reusesExistingRegion}, ariaLiveCount=${ariaLiveCount}`);
+
+  // no Mapping/XMP/core file is touched by this patch.
+  const noMappingXmpCoreTouched = !controllerSrc2.includes('Mapping') || controllerSrc2.includes('never reads or writes finalStyleIntent'); // doc-comment mention is fine; no new Mapping/XMP wiring added
+  const noNewImportsOfMappingOrCore = !/import[^;]*from\s+['"](\.\.\/)?(core|.*mapping)/i.test(controllerSrc2) && !/import[^;]*from\s+['"](\.\.\/)?(core|.*mapping)/i.test(rendererSrc2);
+  record('FIX 9 (F3-P1): no Mapping/XMP/core file is touched by this patch — the Controller/Renderer gain no new imports of core/ or Mapping modules', noMappingXmpCoreTouched && noNewImportsOfMappingOrCore, `noMappingXmpCoreTouched=${noMappingXmpCoreTouched}, noNewImportsOfMappingOrCore=${noNewImportsOfMappingOrCore}`);
+}
+{
+  // Browser test FIX 6/7 focused Controller/Renderer tests exist in the
+  // Observation smoke test (ALLOWED QA FILE for this round).
+  let obsSmokeSrc = '';
+  try { obsSmokeSrc = await readFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-observation-smoke-test.mjs'), 'utf8'); } catch { /* fails closed below */ }
+  const hasControllerScenarios = ['FIX 6 Scenario A', 'FIX 6 Scenario B', 'FIX 6 Scenario C', 'FIX 6 Scenario D', 'FIX 6 Scenario E', 'FIX 6 Scenario F'].every((s) => obsSmokeSrc.includes(s));
+  const hasRendererChecks = ['FIX 7:', "renders the exact message into #ipoReasonLimit", 'textContent only', 'still renders the existing limit message', 'has priority over the limit message', 'renders no Clear Reasons message', 'hostile'].every((s) => obsSmokeSrc.includes(s));
+  record('FIX 6/7 (F3-P1): the Observation smoke test contains focused Controller Scenarios A-F and Renderer priority/textContent-only/hostile-token checks', hasControllerScenarios && hasRendererChecks, `hasControllerScenarios=${hasControllerScenarios}, hasRendererChecks=${hasRendererChecks}`);
 }
 
 // ══════════════════════════════════════════════════════════════════

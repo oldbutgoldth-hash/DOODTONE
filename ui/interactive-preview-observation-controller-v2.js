@@ -183,9 +183,16 @@ const STALE_WARNING_MESSAGE = 'The previous observation was cleared because a ne
 // Neutral, not an error — never labeled "stale".
 const PROVIDER_UNCONFIRMED_WARNING = 'Current generation could not be independently confirmed.';
 
+// Step 7B-B-F3-P1 FIX 1 — the only two values this compact semantic
+// token may ever take. Never arbitrary announcement text.
+const VALID_REASON_ANNOUNCEMENTS = ['reasons-cleared'];
+function _normalizeReasonAnnouncement(value) {
+  return VALID_REASON_ANNOUNCEMENTS.includes(value) ? value : null;
+}
+
 // Builds the compact, DOM-free state object returned by every public
 // method and passed to onStateChange. Never includes any DOM element.
-function _buildState({ state, observation, observationGenerationId, currentGenerationId, interactiveComparisonReady, safetyReadOnly, createdAt, updatedAt, warnings, blockers, unavailableReason, contextGenerationId, providerGenerationId, providerConfigured, providerEvidenceAvailable, generationUsable, generationConfirmed, reasons, reasonsGenerationId }) {
+function _buildState({ state, observation, observationGenerationId, currentGenerationId, interactiveComparisonReady, safetyReadOnly, createdAt, updatedAt, warnings, blockers, unavailableReason, contextGenerationId, providerGenerationId, providerConfigured, providerEvidenceAvailable, generationUsable, generationConfirmed, reasons, reasonsGenerationId, reasonAnnouncement }) {
   const safeReasons = Array.isArray(reasons) ? reasons.slice(0, REASON_LIMIT) : [];
   return {
     state,
@@ -204,6 +211,10 @@ function _buildState({ state, observation, observationGenerationId, currentGener
     reasonLimit: REASON_LIMIT,
     reasonLimitReached: safeReasons.length >= REASON_LIMIT,
     reasonsGenerationId: reasonsGenerationId ?? null,
+    // Step 7B-B-F3-P1 FIX 1 — a compact semantic token, never arbitrary
+    // announcement text, never a DOM object, never an Error object,
+    // never persisted, never sent to Session records, Mapping, or XMP.
+    reasonAnnouncement: _normalizeReasonAnnouncement(reasonAnnouncement),
     metadata: {
       blockers: Array.isArray(blockers) ? blockers.slice(0, 4) : [],
       unavailableReason: unavailableReason ?? null,
@@ -240,6 +251,10 @@ function _stateSignature(state) {
     safePart(meta.providerConfigured), safePart(meta.providerEvidenceAvailable),
     safePart(meta.generationUsable), safePart(meta.generationConfirmed),
     safePart(meta.unavailableReason), firstWarning, firstBlocker, reasonsSignature,
+    // Step 7B-B-F3-P1 FIX 1 — included in the safe state signature so a
+    // genuine reasonAnnouncement transition (e.g. null -> "reasons-cleared")
+    // is itself detected as a meaningful state change worth emitting.
+    safePart(s.reasonAnnouncement),
   ].join('|');
 }
 
@@ -277,9 +292,14 @@ function deriveObservationStateV2(input) {
   const providerConfigured = safeGet(providerResult, 'configured') === true;
   const providerEvidenceAvailable = safeGet(providerResult, 'available') === true;
   const providerGenerationId = safeGet(providerResult, 'generationId') ?? null;
+  // Step 7B-B-F3-P1 FIX 1/3 — this pure derivation function never
+  // decides WHEN to set or clear the token (that lifecycle is owned by
+  // the Controller per FIX 3); it only normalizes and passes through
+  // whatever value the Controller currently holds.
+  const reasonAnnouncement = _normalizeReasonAnnouncement(safeGet(rec, 'reasonAnnouncement'));
 
   if (disposed) {
-    return _buildState({ state: 'disposed', currentGenerationId: null, warnings: [], blockers: [] });
+    return _buildState({ state: 'disposed', currentGenerationId: null, warnings: [], blockers: [], reasonAnnouncement: null });
   }
 
   const generationId = safeGet(context, 'generationId') ?? null;
@@ -313,7 +333,7 @@ function deriveObservationStateV2(input) {
       state: 'unavailable', observationGenerationId: null, currentGenerationId: generationId,
       interactiveComparisonReady: false, safetyReadOnly: false, createdAt: null, updatedAt: null,
       warnings: [STALE_WARNING_MESSAGE], blockers: [STALE_WARNING_MESSAGE],
-      unavailableReason: 'cancelled', ...metaBase,
+      unavailableReason: 'cancelled', ...metaBase, reasonAnnouncement: null,
     });
   }
 
@@ -322,7 +342,7 @@ function deriveObservationStateV2(input) {
       state: 'unavailable', observationGenerationId, currentGenerationId: generationId,
       interactiveComparisonReady: false, safetyReadOnly: false, createdAt, updatedAt,
       warnings: [], blockers: [UNAVAILABLE_REASON_MESSAGE['missing-generation']],
-      unavailableReason: 'missing-generation', ...metaBase,
+      unavailableReason: 'missing-generation', ...metaBase, reasonAnnouncement: null,
     });
   }
 
@@ -333,7 +353,7 @@ function deriveObservationStateV2(input) {
       interactiveComparisonReady: interactiveReady, safetyReadOnly: true,
       createdAt, updatedAt, warnings: [],
       blockers: [SAFETY_BLOCKED_MESSAGE],
-      unavailableReason: null, ...metaBase,
+      unavailableReason: null, ...metaBase, reasonAnnouncement: null,
     });
   }
 
@@ -356,7 +376,7 @@ function deriveObservationStateV2(input) {
       interactiveComparisonReady: interactiveReady, safetyReadOnly: false,
       createdAt, updatedAt, warnings: [],
       blockers: [UNAVAILABLE_REASON_MESSAGE[reason] ?? UNAVAILABLE_REASON_MESSAGE['not-ready']],
-      unavailableReason: reason, ...metaBase,
+      unavailableReason: reason, ...metaBase, reasonAnnouncement: null,
     });
   }
 
@@ -367,13 +387,17 @@ function deriveObservationStateV2(input) {
       interactiveComparisonReady: true, safetyReadOnly: false, createdAt, updatedAt,
       warnings: providerUnconfirmedWarning, blockers: [], unavailableReason: null, ...metaBase,
       reasons: validReasons, reasonsGenerationId: (reasonsGenerationId === generationId) ? reasonsGenerationId : null,
+      // Step 7B-B-F3-P1 FIX 1 — the ONLY state where the announcement is
+      // meaningful (Observation genuinely selected for this generation);
+      // pass through whatever the Controller currently holds.
+      reasonAnnouncement,
     });
   }
 
   return _buildState({
     state: 'ready', observation: null, observationGenerationId: null, currentGenerationId: generationId,
     interactiveComparisonReady: true, safetyReadOnly: false, createdAt, updatedAt,
-    warnings: providerUnconfirmedWarning, blockers: [], unavailableReason: null, ...metaBase,
+    warnings: providerUnconfirmedWarning, blockers: [], unavailableReason: null, ...metaBase, reasonAnnouncement: null,
   });
 }
 
@@ -452,6 +476,11 @@ export function createInteractivePreviewObservationControllerV2(options) {
   // discipline as the observation itself.
   let reasons = [];
   let reasonsGenerationId = null;
+  // Step 7B-B-F3-P1 FIX 1 — a compact semantic token, never arbitrary
+  // announcement text. Set to 'reasons-cleared' ONLY by clearReasons()
+  // when Reasons genuinely existed; cleared to null by every other
+  // genuine state-changing operation (FIX 3). Never persisted.
+  let reasonAnnouncement = null;
 
   /**
    * A structured provider read — never communicates provider state
@@ -502,7 +531,7 @@ export function createInteractivePreviewObservationControllerV2(options) {
     return providerResult.configured === true && providerResult.available === true && generationId !== null && providerResult.generationId !== generationId;
   }
 
-  let lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult: _readProviderGeneration(), reasons, reasonsGenerationId });
+  let lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult: _readProviderGeneration(), reasons, reasonsGenerationId, reasonAnnouncement });
   let lastSignature = _stateSignature(lastState);
 
   const listeners = [];
@@ -535,7 +564,7 @@ export function createInteractivePreviewObservationControllerV2(options) {
   // reuses it throughout that single operation — never re-reading the
   // provider multiple times within one call.
   function _refreshWith(providerResult) {
-    lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult, reasons, reasonsGenerationId });
+    lastState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult, reasons, reasonsGenerationId, reasonAnnouncement });
     return lastState;
   }
 
@@ -581,6 +610,11 @@ export function createInteractivePreviewObservationControllerV2(options) {
     let staleCleared = false;
     if (generationChanged || leftReady || providerMismatch) {
       staleCleared = _clearObservationMemory();
+      // Step 7B-B-F3-P1 FIX 3 — new generation/context invalidation
+      // clears the announcement. A metadata-only re-emit that leaves
+      // the user-visible state unchanged (staleCleared stays false)
+      // never touches it.
+      reasonAnnouncement = null;
     }
 
     _refreshWith(providerResult);
@@ -608,13 +642,14 @@ export function createInteractivePreviewObservationControllerV2(options) {
     // to the original generation).
     if (_providerMismatchesContext(providerResult)) {
       const staleCleared = _clearObservationMemory();
+      reasonAnnouncement = null; // Step 7B-B-F3-P1 FIX 3 — stale-generation clearing
       _refreshWith(providerResult);
       if (staleCleared) lastState = { ...lastState, warnings: [STALE_WARNING_MESSAGE] };
       _emitIfChanged();
       return lastState;
     }
 
-    const liveState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult, reasons, reasonsGenerationId });
+    const liveState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult, reasons, reasonsGenerationId, reasonAnnouncement });
     if (liveState.state !== 'ready' && liveState.state !== 'selected') return lastState; // not enabled
     const normalized = normalizeObservationValue(value);
     if (normalized === null) return lastState; // invalid value — silently ignored, never crashes
@@ -627,6 +662,9 @@ export function createInteractivePreviewObservationControllerV2(options) {
     const now = _safeNow();
     if (createdAt === null) createdAt = now;
     updatedAt = now;
+    // Step 7B-B-F3-P1 FIX 3 — selecting/changing an Observation clears
+    // any prior Reasons-cleared announcement.
+    reasonAnnouncement = null;
 
     _refreshWith(providerResult);
     _emitIfChanged();
@@ -647,7 +685,7 @@ export function createInteractivePreviewObservationControllerV2(options) {
   function _reasonsAcceptable(providerResult) {
     if (disposed) return false;
     if (_providerMismatchesContext(providerResult)) return false;
-    const liveState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult, reasons, reasonsGenerationId });
+    const liveState = deriveObservationStateV2({ disposed, context, observation, observationGenerationId, createdAt, updatedAt, providerResult, reasons, reasonsGenerationId, reasonAnnouncement });
     return liveState.state === 'selected';
   }
 
@@ -659,6 +697,9 @@ export function createInteractivePreviewObservationControllerV2(options) {
   // the transition. The caller must return immediately after this.
   function _rejectReasonOperationAsStale(providerResult) {
     const staleCleared = _clearObservationMemory();
+    // Step 7B-B-F3-P1 FIX 3 — stale-generation clearing clears the
+    // announcement (shared by toggleReason/setReasons/clearReasons).
+    reasonAnnouncement = null;
     _refreshWith(providerResult);
     if (staleCleared) lastState = { ...lastState, warnings: [STALE_WARNING_MESSAGE] };
     _emitIfChanged();
@@ -702,6 +743,9 @@ export function createInteractivePreviewObservationControllerV2(options) {
 
     reasons = normalizeReasons(nextReasons);
     reasonsGenerationId = generationId;
+    // Step 7B-B-F3-P1 FIX 3 — adding/removing a Reason clears any prior
+    // Reasons-cleared announcement (a genuine Reason mutation).
+    reasonAnnouncement = null;
     _refreshWith(providerResult);
     _emitIfChanged();
     return lastState;
@@ -727,6 +771,9 @@ export function createInteractivePreviewObservationControllerV2(options) {
     // could otherwise throw or return unbounded data).
     reasons = normalizeReasons(_safeBoundedArray(reasonsInput));
     reasonsGenerationId = generationId;
+    // Step 7B-B-F3-P1 FIX 3 — setReasons() clears any prior
+    // Reasons-cleared announcement (a genuine Reason mutation).
+    reasonAnnouncement = null;
     _refreshWith(providerResult);
     _emitIfChanged();
     return lastState;
@@ -736,13 +783,23 @@ export function createInteractivePreviewObservationControllerV2(options) {
    * Clears reason tags only — keeps the current Observation selected
    * and its session association valid. Does not clear the main
    * Observation.
+   * Step 7B-B-F3-P1 FIX 2 — when Reasons genuinely existed and were
+   * cleared, sets the semantic reasonAnnouncement token so the Renderer
+   * can surface one bounded accessible message; the current Observation
+   * and its generation are always preserved (only `_clearReasonsMemory`
+   * fields are touched). When no Reasons existed, this is a safe no-op:
+   * no new announcement, no duplicate state-change emission (the state
+   * signature is unchanged, so `_emitIfChanged` naturally emits nothing).
    */
   function clearReasons() {
     if (disposed) return lastState;
     // ONE provider snapshot for this entire operation.
     const providerResult = _readProviderGeneration();
     if (_providerMismatchesContext(providerResult)) return _rejectReasonOperationAsStale(providerResult);
-    _clearReasonsMemory();
+    const hadReasons = _clearReasonsMemory();
+    if (hadReasons) {
+      reasonAnnouncement = 'reasons-cleared';
+    }
     _refreshWith(providerResult);
     _emitIfChanged();
     return lastState;
@@ -759,6 +816,9 @@ export function createInteractivePreviewObservationControllerV2(options) {
    */
   function clearObservation() {
     if (disposed) return lastState;
+    // Step 7B-B-F3-P1 FIX 3 — clearing the Observation always clears
+    // any prior Reasons-cleared announcement.
+    reasonAnnouncement = null;
     const providerResult = _readProviderGeneration(); // ONE snapshot for this operation
     const mismatch = _providerMismatchesContext(providerResult);
     const staleCleared = _clearObservationMemory();
@@ -777,6 +837,8 @@ export function createInteractivePreviewObservationControllerV2(options) {
     if (disposed) return lastState;
     context = null;
     _clearObservationMemory();
+    // Step 7B-B-F3-P1 FIX 3 — reset() clears any prior announcement.
+    reasonAnnouncement = null;
     _refreshWith(_readProviderGeneration());
     _emitIfChanged();
     return lastState;
@@ -793,7 +855,9 @@ export function createInteractivePreviewObservationControllerV2(options) {
     listeners.length = 0;
     context = null;
     _clearObservationMemory();
-    lastState = deriveObservationStateV2({ disposed: true, context: null, observation: null, observationGenerationId: null, createdAt: null, updatedAt: null, providerResult: { configured: false, available: false, generationId: null } });
+    // Step 7B-B-F3-P1 FIX 3 — dispose() clears any prior announcement.
+    reasonAnnouncement = null;
+    lastState = deriveObservationStateV2({ disposed: true, context: null, observation: null, observationGenerationId: null, createdAt: null, updatedAt: null, providerResult: { configured: false, available: false, generationId: null }, reasonAnnouncement: null });
   }
 
   /**
@@ -813,7 +877,11 @@ export function createInteractivePreviewObservationControllerV2(options) {
     const providerResult = _readProviderGeneration(); // ONE snapshot
     const mismatch = _providerMismatchesContext(providerResult);
     let staleCleared = false;
-    if (mismatch) staleCleared = _clearObservationMemory();
+    if (mismatch) {
+      staleCleared = _clearObservationMemory();
+      // Step 7B-B-F3-P1 FIX 3 — stale-generation clearing clears the announcement.
+      reasonAnnouncement = null;
+    }
 
     _refreshWith(providerResult);
     if (staleCleared) {

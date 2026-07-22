@@ -66,6 +66,11 @@ const SAFETY_NOTE = 'Observation only \u00B7 Legacy remains production \u00B7 XM
 const V2_REMINDER = 'Controlled V2 remains non-production.';
 const REASON_DETAILS_NOTE = 'Observation details stay in this page session only and do not change production output.';
 const REASON_LIMIT_MESSAGE = 'You can select up to five reasons.';
+// Step 7B-B-F3-P1 FIX 4 — the exact bounded accessible message shown
+// when Reasons are genuinely cleared while the current Observation
+// remains selected. Reuses the existing #ipoReasonLimit polite live
+// region — no fourth live region is added.
+const REASONS_CLEARED_MESSAGE = 'Reasons cleared. Observation remains selected. Production output was not changed.';
 const SESSION_NOTE = 'This summary resets when the page reloads and does not affect Mapping, XMP, or production.';
 const SESSION_EMPTY_MESSAGE = 'No observations have been recorded in this page session.';
 
@@ -271,6 +276,11 @@ export function renderInteractivePreviewObservationV2(container, state) {
   const rawUnavailableReason = _safeGetR(rawMetadata, 'unavailableReason');
   const rawReasons = _safeGetR(s, 'reasons');
   const rawReasonLimitReached = _safeGetR(s, 'reasonLimitReached');
+  // Step 7B-B-F3-P1 FIX 4/7 — an unknown/hostile token is treated
+  // exactly like null (no Clear Reasons message); only the exact
+  // string 'reasons-cleared' is ever accepted.
+  const rawReasonAnnouncement = _safeGetR(s, 'reasonAnnouncement');
+  const reasonAnnouncementActive = rawReasonAnnouncement === 'reasons-cleared';
 
   const normalizedState = typeof rawState === 'string' ? rawState : 'unavailable';
   const enabled = normalizedState === 'ready' || normalizedState === 'selected' || normalizedState === 'cleared';
@@ -360,7 +370,19 @@ export function renderInteractivePreviewObservationV2(container, state) {
     // removable); when not enabled at all, everything is disabled.
     input.disabled = !reasonsEnabled || (reasonLimitReached && !isChecked);
   });
-  if (reasonLimitEl) reasonLimitEl.textContent = reasonsEnabled && reasonLimitReached ? REASON_LIMIT_MESSAGE : '';
+  // Step 7B-B-F3-P1 FIX 4 — render priority into the EXISTING
+  // #ipoReasonLimit polite live region (no fourth live region added):
+  // (1) the Reasons-cleared announcement, (2) otherwise the five-Reason
+  // limit message, (3) otherwise empty. textContent only — no HTML/
+  // innerHTML — and the message is the exact bounded string, never
+  // concatenated or interpolated with untrusted data.
+  let reasonLimitMessage = '';
+  if (reasonsEnabled && reasonAnnouncementActive) {
+    reasonLimitMessage = REASONS_CLEARED_MESSAGE;
+  } else if (reasonsEnabled && reasonLimitReached) {
+    reasonLimitMessage = REASON_LIMIT_MESSAGE;
+  }
+  if (reasonLimitEl) reasonLimitEl.textContent = reasonLimitMessage;
   if (clearReasonsButton) clearReasonsButton.disabled = !reasonsEnabled || reasonsList.length === 0;
   if (reasonStatusEl) {
     reasonStatusEl.textContent = reasonsEnabled && reasonsList.length > 0

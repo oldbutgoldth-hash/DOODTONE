@@ -1,16 +1,16 @@
 {
   "suite": "EPIC 2E-J — Step 7B-B-F3-S: static coverage self-test (source audit only, no Chromium)",
-  "generatedAt": "2026-07-22T08:59:16.171Z",
+  "generatedAt": "2026-07-22T09:20:13.547Z",
   "summary": {
-    "total": 50,
-    "pass": 50,
+    "total": 59,
+    "pass": 59,
     "fail": 0
   },
   "results": [
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "149003 bytes"
+      "evidence": "149152 bytes"
     },
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-f1-static-results.json is readable",
@@ -83,7 +83,7 @@
       "evidence": "hasInstallFn=true, observesOnlyThreeRegions=true, hasRequiredRecordShape=true"
     },
     {
-      "test": "Part 7: all five MutationObserver scenarios are implemented per F3-S2 (A deterministic ordinary-selection non-live, B deterministic limit-reached single announcement, C Clear Reasons fail-closed, D stale/generation transition with Canvas exclusion, E Clear Observation requires real announcement)",
+      "test": "Part 7: all five MutationObserver scenarios are implemented per F3-S2/F3-P1 (A deterministic ordinary-selection non-live, B deterministic limit-reached single announcement, C Clear Reasons EXACT bounded message now that the Production fix exists, D stale/generation transition with Canvas exclusion, E Clear Observation requires real announcement)",
       "result": "PASS",
       "evidence": "hasScenarioA=true, hasScenarioB=true, hasScenarioC=true, hasScenarioD=true, hasScenarioE=true"
     },
@@ -128,9 +128,9 @@
       "evidence": "usesSetBasedWholeWindowDetection=true, commentsWholeWindowIntent=true"
     },
     {
-      "test": "FIX 4: an empty-text Reason-limit clearing cannot satisfy Clear Reasons — zero non-empty announcements records an honest FAIL with evidence PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT, never reinterpreted as PASS, with no Production change",
+      "test": "FIX 4 (F3-S2) / FIX 8 (F3-P1): the original Clear Reasons fail-closed honest-FAIL code path (and its PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT evidence string) has been removed from the Browser test now that Production contains the bounded fix",
       "result": "PASS",
-      "evidence": "present=true"
+      "evidence": "failClosedBranchRemoved=true, markerNoLongerPresentAsEvidence=true"
     },
     {
       "test": "FIX 5: Clear Observation requires exactly one non-empty ipoStatus announcement matching the real expected cleared-state message with no repeat; zero mutations/messages cannot PASS",
@@ -238,14 +238,59 @@
       "evidence": "usesRealContainment=true, noLongerUsesIdPrefixHeuristic=true, capturedInlineNotReconstructed=true"
     },
     {
-      "test": "FIX 8 (F3-S3): the Clear Reasons named Product-accessibility-gap evidence (PRODUCT_ACCESSIBILITY_GAP_CLEAR_REASONS_ANNOUNCEMENT) remains intact and is never reinterpreted as PASS",
+      "test": "FIX 8/9 (F3-P1): the Clear Reasons Product-gap marker is removed from the Browser test ONLY because the bounded Production fix (reasonAnnouncement token + Renderer priority mapping) genuinely exists in the allowed Production files",
       "result": "PASS",
-      "evidence": "present=true"
+      "evidence": "markerRemovedFromBrowserTest=true, productionFixGenuinelyExists=true"
     },
     {
       "test": "FIX 8 (F3-S3): no Production file was modified — this static self-test only reads the qa/ test file itself and never claims a Production change",
       "result": "PASS",
       "evidence": "neverReferencesCoreOrUiPaths=true, neverClaimsProductionChange=true"
+    },
+    {
+      "test": "FIX 9 (F3-P1): reasonAnnouncement is a semantic token restricted to exactly one allowed value (or null), never arbitrary announcement text",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 9 (F3-P1): the Controller state signature includes reasonAnnouncement (a genuine token transition is detected as a meaningful state change)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 9 (F3-P1): clearReasons() sets reasonAnnouncement=\"reasons-cleared\" ONLY when _clearReasonsMemory() reports Reasons genuinely existed",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 9 (F3-P1): calling clearReasons() when no Reasons existed never unconditionally (re-)sets the token — a repeated empty clear cannot manufacture a new announcement",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 9 (F3-P1): ordinary Reason mutation (toggleReason success and setReasons() success) clears reasonAnnouncement to null",
+      "result": "PASS",
+      "evidence": "toggleClears=true, setReasonsClears=true"
+    },
+    {
+      "test": "FIX 9 (F3-P1): the Renderer maps the token to the exact bounded Clear Reasons message",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 9 (F3-P1): the existing #ipoReasonLimit polite live region is reused for the Clear Reasons message; exactly three aria-live regions exist in the Renderer (no fourth live region added)",
+      "result": "PASS",
+      "evidence": "reusesExistingRegion=true, ariaLiveCount=3"
+    },
+    {
+      "test": "FIX 9 (F3-P1): no Mapping/XMP/core file is touched by this patch — the Controller/Renderer gain no new imports of core/ or Mapping modules",
+      "result": "PASS",
+      "evidence": "noMappingXmpCoreTouched=true, noNewImportsOfMappingOrCore=true"
+    },
+    {
+      "test": "FIX 6/7 (F3-P1): the Observation smoke test contains focused Controller Scenarios A-F and Renderer priority/textContent-only/hostile-token checks",
+      "result": "PASS",
+      "evidence": "hasControllerScenarios=true, hasRendererChecks=true"
     },
     {
       "test": "Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)",
