@@ -4,48 +4,47 @@
  *
  * EPIC 2E-J-C-F2 Step 7B-B — Keyboard, Accessibility, Security and
  * Final Phase C Closeout. Launches the REAL, complete, unmodified
- * application in headless Chromium, drives it through real keyboard
+ * application in real Chromium, drives it through real keyboard
  * events (never `locator.focus()` as a substitute for Tab), audits
  * accessibility structure/ARIA/contrast/touch-targets, and tests the
  * real Observation/Session renderers directly against malformed and
  * hostile input plus HTML/script injection strings.
  *
+ * EPIC 2E-J ENV-B2: the application is loaded through the
+ * Navigation-Free In-Memory Harness (qa/helpers/playwright-in-memory-app.mjs
+ * + qa/helpers/playwright-opaque-origin-storage.mjs, wired together via
+ * qa/helpers/playwright-lumixa-test-runtime.mjs's openLumixaInMemoryPage())
+ * — every Page this suite opens navigates ONLY to "about:blank?qa=1",
+ * never localhost/127.0.0.1/a private IP/a local HTTP server/a public
+ * deployment. The real project fixture image is still supplied via the
+ * genuine Playwright file-input API (page.setInputFiles against a real
+ * disk path) — Node/Playwright reads that file directly; the Browser
+ * itself never navigates to file:.
+ *
  * Run: node qa/epic-2e-j-phase-c-step7b-b-test.mjs
- * Output: qa/epic-2e-j-phase-c-step7b-b-results.json
+ * Output: qa/epic-2e-j-phase-c-step7b-b-results.json (written ONLY when
+ * the real Browser suite actually ran to completion)
  */
 
-import http from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
 import { computeStep7BBDecision, isAllowedExternalFontUrl } from './epic-2e-j-phase-c-step7b-b-f1-decision.mjs';
+import {
+  detectPlaywrightPackage,
+  detectBrowserExecutable,
+  REQUIRED_LAUNCH_ARGS,
+  buildLumixaAppSnapshot,
+  openLumixaInMemoryPage,
+  observeAppStorageKeys,
+  classifyStorageKeyPrivacyRisk,
+} from './helpers/playwright-lumixa-test-runtime.mjs';
+import { CANONICAL_ORIGIN } from './helpers/playwright-in-memory-app.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const PORT = 19992;
 const FIXTURES_DIR = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j');
-
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg' };
-
-function startServer() {
-  return new Promise((resolve) => {
-    const server = http.createServer(async (req, res) => {
-      try {
-        const urlPath = decodeURIComponent(req.url.split('?')[0]);
-        const filePath = path.join(PROJECT_ROOT, urlPath === '/' ? '/index.html' : urlPath);
-        const data = await readFile(filePath);
-        const ext = path.extname(filePath);
-        res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-        res.end(data);
-      } catch {
-        res.writeHead(404);
-        res.end('not found');
-      }
-    });
-    server.listen(PORT, () => resolve(server));
-  });
-}
+const SCREENSHOTS_DIR = path.join(PROJECT_ROOT, 'qa', 'screenshots', 'epic-2e-j-step7b-b');
 
 const results = [];
 let contrastResults = [];
@@ -478,8 +477,31 @@ function parseSessionSecondary(secondaryText) {
 }
 
 async function main() {
-  const server = await startServer();
-  const browser = await chromium.launch();
+  // ── PART 8 (ENV-B2) — Browser detection: env var -> bundled ->
+  // common system paths, in that order. Never downloads a Browser
+  // binary. When unavailable, the results JSON is NEVER regenerated —
+  // this suite exits honestly before any test runs. ──
+  const pkg = await detectPlaywrightPackage();
+  if (pkg.status !== 'PLAYWRIGHT_PACKAGE_AVAILABLE') {
+    console.log(`Playwright Node package unavailable: ${pkg.error}`);
+    console.log('Final decision: PLAYWRIGHT_PACKAGE_UNAVAILABLE');
+    console.log('qa/epic-2e-j-phase-c-step7b-b-results.json was NOT regenerated (honest environment-blocked exit).');
+    process.exit(0);
+  }
+  const { chromium } = pkg.mod;
+  const browserDetect = await detectBrowserExecutable(chromium);
+  if (!browserDetect.found) {
+    console.log(`No usable Browser executable found among ${browserDetect.attempts.length} candidates (never downloaded one): ${JSON.stringify(browserDetect.attempts)}`);
+    console.log('Final decision: BROWSER_BINARY_UNAVAILABLE');
+    console.log('qa/epic-2e-j-phase-c-step7b-b-results.json was NOT regenerated (honest environment-blocked exit).');
+    process.exit(0);
+  }
+
+  const browser = await chromium.launch({ executablePath: browserDetect.found, args: REQUIRED_LAUNCH_ARGS });
+  // Built ONCE per project snapshot (PART 1 step 1) and shared by every
+  // in-memory Page this suite opens (the main Page and Part 7's fresh
+  // Page), instead of re-reading/re-scanning every project file twice.
+  const appSnapshot = await buildLumixaAppSnapshot(PROJECT_ROOT);
   const consoleErrors = [];
   // FIX 2: resource-load failures (real HTTP status / real network
   // failure) tracked separately from console text, and NO LONGER
@@ -521,19 +543,48 @@ async function main() {
     });
   }
 
+  let mainRuntime = null;
+  let part7Runtime = null;
   try {
     // ══════════════════════════════════════════════════════════════
     // PART 1 — Reach Ready through the real application (no forced state).
+    // Loaded via the Navigation-Free In-Memory Harness — the only
+    // navigation target is "about:blank?qa=1", never localhost.
     // ══════════════════════════════════════════════════════════════
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
+    mainRuntime = await openLumixaInMemoryPage({
+      browser,
+      projectRoot: PROJECT_ROOT,
+      qaQuery: '?qa=1',
+      viewport: { width: 1440, height: 1400 },
+      prebuiltApp: appSnapshot,
+    });
+    const page = mainRuntime.page;
     attachErrorListeners(page, 'main');
 
-    await page.goto(`http://localhost:${PORT}/index.html?qa=1`);
+    record('ENV-B2 PART 1/5-7: In-Memory runtime storage compatibility for the main Page (native accessible or shim installed, verified before app load)', mainRuntime.storageAccessVerified ? 'PASS' : 'FAIL', `storageStatus=${mainRuntime.storageStatus}, nativeStorageAvailable=${mainRuntime.nativeStorageAvailable}, storageAccessVerified=${mainRuntime.storageAccessVerified}`);
+    record('ENV-B2 PART 7: window.localStorage/sessionStorage are read-only Window properties (a replacement assignment never silently replaces the object; a strict-mode throw is also acceptable evidence)', mainRuntime.readOnlyCheck.localStorageReadOnly && mainRuntime.readOnlyCheck.sessionStorageReadOnly && mainRuntime.readOnlyCheck.localIdentityPreserved && mainRuntime.readOnlyCheck.sessionIdentityPreserved ? 'PASS' : 'FAIL', JSON.stringify(mainRuntime.readOnlyCheck));
+
     await page.waitForTimeout(600);
     const { completed, snapshot } = await reachReady(page, 'neutral-balanced.png');
     record('Real application reaches Ready with Observation enabled', completed && snapshot?.observation?.enabled === true, `completed=${completed}, observationEnabled=${snapshot?.observation?.enabled}`);
     await page.evaluate(() => { const el = document.getElementById('interactivePreviewObservationSection'); if (el) el.scrollIntoView(); });
     await page.waitForTimeout(300);
+
+    // ── PART 9 (ENV-B2) — real screenshot generation. ──
+    await mkdir(SCREENSHOTS_DIR, { recursive: true });
+    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, '01-ready-state.png') }).catch(() => {});
+
+    // ── PART 6 (ENV-B2) — Storage privacy key detection. Key NAMES
+    // only, never values. Theme ("dm") / language ("lang") writes
+    // remain allowed; anything that looks like Observation/Session
+    // persistence is flagged. ──
+    const storageKeysAtReady = await observeAppStorageKeys(page);
+    const privacyRisk = classifyStorageKeyPrivacyRisk(storageKeysAtReady.allKeys);
+    record(
+      'ENV-B2 PART 6: no Observation/Session/interactivePreview/ipo-shaped key appears in Storage at Ready state (Theme "dm" / Language "lang" writes are normal and allowed) — key NAMES only, never values',
+      privacyRisk.safe ? 'PASS' : 'FAIL',
+      `allKeys=${JSON.stringify(storageKeysAtReady.allKeys)}, flagged=${JSON.stringify(privacyRisk.flagged)}`
+    );
 
     // ══════════════════════════════════════════════════════════════
     // PART 2 — Real keyboard navigation (actual Tab/Shift+Tab/Arrow/
@@ -1966,25 +2017,37 @@ async function main() {
     record('All 17 touch targets pass width>=43.5 AND height>=43.5 (radio/reason labels, Clear buttons)', touchTargetsAllPass && touchTargetCheck.length === 17, `count=${touchTargetCheck.length}, allPass=${touchTargetsAllPass}, targets=${JSON.stringify(touchTargetCheck)}`);
     record('Physical touch hardware', 'NOT_TESTED', 'genuine physical touch hardware was not used');
 
-    await page.close();
+    await mainRuntime.cleanup();
 
     // ══════════════════════════════════════════════════════════════
     // PART 7 — Malformed renderer state + HTML/script injection.
     // Executed through the real browser DOM (page.evaluate + dynamic
     // import of the REAL renderer functions) — never a fake Node.js
-    // container, since the renderer expects genuine DOM APIs. Moved
-    // inside this try block (before browser.close() in `finally`) so
-    // `browser` is still open when a fresh page is created here.
+    // container, since the renderer expects genuine DOM APIs. A fresh
+    // in-memory Page (its own Context, its own about:blank?qa=1
+    // navigation), reusing the same project snapshot built once at
+    // the top of main() — no rebuild, no re-scan of project files.
     // ══════════════════════════════════════════════════════════════
     console.log('=== Malformed renderer state + injection safety (real browser DOM, real renderer functions) ===');
 
-    const part7Page = await browser.newPage();
+    part7Runtime = await openLumixaInMemoryPage({
+      browser,
+      projectRoot: PROJECT_ROOT,
+      qaQuery: '?qa=1',
+      prebuiltApp: appSnapshot,
+    });
+    const part7Page = part7Runtime.page;
     attachErrorListeners(part7Page, 'part7-malformed-injection');
-    await part7Page.goto(`http://localhost:${PORT}/index.html?qa=1`);
+    record('ENV-B2 PART 1/5-7: In-Memory runtime storage compatibility for the Part 7 Page (independent Context, independent verification)', part7Runtime.storageAccessVerified ? 'PASS' : 'FAIL', `storageStatus=${part7Runtime.storageStatus}, storageAccessVerified=${part7Runtime.storageAccessVerified}`);
     await part7Page.waitForTimeout(300);
 
-  const malformedResult = await part7Page.evaluate(async () => {
-    const { renderInteractivePreviewObservationV2, renderInteractivePreviewObservationSessionV2 } = await import('/ui/interactive-preview-observation-renderer-v2.js');
+  const malformedResult = await part7Page.evaluate(async (canonicalOrigin) => {
+    // Rewritten for ENV-B2: the real renderer module is already part of
+    // the in-memory module graph's Import Map under its canonical ID —
+    // no local HTTP server, no absolute "/ui/..." path (which would
+    // have no origin to resolve against on this opaque about:blank
+    // document — there is no server behind it to even attempt).
+    const { renderInteractivePreviewObservationV2, renderInteractivePreviewObservationSessionV2 } = await import(`${canonicalOrigin}/ui/interactive-preview-observation-renderer-v2.js`);
     const makeContainer = () => document.createElement('div');
 
     const malformedInputs = [
@@ -2047,17 +2110,21 @@ async function main() {
       summaryNoneCrashed, summaryFailures, summaryCount: malformedSummaries.length,
       injectionSafe, injectionFindings, injectionCount: injectionStrings.length,
     };
-  });
+  }, CANONICAL_ORIGIN);
 
   record('Observation renderer: no uncaught exception on any malformed/hostile state', malformedResult.malformedNoneCrashed, malformedResult.malformedNoneCrashed ? `${malformedResult.malformedCount} cases tested, zero crashes` : JSON.stringify(malformedResult.malformedFailures));
   record('Session summary renderer: no uncaught exception on any malformed/hostile summary', malformedResult.summaryNoneCrashed, malformedResult.summaryNoneCrashed ? `${malformedResult.summaryCount} cases tested, zero crashes` : JSON.stringify(malformedResult.summaryFailures));
   record('HTML/script injection: no script/event-handler execution or raw injection in renderer output', malformedResult.injectionSafe, malformedResult.injectionSafe ? `${malformedResult.injectionCount} payloads tested, all safely handled` : JSON.stringify(malformedResult.injectionFindings));
 
-  await part7Page.close();
+  await mkdir(SCREENSHOTS_DIR, { recursive: true });
+  await part7Page.screenshot({ path: path.join(SCREENSHOTS_DIR, '02-part7-malformed-injection.png') }).catch(() => {});
+
+  await part7Runtime.cleanup();
 
   } finally {
+    if (mainRuntime) await mainRuntime.cleanup().catch(() => {});
+    if (part7Runtime) await part7Runtime.cleanup().catch(() => {});
     await browser.close();
-    server.close();
   }
 
 
