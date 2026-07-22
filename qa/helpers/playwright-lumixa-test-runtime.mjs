@@ -15,10 +15,12 @@
  * import), and never starts a local HTTP server.
  */
 
-import { access } from 'node:fs/promises';
+import { access, readFile, writeFile, rename } from 'node:fs/promises';
 import { constants as FS_CONSTANTS } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import crypto from 'node:crypto';
+import path from 'node:path';
 import { buildInMemoryApp, toEvidenceSummary } from './playwright-in-memory-app.mjs';
 import {
   buildProbeInvocationSource,
@@ -284,4 +286,149 @@ export function computeInMemoryHarnessDecision(results) {
 
   const allExactlyPass = results.every((r) => r.result === 'PASS');
   return allExactlyPass ? 'PASS_IN_MEMORY_HARNESS_READY' : 'FAIL_IN_MEMORY_HARNESS';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// COMBINED CLOSEOUT R2 — Phase E: Fail-Closed Result Artifact Identity.
+//
+// A stale result JSON from an earlier successful run must never be
+// mistaken for evidence of the CURRENT run — especially when the
+// current run crashed or the Browser became unavailable. Every real
+// Browser-suite result now carries a `runId`/`startedAt`/`completedAt`/
+// `completed`/`sourceHash`/`browserExecutablePath`/`browserVersion`
+// identity block, is written atomically (temp file -> rename, never a
+// partial overwrite of the official path), and can be independently
+// validated as "current" by a pure function usable both by suites
+// themselves and by static self-tests.
+// ══════════════════════════════════════════════════════════════════
+
+/** A fresh, non-empty run identifier — never reused across runs. */
+export function generateRunId() {
+  return crypto.randomUUID();
+}
+
+/**
+ * Computes a single sha256 hex digest over the concatenated UTF-8
+ * contents of every given absolute file path, in the GIVEN order (order
+ * matters and must be held constant by callers so the same source set
+ * always produces the same hash) — used to detect "this suite's own
+ * source, or a shared helper it depends on, changed since this result
+ * was written" without needing git or any external tooling. A missing
+ * file fails closed by throwing (callers should let this propagate —
+ * a suite that cannot read its own source has no business claiming a
+ * current, verified result).
+ */
+export async function computeSourceHash(absoluteFilePaths) {
+  const hash = crypto.createHash('sha256');
+  for (const p of absoluteFilePaths) {
+    const contents = await readFile(p, 'utf8');
+    hash.update(path.basename(p));
+    hash.update(' ');
+    hash.update(contents);
+    hash.update(' ');
+  }
+  return hash.digest('hex');
+}
+
+/**
+ * Writes `dataObj` as pretty-printed JSON to `finalPath` ATOMICALLY: a
+ * temporary sibling file (unique per-process/per-call, same directory
+ * so the rename is on the same filesystem) is written first and fsync-
+ * flushed by the OS on close, then renamed over `finalPath` in one
+ * filesystem operation. A reader can therefore never observe a
+ * partially-written official result file — it either sees the complete
+ * prior file or the complete new one.
+ */
+export async function writeResultAtomic(finalPath, dataObj) {
+  const dir = path.dirname(finalPath);
+  const tmpPath = path.join(dir, `.${path.basename(finalPath)}.tmp-${process.pid}-${crypto.randomBytes(6).toString('hex')}`);
+  const json = JSON.stringify(dataObj, null, 2);
+  await writeFile(tmpPath, json);
+  await rename(tmpPath, finalPath);
+}
+
+/**
+ * Builds the standard identity block every real-Browser-suite result
+ * must carry. `browserExecutablePath`/`browserVersion` are honest nulls
+ * when no Browser was actually launched (e.g. the Browser-unavailable
+ * path) — never fabricated.
+ */
+export function buildRunIdentity({ runId, startedAt, completedAt, completed, sourceHash, browserExecutablePath, browserVersion }) {
+  return {
+    runId: runId ?? null,
+    startedAt: startedAt ?? null,
+    completedAt: completedAt ?? null,
+    completed: completed === true,
+    sourceHash: sourceHash ?? null,
+    browserExecutablePath: browserExecutablePath ?? null,
+    browserVersion: browserVersion ?? null,
+  };
+}
+
+/**
+ * A single bounded "the suite crashed" evidence row — `errorName` only
+ * (e.g. "TypeError", "SecurityError"), NEVER the full error message or
+ * stack, which could leak file paths, arbitrary Runtime state, or be
+ * unbounded in length.
+ */
+export function buildRuntimeCrashRow(error) {
+  return { test: 'RUNTIME_CRASH', result: 'FAIL', evidence: `errorName=${(error && error.name) || 'UnknownError'}` };
+}
+
+/**
+ * Pure validation: is `resultObj` a CURRENT, well-formed result for
+ * `expectedSourceHash`? Every condition is required — this is the
+ * single function both real suites (to decide whether to trust a prior
+ * result before treating it as authoritative for cross-referencing) and
+ * the static self-tests (FIX E5) exercise. Never throws; returns a
+ * bounded `{ valid, reasons }` shape.
+ */
+export function validateResultFreshness(resultObj, { expectedSourceHash } = {}) {
+  const reasons = [];
+  if (!resultObj || typeof resultObj !== 'object') {
+    return { valid: false, reasons: ['result is not an object'] };
+  }
+  if (resultObj.completed !== true) reasons.push('completed is not true');
+  if (typeof resultObj.runId !== 'string' || resultObj.runId.trim().length === 0) reasons.push('runId is missing or empty');
+  if (expectedSourceHash !== undefined && resultObj.sourceHash !== expectedSourceHash) reasons.push('sourceHash does not match the current sources');
+  if (!Array.isArray(resultObj.results) || resultObj.results.length === 0) {
+    reasons.push('results array is missing or empty');
+  } else {
+    const malformedRow = resultObj.results.some(
+      (r) => !r || typeof r !== 'object' || typeof r.test !== 'string' || r.test.trim().length === 0 || typeof r.result !== 'string'
+    );
+    if (malformedRow) reasons.push('one or more result rows are malformed');
+  }
+  if (typeof resultObj.generatedAt !== 'string' && typeof resultObj.completedAt !== 'string') reasons.push('missing a generated/completed timestamp');
+  return { valid: reasons.length === 0, reasons };
+}
+
+/**
+ * FIX E4 — when Playwright/Browser is unavailable, writes an explicit,
+ * CURRENT, atomically-written environment-status result (never PASS,
+ * never merely leaving a stale prior PASS file untouched) so a reader
+ * can never mistake an old successful run for evidence about the
+ * present environment.
+ */
+export async function writeBrowserUnavailableResult(finalPath, { suite, status, reason }) {
+  const nowIso = new Date().toISOString();
+  const identity = buildRunIdentity({
+    runId: generateRunId(),
+    startedAt: nowIso,
+    completedAt: nowIso,
+    completed: true, // the SUITE completed its honest environment check — it did not crash
+    sourceHash: null, // no suite-specific source hash claimed for an environment-only result
+    browserExecutablePath: null,
+    browserVersion: null,
+  });
+  const output = {
+    suite,
+    ...identity,
+    generatedAt: nowIso,
+    summary: { total: 1, pass: 0, fail: 0, notTested: 1 },
+    results: [{ test: 'Browser environment availability', result: 'NOT_TESTED', evidence: reason }],
+    decision: status, // e.g. 'BROWSER_BINARY_UNAVAILABLE' / 'PLAYWRIGHT_PACKAGE_UNAVAILABLE' — never 'PASS'
+  };
+  await writeResultAtomic(finalPath, output);
+  return output;
 }

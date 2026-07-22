@@ -4,22 +4,33 @@
  *
  * EPIC 2E-J Phase C (+ EPIC 2E-J-C-F closeout patch) — a reproducible
  * smoke test for the Preview Observation + Session Summary layer.
- * Spawns its own local static file server and drives real headless
- * Chromium sessions.
  *
- * PREREQUISITE: must be run from the COMPLETE project root — it
- * imports the real project's `ui/*.js` and `index.html` files over the
- * spawned local server. It is NOT a standalone script; a changed-files-
- * only copy cannot run it without the rest of the project alongside it.
- * The `playwright` npm package must be resolvable from this file
- * (installed globally and linked, or locally) — this project has no
- * build step and does not commit a `node_modules/` directory.
+ * COMBINED CLOSEOUT R1 — Phase E / R2 — Phase C2/F: this suite uses NO
+ * local static file server and NO localhost/127.0.0.1 navigation. It
+ * runs entirely on the shared Navigation-Free In-Memory Runtime
+ * (qa/helpers/playwright-lumixa-test-runtime.mjs) — the real project's
+ * `ui/*.js` and `index.html` sources are read from disk, inlined into a
+ * single in-memory document, and served to the page via
+ * `page.setContent()` after navigating only to `about:blank?qa=1`. A
+ * real Browser (Playwright + a resolvable Chromium executable) is still
+ * required to execute this suite; when unavailable the suite reports an
+ * honest current-run environment result rather than fabricating a PASS
+ * (see FIX E4). File uploads use a single deterministic, project-owned
+ * fixture (qa/fixtures/epic-2e-j/neutral-balanced.png) — never a
+ * machine-specific `/tmp` path or a user file.
+ *
+ * PREREQUISITE: must be run from the COMPLETE project root. It is NOT a
+ * standalone script; a changed-files-only copy cannot run it without
+ * the rest of the project alongside it. The `playwright` npm package
+ * must be resolvable from this file (installed globally and linked, or
+ * locally) — this project has no build step and does not commit a
+ * `node_modules/` directory.
  *
  * Run: node qa/epic-2e-j-phase-c-observation-smoke-test.mjs
  * Output: qa/epic-2e-j-phase-c-results.json
  */
 
-import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, unlink, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 // COMBINED CLOSEOUT R1 — Phase E: migrated off node:http/localhost/direct
@@ -33,12 +44,42 @@ import {
   REQUIRED_LAUNCH_ARGS,
   buildLumixaAppSnapshot,
   openLumixaInMemoryPage,
+  generateRunId,
+  computeSourceHash,
+  writeResultAtomic,
+  buildRuntimeCrashRow,
+  writeBrowserUnavailableResult,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
 import { CANONICAL_ORIGIN } from './helpers/playwright-in-memory-app.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const VIEWPORTS = [320, 360, 390, 430, 768, 1024, 1440];
+// COMBINED CLOSEOUT R2 — Phase C FIX C1: exactly ONE resolved,
+// project-owned, deterministic fixture — never a machine-specific
+// `/tmp` path or a real user file. Existence is verified (as a regular
+// file) before any Browser action uses it; a missing fixture fails
+// closed with a bounded result rather than crashing.
+const OBSERVATION_FIXTURE_PATH = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j', 'neutral-balanced.png');
+const RESULTS_PATH = path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-results.json');
+// Source hash covers this suite's own source plus the shared runtime/
+// helper modules it depends on (never the binary fixture itself —
+// sourceHash detects SOURCE CODE drift, not fixture-content drift, and
+// readFile(..., 'utf8') on a binary PNG would not faithfully represent
+// its bytes anyway).
+const SOURCE_HASH_INPUTS = [
+  path.join(__dirname, 'epic-2e-j-phase-c-observation-smoke-test.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-lumixa-test-runtime.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-in-memory-app.mjs'),
+];
+
+// COMBINED CLOSEOUT R2 — Phase E: module-scope run identity so the
+// outer main().catch() crash handler can still access it even if
+// main() throws partway through (a function-local const/let inside
+// main() is not visible to the outer catch callback's scope).
+let runId = null;
+let startedAt = null;
+let sourceHash = null;
 
 const results = [];
 function record(test, result, evidence) {
@@ -127,15 +168,25 @@ const DRIVE_REAL_APP_JS = `
 `;
 
 async function main() {
-  // COMBINED CLOSEOUT R1 — Phase E: shared Browser detection (never a
+  runId = generateRunId();
+  startedAt = new Date().toISOString();
+  sourceHash = await computeSourceHash(SOURCE_HASH_INPUTS);
+  // COMBINED CLOSEOUT R2 — Phase E: shared Browser detection (never a
   // downloaded binary), launched with the required sandbox args. When
-  // unavailable, this suite exits honestly before any test runs and
-  // never regenerates its result JSON.
+  // unavailable, this suite now WRITES a current environment-status
+  // result rather than merely skipping regeneration (FIX E4) — a stale
+  // prior PASS file must never be left standing as the apparent current
+  // result.
   const pkg = await detectPlaywrightPackage();
   if (pkg.status !== 'PLAYWRIGHT_PACKAGE_AVAILABLE') {
     console.log(`Playwright Node package unavailable: ${pkg.error}`);
     console.log('Final decision: PLAYWRIGHT_PACKAGE_UNAVAILABLE');
-    console.log('qa/epic-2e-j-phase-c-results.json was NOT regenerated (honest environment-blocked exit).');
+    await writeBrowserUnavailableResult(RESULTS_PATH, {
+      suite: 'EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test',
+      status: 'PLAYWRIGHT_PACKAGE_UNAVAILABLE',
+      reason: pkg.error,
+    });
+    console.log('qa/epic-2e-j-phase-c-results.json updated with a current PLAYWRIGHT_PACKAGE_UNAVAILABLE environment result (never PASS, no stale prior result left behind).');
     process.exit(0);
   }
   const { chromium } = pkg.mod;
@@ -143,8 +194,39 @@ async function main() {
   if (!browserDetect.found) {
     console.log(`No usable Browser executable found among ${browserDetect.attempts.length} candidates (never downloaded one): ${JSON.stringify(browserDetect.attempts)}`);
     console.log('Final decision: BROWSER_BINARY_UNAVAILABLE');
-    console.log('qa/epic-2e-j-phase-c-results.json was NOT regenerated (honest environment-blocked exit).');
+    await writeBrowserUnavailableResult(RESULTS_PATH, {
+      suite: 'EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test',
+      status: 'BROWSER_BINARY_UNAVAILABLE',
+      reason: JSON.stringify(browserDetect.attempts),
+    });
+    console.log('qa/epic-2e-j-phase-c-results.json updated with a current BROWSER_BINARY_UNAVAILABLE environment result (never PASS, no stale prior result left behind).');
     process.exit(0);
+  }
+  // COMBINED CLOSEOUT R2 — Phase C FIX C1: verify the ONE deterministic,
+  // project-owned fixture exists as a regular file BEFORE any Browser
+  // action uses it — fail closed with a bounded, CURRENT result (never
+  // a runtime crash, never a stale prior PASS file) when it is missing.
+  try {
+    const fixtureStat = await stat(OBSERVATION_FIXTURE_PATH);
+    if (!fixtureStat.isFile()) {
+      console.log(`Deterministic fixture is not a regular file: ${OBSERVATION_FIXTURE_PATH}`);
+      console.log('Final decision: FIXTURE_MISSING');
+      await writeBrowserUnavailableResult(RESULTS_PATH, {
+        suite: 'EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test',
+        status: 'FIXTURE_MISSING',
+        reason: `Deterministic fixture is not a regular file: ${OBSERVATION_FIXTURE_PATH}`,
+      });
+      process.exit(1);
+    }
+  } catch (fixtureStatErr) {
+    console.log(`Deterministic fixture could not be found: ${OBSERVATION_FIXTURE_PATH} — ${fixtureStatErr.code ?? fixtureStatErr.message}`);
+    console.log('Final decision: FIXTURE_MISSING');
+    await writeBrowserUnavailableResult(RESULTS_PATH, {
+      suite: 'EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test',
+      status: 'FIXTURE_MISSING',
+      reason: `Deterministic fixture could not be found: ${OBSERVATION_FIXTURE_PATH} — ${fixtureStatErr.code ?? fixtureStatErr.message}`,
+    });
+    process.exit(1);
   }
   const browser = await chromium.launch({ executablePath: browserDetect.found, args: REQUIRED_LAUNCH_ARGS });
   const appSnapshot = await buildLumixaAppSnapshot(PROJECT_ROOT);
@@ -161,19 +243,17 @@ async function main() {
     const readyErrors = [];
     readyPage.on('pageerror', (e) => readyErrors.push(String(e)));
     await readyPage.waitForTimeout(600);
-    const uploadPath = path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'mobile-320px.png');
-    // Use a real local image fixture already present in this environment
-    // (any of the project's own prior QA screenshots serves as a valid,
-    // synthetic, non-private JPEG/PNG fixture for this reachability
-    // probe — this is not "private user photographs").
+    // COMBINED CLOSEOUT R2 — Phase C FIX C1: exactly ONE resolved,
+    // project-owned, deterministic fixture (verified to exist as a
+    // regular file BEFORE this point — see the fail-closed check in
+    // main() below) — never a machine-specific /tmp path or a real user
+    // file/screenshot.
     let fixtureUsed = null;
     try {
-      const candidateDirs = ['/tmp', path.join(PROJECT_ROOT, 'qa-screenshots')];
-      // Prefer any .jpg fixture already used throughout this project's manual QA history.
-      await readyPage.setInputFiles('#fileIn', '/tmp/test_photo.jpg');
-      fixtureUsed = '/tmp/test_photo.jpg';
+      await readyPage.setInputFiles('#fileIn', OBSERVATION_FIXTURE_PATH);
+      fixtureUsed = OBSERVATION_FIXTURE_PATH;
     } catch (fixtureErr) {
-      record('Full application Ready reachability — fixture available', 'FAIL', `No usable local fixture: ${fixtureErr.message}`);
+      record('Full application Ready reachability — fixture available', 'FAIL', `Deterministic fixture ${OBSERVATION_FIXTURE_PATH} could not be used: ${fixtureErr.message}`);
     }
     if (fixtureUsed) {
       await readyPage.waitForTimeout(16000);
@@ -231,7 +311,7 @@ async function main() {
       consoleErrors.push(text);
     });
     await page.waitForTimeout(600);
-    await page.setInputFiles('#fileIn', '/tmp/test_photo.jpg');
+    await page.setInputFiles('#fileIn', OBSERVATION_FIXTURE_PATH);
     await page.waitForTimeout(16000);
     await page.evaluate(DRIVE_REAL_APP_JS);
     await page.waitForTimeout(200);
@@ -796,7 +876,7 @@ async function main() {
       const pErrors = [];
       p.on('pageerror', (e) => pErrors.push(String(e)));
       await p.waitForTimeout(600);
-      await p.setInputFiles('#fileIn', '/tmp/test_photo.jpg');
+      await p.setInputFiles('#fileIn', OBSERVATION_FIXTURE_PATH);
       await p.waitForTimeout(16000);
       await p.evaluate(DRIVE_REAL_APP_JS);
       await p.evaluate(() => { window.__testController.setContext({ generationId: 1, interactiveState: 'ready', interactiveReady: true, safetyBlocked: false, blockedReason: null }); window.__testController.selectObservation('prefer-legacy'); window.__testController.toggleReason('skin-tone'); window.__testController.toggleReason('white-balance'); window.__testController.toggleReason('highlight-detail'); });
@@ -824,21 +904,48 @@ async function main() {
   ];
   const output = {
     suite: 'EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test',
+    runId,
+    startedAt,
+    completedAt: new Date().toISOString(),
+    completed: true,
+    sourceHash,
+    browserExecutablePath: browserDetect.found,
+    browserVersion: browser.version(),
     generatedAt: new Date().toISOString(),
     summary: { total: results.length, pass: passCount, fail: failCount, notTested: results.length - passCount - failCount },
     coverage,
     manualTestsNotPerformed,
     results,
+    decision: failCount > 0 ? 'FAIL' : 'PASS',
   };
   await mkdir(path.join(PROJECT_ROOT, 'qa'), { recursive: true });
-  await writeFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-results.json'), JSON.stringify(output, null, 2));
+  await writeResultAtomic(RESULTS_PATH, output);
   console.log(`\n${passCount}/${results.length} PASS, ${failCount} FAIL`);
   console.log('Coverage:', JSON.stringify(coverage));
   console.log('Results written to qa/epic-2e-j-phase-c-results.json');
   process.exit(failCount > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error('Smoke test crashed:', err);
+main().catch(async (err) => {
+  console.error('Smoke test crashed:', err && err.name ? err.name : err);
+  try {
+    const nowIso = new Date().toISOString();
+    await writeResultAtomic(RESULTS_PATH, {
+      suite: 'EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test',
+      runId,
+      startedAt,
+      completedAt: nowIso,
+      completed: false,
+      sourceHash,
+      browserExecutablePath: null,
+      browserVersion: null,
+      generatedAt: nowIso,
+      summary: { total: 1, pass: 0, fail: 1, notTested: 0 },
+      results: [buildRuntimeCrashRow(err)],
+      decision: 'FAIL',
+    });
+  } catch (writeErr) {
+    console.error('Failed to write crash result JSON:', writeErr && writeErr.name ? writeErr.name : writeErr);
+  }
   process.exit(2);
 });

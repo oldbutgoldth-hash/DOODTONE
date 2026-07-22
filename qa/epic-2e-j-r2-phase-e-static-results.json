@@ -1,0 +1,323 @@
+{
+  "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
+  "generatedAt": "2026-07-22T15:32:47.990Z",
+  "summary": {
+    "total": 62,
+    "pass": 62,
+    "fail": 0,
+    "notTested": 0
+  },
+  "results": [
+    {
+      "test": "generateRunId() returns a non-empty string",
+      "result": "PASS",
+      "evidence": "idA=4e98066a-27ec-498a-ad6b-254953b5a927"
+    },
+    {
+      "test": "generateRunId() returns a fresh value on each call (never reused)",
+      "result": "PASS",
+      "evidence": "idA=4e98066a-27ec-498a-ad6b-254953b5a927, idB=78016a3c-8814-4fb2-8a9a-eb46be2cd1a2"
+    },
+    {
+      "test": "computeSourceHash() is deterministic for identical inputs",
+      "result": "PASS",
+      "evidence": "hash1=a1b59b927809..., hash2=a1b59b927809..."
+    },
+    {
+      "test": "computeSourceHash() changes when file content changes",
+      "result": "PASS",
+      "evidence": "hash1=a1b59b927809..., hash3=e942ba33d99f..."
+    },
+    {
+      "test": "computeSourceHash() is sensitive to input order",
+      "result": "PASS",
+      "evidence": "hash3=e942ba33d99f..., hash4(reversed)=e9c5f9012f20..."
+    },
+    {
+      "test": "writeResultAtomic() writes readable JSON on first write",
+      "result": "PASS",
+      "evidence": "{\"a\":1}"
+    },
+    {
+      "test": "writeResultAtomic() fully replaces prior content on a second write (no merge/partial overwrite)",
+      "result": "PASS",
+      "evidence": "{\"a\":2,\"b\":\"second\"}"
+    },
+    {
+      "test": "writeResultAtomic() leaves no leftover temp file in the target directory",
+      "result": "PASS",
+      "evidence": "entries=[\"a.txt\",\"b.txt\",\"result.json\"]"
+    },
+    {
+      "test": "buildRuntimeCrashRow() row is well-formed {test, result, evidence}",
+      "result": "PASS",
+      "evidence": "{\"test\":\"RUNTIME_CRASH\",\"result\":\"FAIL\",\"evidence\":\"errorName=TypeError\"}"
+    },
+    {
+      "test": "buildRuntimeCrashRow() evidence contains only the bounded errorName, never the full message/stack",
+      "result": "PASS",
+      "evidence": "errorName=TypeError"
+    },
+    {
+      "test": "buildRuntimeCrashRow() falls back to UnknownError when the thrown value has no .name",
+      "result": "PASS",
+      "evidence": "errorName=UnknownError"
+    },
+    {
+      "test": "validateResultFreshness() ACCEPTS a current, well-formed result matching the expected sourceHash",
+      "result": "PASS",
+      "evidence": "{\"valid\":true,\"reasons\":[]}"
+    },
+    {
+      "test": "validateResultFreshness() REJECTS a stale result claiming decision=PASS while completed is not true",
+      "result": "PASS",
+      "evidence": "{\"valid\":false,\"reasons\":[\"completed is not true\"]}"
+    },
+    {
+      "test": "validateResultFreshness() REJECTS a result whose sourceHash does not match the current sources",
+      "result": "PASS",
+      "evidence": "{\"valid\":false,\"reasons\":[\"sourceHash does not match the current sources\"]}"
+    },
+    {
+      "test": "validateResultFreshness() REJECTS a result with completed !== true",
+      "result": "PASS",
+      "evidence": "{\"valid\":false,\"reasons\":[\"completed is not true\"]}"
+    },
+    {
+      "test": "validateResultFreshness() REJECTS a result with an empty runId",
+      "result": "PASS",
+      "evidence": "{\"valid\":false,\"reasons\":[\"runId is missing or empty\"]}"
+    },
+    {
+      "test": "validateResultFreshness() REJECTS a result with a missing runId field entirely",
+      "result": "PASS",
+      "evidence": "{\"valid\":false,\"reasons\":[\"runId is missing or empty\"]}"
+    },
+    {
+      "test": "validateResultFreshness() REJECTS a result containing a malformed row (missing test/result)",
+      "result": "PASS",
+      "evidence": "{\"valid\":false,\"reasons\":[\"one or more result rows are malformed\"]}"
+    },
+    {
+      "test": "validateResultFreshness() REJECTS a result with an empty results array",
+      "result": "PASS",
+      "evidence": "{\"valid\":false,\"reasons\":[\"results array is missing or empty\"]}"
+    },
+    {
+      "test": "validateResultFreshness() REJECTS a result with neither generatedAt nor completedAt",
+      "result": "PASS",
+      "evidence": "{\"valid\":false,\"reasons\":[\"missing a generated/completed timestamp\"]}"
+    },
+    {
+      "test": "validateResultFreshness() ACCEPTS completedAt as a valid substitute for generatedAt",
+      "result": "PASS",
+      "evidence": "{\"valid\":true,\"reasons\":[]}"
+    },
+    {
+      "test": "validateResultFreshness() never throws on a non-object input (fails closed instead)",
+      "result": "PASS",
+      "evidence": "checked with null input"
+    },
+    {
+      "test": "writeBrowserUnavailableResult() overwrites a stale PASS file (never leaves the old 56/56 PASS content standing)",
+      "result": "PASS",
+      "evidence": "{\"total\":1,\"pass\":0,\"fail\":0,\"notTested\":1}, decision=BROWSER_BINARY_UNAVAILABLE"
+    },
+    {
+      "test": "writeBrowserUnavailableResult() output has completed=true (the suite itself completed its honest environment check)",
+      "result": "PASS",
+      "evidence": "completed=true"
+    },
+    {
+      "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
+      "result": "PASS",
+      "evidence": "oldRunId=1657ab99-8ca2-4121-a9e9-2fce590d2eb2, newRunId=d2a3611a-9a80-4baa-b8f9-6c20ea7d6041"
+    },
+    {
+      "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",
+      "result": "PASS",
+      "evidence": "decision=BROWSER_BINARY_UNAVAILABLE"
+    },
+    {
+      "test": "The environment result written by writeBrowserUnavailableResult() itself passes validateResultFreshness()",
+      "result": "PASS",
+      "evidence": "{\"valid\":true,\"reasons\":[]}"
+    },
+    {
+      "test": "buildRunIdentity() preserves completed:true and honest null browser fields when none were launched",
+      "result": "PASS",
+      "evidence": "{\"runId\":\"r1\",\"startedAt\":\"s1\",\"completedAt\":\"c1\",\"completed\":true,\"sourceHash\":\"h1\",\"browserExecutablePath\":null,\"browserVersion\":null}"
+    },
+    {
+      "test": "buildRunIdentity() defaults every unset field to null/false rather than undefined",
+      "result": "PASS",
+      "evidence": "{\"runId\":null,\"startedAt\":null,\"completedAt\":null,\"completed\":false,\"sourceHash\":null,\"browserExecutablePath\":null,\"browserVersion\":null}"
+    },
+    {
+      "test": "epic-2e-j-phase-c-live-app-test.mjs: imports all five Phase E helpers from the shared runtime module",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-live-app-test.mjs: runId/startedAt/sourceHash are hoisted to MODULE scope (visible to the outer main().catch() handler)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-live-app-test.mjs: calls writeBrowserUnavailableResult() from at least both early-exit branches (Playwright-package-unavailable and Browser-binary-unavailable)",
+      "result": "PASS",
+      "evidence": "occurrences=2"
+    },
+    {
+      "test": "epic-2e-j-phase-c-live-app-test.mjs: success-path output object includes runId/startedAt/completedAt/completed:true/sourceHash",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-live-app-test.mjs: writes its official result via writeResultAtomic(), not a bare writeFile()",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-live-app-test.mjs: the top-level main().catch() handler itself writes a current crash result before exiting",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-live-app-test.mjs: the crash handler logs only err.name, never the full error object",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-live-app-test.mjs: no code path hard-codes decision:'PASS' as an unavailable/fallback/default value",
+      "result": "PASS",
+      "evidence": "present(no bad pattern found)=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-observation-smoke-test.mjs: imports all five Phase E helpers from the shared runtime module",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-observation-smoke-test.mjs: runId/startedAt/sourceHash are hoisted to MODULE scope (visible to the outer main().catch() handler)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-observation-smoke-test.mjs: calls writeBrowserUnavailableResult() from at least both early-exit branches (Playwright-package-unavailable and Browser-binary-unavailable)",
+      "result": "PASS",
+      "evidence": "occurrences=4"
+    },
+    {
+      "test": "epic-2e-j-phase-c-observation-smoke-test.mjs: success-path output object includes runId/startedAt/completedAt/completed:true/sourceHash",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-observation-smoke-test.mjs: writes its official result via writeResultAtomic(), not a bare writeFile()",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-observation-smoke-test.mjs: the top-level main().catch() handler itself writes a current crash result before exiting",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-observation-smoke-test.mjs: the crash handler logs only err.name, never the full error object",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-observation-smoke-test.mjs: no code path hard-codes decision:'PASS' as an unavailable/fallback/default value",
+      "result": "PASS",
+      "evidence": "present(no bad pattern found)=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-a-test.mjs: imports all five Phase E helpers from the shared runtime module",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-a-test.mjs: runId/startedAt/sourceHash are hoisted to MODULE scope (visible to the outer main().catch() handler)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-a-test.mjs: calls writeBrowserUnavailableResult() from at least both early-exit branches (Playwright-package-unavailable and Browser-binary-unavailable)",
+      "result": "PASS",
+      "evidence": "occurrences=2"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-a-test.mjs: success-path output object includes runId/startedAt/completedAt/completed:true/sourceHash",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-a-test.mjs: writes its official result via writeResultAtomic(), not a bare writeFile()",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-a-test.mjs: the top-level main().catch() handler itself writes a current crash result before exiting",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-a-test.mjs: the crash handler logs only err.name, never the full error object",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-a-test.mjs: no code path hard-codes decision:'PASS' as an unavailable/fallback/default value",
+      "result": "PASS",
+      "evidence": "present(no bad pattern found)=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-b-test.mjs: imports all five Phase E helpers from the shared runtime module",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-b-test.mjs: runId/startedAt/sourceHash are hoisted to MODULE scope (visible to the outer main().catch() handler)",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-b-test.mjs: calls writeBrowserUnavailableResult() from at least both early-exit branches (Playwright-package-unavailable and Browser-binary-unavailable)",
+      "result": "PASS",
+      "evidence": "occurrences=2"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-b-test.mjs: success-path output object includes runId/startedAt/completedAt/completed:true/sourceHash",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-b-test.mjs: writes its official result via writeResultAtomic(), not a bare writeFile()",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-b-test.mjs: the top-level main().catch() handler itself writes a current crash result before exiting",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-b-test.mjs: the crash handler logs only err.name, never the full error object",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-b-test.mjs: no code path hard-codes decision:'PASS' as an unavailable/fallback/default value",
+      "result": "PASS",
+      "evidence": "present(no bad pattern found)=true"
+    },
+    {
+      "test": "epic-2e-j-phase-c-step7b-a-test.mjs: SOURCE_HASH_INPUTS includes playwright-opaque-origin-cookie.mjs (a source change there must invalidate this suite's prior result freshness)",
+      "result": "PASS",
+      "evidence": "present=true"
+    }
+  ],
+  "disclaimer": "This suite proves the Phase E toolkit (generateRunId, computeSourceHash, writeResultAtomic, buildRunIdentity, buildRuntimeCrashRow, validateResultFreshness, writeBrowserUnavailableResult) via real functional calls in a throwaway temp directory, plus source-text audits proving all four real Browser suites are actually wired to use it. It does not launch a Browser and does not prove real end-to-end crash-handler behavior under an actual Playwright runtime exception — that remains the job of the real Browser suites themselves (which, in this sandbox, can only be exercised along the Browser-unavailable path, confirmed separately by actually running each suite)."
+}

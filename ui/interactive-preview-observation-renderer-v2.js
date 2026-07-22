@@ -375,28 +375,40 @@ export function renderInteractivePreviewObservationV2(container, state) {
     // Renderer-owned visible style difference on the Reason's own
     // label — never relying on native checkbox rendering, cursor alone,
     // the bare `disabled` property, or a className with no attached
-    // CSS. `data-ipo-disabled` is the bounded Production attribute; the
-    // opacity/background/border-color changes are the measurable
-    // computed-style differences (getComputedStyle) a Contrast/Focus
-    // audit can detect. Applied/removed idempotently on every render —
-    // explicit values in BOTH branches, never a partial clear that could
-    // leave stale inline styling behind, and enabled text/contrast is
-    // fully restored to its ORIGINAL values (never left dimmer or
-    // otherwise degraded) so FIX C4 (no contrast regression) holds.
+    // CSS. `data-ipo-disabled` is the bounded Production attribute.
+    // COMBINED CLOSEOUT R2 — Phase A FIX A1: the label (and its text) is
+    // NEVER dimmed via `opacity` — a Contrast audit measuring a
+    // group-opacity Element correctly requires full foreground/
+    // background alpha compositing, which five simultaneously-disabled
+    // labels turned into an unmeasurable/NOT_TESTED result. The visible
+    // disabled distinction now comes ONLY from fully-opaque
+    // backgroundColor/borderColor/boxShadow changes (and, optionally,
+    // dimming the checkbox INPUT itself — never the label or its text)
+    // so every disabled Reason still yields a real, directly-computable
+    // two-opaque-color Contrast ratio. Applied/removed idempotently on
+    // every render — explicit values in BOTH branches, never a partial
+    // clear that could leave stale inline styling behind — and enabled
+    // text/contrast is fully restored to its ORIGINAL values (never left
+    // dimmer or otherwise degraded) so FIX C4/A2 (no contrast
+    // regression) holds.
     const reasonLabel = input.closest('label');
     if (reasonLabel) {
       if (isDisabled) {
         reasonLabel.dataset.ipoDisabled = 'true';
-        reasonLabel.style.opacity = '0.55';
+        reasonLabel.style.opacity = '1'; // FIX A1: label/text group opacity is NEVER reduced
         reasonLabel.style.backgroundColor = 'var(--surface-2)';
-        reasonLabel.style.borderColor = 'var(--border)';
+        reasonLabel.style.borderColor = 'var(--border-strong, var(--border))';
+        reasonLabel.style.boxShadow = 'inset 0 0 0 1px var(--surface-3, var(--border))';
         reasonLabel.style.cursor = 'not-allowed';
+        input.style.opacity = '0.6'; // FIX A1: dimming is confined to the checkbox input itself
       } else {
         delete reasonLabel.dataset.ipoDisabled;
         reasonLabel.style.opacity = '1';
         reasonLabel.style.backgroundColor = 'transparent';
         reasonLabel.style.borderColor = 'var(--border)';
+        reasonLabel.style.boxShadow = 'none';
         reasonLabel.style.cursor = 'pointer';
+        input.style.opacity = '1'; // FIX A2: exact restoration, no stale dimming left behind
       }
     }
   });

@@ -148,6 +148,13 @@ function _qaSafeNum(v) { return typeof v === 'number' && Number.isFinite(v) ? v 
 function _qaSafeBool(v) { return v === true || v === false ? v : null; }
 function _qaSafeStr(v) { return typeof v === 'string' ? v : null; }
 function _qaSafeStrArray(v) { return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 32) : []; }
+// COMBINED CLOSEOUT R2 — Phase B FIX B1: a non-negative-integer-only
+// numeric projection for Session summary counters — never a raw pass-
+// through of an untrusted/hostile numeric value.
+function _qaSafeCount(v) { return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0; }
+// Bounded, string-only, max-5 Reason array (matches the Controller's own
+// REASON_LIMIT — defense in depth, never trusts the source array length).
+function _qaSafeReasons(v) { return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 5) : []; }
 
 function ensureQaSnapshotHook() {
   let qaEnabled = false;
@@ -172,14 +179,60 @@ function ensureQaSnapshotHook() {
       alignmentStatus = _qaSafeStr(ibaState?.metadata?.alignment?.status) ?? _qaSafeStr(ibaState?.blockedReason);
     } catch { /* leave nulls, never throw from the QA hook */ }
 
-    let observationEnabled = null, observationState = null;
+    // COMBINED CLOSEOUT R2 — Phase B FIX B1: the QA-only snapshot now
+    // also exposes the Observation's own selectedValue/reasons/
+    // observationGenerationId (never a raw Controller reference — one
+    // getState() call, then only safe bounded primitives are copied
+    // out), plus a bounded Session summary projection (one getSummary()
+    // call, already a fresh safe-copy from the Session module itself;
+    // re-projected here defensively so this hook never depends on the
+    // Session module's internal shape remaining identical forever).
+    let observationEnabled = null, observationState = null, observationSelectedValue = null, observationReasons = [], observationGenerationId = null;
     try {
       const obsState = interactivePreviewObservationController ? interactivePreviewObservationController.getState() : null;
       observationState = _qaSafeStr(obsState?.state);
       observationEnabled = obsState ? (obsState.state === 'ready' || obsState.state === 'selected' || obsState.state === 'cleared') : null;
-    } catch { /* leave nulls */ }
+      observationSelectedValue = _qaSafeStr(obsState?.observation);
+      observationReasons = _qaSafeReasons(obsState?.reasons);
+      observationGenerationId = _qaSafeNum(obsState?.observationGenerationId);
+    } catch { /* leave nulls/defaults, never throw from the QA hook */ }
+
+    let sessionSummary = {
+      totalObserved: 0, activeObservations: 0, preferLegacy: 0, preferV2: 0,
+      noVisibleDifference: 0, unsure: 0, cleared: 0, invalidated: 0,
+      reasonCounts: {}, topReasons: [], lastObservation: null,
+    };
+    try {
+      const rawSummary = interactivePreviewObservationSession ? interactivePreviewObservationSession.getSummary() : null;
+      if (rawSummary) {
+        const rawCounts = (rawSummary.reasonCounts && typeof rawSummary.reasonCounts === 'object') ? rawSummary.reasonCounts : {};
+        const safeCounts = {};
+        for (const k of Object.keys(rawCounts)) { safeCounts[k] = _qaSafeCount(rawCounts[k]); }
+        const rawTop = Array.isArray(rawSummary.topReasons) ? rawSummary.topReasons.slice(0, 3) : [];
+        const safeTop = rawTop.map((t) => ({ reason: _qaSafeStr(t?.reason), count: _qaSafeCount(t?.count) })).filter((t) => t.reason !== null);
+        const rawLast = rawSummary.lastObservation && typeof rawSummary.lastObservation === 'object' ? rawSummary.lastObservation : null;
+        sessionSummary = {
+          totalObserved: _qaSafeCount(rawSummary.totalObserved),
+          activeObservations: _qaSafeCount(rawSummary.activeObservations),
+          preferLegacy: _qaSafeCount(rawSummary.preferLegacy),
+          preferV2: _qaSafeCount(rawSummary.preferV2),
+          noVisibleDifference: _qaSafeCount(rawSummary.noVisibleDifference),
+          unsure: _qaSafeCount(rawSummary.unsure),
+          cleared: _qaSafeCount(rawSummary.cleared),
+          invalidated: _qaSafeCount(rawSummary.invalidated),
+          reasonCounts: safeCounts,
+          topReasons: safeTop,
+          lastObservation: rawLast ? {
+            generationId: _qaSafeNum(rawLast.generationId),
+            observation: _qaSafeStr(rawLast.observation),
+            reasons: _qaSafeReasons(rawLast.reasons),
+          } : null,
+        };
+      }
+    } catch { /* leave the zeroed/empty default shape, never throw from the QA hook */ }
 
     return {
+      qaContractVersion: '2E-J-C-R2',
       analysisGeneration: _qaSafeNum(analysisRenderGeneration),
       testGate: {
         exists: !!testGate,
@@ -242,7 +295,11 @@ function ensureQaSnapshotHook() {
       observation: {
         enabled: observationEnabled,
         state: observationState,
+        selectedValue: observationSelectedValue,
+        reasons: observationReasons,
+        observationGenerationId,
       },
+      sessionSummary,
     };
   }
 

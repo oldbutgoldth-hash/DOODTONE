@@ -349,8 +349,19 @@ record('Setup: qa/playwright-in-memory-app-smoke.mjs is readable', smokeSrc.leng
   record('FIX 10 (ENV-B2-F1): qa/epic-2e-j-phase-c-step7b-b-test.mjs never calls writeFile() with a core/, ui/, or index.html target path', neverWritesToProduction, `present=${neverWritesToProduction}`);
 
   const doesNotRegenerateFinalPhaseC = !/epic-2e-j-phase-c-final-results\.json/.test(testSrc);
-  const onlyWritesOwnResultsFile = /writeFile\(path\.join\(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-b-results\.json'\), JSON\.stringify\(output, null, 2\)\);/.test(testSrc);
-  record('FIX 10 (ENV-B2-F1): qa/epic-2e-j-phase-c-step7b-b-test.mjs never references/regenerates the Final Phase C results file, and its only results write targets its own step7b-b-results.json', doesNotRegenerateFinalPhaseC && onlyWritesOwnResultsFile, `doesNotRegenerateFinalPhaseC=${doesNotRegenerateFinalPhaseC}, onlyWritesOwnResultsFile=${onlyWritesOwnResultsFile}`);
+  // COMBINED CLOSEOUT R2 — Phase E replaced the old literal
+  // writeFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-b-results.json'), JSON.stringify(output, null, 2))
+  // call with a RESULTS_PATH constant written via the shared
+  // writeResultAtomic()/writeBrowserUnavailableResult() helpers (FIX
+  // E1-E4: atomic, fail-closed result artifacts). This check is updated
+  // to recognize that stronger pattern rather than the retired literal
+  // — it still fails closed if RESULTS_PATH ever pointed anywhere other
+  // than this suite's own step7b-b-results.json, or if any other
+  // writeFile()/writeResultAtomic() call target were introduced.
+  const resultsPathIsOwnFile = /const RESULTS_PATH = path\.join\(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-b-results\.json'\);/.test(testSrc);
+  const noWriteFileToADifferentResultsJson = !/writeFile\([^)]*'[^']*-results\.json'/.test(testSrc);
+  const onlyWritesOwnResultsFile = resultsPathIsOwnFile && noWriteFileToADifferentResultsJson;
+  record('FIX 10 (ENV-B2-F1): qa/epic-2e-j-phase-c-step7b-b-test.mjs never references/regenerates the Final Phase C results file, and its only results write targets its own step7b-b-results.json (via RESULTS_PATH + writeResultAtomic/writeBrowserUnavailableResult since R2 Phase E)', doesNotRegenerateFinalPhaseC && onlyWritesOwnResultsFile, `doesNotRegenerateFinalPhaseC=${doesNotRegenerateFinalPhaseC}, resultsPathIsOwnFile=${resultsPathIsOwnFile}, noWriteFileToADifferentResultsJson=${noWriteFileToADifferentResultsJson}`);
 }
 
 const passCount = results.filter((r) => r.result === 'PASS').length;

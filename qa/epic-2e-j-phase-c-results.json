@@ -1,240 +1,25 @@
 {
   "suite": "EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test",
-  "generatedAt": "2026-07-20T10:40:49.974Z",
+  "runId": "038722fe-a556-458b-91e1-8e3c92745e30",
+  "startedAt": "2026-07-22T15:32:59.867Z",
+  "completedAt": "2026-07-22T15:32:59.867Z",
+  "completed": true,
+  "sourceHash": null,
+  "browserExecutablePath": null,
+  "browserVersion": null,
+  "generatedAt": "2026-07-22T15:32:59.867Z",
   "summary": {
-    "total": 43,
-    "pass": 42,
+    "total": 1,
+    "pass": 0,
     "fail": 0,
     "notTested": 1
   },
-  "coverage": {
-    "fullApplicationWorkflow": "NOT_TESTED",
-    "syntheticIntegrationHarness": "PASS",
-    "physicalDevice": "NOT_TESTED",
-    "screenReader": "NOT_TESTED"
-  },
-  "manualTestsNotPerformed": [
-    "Physical mobile device",
-    "Physical touch hardware",
-    "NVDA/JAWS/VoiceOver",
-    "Long-duration memory profiling",
-    "Real user privacy study"
-  ],
   "results": [
     {
-      "test": "Full application Ready reachability",
+      "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "Real pipeline did not reach a state that enables Observation (expected, documented, pre-existing Render Plan limitation — Controlled V2 has no concrete adjustment data for this fixture). Blocker state: {\"interactiveState\":\"Partial\",\"interactiveBlockerMessage\":\"Controlled V2 preview unavailable.This browser preview is an approximation — it is NOT Lightroom-accurate.RAW development is not simulated.Camera profiles are not reproduced.\",\"observationStatus\":\"Observation is unavailable because only one preview rendered.\"}"
-    },
-    {
-      "test": "[Controller/Renderer/Session integration harness] Initial unavailable state",
-      "result": "PASS",
-      "evidence": "state=\"unavailable\""
-    },
-    {
-      "test": "[Controller/Renderer/Session integration harness] Ready state reachable",
-      "result": "PASS",
-      "evidence": "state=\"ready\""
-    },
-    {
-      "test": "[Controller/Renderer/Session integration harness] Select observation \"prefer-legacy\"",
-      "result": "PASS",
-      "evidence": "observation=\"prefer-legacy\""
-    },
-    {
-      "test": "[Controller/Renderer/Session integration harness] Select observation \"prefer-v2\"",
-      "result": "PASS",
-      "evidence": "observation=\"prefer-v2\""
-    },
-    {
-      "test": "[Controller/Renderer/Session integration harness] Select observation \"no-visible-difference\"",
-      "result": "PASS",
-      "evidence": "observation=\"no-visible-difference\""
-    },
-    {
-      "test": "[Controller/Renderer/Session integration harness] Select observation \"unsure\"",
-      "result": "PASS",
-      "evidence": "observation=\"unsure\""
-    },
-    {
-      "test": "Five-reason limit reached",
-      "result": "PASS",
-      "evidence": "count=5, limitReached=true"
-    },
-    {
-      "test": "Sixth reason rejected",
-      "result": "PASS",
-      "evidence": "count=5"
-    },
-    {
-      "test": "No-specific-reason exclusivity",
-      "result": "PASS",
-      "evidence": "reasons=[\"no-specific-reason\"]"
-    },
-    {
-      "test": "Clear Reasons keeps Observation selected",
-      "result": "PASS",
-      "evidence": "reasons=0, observation=\"prefer-legacy\""
-    },
-    {
-      "test": "Clear Observation",
-      "result": "PASS",
-      "evidence": "observation=null"
-    },
-    {
-      "test": "Generation invalidation clears Observation",
-      "result": "PASS",
-      "evidence": "state=\"unavailable\""
-    },
-    {
-      "test": "Stale selection does not revive",
-      "result": "PASS",
-      "evidence": "state=\"ready\""
-    },
-    {
-      "test": "Session invalidated count",
-      "result": "PASS",
-      "evidence": "invalidated=1"
-    },
-    {
-      "test": "Session active count after new selection",
-      "result": "PASS",
-      "evidence": "active=1, unsure=1"
-    },
-    {
-      "test": "Session cleared count",
-      "result": "PASS",
-      "evidence": "cleared=2"
-    },
-    {
-      "test": "[App-level] Session Clear pre-check: active observation present",
-      "result": "PASS",
-      "evidence": "active=1"
-    },
-    {
-      "test": "[App-level] Session Clear + current re-record: history reset",
-      "result": "PASS",
-      "evidence": "cleared=0, invalidated=0"
-    },
-    {
-      "test": "[App-level] Session Clear + current re-record: current Observation preserved",
-      "result": "PASS",
-      "evidence": "{\"totalObserved\":1,\"activeObservations\":1,\"preferLegacy\":1,\"preferV2\":0,\"noVisibleDifference\":0,\"unsure\":0,\"cleared\":0,\"invalidated\":0,\"reasonCounts\":{\"skinTone\":1,\"whiteBalance\":0,\"highlightDetail\":0,\"shadowDetail\":0,\"contrast\":1,\"colorBalance\":0,\"saturation\":0,\"naturalLook\":0,\"clarityDetail\":0,\"noSpecificReason\":0},\"topReasons\":[{\"reason\":\"skin-tone\",\"count\":1},{\"reason\":\"contrast\",\"count\":1}],\"lastObservation\":{\"generationId\":3,\"observation\":\"prefer-legacy\",\"reasons\":[\"skin-tone\",\"contrast\"]}}"
-    },
-    {
-      "test": "[App-level] Session Clear + current re-record: Reasons preserved",
-      "result": "PASS",
-      "evidence": "{\"skinTone\":1,\"whiteBalance\":0,\"highlightDetail\":0,\"shadowDetail\":0,\"contrast\":1,\"colorBalance\":0,\"saturation\":0,\"naturalLook\":0,\"clarityDetail\":0,\"noSpecificReason\":0}"
-    },
-    {
-      "test": "[App-level] Session Clear + current re-record: radio remains checked",
-      "result": "PASS",
-      "evidence": "checked=true"
-    },
-    {
-      "test": "Provider unavailable produces neutral warning, stays usable",
-      "result": "PASS",
-      "evidence": "{\"state\":\"ready\",\"generationConfirmed\":false,\"warnings\":[\"Current generation could not be independently confirmed.\"]}"
-    },
-    {
-      "test": "Provider mismatch clears observation via getState",
-      "result": "PASS",
-      "evidence": "{\"state\":\"unavailable\",\"observation\":null}"
-    },
-    {
-      "test": "No duplicate element IDs",
-      "result": "PASS",
-      "evidence": "total=295, unique=295"
-    },
-    {
-      "test": "Tab reaches Observation radio group",
-      "result": "PASS",
-      "evidence": "activeElement.id=\"ipoOption_prefer-legacy\""
-    },
-    {
-      "test": "Arrow keys change selected radio",
-      "result": "PASS",
-      "evidence": "{\"id\":\"ipoOption_prefer-v2\",\"checked\":true}"
-    },
-    {
-      "test": "Space toggles Reason checkbox",
-      "result": "PASS",
-      "evidence": "checked=true"
-    },
-    {
-      "test": "Tab reaches Clear Observation button",
-      "result": "PASS",
-      "evidence": "activeElement.id=\"ipoClearButton\""
-    },
-    {
-      "test": "Tab reaches Clear Reasons button",
-      "result": "PASS",
-      "evidence": "activeElement.id=\"ipoClearReasonsButton\""
-    },
-    {
-      "test": "Tab reaches Clear Session button",
-      "result": "PASS",
-      "evidence": "activeElement.id=\"ipoClearSessionButton\""
-    },
-    {
-      "test": "Focus-visible has non-zero computed outline style",
-      "result": "PASS",
-      "evidence": "outlineStyle=\"solid\""
-    },
-    {
-      "test": "Storage instrumentation: zero Observation-related storage calls",
-      "result": "PASS",
-      "evidence": "{\"localStorageSet\":0,\"localStorageRemove\":0,\"localStorageClear\":0,\"sessionStorageSet\":0,\"sessionStorageRemove\":0,\"sessionStorageClear\":0}"
-    },
-    {
-      "test": "Network instrumentation: zero Observation-related network calls",
-      "result": "PASS",
-      "evidence": "{\"fetch\":0,\"xhr\":0,\"sendBeacon\":0,\"webSocket\":0,\"broadcastChannel\":0}"
-    },
-    {
-      "test": "No Canvas drawImage calls from Observation actions",
-      "result": "PASS",
-      "evidence": "drawImage calls=0"
-    },
-    {
-      "test": "Element-level overflow containment at 320px",
-      "result": "PASS",
-      "evidence": "docScrollW=320, no clipped children"
-    },
-    {
-      "test": "Element-level overflow containment at 360px",
-      "result": "PASS",
-      "evidence": "docScrollW=360, no clipped children"
-    },
-    {
-      "test": "Element-level overflow containment at 390px",
-      "result": "PASS",
-      "evidence": "docScrollW=390, no clipped children"
-    },
-    {
-      "test": "Element-level overflow containment at 430px",
-      "result": "PASS",
-      "evidence": "docScrollW=430, no clipped children"
-    },
-    {
-      "test": "Element-level overflow containment at 768px",
-      "result": "PASS",
-      "evidence": "docScrollW=768, no clipped children"
-    },
-    {
-      "test": "Element-level overflow containment at 1024px",
-      "result": "PASS",
-      "evidence": "docScrollW=1024, no clipped children"
-    },
-    {
-      "test": "Element-level overflow containment at 1440px",
-      "result": "PASS",
-      "evidence": "docScrollW=1440, no clipped children"
-    },
-    {
-      "test": "Console errors across entire smoke test",
-      "result": "PASS",
-      "evidence": "(none)"
+      "evidence": "[{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
     }
-  ]
+  ],
+  "decision": "BROWSER_BINARY_UNAVAILABLE"
 }

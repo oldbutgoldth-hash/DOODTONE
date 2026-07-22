@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J ENV-B2-F1 FIX 10 — Real Browser QA Determinism and Evidence Integrity static/functional self-test",
-  "generatedAt": "2026-07-22T14:24:58.327Z",
+  "generatedAt": "2026-07-22T15:32:46.668Z",
   "summary": {
     "total": 35,
     "pass": 35,
@@ -11,12 +11,12 @@
     {
       "test": "Setup: qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "200741 bytes"
+      "evidence": "203950 bytes"
     },
     {
       "test": "Setup: qa/helpers/playwright-lumixa-test-runtime.mjs is readable",
       "result": "PASS",
-      "evidence": "12610 bytes"
+      "evidence": "19298 bytes"
     },
     {
       "test": "Setup: qa/playwright-in-memory-app-smoke.mjs is readable",
@@ -179,9 +179,9 @@
       "evidence": "present=true"
     },
     {
-      "test": "FIX 10 (ENV-B2-F1): qa/epic-2e-j-phase-c-step7b-b-test.mjs never references/regenerates the Final Phase C results file, and its only results write targets its own step7b-b-results.json",
+      "test": "FIX 10 (ENV-B2-F1): qa/epic-2e-j-phase-c-step7b-b-test.mjs never references/regenerates the Final Phase C results file, and its only results write targets its own step7b-b-results.json (via RESULTS_PATH + writeResultAtomic/writeBrowserUnavailableResult since R2 Phase E)",
       "result": "PASS",
-      "evidence": "doesNotRegenerateFinalPhaseC=true, onlyWritesOwnResultsFile=true"
+      "evidence": "doesNotRegenerateFinalPhaseC=true, resultsPathIsOwnFile=true, noWriteFileToADifferentResultsJson=true"
     }
   ],
   "disclaimer": "This suite proves FIX 1-9 via real functional calls against exported pure logic (computeInMemoryHarnessDecision, computeStep7BBDecision, PERMITTED_NOT_TESTED_STEP_7BB) plus source-text audits of qa/epic-2e-j-phase-c-step7b-b-test.mjs and qa/playwright-in-memory-app-smoke.mjs. It does not launch a Browser and proves nothing about actual real-DOM Tab/Arrow/Space keyboard behavior — that remains the job of the real Step 7B-B Browser suite, which was NOT re-executed by this static test."

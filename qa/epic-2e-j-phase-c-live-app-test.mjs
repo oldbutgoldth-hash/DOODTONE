@@ -33,6 +33,11 @@ import {
   REQUIRED_LAUNCH_ARGS,
   buildLumixaAppSnapshot,
   openLumixaInMemoryPage,
+  generateRunId,
+  computeSourceHash,
+  writeResultAtomic,
+  buildRuntimeCrashRow,
+  writeBrowserUnavailableResult,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +45,23 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const FIXTURES_DIR = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j');
 const F3_SCREENSHOT_DIR = path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-f3');
 const FIXTURES = ['neutral-balanced.png', 'warm-portrait-synthetic.png', 'cool-shadow-synthetic.png', 'highlight-shadow-range.png'];
+const RESULTS_PATH = path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-live-app-results.json');
+const EVIDENCE_RESULTS_PATH = path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-live-evidence-results.json');
+const SOURCE_HASH_INPUTS = [
+  path.join(__dirname, 'epic-2e-j-phase-c-live-app-test.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-lumixa-test-runtime.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-in-memory-app.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-opaque-origin-storage.mjs'),
+];
+
+// COMBINED CLOSEOUT R2 — Phase E: hoisted to module scope (not declared
+// inside main()) so the outer main().catch() crash handler below can
+// still access this run's identity even if main() throws partway
+// through — a function-local const/let inside main() would not be
+// visible to the outer catch callback's scope at all.
+let runId = null;
+let startedAt = null;
+let sourceHash = null;
 
 const results = [];
 function record(test, result, evidence) {
@@ -108,16 +130,25 @@ function sha256(text) {
 }
 
 async function main() {
+  runId = generateRunId();
+  startedAt = new Date().toISOString();
+  sourceHash = await computeSourceHash(SOURCE_HASH_INPUTS);
   await mkdir(F3_SCREENSHOT_DIR, { recursive: true });
-  // COMBINED CLOSEOUT R1 — Phase E: shared Browser detection (never a
+  // COMBINED CLOSEOUT R2 — Phase E: shared Browser detection (never a
   // downloaded binary), launched with the required sandbox args. When
-  // unavailable, this suite exits honestly before any test runs and
-  // never regenerates its result JSONs.
+  // unavailable, this suite now WRITES a current environment-status
+  // result (never leaves a stale prior PASS file standing as if it
+  // were current — FIX E4).
   const pkg = await detectPlaywrightPackage();
   if (pkg.status !== 'PLAYWRIGHT_PACKAGE_AVAILABLE') {
     console.log(`Playwright Node package unavailable: ${pkg.error}`);
     console.log('Final decision: PLAYWRIGHT_PACKAGE_UNAVAILABLE');
-    console.log('qa/epic-2e-j-phase-c-live-app-results.json / qa/epic-2e-j-phase-c-live-evidence-results.json were NOT regenerated (honest environment-blocked exit).');
+    await writeBrowserUnavailableResult(RESULTS_PATH, {
+      suite: 'EPIC 2E-J-C-F2 Step 7A (complete, incl. F3) - Full Application Reachability + Actual UI Workflow',
+      status: 'PLAYWRIGHT_PACKAGE_UNAVAILABLE',
+      reason: pkg.error,
+    });
+    console.log('qa/epic-2e-j-phase-c-live-app-results.json updated with a current PLAYWRIGHT_PACKAGE_UNAVAILABLE environment result (never PASS, no stale prior result left behind).');
     process.exit(0);
   }
   const { chromium } = pkg.mod;
@@ -125,7 +156,12 @@ async function main() {
   if (!browserDetect.found) {
     console.log(`No usable Browser executable found among ${browserDetect.attempts.length} candidates (never downloaded one): ${JSON.stringify(browserDetect.attempts)}`);
     console.log('Final decision: BROWSER_BINARY_UNAVAILABLE');
-    console.log('qa/epic-2e-j-phase-c-live-app-results.json / qa/epic-2e-j-phase-c-live-evidence-results.json were NOT regenerated (honest environment-blocked exit).');
+    await writeBrowserUnavailableResult(RESULTS_PATH, {
+      suite: 'EPIC 2E-J-C-F2 Step 7A (complete, incl. F3) - Full Application Reachability + Actual UI Workflow',
+      status: 'BROWSER_BINARY_UNAVAILABLE',
+      reason: JSON.stringify(browserDetect.attempts),
+    });
+    console.log('qa/epic-2e-j-phase-c-live-app-results.json updated with a current BROWSER_BINARY_UNAVAILABLE environment result (never PASS, no stale prior result left behind).');
     process.exit(0);
   }
   const browser = await chromium.launch({ executablePath: browserDetect.found, args: REQUIRED_LAUNCH_ARGS });
@@ -220,6 +256,26 @@ async function main() {
       const xmpBefore = await captureXmpText(page);
       const snapshotBeforeObs = await qaSnapshot(page);
 
+      // COMBINED CLOSEOUT R2 — Phase B FIX B2: validate the QA snapshot
+      // contract ONCE, before any Observation scenario runs, so a
+      // missing/incompatible hook produces exactly ONE clear
+      // QA_CONTRACT_MISSING failure instead of a dozen downstream
+      // `undefined` cascade failures. The dependent scenario is stopped
+      // safely (skipped) rather than continuing on broken evidence.
+      const qaContractOk = !!snapshotBeforeObs
+        && snapshotBeforeObs.qaContractVersion === '2E-J-C-R2'
+        && snapshotBeforeObs.sessionSummary && typeof snapshotBeforeObs.sessionSummary === 'object'
+        && typeof snapshotBeforeObs.sessionSummary.activeObservations === 'number'
+        && Array.isArray(snapshotBeforeObs.sessionSummary.topReasons)
+        && snapshotBeforeObs.sessionSummary.reasonCounts && typeof snapshotBeforeObs.sessionSummary.reasonCounts === 'object'
+        && snapshotBeforeObs.observation && typeof snapshotBeforeObs.observation === 'object'
+        && ('selectedValue' in snapshotBeforeObs.observation)
+        && ('reasons' in snapshotBeforeObs.observation)
+        && ('observationGenerationId' in snapshotBeforeObs.observation);
+      if (!qaContractOk) {
+        record('QA_CONTRACT_MISSING: the ?qa=1 snapshot hook does not expose the required 2E-J-C-R2 fields (qaContractVersion/sessionSummary/observation.selectedValue|reasons|observationGenerationId) — Observation scenarios stopped safely, no cascade of undefined-derived failures', false, JSON.stringify(snapshotBeforeObs));
+      }
+      if (qaContractOk) {
       // ── Actual Observation radio + Reason checkbox test ──
       await page.click('#ipoOption_prefer-legacy');
       await page.waitForTimeout(200);
@@ -434,6 +490,7 @@ async function main() {
 
       for (const url of f3RequestFailures) { if (!/fonts\.googleapis\.com|fonts\.gstatic\.com/i.test(url)) consoleErrors.push({ context: 'F3', type: 'requestfailed', url }); }
       for (const e of f3Errors) consoleErrors.push({ context: 'F3', type: 'pageerror', error: e });
+      } // end if (qaContractOk)
 
       await f3Runtime.cleanup();
     } else {
@@ -477,6 +534,13 @@ async function main() {
 
   const output = {
     suite: 'EPIC 2E-J-C-F2 Step 7A (complete, incl. F3) - Full Application Reachability + Actual UI Workflow',
+    runId,
+    startedAt,
+    completedAt: new Date().toISOString(),
+    completed: true,
+    sourceHash,
+    browserExecutablePath: browserDetect.found,
+    browserVersion: browser.version(),
     generatedAt: new Date().toISOString(),
     summary: { total: results.length, pass: passCount, fail: failCount, notTested: notTestedCount },
     firstFixtureReachingReady: firstReadyFixture,
@@ -487,15 +551,34 @@ async function main() {
     decision: finalDecision,
   };
   await mkdir(path.join(PROJECT_ROOT, 'qa'), { recursive: true });
-  await writeFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-live-app-results.json'), JSON.stringify(output, null, 2));
-  await writeFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-live-evidence-results.json'), JSON.stringify({ generatedAt: new Date().toISOString(), liveEvidenceRecords }, null, 2));
+  await writeResultAtomic(RESULTS_PATH, output);
+  await writeResultAtomic(EVIDENCE_RESULTS_PATH, { runId, generatedAt: new Date().toISOString(), liveEvidenceRecords });
   console.log(`\n${passCount}/${results.length} PASS, ${failCount} FAIL, ${notTestedCount} NOT_TESTED`);
   console.log(`Step 7A Final Decision: ${output.decision}`);
   console.log('Results written to qa/epic-2e-j-phase-c-live-app-results.json');
   process.exit(output.decision === 'FAIL' ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error('Live app test crashed:', err);
+main().catch(async (err) => {
+  console.error('Live app test crashed:', err && err.name ? err.name : err);
+  try {
+    const nowIso = new Date().toISOString();
+    await writeResultAtomic(RESULTS_PATH, {
+      suite: 'EPIC 2E-J-C-F2 Step 7A (complete, incl. F3) - Full Application Reachability + Actual UI Workflow',
+      runId,
+      startedAt,
+      completedAt: nowIso,
+      completed: false,
+      sourceHash,
+      browserExecutablePath: null,
+      browserVersion: null,
+      generatedAt: nowIso,
+      summary: { total: 1, pass: 0, fail: 1, notTested: 0 },
+      results: [buildRuntimeCrashRow(err)],
+      decision: 'FAIL',
+    });
+  } catch (writeErr) {
+    console.error('Failed to write crash result JSON:', writeErr && writeErr.name ? writeErr.name : writeErr);
+  }
   process.exit(2);
 });

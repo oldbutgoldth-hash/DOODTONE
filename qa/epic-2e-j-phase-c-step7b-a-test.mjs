@@ -32,13 +32,46 @@ import {
   REQUIRED_LAUNCH_ARGS,
   buildLumixaAppSnapshot,
   openLumixaInMemoryPage,
+  generateRunId,
+  computeSourceHash,
+  writeResultAtomic,
+  buildRuntimeCrashRow,
+  writeBrowserUnavailableResult,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
+// COMBINED CLOSEOUT R2 — Phase D: opaque-origin cookie compatibility.
+// `document.cookie` throws SecurityError when merely READ on the
+// opaque `about:blank` origin the In-Memory Harness navigates to — this
+// helper installs a Test-only in-memory cookie ONLY when native access
+// genuinely fails, and provides exact-cleanup removal. Same pattern as
+// qa/helpers/playwright-opaque-origin-storage.mjs.
+import {
+  ensureCookieCompatibility,
+  removeOpaqueOriginMemoryCookie,
+} from './helpers/playwright-opaque-origin-cookie.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const FIXTURES_DIR = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j');
 const SCREENSHOT_DIR = path.join(PROJECT_ROOT, 'qa-screenshots', 'epic-2e-j', 'full-app-7b-a');
 const VIEWPORTS = [320, 360, 390, 430, 768, 1024, 1440];
+const RESULTS_PATH = path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-a-results.json');
+// Includes the new cookie-compatibility helper this round introduced —
+// a change to that helper's logic must also invalidate a prior result's
+// freshness claim for this suite.
+const SOURCE_HASH_INPUTS = [
+  path.join(__dirname, 'epic-2e-j-phase-c-step7b-a-test.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-lumixa-test-runtime.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-in-memory-app.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-opaque-origin-cookie.mjs'),
+  path.join(PROJECT_ROOT, 'ui', 'interactive-preview-observation-session-v2.js'),
+];
+
+// COMBINED CLOSEOUT R2 — Phase E: module-scope run identity so the
+// outer main().catch() crash handler can still access it even if
+// main() throws partway through.
+let runId = null;
+let startedAt = null;
+let sourceHash = null;
 
 const results = [];
 function record(test, result, evidence) {
@@ -226,28 +259,44 @@ const INSTALL_INSTRUMENTATION_JS = `
     history.forward = function (...args) { counts.history.forward++; return orig.forward.apply(history, args); };
     history.go = function (...args) { counts.history.go++; return orig.go.apply(history, args); };
 
-    // FIX 4: native cookie setter instrumentation via property descriptor.
-    // FIX 1 (Step 7B-A-F2): capture the EXACT original shape before
-    // patching — whether an own property already existed on
-    // \`document\`, and the prototype descriptor used by normal lookup
-    // — so restoration can put things back exactly as found, never
-    // leaving a copied prototype descriptor behind as a stray own
-    // property.
+    // COMBINED CLOSEOUT R2 — Phase D FIX D1/D2/D3: on the opaque
+    // \`about:blank\` origin, even READING \`document.cookie\` throws
+    // SecurityError — this crashed the suite before any instrumentation
+    // could run. \`ensureCookieCompatibility\` probes real access FIRST
+    // and installs a Test-only in-memory cookie ONLY when native access
+    // genuinely fails; when it works natively, nothing is installed
+    // (NATIVE_COOKIE_AVAILABLE). Required sequence step 2/3: probe/
+    // install, then capture the EFFECTIVE descriptor (the just-installed
+    // own descriptor when compatibility was installed, otherwise the
+    // real native prototype descriptor) — the native opaque-origin
+    // getter is NEVER called again once a compatibility descriptor is
+    // in place.
+    ${ensureCookieCompatibility.toString()}
     optional.cookieSetter = { supported: false, patched: false };
+    window.__step7bCookieCompat = { status: 'NATIVE_COOKIE_AVAILABLE', cookieAccessibleBefore: true, cookieErrorNameBefore: null };
     try {
+      const compat = ensureCookieCompatibility(document);
+      window.__step7bCookieCompat = compat;
       const hadOwnProperty = Object.prototype.hasOwnProperty.call(document, 'cookie');
       const ownDescBefore = hadOwnProperty ? Object.getOwnPropertyDescriptor(document, 'cookie') : null;
-      const protoDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie') || Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie');
-      if (protoDesc && protoDesc.set && protoDesc.get) {
+      // FIX D3: the EFFECTIVE descriptor — own compatibility descriptor
+      // (already installed by ensureCookieCompatibility, safe in-memory
+      // get/set) when compatibility was installed; otherwise the real
+      // native prototype descriptor, exactly as before.
+      const effectiveDesc = compat.status === 'OPAQUE_ORIGIN_MEMORY_COOKIE_INSTALLED'
+        ? Object.getOwnPropertyDescriptor(document, 'cookie')
+        : (Object.getOwnPropertyDescriptor(Document.prototype, 'cookie') || Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie'));
+      if (effectiveDesc && effectiveDesc.set && effectiveDesc.get) {
         window.__step7bCookieShapeBefore = { hadOwnProperty, ownDescBefore: ownDescBefore ? { configurable: ownDescBefore.configurable, enumerable: ownDescBefore.enumerable, getter: ownDescBefore.get, setter: ownDescBefore.set } : null };
-        orig.cookieProtoDescriptor = protoDesc;
+        orig.cookieEffectiveDescriptor = effectiveDesc;
         Object.defineProperty(document, 'cookie', {
           configurable: true,
-          get() { return protoDesc.get.call(document); },
-          set(v) { counts.cookie.setterCalls++; return protoDesc.set.call(document, v); },
+          enumerable: true,
+          get: effectiveDesc.get,
+          set(v) { counts.cookie.setterCalls++; return effectiveDesc.set.call(document, v); },
         });
         const patchedDesc = Object.getOwnPropertyDescriptor(document, 'cookie');
-        optional.cookieSetter = { supported: true, patched: typeof patchedDesc?.set === 'function' && patchedDesc.get !== protoDesc.get };
+        optional.cookieSetter = { supported: true, patched: typeof patchedDesc?.set === 'function' && patchedDesc.get !== effectiveDesc.get };
       }
     } catch (e) { optional.cookieSetter = { supported: false, patched: false, error: String(e && e.message || e) }; }
 
@@ -316,18 +365,23 @@ const RESTORE_AND_VERIFY_JS = `
     history.go = orig.go;
     restoration.history = history.pushState === orig.pushState && history.replaceState === orig.replaceState && history.back === orig.back && history.forward === orig.forward && history.go === orig.go;
 
-    if (orig.cookieProtoDescriptor) {
+    if (orig.cookieEffectiveDescriptor) {
       const shapeBefore = window.__step7bCookieShapeBefore;
+      const compat = window.__step7bCookieCompat;
       let restoredCorrectly = false;
       try {
         if (shapeBefore.hadOwnProperty) {
-          // An own property existed before — restore that EXACT descriptor.
+          // An own property existed before instrumentation — restore
+          // that EXACT descriptor (this is the compatibility-installed
+          // own property when compat.status is
+          // OPAQUE_ORIGIN_MEMORY_COOKIE_INSTALLED, or a genuine
+          // pre-existing own property in the NATIVE_COOKIE_AVAILABLE case).
           Object.defineProperty(document, 'cookie', shapeBefore.ownDescBefore);
         } else {
-          // No own property existed before — DELETE the temporary own
-          // property entirely, so lookup falls back to the prototype
-          // descriptor again (never leave a copied prototype descriptor
-          // behind as a stray own property).
+          // No own property existed before instrumentation wrapped it —
+          // DELETE the temporary own (counting) property entirely, so
+          // lookup falls back to the prototype descriptor again (never
+          // leave a copied descriptor behind as a stray own property).
           delete document.cookie;
         }
         const hasOwnAfter = Object.prototype.hasOwnProperty.call(document, 'cookie');
@@ -341,12 +395,26 @@ const RESTORE_AND_VERIFY_JS = `
             && ownDescAfter.enumerable === shapeBefore.ownDescBefore.enumerable;
         } else {
           restoredCorrectly = hasOwnAfter === false
-            && protoDescAfter.get === orig.cookieProtoDescriptor.get
-            && protoDescAfter.set === orig.cookieProtoDescriptor.set;
+            && protoDescAfter.get === orig.cookieEffectiveDescriptor.get
+            && protoDescAfter.set === orig.cookieEffectiveDescriptor.set;
         }
         restoration.cookieDescriptorShape = { hadOwnPropertyBefore: shapeBefore.hadOwnProperty, hasOwnPropertyAfter: hasOwnAfter, restoredCorrectly };
       } catch (e) { restoration.cookieDescriptorShape = { restoredCorrectly: false, error: String(e && e.message || e) }; }
       restoration.cookieSetter = restoredCorrectly;
+
+      // FIX D3 sequence step 8/9 — remove the compatibility descriptor
+      // entirely (if one was installed) so \`document\` returns to
+      // genuinely having NO own "cookie" property, then verify that
+      // exact original no-own-property shape is restored.
+      ${removeOpaqueOriginMemoryCookie.toString()}
+      let compatibilityDescriptorRemoved = true; // vacuously true when nothing was installed
+      if (compat && compat.status === 'OPAQUE_ORIGIN_MEMORY_COOKIE_INSTALLED') {
+        try {
+          const removal = removeOpaqueOriginMemoryCookie(document);
+          compatibilityDescriptorRemoved = removal.removed === true && removal.hasOwnPropertyAfterRemoval === false;
+        } catch (e) { compatibilityDescriptorRemoved = false; }
+      }
+      restoration.compatibilityDescriptorRemoved = compatibilityDescriptorRemoved;
     }
 
     const booleanRestorationValues = Object.entries(restoration).filter(([k]) => k !== 'cookieDescriptorShape').map(([, v]) => v);
@@ -356,16 +424,25 @@ const RESTORE_AND_VERIFY_JS = `
 `;
 
 async function main() {
+  runId = generateRunId();
+  startedAt = new Date().toISOString();
+  sourceHash = await computeSourceHash(SOURCE_HASH_INPUTS);
   await mkdir(SCREENSHOT_DIR, { recursive: true });
-  // COMBINED CLOSEOUT R1 — Phase E: shared Browser detection (never a
+  // COMBINED CLOSEOUT R2 — Phase E: shared Browser detection (never a
   // downloaded binary), launched with the required sandbox args. When
-  // unavailable, this suite exits honestly before any test runs and
-  // never regenerates its result JSON.
+  // unavailable, this suite now WRITES a current environment-status
+  // result (FIX E4) — a stale prior PASS file must never be left
+  // standing as the apparent current result.
   const pkg = await detectPlaywrightPackage();
   if (pkg.status !== 'PLAYWRIGHT_PACKAGE_AVAILABLE') {
     console.log(`Playwright Node package unavailable: ${pkg.error}`);
     console.log('Final decision: PLAYWRIGHT_PACKAGE_UNAVAILABLE');
-    console.log('qa/epic-2e-j-phase-c-step7b-a-results.json was NOT regenerated (honest environment-blocked exit).');
+    await writeBrowserUnavailableResult(RESULTS_PATH, {
+      suite: 'EPIC 2E-J-C-F2 Step 7B-A Final Closeout (incl. Step 7B-A-F/F2/F3) - Privacy, Storage/Network, Session-Schema and Responsive Final Audit',
+      status: 'PLAYWRIGHT_PACKAGE_UNAVAILABLE',
+      reason: pkg.error,
+    });
+    console.log('qa/epic-2e-j-phase-c-step7b-a-results.json updated with a current PLAYWRIGHT_PACKAGE_UNAVAILABLE environment result (never PASS, no stale prior result left behind).');
     process.exit(0);
   }
   const { chromium } = pkg.mod;
@@ -373,7 +450,12 @@ async function main() {
   if (!browserDetect.found) {
     console.log(`No usable Browser executable found among ${browserDetect.attempts.length} candidates (never downloaded one): ${JSON.stringify(browserDetect.attempts)}`);
     console.log('Final decision: BROWSER_BINARY_UNAVAILABLE');
-    console.log('qa/epic-2e-j-phase-c-step7b-a-results.json was NOT regenerated (honest environment-blocked exit).');
+    await writeBrowserUnavailableResult(RESULTS_PATH, {
+      suite: 'EPIC 2E-J-C-F2 Step 7B-A Final Closeout (incl. Step 7B-A-F/F2/F3) - Privacy, Storage/Network, Session-Schema and Responsive Final Audit',
+      status: 'BROWSER_BINARY_UNAVAILABLE',
+      reason: JSON.stringify(browserDetect.attempts),
+    });
+    console.log('qa/epic-2e-j-phase-c-step7b-a-results.json updated with a current BROWSER_BINARY_UNAVAILABLE environment result (never PASS, no stale prior result left behind).');
     process.exit(0);
   }
   const browser = await chromium.launch({ executablePath: browserDetect.found, args: REQUIRED_LAUNCH_ARGS });
@@ -386,6 +468,7 @@ async function main() {
   let supportMatrix = null;
   let restorationResult = null;
   let dataMinimizationResult = null;
+  let cookieCompatibilityEvidence = null;
   const responsiveResults = [];
 
   try {
@@ -537,6 +620,7 @@ async function main() {
 
     finalCounts = await page.evaluate(() => window.__step7bCounts);
     optionalApiMatrix = await page.evaluate(() => window.__step7bOptional);
+    const cookieCompat = await page.evaluate(() => window.__step7bCookieCompat);
     const cookieUnchanged = await page.evaluate(() => document.cookie === window.__step7bCookieBefore);
     const searchUnchanged = await page.evaluate(() => location.search === window.__step7bSearchBefore);
     const hashUnchanged = await page.evaluate(() => location.hash === window.__step7bHashBefore);
@@ -591,10 +675,32 @@ async function main() {
     }
     record('document.cookie text identical before/after (secondary evidence, always checked)', cookieUnchanged, `unchanged=${cookieUnchanged}`);
 
+    // COMBINED CLOSEOUT R2 — Phase D FIX D4: bounded cookie-compatibility
+    // evidence — never any Cookie VALUE, only status/name/counts/booleans.
+    cookieCompatibilityEvidence = {
+      cookieCompatibilityStatus: cookieCompat?.status ?? null,
+      cookieAccessibleBefore: cookieCompat?.cookieAccessibleBefore ?? null,
+      cookieErrorNameBefore: cookieCompat?.cookieErrorNameBefore ?? null,
+      cookieSetterInstrumented: optionalApiMatrix.cookieSetter?.supported === true,
+      cookieSetterCalls: finalCounts.cookie.setterCalls,
+      instrumentationRestoredExactly: restorationResult.restoration.cookieSetter === true,
+      compatibilityDescriptorRemoved: restorationResult.restoration.compatibilityDescriptorRemoved !== false,
+    };
+    record(
+      'FIX D1-D4: opaque-origin cookie compatibility — probed/installed correctly, effective descriptor instrumented without crashing, and exactly restored/removed on cleanup',
+      cookieCompatibilityEvidence.cookieCompatibilityStatus !== null
+        && cookieCompatibilityEvidence.instrumentationRestoredExactly === true
+        && cookieCompatibilityEvidence.compatibilityDescriptorRemoved === true,
+      JSON.stringify(cookieCompatibilityEvidence)
+    );
+
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'privacy-observation-ready.png') });
     screenshotsGenerated.push('full-app-7b-a/privacy-observation-ready.png');
     mainPageAudit.finalize();
-    await page.close();
+    // COMBINED CLOSEOUT R2 — Phase F: use runtime.cleanup() (which closes
+    // the Page AND its owning Context) rather than a bare page.close(),
+    // which left the Context leaked.
+    await mainRuntime.cleanup();
 
     // ══════════════════════════════════════════════════════════════
     // PART 2 — FIX 6/7/8: responsive required-element assertions,
@@ -750,6 +856,13 @@ async function main() {
 
   const output = {
     suite: 'EPIC 2E-J-C-F2 Step 7B-A Final Closeout (incl. Step 7B-A-F/F2/F3) - Privacy, Storage/Network, Session-Schema and Responsive Final Audit',
+    runId,
+    startedAt,
+    completedAt: new Date().toISOString(),
+    completed: true,
+    sourceHash,
+    browserExecutablePath: browserDetect.found,
+    browserVersion: browser.version(),
     generatedAt: new Date().toISOString(),
     summary: { total: results.length, pass: passCount, fail: failCount, notTested: notTestedCount },
     storage: finalCounts?.storage ?? null,
@@ -759,6 +872,7 @@ async function main() {
     downloads: finalCounts?.downloads ?? null,
     history: finalCounts?.history ?? null,
     cookie: finalCounts?.cookie ?? null,
+    cookieCompatibility: cookieCompatibilityEvidence,
     optionalApiSupportMatrix: supportMatrix,
     apiRestoration: restorationResult,
     responsive: { perViewportResults: responsiveResults },
@@ -769,13 +883,32 @@ async function main() {
     decision: finalDecision,
   };
   await mkdir(path.join(PROJECT_ROOT, 'qa'), { recursive: true });
-  await writeFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-a-results.json'), JSON.stringify(output, null, 2));
+  await writeResultAtomic(RESULTS_PATH, output);
   console.log(`\n${passCount}/${results.length} PASS, ${failCount} FAIL, ${notTestedCount} NOT_TESTED`);
   console.log(`Step 7B-A Decision: ${output.decision}`);
   process.exit(output.decision === 'FAIL' ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error('Step 7B-A test crashed:', err);
+main().catch(async (err) => {
+  console.error('Step 7B-A test crashed:', err && err.name ? err.name : err);
+  try {
+    const nowIso = new Date().toISOString();
+    await writeResultAtomic(RESULTS_PATH, {
+      suite: 'EPIC 2E-J-C-F2 Step 7B-A Final Closeout (incl. Step 7B-A-F/F2/F3) - Privacy, Storage/Network, Session-Schema and Responsive Final Audit',
+      runId,
+      startedAt,
+      completedAt: nowIso,
+      completed: false,
+      sourceHash,
+      browserExecutablePath: null,
+      browserVersion: null,
+      generatedAt: nowIso,
+      summary: { total: 1, pass: 0, fail: 1, notTested: 0 },
+      results: [buildRuntimeCrashRow(err)],
+      decision: 'FAIL',
+    });
+  } catch (writeErr) {
+    console.error('Failed to write crash result JSON:', writeErr && writeErr.name ? writeErr.name : writeErr);
+  }
   process.exit(2);
 });

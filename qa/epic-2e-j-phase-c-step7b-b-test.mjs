@@ -39,6 +39,11 @@ import {
   observeAppStorageKeys,
   classifyStorageKeyPrivacyRisk,
   computeInMemoryHarnessDecision,
+  generateRunId,
+  computeSourceHash,
+  writeResultAtomic,
+  buildRuntimeCrashRow,
+  writeBrowserUnavailableResult,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
 import { CANONICAL_ORIGIN } from './helpers/playwright-in-memory-app.mjs';
 
@@ -46,6 +51,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const FIXTURES_DIR = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j');
 const SCREENSHOTS_DIR = path.join(PROJECT_ROOT, 'qa', 'screenshots', 'epic-2e-j-step7b-b');
+const RESULTS_PATH = path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-b-results.json');
+// COMBINED CLOSEOUT R2 — Phase E FIX E1: every source file whose
+// content changes what THIS suite proves — its own source plus the
+// shared In-Memory runtime/helper modules it depends on.
+const SOURCE_HASH_INPUTS = [
+  path.join(__dirname, 'epic-2e-j-phase-c-step7b-b-test.mjs'),
+  path.join(__dirname, 'epic-2e-j-phase-c-step7b-b-f1-decision.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-lumixa-test-runtime.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-in-memory-app.mjs'),
+  path.join(__dirname, 'helpers', 'playwright-opaque-origin-storage.mjs'),
+];
 
 const results = [];
 let contrastResults = [];
@@ -1061,16 +1077,33 @@ function parseSessionSecondary(secondaryText) {
   return { cleared: clearedMatch ? parseInt(clearedMatch[1], 10) : null, invalidated: invalidatedMatch ? parseInt(invalidatedMatch[1], 10) : null };
 }
 
+// COMBINED CLOSEOUT R2 — Phase E FIX E1: module-scope (not main()-local)
+// so the top-level main().catch() crash handler below can still include
+// this run's identity in its RUNTIME_CRASH result even if main() throws
+// partway through.
+let runId = null;
+let startedAt = null;
+let sourceHash = null;
+
 async function main() {
+  // A fresh identity for THIS run, established before anything else —
+  // every later result artifact (success, crash, or environment-
+  // blocked) carries it.
+  runId = generateRunId();
+  startedAt = new Date().toISOString();
+  sourceHash = await computeSourceHash(SOURCE_HASH_INPUTS);
+
   // ── PART 8 (ENV-B2) — Browser detection: env var -> bundled ->
   // common system paths, in that order. Never downloads a Browser
-  // binary. When unavailable, the results JSON is NEVER regenerated —
-  // this suite exits honestly before any test runs. ──
+  // binary. FIX E4 (COMBINED CLOSEOUT R2): when unavailable, an
+  // explicit CURRENT environment result is now written (never PASS,
+  // never merely leaving a stale prior PASS file untouched). ──
   const pkg = await detectPlaywrightPackage();
   if (pkg.status !== 'PLAYWRIGHT_PACKAGE_AVAILABLE') {
     console.log(`Playwright Node package unavailable: ${pkg.error}`);
     console.log('Final decision: PLAYWRIGHT_PACKAGE_UNAVAILABLE');
-    console.log('qa/epic-2e-j-phase-c-step7b-b-results.json was NOT regenerated (honest environment-blocked exit).');
+    await writeBrowserUnavailableResult(RESULTS_PATH, { suite: 'EPIC 2E-J-C-F2 Step 7B-B - Keyboard, Accessibility, Security and Final Phase C Closeout', status: 'PLAYWRIGHT_PACKAGE_UNAVAILABLE', reason: pkg.error });
+    console.log('qa/epic-2e-j-phase-c-step7b-b-results.json updated with a current PLAYWRIGHT_PACKAGE_UNAVAILABLE environment result (never PASS, no stale prior result left behind).');
     process.exit(0);
   }
   const { chromium } = pkg.mod;
@@ -1078,7 +1111,8 @@ async function main() {
   if (!browserDetect.found) {
     console.log(`No usable Browser executable found among ${browserDetect.attempts.length} candidates (never downloaded one): ${JSON.stringify(browserDetect.attempts)}`);
     console.log('Final decision: BROWSER_BINARY_UNAVAILABLE');
-    console.log('qa/epic-2e-j-phase-c-step7b-b-results.json was NOT regenerated (honest environment-blocked exit).');
+    await writeBrowserUnavailableResult(RESULTS_PATH, { suite: 'EPIC 2E-J-C-F2 Step 7B-B - Keyboard, Accessibility, Security and Final Phase C Closeout', status: 'BROWSER_BINARY_UNAVAILABLE', reason: JSON.stringify(browserDetect.attempts) });
+    console.log('qa/epic-2e-j-phase-c-step7b-b-results.json updated with a current BROWSER_BINARY_UNAVAILABLE environment result (never PASS, no stale prior result left behind).');
     process.exit(0);
   }
 
@@ -2935,6 +2969,13 @@ async function main() {
 
   const output = {
     suite: 'EPIC 2E-J-C-F2 Step 7B-B - Keyboard, Accessibility, Security and Final Phase C Closeout',
+    runId,
+    startedAt,
+    completedAt: new Date().toISOString(),
+    completed: true,
+    sourceHash,
+    browserExecutablePath: browserDetect.found,
+    browserVersion,
     generatedAt: new Date().toISOString(),
     summary: { total: results.length, pass: passCount, fail: failCount, notTested: notTestedCount },
     contrastResults,
@@ -2945,13 +2986,36 @@ async function main() {
     decision: finalDecision,
   };
   await mkdir(path.join(PROJECT_ROOT, 'qa'), { recursive: true });
-  await writeFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-b-results.json'), JSON.stringify(output, null, 2));
+  await writeResultAtomic(RESULTS_PATH, output);
   console.log(`\n${passCount}/${results.length} PASS, ${failCount} FAIL, ${notTestedCount} NOT_TESTED`);
   console.log(`Step 7B-B Decision: ${output.decision}`);
   process.exit(finalDecision === 'FAIL' ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error('Step 7B-B test crashed:', err);
+// COMBINED CLOSEOUT R2 — Phase E FIX E3: a top-level crash must never
+// leave a stale prior PASS result file as the apparent current result.
+// Writes a CURRENT, atomically-written, completed=false/decision=FAIL
+// result with exactly one bounded RUNTIME_CRASH row (errorName only —
+// never the full message/stack) before exiting non-zero.
+main().catch(async (err) => {
+  console.error('Step 7B-B test crashed:', (err && err.name) || 'UnknownError');
+  try {
+    const nowIso = new Date().toISOString();
+    await mkdir(path.join(PROJECT_ROOT, 'qa'), { recursive: true });
+    await writeResultAtomic(RESULTS_PATH, {
+      suite: 'EPIC 2E-J-C-F2 Step 7B-B - Keyboard, Accessibility, Security and Final Phase C Closeout',
+      runId,
+      startedAt,
+      completedAt: nowIso,
+      completed: false,
+      sourceHash,
+      browserExecutablePath: null,
+      browserVersion: null,
+      generatedAt: nowIso,
+      summary: { total: 1, pass: 0, fail: 1, notTested: 0 },
+      results: [buildRuntimeCrashRow(err)],
+      decision: 'FAIL',
+    });
+  } catch { /* even the crash-result write failing must not mask the original crash exit */ }
   process.exit(2);
 });
