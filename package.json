@@ -1,0 +1,18 @@
+{
+  "name": "lumixa_ai_epic_2e_j_phase_c_recovered_deadcode_clean",
+  "version": "1.0.0",
+  "description": "This is a **drop-in replacement** for your original `PresetForge AI` static site — not a mockup. All 30 analysis engines in `core/` are byte-for-byte unchanged from your codebase (verified via diff — Stage 2.4.2B.1); `ui/app.js` and `ui/ui-engine.js` are your original controller logic with only the styling mechanism swapped (inline CSS custom properties instead of `styles.css`); every canvas renderer (`ui/*-renderer.js`) is untouched.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "playwright": "^1.61.1"
+  }
+}

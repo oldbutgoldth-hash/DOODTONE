@@ -98,7 +98,11 @@ const requiredContrastCategories = [
 // FIX 7 — missing-Element paths call FAIL, not NOT_TESTED.
 // ══════════════════════════════════════════════════════════════════
 {
-  const hasContrastMissingFailWording = testSrc.includes('required element not found in DOM — FAIL (never NOT_TESTED for a missing required element)');
+  // Step 7B-B-F2-S2: wording updated so the same shared path also
+  // covers "required non-empty text was not present" (FIX 3) — the
+  // underlying behavior (FAIL, never NOT_TESTED, never PASS merely
+  // because the element exists) is unchanged.
+  const hasContrastMissingFailWording = testSrc.includes('required element not found in DOM, or required non-empty text was not present — FAIL (never NOT_TESTED for a missing required element or empty required text, never PASS merely because the element exists)');
   const hasTouchMissingFailWording = testSrc.includes('required target element not found — FAIL (never NOT_TESTED for a missing required target)');
   const hasFocusMissingFailWording = testSrc.includes("record(`Focus indicator: ${target.label}`, false, 'required element not found in DOM — FAIL')");
   record('Missing-Element path (Contrast) calls FAIL, not NOT_TESTED', hasContrastMissingFailWording, `present=${hasContrastMissingFailWording}`);
@@ -111,9 +115,12 @@ const requiredContrastCategories = [
 // ══════════════════════════════════════════════════════════════════
 {
   const hasFgParseFailFail = testSrc.includes('foreground color could not be parsed') && testSrc.includes('FAIL, not NOT_TESTED');
-  const hasFocusParseFailFail = testSrc.includes('could not parse outline/adjacent-background color for a contrast check');
+  // Step 7B-B-F2-S2 FIX 5: wording updated to reflect that the ACTUAL
+  // active indicator color source (outline OR box-shadow) is what gets
+  // parsed and can fail to parse — never a hard-coded "outline" name.
+  const hasFocusParseFailFail = testSrc.includes('could not parse the ACTUAL active indicator color') && testSrc.includes('FAIL, not NOT_TESTED');
   record('Ordinary foreground-color parse failure calls FAIL (Contrast)', hasFgParseFailFail, `present=${hasFgParseFailFail}`);
-  record('Ordinary outline/adjacent-background parse failure calls FAIL (Focus indicator)', hasFocusParseFailFail, `present=${hasFocusParseFailFail}`);
+  record('Ordinary outline/box-shadow indicator-color parse failure calls FAIL (Focus indicator)', hasFocusParseFailFail, `present=${hasFocusParseFailFail}`);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -226,11 +233,167 @@ const requiredContrastCategories = [
   record('Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)', status === 'NOT_RUN_ENVIRONMENT_BLOCKED', `status=${status}`);
 }
 
+// ══════════════════════════════════════════════════════════════════
+// Step 7B-B-F2-S2 FIX 6 — new static assertions covering FIX 1-5.
+// ══════════════════════════════════════════════════════════════════
+
+// FIX 1 — background-image is inspected UNCONDITIONALLY on every
+// visited element, before/regardless of any opaque-color break — the
+// old F2-S gated pattern ("!foundOpaque && ... bgImageBeforeOpaque
+// === null") must be gone, and the corrected unconditional check must
+// be present in all THREE page.evaluate() call sites that resolve an
+// effective background (Warning capture, main Contrast sweep, Focus
+// indicator).
+{
+  const oldGatedPatternGone = !testSrc.includes('!foundOpaque && style.backgroundImage');
+  const unconditionalCheckOccurrences = (testSrc.match(/if \(style\.backgroundImage && style\.backgroundImage !== 'none' && contributingBgImage === null\) contributingBgImage = style\.backgroundImage;/g) || []).length;
+  record(
+    'FIX 1: background-image is checked unconditionally on every visited element, before any opaque-color break (old gated pattern removed)',
+    oldGatedPatternGone && unconditionalCheckOccurrences === 3,
+    `oldGatedPatternGone=${oldGatedPatternGone}, unconditionalCheckOccurrences=${unconditionalCheckOccurrences} (expected 3: Warning capture, main Contrast sweep, Focus indicator)`
+  );
+}
+// FIX 1 continued — a contributing background-image can no longer be
+// silently cleared just because an opaque color was eventually found
+// on a later ancestor (the old "if (bgImageBeforeOpaque && !foundOpaque)"
+// gate is gone; the corrected check is unconditional on
+// contributingBgImage alone).
+{
+  const oldClearingGateGone = !testSrc.includes('if (bgImageBeforeOpaque && !foundOpaque)');
+  const unconditionalUndeterminableOccurrences = (testSrc.match(/if \(contributingBgImage\) return \{ undeterminable: true/g) || []).length;
+  record(
+    'FIX 1: a contributing background-image is never silently cleared once an opaque ancestor is later found',
+    oldClearingGateGone && unconditionalUndeterminableOccurrences === 3,
+    `oldClearingGateGone=${oldClearingGateGone}, unconditionalUndeterminableOccurrences=${unconditionalUndeterminableOccurrences} (expected 3)`
+  );
+}
+
+// FIX 2 — foreground color is parsed as RGBA (4-tuple with alpha),
+// never just a 3-component opaque color.
+{
+  const hasParseRgbaLocal = (testSrc.match(/function parseRgbaLocal\(str\)/g) || []).length >= 3;
+  const capturesFgRgba = testSrc.includes('fgRgba: parseRgbaLocal(style.color)');
+  record('FIX 2: foreground color is parsed as RGBA (4-tuple with alpha), not just opaque RGB', hasParseRgbaLocal && capturesFgRgba, `parseRgbaLocalOccurrences>=3=${hasParseRgbaLocal}, capturesFgRgba=${capturesFgRgba}`);
+}
+// FIX 2 continued — computed opacity on the target AND its ancestors
+// is inspected via a bounded walk, and the foreground's effective
+// alpha (own alpha × resolved ancestor-opacity product) is composited
+// over the resolved background — never silently discarded/assumed 1.
+{
+  const hasResolveEffectiveOpacityFn = (testSrc.match(/function resolveEffectiveOpacity\(startEl\)/g) || []).length >= 2;
+  const hasBoundedWalk = testSrc.includes('const MAX_STEPS = 25;') && testSrc.includes('steps < MAX_STEPS');
+  const hasEffectiveAlphaComposite = testSrc.includes('const effectiveAlpha = entry.fgRgba[3] * entry.opacityValue;') && testSrc.includes('const compositedFg = effectiveAlpha >= 1');
+  const neverAssumesOpacityOne = !/opacity\s*=\s*1;?\s*\/\/.*assum/i.test(testSrc);
+  record(
+    'FIX 2: computed opacity is inspected via a bounded ancestor walk, and foreground alpha is genuinely composited over the background (never discarded or assumed 1)',
+    hasResolveEffectiveOpacityFn && hasBoundedWalk && hasEffectiveAlphaComposite && neverAssumesOpacityOne,
+    `hasResolveEffectiveOpacityFn(>=2)=${hasResolveEffectiveOpacityFn}, hasBoundedWalk=${hasBoundedWalk}, hasEffectiveAlphaComposite=${hasEffectiveAlphaComposite}, neverAssumesOpacityOne=${neverAssumesOpacityOne}`
+  );
+}
+// FIX 2 continued — an unresolvable opacity chain is honestly
+// NOT_TESTED with bounded evidence, never silently treated as
+// opacity=1.
+{
+  const hasOpacityNotTestedPath = testSrc.includes('if (!entry.opacityResolvable) {') && testSrc.includes("record(`Contrast: ${label}`, 'NOT_TESTED', entry.opacityReason);");
+  record('FIX 2: an unresolvable opacity chain is honestly NOT_TESTED with bounded evidence, never silently assumed to be 1', hasOpacityNotTestedPath, `present=${hasOpacityNotTestedPath}`);
+}
+
+// FIX 3 — Warning, Reason-limit message, Selected Reasons text,
+// Session metrics, and Top Reasons all require non-empty visible text
+// BEFORE contrast is calculated (empty => missing => FAIL, never PASS
+// merely because the element exists).
+{
+  const requireTrueOccurrences = [
+    "collect(document.getElementById('ipoReasonLimit'), 'Reason-limit message', true)",
+    "collect(document.getElementById('ipoReasonStatus'), 'Selected Reasons text', true)",
+    "metricsChildren.forEach((child, i) => out.push(collect(child, `Session metric row ${i} (label+value combined in one text node)`, true)));",
+    "topReasonsChildren.forEach((child, i) => out.push(collect(child, `Top Reasons row ${i} (label+count combined in one text node)`, true)));",
+  ].every((s) => testSrc.includes(s));
+  const collectFailsClosedOnEmptyText = testSrc.includes('if (requireNonEmptyText && text.length === 0) return { label, missing: true };');
+  record('FIX 3: Reason-limit / Selected Reasons / Session metrics / Top Reasons all require non-empty text before contrast is calculated', requireTrueOccurrences && collectFailsClosedOnEmptyText, `requireTrueOccurrences=${requireTrueOccurrences}, collectFailsClosedOnEmptyText=${collectFailsClosedOnEmptyText}`);
+}
+// FIX 3 continued — Warning is measured via a dedicated GENUINE
+// Re-analyze workflow (never a DOM-mutated fake string), polling for
+// real non-empty text and honestly recording FAIL if the genuine
+// workflow never produces it. Warning must NOT be part of the main
+// sweep's `collect()` list (it is measured separately, in its
+// transient window).
+{
+  const hasGenuineWarningWorkflow = testSrc.includes("await page.click('#btnReanalyze');") && testSrc.includes('let warningEntry = null;') && testSrc.includes('for (let i = 0; i < 20 && !warningEntry; i++)');
+  const hasHonestWarningFailFallback = testSrc.includes("record('Contrast: Warning', false, 'genuine Re-analyze workflow never produced non-empty Warning text within a ~2s poll window — FAIL");
+  const warningNotInMainSweepCollectCalls = !testSrc.includes("collect(document.getElementById('ipoWarning')");
+  const neverAssignsWarningTextContent = !/ipoWarning['"]\)\.textContent\s*=/.test(testSrc);
+  record(
+    'FIX 3: Warning text is produced by a genuine Re-analyze workflow (never DOM-mutated), measured in its real transient window, honestly FAILed if never produced',
+    hasGenuineWarningWorkflow && hasHonestWarningFailFallback && warningNotInMainSweepCollectCalls && neverAssignsWarningTextContent,
+    `hasGenuineWarningWorkflow=${hasGenuineWarningWorkflow}, hasHonestWarningFailFallback=${hasHonestWarningFailFallback}, warningNotInMainSweepCollectCalls=${warningNotInMainSweepCollectCalls}, neverAssignsWarningTextContent=${neverAssignsWarningTextContent}`
+  );
+}
+
+// FIX 4 — disabled 6th Reason is compared against an enabled Reason
+// across a real set of computed-style properties, with an honest
+// NOT_TESTED fallback (never a fabricated PASS, never a CSS/class
+// change merely to pass the test) when native disabled styling can't
+// be measured.
+{
+  const hasSnapHelper = testSrc.includes('function snap(input)');
+  const hasEightProps = testSrc.includes("const propsToCompare = ['inputOpacity', 'labelOpacity', 'spanOpacity', 'color', 'backgroundColor', 'borderColor', 'filter', 'cursor'];");
+  const comparesAgainstEnabledReference = testSrc.includes("document.getElementById('ipoReason_skin-tone')");
+  const hasHonestNotTestedFallback = testSrc.includes("not reliably introspectable via getComputedStyle — reported honestly as a tool limitation, never fabricated as PASS");
+  const neverAddsClassOrStyleToPass = !/ipoReason_color-balance['"]\)\.(classList\.add|style\.\w+\s*=)/.test(testSrc);
+  record(
+    'FIX 4: disabled 6th Reason is compared against an enabled Reason across 8 computed-style properties, with honest NOT_TESTED fallback (never a fabricated PASS or CSS change to force a pass)',
+    hasSnapHelper && hasEightProps && comparesAgainstEnabledReference && hasHonestNotTestedFallback && neverAddsClassOrStyleToPass,
+    `hasSnapHelper=${hasSnapHelper}, hasEightProps=${hasEightProps}, comparesAgainstEnabledReference=${comparesAgainstEnabledReference}, hasHonestNotTestedFallback=${hasHonestNotTestedFallback}, neverAddsClassOrStyleToPass=${neverAddsClassOrStyleToPass}`
+  );
+}
+
+// FIX 5 — Focus indicator background resolution uses the SAME robust
+// resolver as Contrast (duplicated inline in the Focus-indicator
+// page.evaluate), never the old simplified first-non-transparent-
+// parent while-loop.
+{
+  const oldSimplifiedLoopGone = !testSrc.includes("while ((!rgba || rgba[3] === 0) && bgEl.parentElement)");
+  const focusUsesRobustResolver = testSrc.includes('const adjacentBgResult = resolveEffectiveBackground(styledEl.parentElement || styledEl);');
+  record('FIX 5: Focus indicator background resolution uses the same robust resolver as Contrast (old simplified while-loop removed)', oldSimplifiedLoopGone && focusUsesRobustResolver, `oldSimplifiedLoopGone=${oldSimplifiedLoopGone}, focusUsesRobustResolver=${focusUsesRobustResolver}`);
+}
+// FIX 5 continued — the ACTUALLY active indicator (outline OR
+// box-shadow) is correctly identified and its real color parsed —
+// never reporting box-shadow presence while measuring an unrelated
+// outlineColor.
+{
+  const hasUsingOutlineUsingBoxShadow = testSrc.includes('const usingOutline = outlineWidth > 0 && outlineStyle !== \'none\';') && testSrc.includes('const usingBoxShadow = !usingOutline && !!boxShadow');
+  const hasBoxShadowColorExtraction = testSrc.includes("const m = boxShadow.match(/rgba?\\([^)]*\\)/);") && testSrc.includes('indicatorColorRaw = m ? m[0] : null;');
+  const neverHardcodesOutlineColor = !/indicatorColorRaw\s*=\s*info\.outlineColor/.test(testSrc) && !testSrc.includes('const outlineRgb = parseRgb(info.outlineColor);\n      if (!outlineRgb ||');
+  record(
+    'FIX 5: the ACTUALLY active indicator (outline or box-shadow) is identified and its real color source parsed, never a hard-coded outlineColor read regardless of which mechanism is active',
+    hasUsingOutlineUsingBoxShadow && hasBoxShadowColorExtraction && neverHardcodesOutlineColor,
+    `hasUsingOutlineUsingBoxShadow=${hasUsingOutlineUsingBoxShadow}, hasBoxShadowColorExtraction=${hasBoxShadowColorExtraction}, neverHardcodesOutlineColor=${neverHardcodesOutlineColor}`
+  );
+}
+// FIX 5 continued — an undeterminable adjacent background (gradient/
+// image) fails closed to NOT_TESTED rather than fabricating a ratio.
+{
+  const hasFocusUndeterminableNotTested = testSrc.includes('if (info.adjacentBgResult.undeterminable) {') && testSrc.includes("'NOT_TESTED', info.adjacentBgResult.reason);");
+  record('FIX 5: Focus indicator fails closed to NOT_TESTED (never a fabricated ratio) when the adjacent background is genuinely undeterminable', hasFocusUndeterminableNotTested, `present=${hasFocusUndeterminableNotTested}`);
+}
+
+// FIX 6 — a single shared decision function (`recordContrastEntry`)
+// applies identical FAIL/NOT_TESTED/PASS rules to every Contrast
+// target, including the standalone Warning check — so the main sweep
+// and Warning can never silently diverge in their pass/fail logic.
+{
+  const hasSharedRecordFn = testSrc.includes('function recordContrastEntry(label, entry, contrastResultsList)');
+  const mainSweepUsesSharedFn = testSrc.includes('for (const entry of contrastAudit) recordContrastEntry(entry.label, entry, contrastResults);');
+  const warningUsesSharedFn = testSrc.includes("recordContrastEntry('Warning', warningEntry, contrastResults);");
+  record('FIX 6: a single shared recordContrastEntry() applies identical decision rules to the main Contrast sweep and the standalone Warning check', hasSharedRecordFn && mainSweepUsesSharedFn && warningUsesSharedFn, `hasSharedRecordFn=${hasSharedRecordFn}, mainSweepUsesSharedFn=${mainSweepUsesSharedFn}, warningUsesSharedFn=${warningUsesSharedFn}`);
+}
+
 const passCount = results.filter((r) => r.result === 'PASS').length;
 const failCount = results.filter((r) => r.result === 'FAIL').length;
 
 const output = {
-  suite: 'EPIC 2E-J — Step 7B-B-F2-S FIX 7: static coverage self-test (source audit only, no Chromium)',
+  suite: 'EPIC 2E-J — Step 7B-B-F2-S/F2-S2: static coverage self-test (source audit only, no Chromium)',
   generatedAt: new Date().toISOString(),
   summary: { total: results.length, pass: passCount, fail: failCount },
   results,

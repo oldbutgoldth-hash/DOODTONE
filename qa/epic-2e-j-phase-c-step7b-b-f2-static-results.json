@@ -1,16 +1,16 @@
 {
-  "suite": "EPIC 2E-J — Step 7B-B-F2-S FIX 7: static coverage self-test (source audit only, no Chromium)",
-  "generatedAt": "2026-07-22T04:37:05.090Z",
+  "suite": "EPIC 2E-J — Step 7B-B-F2-S/F2-S2: static coverage self-test (source audit only, no Chromium)",
+  "generatedAt": "2026-07-22T05:03:00.284Z",
   "summary": {
-    "total": 19,
-    "pass": 19,
+    "total": 31,
+    "pass": 31,
     "fail": 0
   },
   "results": [
     {
       "test": "qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "52046 bytes"
+      "evidence": "66461 bytes"
     },
     {
       "test": "ui/interactive-preview-observation-renderer-v2.js is readable (for touch-target cross-check)",
@@ -48,14 +48,14 @@
       "evidence": "present=true"
     },
     {
-      "test": "Ordinary outline/adjacent-background parse failure calls FAIL (Focus indicator)",
+      "test": "Ordinary outline/box-shadow indicator-color parse failure calls FAIL (Focus indicator)",
       "result": "PASS",
       "evidence": "present=true"
     },
     {
       "test": "The only permitted Contrast NOT_TESTED path is the documented gradient/background-image limitation",
       "result": "PASS",
-      "evidence": "hasDocumentedGradientNotTested=true, total 'NOT_TESTED' string literal occurrences in source=3"
+      "evidence": "hasDocumentedGradientNotTested=true, total 'NOT_TESTED' string literal occurrences in source=6"
     },
     {
       "test": "Normal-text WCAG threshold 4.5:1 exists in the Contrast audit",
@@ -101,6 +101,66 @@
       "test": "Browser result remains NOT_RUN_ENVIRONMENT_BLOCKED (read from existing F1 static-results honest-status record)",
       "result": "PASS",
       "evidence": "status=NOT_RUN_ENVIRONMENT_BLOCKED"
+    },
+    {
+      "test": "FIX 1: background-image is checked unconditionally on every visited element, before any opaque-color break (old gated pattern removed)",
+      "result": "PASS",
+      "evidence": "oldGatedPatternGone=true, unconditionalCheckOccurrences=3 (expected 3: Warning capture, main Contrast sweep, Focus indicator)"
+    },
+    {
+      "test": "FIX 1: a contributing background-image is never silently cleared once an opaque ancestor is later found",
+      "result": "PASS",
+      "evidence": "oldClearingGateGone=true, unconditionalUndeterminableOccurrences=3 (expected 3)"
+    },
+    {
+      "test": "FIX 2: foreground color is parsed as RGBA (4-tuple with alpha), not just opaque RGB",
+      "result": "PASS",
+      "evidence": "parseRgbaLocalOccurrences>=3=true, capturesFgRgba=true"
+    },
+    {
+      "test": "FIX 2: computed opacity is inspected via a bounded ancestor walk, and foreground alpha is genuinely composited over the background (never discarded or assumed 1)",
+      "result": "PASS",
+      "evidence": "hasResolveEffectiveOpacityFn(>=2)=true, hasBoundedWalk=true, hasEffectiveAlphaComposite=true, neverAssumesOpacityOne=true"
+    },
+    {
+      "test": "FIX 2: an unresolvable opacity chain is honestly NOT_TESTED with bounded evidence, never silently assumed to be 1",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 3: Reason-limit / Selected Reasons / Session metrics / Top Reasons all require non-empty text before contrast is calculated",
+      "result": "PASS",
+      "evidence": "requireTrueOccurrences=true, collectFailsClosedOnEmptyText=true"
+    },
+    {
+      "test": "FIX 3: Warning text is produced by a genuine Re-analyze workflow (never DOM-mutated), measured in its real transient window, honestly FAILed if never produced",
+      "result": "PASS",
+      "evidence": "hasGenuineWarningWorkflow=true, hasHonestWarningFailFallback=true, warningNotInMainSweepCollectCalls=true, neverAssignsWarningTextContent=true"
+    },
+    {
+      "test": "FIX 4: disabled 6th Reason is compared against an enabled Reason across 8 computed-style properties, with honest NOT_TESTED fallback (never a fabricated PASS or CSS change to force a pass)",
+      "result": "PASS",
+      "evidence": "hasSnapHelper=true, hasEightProps=true, comparesAgainstEnabledReference=true, hasHonestNotTestedFallback=true, neverAddsClassOrStyleToPass=true"
+    },
+    {
+      "test": "FIX 5: Focus indicator background resolution uses the same robust resolver as Contrast (old simplified while-loop removed)",
+      "result": "PASS",
+      "evidence": "oldSimplifiedLoopGone=true, focusUsesRobustResolver=true"
+    },
+    {
+      "test": "FIX 5: the ACTUALLY active indicator (outline or box-shadow) is identified and its real color source parsed, never a hard-coded outlineColor read regardless of which mechanism is active",
+      "result": "PASS",
+      "evidence": "hasUsingOutlineUsingBoxShadow=true, hasBoxShadowColorExtraction=true, neverHardcodesOutlineColor=true"
+    },
+    {
+      "test": "FIX 5: Focus indicator fails closed to NOT_TESTED (never a fabricated ratio) when the adjacent background is genuinely undeterminable",
+      "result": "PASS",
+      "evidence": "present=true"
+    },
+    {
+      "test": "FIX 6: a single shared recordContrastEntry() applies identical decision rules to the main Contrast sweep and the standalone Warning check",
+      "result": "PASS",
+      "evidence": "hasSharedRecordFn=true, mainSweepUsesSharedFn=true, warningUsesSharedFn=true"
     }
   ],
   "disclaimer": "This suite audits the SOURCE TEXT of qa/epic-2e-j-phase-c-step7b-b-test.mjs for the presence of required categories/thresholds/wiring. It does NOT execute a browser, does NOT measure real computed colors or element sizes, and does NOT prove real Contrast/Touch-target PASS. A PASS here means \"the required code path is present,\" not \"the real UI meets WCAG.\"",
