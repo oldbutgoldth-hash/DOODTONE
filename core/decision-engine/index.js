@@ -2862,36 +2862,3 @@ function _buildDebugTrace({ decision, fingerprint, mapped, stats, wb, cast }) {
 // main production path (buildFinalPreset) still uses this internally
 // via the same reference; exporting it does not change any behavior.
 export { _projectHumanReviewStateV2, _safeNormalizeErrorText, _applyAuthoritativePreviewFailureStateV2 };
-
-/**
- * FIX 3 (EPIC 2E-J-C-F2 Step 7A-F2F2): focused test seam for the
- * authoritative post-mapping Preview Sandbox commit transaction.
- * Exported for QA only — Production calls it via the real builder
- * functions already wired in `buildFinalPreset()` above.
- *
- * Accepts injectable `buildSandbox`/`buildReviewState` functions so the
- * QA smoke test can inject a throwing builder without any runtime flag,
- * URL parameter, localStorage change, or mutation of exported application
- * state. Normal production behavior is completely unaffected since
- * production never calls this export directly — it only calls the private
- * inline try/catch already present in `buildFinalPreset()`.
- *
- * @param {{ finalStyleIntent: object, buildSandbox: function, buildReviewState: function, sandboxInputs: object, reviewInputs: object }} params
- * @returns {{ committed: boolean, error: string|null }} — never throws
- */
-export function _runAuthoritativePreviewRebuildTransactionV2({ finalStyleIntent, buildSandbox, buildReviewState, sandboxInputs = {}, reviewInputs = {} }) {
-  try {
-    const authSandbox = buildSandbox(sandboxInputs);
-    const authReviewState = buildReviewState({ ...reviewInputs, controlledOverlayPreviewSandboxV2: authSandbox });
-    // Only commit once BOTH succeed.
-    finalStyleIntent.controlledOverlayPreviewSandboxV2 = authSandbox;
-    finalStyleIntent.controlledPreviewReviewStateV2 = authReviewState;
-    return { committed: true, error: null };
-  } catch (e) {
-    // Delegates to the exact same shared failure-state helper the real
-    // production catch block uses — both canonical fields to null, safe
-    // normalized error string recorded, no provisional fallback.
-    _applyAuthoritativePreviewFailureStateV2(finalStyleIntent, e);
-    return { committed: false, error: finalStyleIntent?.authoritativePreviewSandboxError ?? _safeNormalizeErrorText(e) };
-  }
-}

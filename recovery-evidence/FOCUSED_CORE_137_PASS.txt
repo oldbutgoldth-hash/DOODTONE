@@ -1,0 +1,162 @@
+=== FIX 1/2: Preview-only flags and Test Gate eligibility ===
+✓ [PASS] allowControlledOverlayTest remains false — value=false
+✓ [PASS] allowOverlayTestPresetPreview enabled — value=true
+✓ [PASS] allowOverlayPreviewGeneration enabled — value=true
+✓ [PASS] allowOverlayPreviewExport remains false — value=false
+✓ [PASS] allowOverlayPreviewProductionWrite remains false — value=false
+✓ [PASS] enableControlledActivation remains false — value=false
+✓ [PASS] allowProductionOverride remains false — value=false
+✓ [PASS] canEnterControlledTest remains false — value=false
+✓ [PASS] canPreviewOverlayPreset is true — value=true
+
+=== FIX 3: Safe Human Review projection ===
+✓ [PASS] A: status=passed+reviewed=true+approve -> passed — {"legacy-output-preserved":"passed"}
+✓ [PASS] B: reviewed=false -> not passed — {}
+✓ [PASS] C: reject -> failed — {"legacy-output-preserved":"failed"}
+✓ [PASS] D: needs-adjustment -> not passed (pending) — {}
+✓ [PASS] E: status=failed -> failed — {"legacy-output-preserved":"failed"}
+✓ [PASS] F: pending status -> not passed — {}
+✓ [PASS] G: missing reviewerDecision -> not passed — {}
+✓ [PASS] H: duplicate passed+reject (either order) -> failed wins — order1=failed, order2=failed
+✓ [PASS] I: hostile Review array index getter -> no crash — crashed=false, result={"legacy-output-preserved":"passed"}
+✓ [PASS] J: hostile item getter -> malformed item skipped, no crash — crashed=false, result={"legacy-output-preserved":"passed"}
+
+=== K/L: Full pipeline reachability + Production lock ===
+✓ [PASS] K: all-ten-item approved -> human-review-complete removed — missingRequirements=[]
+✓ [PASS] K: canGeneratePreview = true — canGeneratePreview=true
+✓ [PASS] K: Render Plan renderable = true — renderable=true
+✓ [PASS] L: canWriteProduction = false — value=false
+✓ [PASS] L: canExportPreview = false — value=false
+✓ [PASS] L: allowControlledOverlayTest = false — value=false
+✓ [PASS] L: selectedOutputSource = legacy — value=legacy
+
+=== Full-pipeline regression: reject/needs-adjustment still block Preview ===
+✓ [PASS] C (pipeline): a single reject blocks canGeneratePreview — canGeneratePreview=false
+✓ [PASS] D (pipeline): a single needs-adjustment blocks canGeneratePreview — canGeneratePreview=false
+
+=== Step 3-F: Conservative duplicate precedence (failed > pending > passed) ===
+✓ [PASS] 1: pending then passed -> omitted — {}
+✓ [PASS] 2: passed then pending -> omitted — {}
+✓ [PASS] 3: needs-adjustment then passed -> omitted — {}
+✓ [PASS] 4: passed then needs-adjustment -> omitted — {}
+✓ [PASS] 5: unreviewed then passed -> omitted — {}
+✓ [PASS] 6: passed then unreviewed -> omitted — {}
+✓ [PASS] 7: passed+reviewed=true+undecided -> omitted — {}
+✓ [PASS] 8: failed+pending+passed, any order -> failed always wins — order1=failed, order2=failed, order3=failed
+✓ [PASS] 9: approved duplicate entries -> passed — {"legacy-output-preserved":"passed"}
+✓ [PASS] 10: all ten properly approved -> canGeneratePreview=true — canGeneratePreview=true
+✓ [PASS] 10: all ten properly approved -> Render Plan renderable=true — renderable=true
+✓ [PASS] 11: every ID has a pending+passed duplicate -> projected map empty — {}
+✓ [PASS] 11: Sandbox Human Review remains incomplete — missingRequirements=["human-review-complete"]
+✓ [PASS] 11: canGeneratePreview remains false — canGeneratePreview=false
+✓ [PASS] 12: canWriteProduction = false — value=false
+✓ [PASS] 12: canExportPreview = false — value=false
+✓ [PASS] 12: allowControlledOverlayTest = false — value=false
+✓ [PASS] 12: selectedOutputSource = legacy — value=legacy
+
+=== Step 4-6: Identity Preview honesty + buildFinalPreset integration ===
+✓ [PASS] A: buildFinalPreset duplicate integration — Sandbox exists — sandbox exists=true
+✓ [PASS] A: buildFinalPreset duplicate integration — human-review-complete missing — missingRequirements=["human-review-complete"]
+✓ [PASS] A: buildFinalPreset duplicate integration — canGeneratePreview=false — canGeneratePreview=false
+  [INFO] B: buildFinalPreset approved integration — Sandbox state: canGeneratePreview=true, confidence=0.756, safetyScore=0.812, selectedOutputSource=legacy, missingRequirements=[]
+✓ [PASS] B: buildFinalPreset approved integration — human-review-complete itself no longer blocks — missingRequirements=[]
+✓ [PASS] B: buildFinalPreset approved integration — selectedOutputSource=legacy — value=legacy
+✓ [PASS] C: Sandbox canGeneratePreview=true — value=true
+✓ [PASS] C: simulatedPreviewPreset.available=true — value=true
+✓ [PASS] C: Render Plan renderable=true — value=true
+✓ [PASS] C: Identity Preview reason/warning present — ["V2 simulated preview preset is available and confirmed non-production; it contains no concrete signed adjustment values in Phase A, so the isolated preview renders as a valid identity (visually unchanged) preview rather than being blocked as unavailable."]
+✓ [PASS] C: canWriteProduction=false — value=false
+✓ [PASS] C: canExportPreview=false — value=false
+✓ [PASS] C: selectedOutputSource=legacy — value=legacy
+✓ [PASS] C: Identity Pixel contract — state=rendered — state=rendered
+✓ [PASS] C: Identity Pixel contract — transformed=false — transformed=false
+✓ [PASS] C: Identity Pixel contract — appliedAdjustments is an Array — type=object
+✓ [PASS] C: Identity Pixel contract — appliedAdjustments.length=0 — length=0
+✓ [PASS] C: Identity Pixel contract — every output byte equals original — unchanged=true
+✓ [PASS] C: Identity Pixel contract — reason indicates no supported adjustment/unchanged pixels — ["No supported preview adjustments were applied; the pixel buffer remains unchanged."]
+✓ [PASS] D: missing Sandbox -> renderable=false — value=false
+✓ [PASS] D: missing Sandbox -> not Identity Preview — ["No V2 Sandbox simulated preview preset was supplied — V2 render plan is unavailable."]
+✓ [PASS] E: Sandbox unavailable -> renderable=false — value=false
+✓ [PASS] E: Sandbox unavailable -> not Identity Preview — ["V2 simulated preview preset exists but is not currently available (Sandbox not eligible) — nothing to render yet."]
+✓ [PASS] F: malformed simulated preset -> no crash — crashed=false
+✓ [PASS] F: malformed simulated preset -> renderable=false — value=false
+✓ [PASS] G: hard stop -> Sandbox canGeneratePreview=false — value=false
+✓ [PASS] G: hard stop -> Render Plan renderable=false — value=false
+✓ [PASS] H: contradictory evidence -> renderable=false — value=false
+✓ [PASS] H: contradictory evidence -> blocker identifies it — ["V2 preview evidence is contradictory (appliedToProduction or exportEligible reports true) — blocking V2 rendering as a safety precaution."]
+✓ [PASS] Renderer supported-adjustment regression: transformed=true — transformed=true
+✓ [PASS] Renderer supported-adjustment regression: appliedAdjustments includes colorGrading — ["colorGrading"]
+✓ [PASS] Renderer supported-adjustment regression: appliedAdjustments.length > 0 — length=1
+✓ [PASS] Renderer supported-adjustment regression: reason does not describe Identity/unchanged preview — ["Applied 1 adjustment(s), skipped 13 unsupported/unavailable adjustment(s). Note: the supplied data buffer was mutated in place."]
+✓ [PASS] L: Production Mapping fields identical with/without Review state (union comparison) — all fields identical, no key added or removed
+
+=== Step 7A-F2: Authoritative post-mapping Sandbox (partial vs full Legacy context) ===
+  [INFO] A: partial legacy context (live-representative evidence) — confidence=0.578, safetyScore=0.754
+✓ [PASS] A: partial legacy context — confidence gate fails — confidence=0.578
+  [INFO] B: full legacy context (live-representative evidence) — confidence=0.728, safetyScore=0.804
+✓ [PASS] B: full legacy context — canGeneratePreview=true — canGeneratePreview=true
+✓ [PASS] B: full legacy context — confidence higher than partial — full=0.728 vs partial=0.578
+✓ [PASS] C: buildFinalPreset (no Review) — authoritative Sandbox uses legacy-preset context — confidence=0.756
+✓ [PASS] C: buildFinalPreset (no Review) — Human Review remains incomplete, Preview blocked — canGeneratePreview=false
+✓ [PASS] D: buildFinalPreset (all approved) — authoritative Sandbox uses legacy-preset context — sourceType=legacy-preset
+✓ [PASS] D: buildFinalPreset (all approved) — human-review-complete passes, canGeneratePreview=true — canGeneratePreview=true
+✓ [PASS] D: buildFinalPreset (all approved) — V2 Render Plan renderable — renderable=true
+✓ [PASS] D: buildFinalPreset (all approved) — Identity Preview remains honest (no concrete adjustment) — ["V2 simulated preview preset is available and confirmed non-production; it contains no concrete signed adjustment values in Phase A, so the isolated preview renders as a valid identity (visually unchanged) preview rather than being blocked as unavailable."]
+✓ [PASS] E: pending/passed duplicate — remains blocked post-rebuild — canGeneratePreview=false
+✓ [PASS] F: Production Mapping comparison (post-rebuild, union) — no key added/removed/changed — all fields identical
+✓ [PASS] G: selectedOutputSource=legacy — value=legacy
+✓ [PASS] G: canWriteProduction=false — value=false
+✓ [PASS] G: canExportPreview=false — value=false
+✓ [PASS] G: allowControlledOverlayTest=false — value=false
+
+=== Step 7A-F2-F: Safe error normalizer + provisional-object removal ===
+✓ [PASS] Safe error normalizer: null -> no crash, safe text — Unknown error (no error value provided).
+✓ [PASS] Safe error normalizer: string -> passthrough — plain string error
+✓ [PASS] Safe error normalizer: Error -> message extracted — genuine error
+✓ [PASS] Safe error normalizer: throwing message getter -> no crash — crashed=false, result="Non-Error object thrown; message property could not be safely read."
+✓ [PASS] Safe error normalizer: excessively long message -> bounded to ~200 chars — length=201
+✓ [PASS] Safe error normalizer: no stack trace ever included — verified no stack-trace markers
+✓ [PASS] No provisional-object field exists on finalStyleIntent — none found
+✓ [PASS] Production Mapping remains identical (re-verified post Step 7A-F2-F) — all fields identical
+
+=== FIX 7: Partial/full context invariant (mock values are REPRESENTATIVE, not exact live reproductions) ===
+  Mock: partial=0.578, full=0.728 (live fixture: partial≈0.597, full≈0.747 — different evidence inputs, same qualitative effect)
+✓ [PASS] FIX 7: full Legacy context increases confidence (proven invariant, not an exact-value claim) — delta=0.150 (expected ≈0.15 per the Sandbox formula's 30% Legacy-availability weight × 0.5 factor swing)
+✓ [PASS] FIX 7: full Legacy context increases safety score (proven invariant) — delta=0.050 (expected ≈0.05 per the Sandbox formula's 10% Legacy-availability weight × 0.5 factor swing)
+✓ [PASS] FIX 7: full context can cross the unchanged 0.72 threshold with valid evidence — partial=0.578 (below), full=0.728 (at/above) — threshold itself (0.72) never touched
+
+=== Step 7A-F2-G: Canonical safe-failure regression (_applyAuthoritativePreviewFailureStateV2) ===
+✓ [PASS] Failure helper (genuine Error): no crash — crashed=false
+✓ [PASS] Failure helper (genuine Error): canonical Sandbox cleared to null — value=null
+✓ [PASS] Failure helper (genuine Error): canonical Review State cleared to null — value=null
+✓ [PASS] Failure helper (genuine Error): bounded safe error string recorded — error="deliberate rebuild failure"
+✓ [PASS] Failure helper (genuine Error): no stack trace leaked — verified no stack-trace markers
+✓ [PASS] Failure helper (genuine Error): no provisional field added — controlledOverlayPreviewSandboxV2, controlledPreviewReviewStateV2, authoritativePreviewSandboxError
+✓ [PASS] Failure helper (null): no crash — crashed=false
+✓ [PASS] Failure helper (null): canonical Sandbox cleared to null — value=null
+✓ [PASS] Failure helper (null): canonical Review State cleared to null — value=null
+✓ [PASS] Failure helper (null): bounded safe error string recorded — error="Unknown error (no error value provided)."
+✓ [PASS] Failure helper (null): no stack trace leaked — verified no stack-trace markers
+✓ [PASS] Failure helper (null): no provisional field added — controlledOverlayPreviewSandboxV2, controlledPreviewReviewStateV2, authoritativePreviewSandboxError
+✓ [PASS] Failure helper (throwing message getter): no crash — crashed=false
+✓ [PASS] Failure helper (throwing message getter): canonical Sandbox cleared to null — value=null
+✓ [PASS] Failure helper (throwing message getter): canonical Review State cleared to null — value=null
+✓ [PASS] Failure helper (throwing message getter): bounded safe error string recorded — error="Non-Error object thrown; message property could not be safely read."
+✓ [PASS] Failure helper (throwing message getter): no stack trace leaked — verified no stack-trace markers
+✓ [PASS] Failure helper (throwing message getter): no provisional field added — controlledOverlayPreviewSandboxV2, controlledPreviewReviewStateV2, authoritativePreviewSandboxError
+✓ [PASS] Failure helper (revoked Proxy): no crash — crashed=false
+✓ [PASS] Failure helper (revoked Proxy): canonical Sandbox cleared to null — value=null
+✓ [PASS] Failure helper (revoked Proxy): canonical Review State cleared to null — value=null
+✓ [PASS] Failure helper (revoked Proxy): bounded safe error string recorded — error="Error value could not be safely normalized."
+✓ [PASS] Failure helper (revoked Proxy): no stack trace leaked — verified no stack-trace markers
+✓ [PASS] Failure helper (revoked Proxy): no provisional field added — controlledOverlayPreviewSandboxV2, controlledPreviewReviewStateV2, authoritativePreviewSandboxError
+✓ [PASS] Failure helper (excessively long message): bounded to ~200 chars — length=201
+✓ [PASS] Failure helper (null finalStyleIntent): no crash — crashed=false
+✓ [PASS] Downstream Render Plan unrenderable after authoritative failure — renderable=false
+✓ [PASS] Downstream Render Plan: no Identity Preview produced after failure — ["No V2 Sandbox simulated preview preset was supplied — V2 render plan is unavailable."]
+✓ [PASS] FIX 4: Production Mapping regression (normal execution, not failure-triggered) — all fields identical, no key added/removed
+✓ [PASS] Regression: normal successful rebuild still commits (all-approved -> canGeneratePreview) — canGeneratePreview=true
+✓ [PASS] Regression: selectedOutputSource=legacy (post Step 7A-F2-G) — value=legacy
+✓ [PASS] Regression: allowControlledOverlayTest=false (post Step 7A-F2-G) — value=false
+
+137/137 PASS, 0 FAIL

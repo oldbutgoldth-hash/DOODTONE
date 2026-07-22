@@ -1,0 +1,86 @@
+{
+  "suite": "EPIC 2E-J — Step 7B-B-F1-R FIX 4: static decision self-test (no Chromium, no network, no DOM)",
+  "generatedAt": "2026-07-22T03:30:32.861Z",
+  "summary": {
+    "total": 13,
+    "pass": 13,
+    "fail": 0
+  },
+  "results": [
+    {
+      "test": "Case A: all PASS => decision is PASS",
+      "result": "PASS",
+      "evidence": "decision=PASS"
+    },
+    {
+      "test": "Case A: all PASS => exit code is success (0)",
+      "result": "PASS",
+      "evidence": "exitCode=0"
+    },
+    {
+      "test": "Case B: one FAIL => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case B: one FAIL => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case C: unexpected NOT_TESTED (Contrast) => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case C: unexpected NOT_TESTED (Contrast) => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case D: unexpected NOT_TESTED (Clear Session) => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case D: unexpected NOT_TESTED (Clear Session) => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "Case E: only Physical touch hardware NOT_TESTED => decision is CONDITIONAL_PASS",
+      "result": "PASS",
+      "evidence": "decision=CONDITIONAL_PASS"
+    },
+    {
+      "test": "Case E: only Physical touch hardware NOT_TESTED => exit code is success (0)",
+      "result": "PASS",
+      "evidence": "exitCode=0"
+    },
+    {
+      "test": "Case F: Physical touch hardware + one FAIL => decision is FAIL",
+      "result": "PASS",
+      "evidence": "decision=FAIL"
+    },
+    {
+      "test": "Case F: Physical touch hardware + one FAIL => exit code is non-zero",
+      "result": "PASS",
+      "evidence": "exitCode=1"
+    },
+    {
+      "test": "isAllowedExternalFontUrl allows only fonts.googleapis.com/fonts.gstatic.com (lookalikes rejected)",
+      "result": "PASS",
+      "evidence": "10 cases checked, all correct"
+    }
+  ],
+  "browserSuiteExecution": {
+    "status": "NOT_RUN_ENVIRONMENT_BLOCKED",
+    "reason": "This sandbox cannot download or launch a Chromium binary (network allowlist blocks the Playwright browser download host, and no system browser is available). The FIX 1/2/3 changes to qa/epic-2e-j-phase-c-step7b-b-test.mjs (fail-closed decision wiring, console/resource listeners, required result rows) were NOT executed in a real browser for this patch.",
+    "doesNotClaim": [
+      "PASS for the browser suite",
+      "that qa/epic-2e-j-phase-c-step7b-b-results.json on disk (28/29, from a PRIOR run before this patch) is evidence for the FIX 1/2/3 changes made here",
+      "any Console/Resource runtime counts (zero or otherwise) from an actual run"
+    ],
+    "finalPhaseCDecisionRegenerated": false
+  }
+}

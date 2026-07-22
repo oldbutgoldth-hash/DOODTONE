@@ -16,7 +16,7 @@
 import { buildControlledOverlayTestGateV2 } from '../core/lightroom-mapping-engine/mapping-v2-overlay-test-gate.js';
 import { buildControlledOverlayPreviewSandboxV2 } from '../core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js';
 import { buildVisualPreviewRenderPlanV2 } from '../core/preview-rendering/visual-preview-render-plan-v2.js';
-import { _projectHumanReviewStateV2, _safeNormalizeErrorText, _runAuthoritativePreviewRebuildTransactionV2, _applyAuthoritativePreviewFailureStateV2 } from '../core/decision-engine/index.js';
+import { _projectHumanReviewStateV2, _safeNormalizeErrorText, _applyAuthoritativePreviewFailureStateV2 } from '../core/decision-engine/index.js';
 import { LIGHTROOM_MAPPING_V2_FLAGS } from '../core/lightroom-mapping-engine/mapping-v2-flags.js';
 
 const results = [];

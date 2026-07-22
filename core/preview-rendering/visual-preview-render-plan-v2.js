@@ -353,14 +353,23 @@ function _buildLegacyRenderPlan(legacyPreset) {
 }
 
 /**
- * Builds the V2 render plan. Blocks rendering (returns `renderable:
- * false`) when the Sandbox's non-production evidence is missing or
- * contradictory: `simulatedPreviewPreset.available` must be `true`,
- * `appliedToProduction` must not be `true`, `exportEligible` must not
- * be `true`. Even when all of that evidence checks out, `renderable`
- * remains `false` in Phase A because the adjustment model itself has
- * no supported (concrete, signed) adjustments yet — see the
- * file-level comment.
+ * Builds the V2 render plan. Current exact policy:
+ *
+ * - a MISSING Sandbox (no `simulatedPreviewPreset` supplied at all) is
+ *   unrenderable
+ * - an UNAVAILABLE Sandbox (`simulatedPreviewPreset.available !== true`)
+ *   is unrenderable
+ * - CONTRADICTORY Production evidence (`appliedToProduction === true`
+ *   or `exportEligible === true`) is unrenderable, as a hard safety
+ *   precaution
+ * - a VALID, AVAILABLE, non-production Sandbox result with zero
+ *   concrete supported adjustments IS renderable — as an honest
+ *   IDENTITY PREVIEW (`renderable: true`, `visualAdjustmentsApplied:
+ *   false`, `appliedAdjustments: []`)
+ *
+ * An Identity Preview never changes any pixel and never activates or
+ * implies Production activation — Legacy Mapping remains the exclusive
+ * Production/XMP source regardless of this Plan's `renderable` value.
  */
 function _buildV2RenderPlan(sandbox) {
   const preset = _isRecord(sandbox?.simulatedPreviewPreset) ? sandbox.simulatedPreviewPreset : null;

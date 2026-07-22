@@ -19,6 +19,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { computeStep7BBDecision, isAllowedExternalFontUrl } from './epic-2e-j-phase-c-step7b-b-f1-decision.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -112,14 +113,52 @@ async function main() {
   const server = await startServer();
   const browser = await chromium.launch();
   const consoleErrors = [];
+  // FIX 2: resource-load failures (real HTTP status / real network
+  // failure) tracked separately from console text, and NO LONGER
+  // silently dropped for matching "Failed to load resource" — that text
+  // match previously discarded evidence instead of using it.
+  const resourceErrors = [];
+
+  // FIX 2: install pageerror/console/response/requestfailed listeners
+  // BEFORE navigation, on every page this suite opens. A console.error
+  // is only excused from counting when it can be CONCLUSIVELY tied to
+  // an allowed Google Fonts host via the isAllowedExternalFontUrl()
+  // allowlist parsed out of the message text itself — never by broadly
+  // matching the phrase "Failed to load resource" against arbitrary
+  // console text, which could hide a genuine same-origin asset failure
+  // behind a font-shaped excuse. The authoritative source of truth for
+  // "was this actually a font request" is the real response/
+  // requestfailed URL, not the console text.
+  function extractUrlFromText(text) {
+    const m = typeof text === 'string' ? text.match(/https?:\/\/\S+/) : null;
+    return m ? m[0].replace(/[)\]},.;'"]+$/, '') : null;
+  }
+  function attachErrorListeners(p, context) {
+    p.on('pageerror', (e) => consoleErrors.push({ context, type: 'pageerror', error: String(e) }));
+    p.on('console', (msg) => {
+      if (msg.type() !== 'error') return;
+      const text = msg.text();
+      const urlInText = extractUrlFromText(text);
+      if (urlInText && isAllowedExternalFontUrl(urlInText)) return; // conclusively an allowed Google Fonts host
+      consoleErrors.push({ context, type: 'console.error', text });
+    });
+    p.on('response', (res) => {
+      if (res.status() < 400) return;
+      if (isAllowedExternalFontUrl(res.url())) return;
+      resourceErrors.push({ context, url: res.url(), status: res.status() });
+    });
+    p.on('requestfailed', (req) => {
+      if (isAllowedExternalFontUrl(req.url())) return;
+      resourceErrors.push({ context, url: req.url(), reason: req.failure()?.errorText ?? 'unknown' });
+    });
+  }
 
   try {
     // ══════════════════════════════════════════════════════════════
     // PART 1 — Reach Ready through the real application (no forced state).
     // ══════════════════════════════════════════════════════════════
     const page = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
-    page.on('pageerror', (e) => consoleErrors.push({ context: 'main', type: 'pageerror', error: String(e) }));
-    page.on('console', (msg) => { if (msg.type() === 'error' && !/Failed to load resource/i.test(msg.text())) consoleErrors.push({ context: 'main', type: 'console.error', text: msg.text() }); });
+    attachErrorListeners(page, 'main');
 
     await page.goto(`http://localhost:${PORT}/index.html?qa=1`);
     await page.waitForTimeout(600);
@@ -404,6 +443,7 @@ async function main() {
     console.log('=== Malformed renderer state + injection safety (real browser DOM, real renderer functions) ===');
 
     const part7Page = await browser.newPage();
+    attachErrorListeners(part7Page, 'part7-malformed-injection');
     await part7Page.goto(`http://localhost:${PORT}/index.html?qa=1`);
     await part7Page.waitForTimeout(300);
 
@@ -518,11 +558,23 @@ async function main() {
   }
   record('Production isolation: zero Observation/Session identifiers found in core/', productionFindings.length === 0, productionFindings.length === 0 ? 'zero matches in core/' : JSON.stringify(productionFindings));
 
+  // FIX 3 — required result rows. Both must be PASS for the suite to
+  // pass; neither has a NOT_TESTED escape hatch. resourceErrors/
+  // consoleErrors were captured throughout the ENTIRE run above
+  // (attached before navigation on every page this suite opened).
+  record('Zero non-font console/page errors', consoleErrors.length === 0, consoleErrors.length === 0 ? 'zero non-font console/page errors observed' : JSON.stringify(consoleErrors));
+  record('Zero non-font resource/network failures', resourceErrors.length === 0, resourceErrors.length === 0 ? 'zero non-font resource/network failures observed' : JSON.stringify(resourceErrors));
+
   const passCount = results.filter((r) => r.result === 'PASS').length;
   const failCount = results.filter((r) => r.result === 'FAIL').length;
   const notTestedCount = results.filter((r) => r.result === 'NOT_TESTED').length;
-  const requiredNotTestedOk = results.filter((r) => r.result === 'NOT_TESTED').every((r) => /Physical touch hardware|Contrast:/i.test(r.test));
-  const finalDecision = (failCount === 0 && requiredNotTestedOk) ? (notTestedCount === 0 ? 'PASS' : 'CONDITIONAL_PASS') : 'FAIL';
+  // FIX 1 — true fail-closed decision, factored into a pure function
+  // (qa/epic-2e-j-phase-c-step7b-b-f1-decision.mjs) so it is unit-
+  // testable without Chromium. Only the exact test name
+  // 'Physical touch hardware' is a permitted NOT_TESTED for this suite;
+  // Contrast, Clear Session, a missing element, and the new
+  // Console/Resource rows above are all NOT permitted and force FAIL.
+  const finalDecision = computeStep7BBDecision(results);
 
   const output = {
     suite: 'EPIC 2E-J-C-F2 Step 7B-B - Keyboard, Accessibility, Security and Final Phase C Closeout',
@@ -530,6 +582,7 @@ async function main() {
     summary: { total: results.length, pass: passCount, fail: failCount, notTested: notTestedCount },
     contrastResults,
     consoleErrors,
+    resourceErrors,
     results,
     decision: finalDecision,
   };
@@ -537,7 +590,7 @@ async function main() {
   await writeFile(path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-step7b-b-results.json'), JSON.stringify(output, null, 2));
   console.log(`\n${passCount}/${results.length} PASS, ${failCount} FAIL, ${notTestedCount} NOT_TESTED`);
   console.log(`Step 7B-B Decision: ${output.decision}`);
-  process.exit(failCount > 0 ? 1 : 0);
+  process.exit(finalDecision === 'FAIL' ? 1 : 0);
 }
 
 main().catch((err) => {
