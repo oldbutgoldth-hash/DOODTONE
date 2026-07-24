@@ -1,14 +1,14 @@
 {
   "suite": "DEPLOY GEOMETRY R1 — Deploy Preview Geometry suite",
-  "runId": "48547350-b266-4cf4-8cf2-8fb6733ca444",
-  "startedAt": "2026-07-22T19:56:03.940Z",
-  "completedAt": "2026-07-22T19:56:03.955Z",
+  "runId": "f6f64827-f31d-49a8-91a6-b616c5a92516",
+  "startedAt": "2026-07-23T02:56:07.641Z",
+  "completedAt": "2026-07-23T02:56:07.675Z",
   "completed": true,
   "sourceHash": "23f75c090f0111672bf419260fb0cc80fc06415e9377c9a14d14597411575c8d",
   "deployUrl": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-22T19:56:03.955Z",
+  "generatedAt": "2026-07-23T02:56:07.675Z",
   "summary": {
     "total": 1,
     "pass": 0,

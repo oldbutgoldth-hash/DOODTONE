@@ -127,6 +127,13 @@ const state = {
   // for the current generation only (see _buildPreviewGeometryDiagnostics
   // and preview-source-geometry-normalizer-v2.js) — never raw pixels.
   lastCanonicalSourceEvidence: null,
+  // SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 4: bounded post-render
+  // outcome evidence for the current generation only — lets
+  // _buildPreviewGeometryDiagnostics() report the render-time blocker
+  // codes (LEGACY_RENDER_FAILED / V2_RENDER_FAILED /
+  // PIXEL_DIMENSION_MISMATCH / GENERATION_MISMATCH) that cannot be
+  // known before render() actually resolves. Bounded primitives only.
+  lastRenderOutcomeEvidence: null,
 };
 
 // DEPLOY GEOMETRY R1 — Phase B: one shared normalizer instance for the
@@ -234,7 +241,46 @@ function _buildPreviewGeometryDiagnostics(generationId) {
   else if (otherFailedRequiredGates.length > 0) blockerCode = 'SANDBOX_NOT_ELIGIBLE';
   else if (!simulatedPreviewPresetAvailable && !v2Available) blockerCode = 'SIMULATED_PRESET_UNAVAILABLE';
   else if (v2Available && !v2Renderable) blockerCode = 'SANDBOX_NOT_ELIGIBLE';
-  // else: no known blocker — V2 is genuinely eligible (blockerCode stays null).
+  // else: no known PRE-RENDER blocker — Sandbox/Plan eligibility looks
+  // fine. SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 4: only NOW check
+  // the POST-decode/render outcome evidence for this SAME generation
+  // (unavailable before decode/render actually run — this function is
+  // also called once, pre-render, to compute the value threaded into
+  // render() itself; at that call site none of these can fire yet,
+  // which is correct — they only become reachable on a LATER call to
+  // this function, e.g. via the QA snapshot hook, after decode/render
+  // has resolved for this generation).
+  else {
+    const decodeEv = state.lastCanonicalSourceEvidence;
+    const decodeEvMatchesGeneration = decodeEv && _qaSafeGenerationId(decodeEv.generationId) === _qaSafeGenerationId(generationId);
+    const renderEv = state.lastRenderOutcomeEvidence;
+    const renderEvMatchesGeneration = renderEv && _qaSafeGenerationId(renderEv.generationId) === _qaSafeGenerationId(generationId);
+
+    if (decodeEv && !decodeEvMatchesGeneration) {
+      blockerCode = 'GENERATION_MISMATCH';
+    } else if (renderEv && !renderEvMatchesGeneration) {
+      blockerCode = 'GENERATION_MISMATCH';
+    } else if (decodeEvMatchesGeneration && decodeEv.decodeComplete === false && decodeEv.decodePath !== 'unavailable') {
+      // 'unavailable' means decode was never attempted for this
+      // generation (e.g. no file yet) — not itself a failure to
+      // report; 'stale-discarded' or a genuine decode exception both
+      // mean decodeComplete stays false with a real attempt made.
+      blockerCode = 'SOURCE_DECODE_FAILED';
+    } else if (decodeEvMatchesGeneration && decodeEv.decodeComplete === true
+      && !(Number.isFinite(decodeEv.canonicalWidth) && decodeEv.canonicalWidth > 0 && Number.isFinite(decodeEv.canonicalHeight) && decodeEv.canonicalHeight > 0)) {
+      blockerCode = 'SOURCE_GEOMETRY_INVALID';
+    } else if (renderEvMatchesGeneration && renderEv.legacyFailed) {
+      blockerCode = 'LEGACY_RENDER_FAILED';
+    } else if (renderEvMatchesGeneration && renderEv.v2Failed) {
+      blockerCode = 'V2_RENDER_FAILED';
+    } else if (renderEvMatchesGeneration && renderEv.legacyRendered && renderEv.v2Rendered
+      && (renderEv.legacyBackingWidth !== renderEv.v2BackingWidth || renderEv.legacyBackingHeight !== renderEv.v2BackingHeight)) {
+      blockerCode = 'PIXEL_DIMENSION_MISMATCH';
+    }
+    // else: no known blocker — V2 is genuinely eligible and (if
+    // decode/render evidence for this generation exists yet) succeeded
+    // cleanly. blockerCode stays null.
+  }
 
   return {
     generationId: _qaSafeGenerationId(generationId),
@@ -330,6 +376,12 @@ function ensureQaSnapshotHook() {
 
     return {
       qaContractVersion: '2E-J-C-R2',
+      // SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 1 requirement #8: the
+      // Baseline Upload Contract test must confirm state.imageLoaded
+      // becomes true through THIS public, bounded QA hook (never by
+      // reaching into module-internal state directly). A single boolean
+      // — no image data, no dimensions, no file metadata.
+      imageLoaded: _qaSafeBool(state.imageLoaded),
       analysisGeneration: _qaSafeNum(analysisRenderGeneration),
       testGate: {
         exists: !!testGate,
@@ -1963,6 +2015,12 @@ async function runAnalysis() {
           // newer one. Everything else in runAnalysis() before/after
           // this Visual-Preview-only boundary is unaffected.
           if (renderGeneration === analysisRenderGeneration) {
+          // SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 3: mark this
+          // generation's render as STARTED before invoking it, so the
+          // normalizer's resource map knows this generation's bitmap is
+          // actively being consumed and must not be closed out from
+          // under it even if a newer generation's decode begins first.
+          previewSourceGeometryNormalizer.markRenderStarted(renderGeneration);
           // Fire-and-forget (never awaited here) — see rationale above.
           visualPreviewComparisonController.render({
             source: _canonicalDecode.source ?? img,
@@ -1970,6 +2028,35 @@ async function runAnalysis() {
             analysisGenerationId: renderGeneration,
             v2BlockerCode: _previewGeometryDiagnostics.blockerCode,
           }).then(vprState => {
+            // Phase 3: mark settled on EVERY settle path (success here,
+            // failure in .catch() below) — this is what lets a
+            // superseded generation's bitmap be released the instant
+            // its render finishes, never before.
+            previewSourceGeometryNormalizer.markRenderSettled(renderGeneration);
+            // SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 4: record
+            // bounded post-render outcome evidence for THIS generation
+            // — this is what lets _buildPreviewGeometryDiagnostics()
+            // (when read later via the QA snapshot) report
+            // LEGACY_RENDER_FAILED / V2_RENDER_FAILED /
+            // PIXEL_DIMENSION_MISMATCH, which cannot be known before
+            // render() resolves. Only recorded if this is still the
+            // current generation — a stale/superseded render's outcome
+            // must never overwrite a newer generation's evidence.
+            if (renderGeneration === analysisRenderGeneration) {
+              const legacyR = vprState?.legacy ?? null;
+              const v2R = vprState?.v2 ?? null;
+              state.lastRenderOutcomeEvidence = {
+                generationId: renderGeneration,
+                legacyRendered: legacyR?.rendered === true,
+                legacyFailed: legacyR?.state === 'failed',
+                v2Rendered: v2R?.rendered === true,
+                v2Failed: v2R?.state === 'failed',
+                legacyBackingWidth: typeof legacyR?.backingWidth === 'number' ? legacyR.backingWidth : null,
+                legacyBackingHeight: typeof legacyR?.backingHeight === 'number' ? legacyR.backingHeight : null,
+                v2BackingWidth: typeof v2R?.backingWidth === 'number' ? v2R.backingWidth : null,
+                v2BackingHeight: typeof v2R?.backingHeight === 'number' ? v2R.backingHeight : null,
+              };
+            }
             // FIX 8: a newer analysis (Re-analyze / new image) may have
             // already started by the time this resolves — never let a
             // stale preview render overwrite the current one's display.
@@ -1981,6 +2068,28 @@ async function runAnalysis() {
             // re-invoking the pixel renderer.
             _syncInteractiveBeforeAfter(vprState, renderGeneration);
           }).catch(err => {
+            // Phase 3: mark settled on the failure path too — a thrown/
+            // rejected render must release its pending-render claim
+            // just as reliably as a successful one, or a failed render
+            // would leak its generation's bitmap forever.
+            previewSourceGeometryNormalizer.markRenderSettled(renderGeneration);
+            // SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 4: a rejected
+            // render() promise (as opposed to a resolved-but-'failed'
+            // side result) is recorded as a V2_RENDER_FAILED blocker —
+            // V2 is the newer, more complex render path and therefore
+            // the more likely failure point when the whole call throws
+            // rather than one side reporting its own 'failed' state;
+            // this is a documented best-available inference, not a
+            // certainty, since a rejection gives no per-side detail.
+            if (renderGeneration === analysisRenderGeneration) {
+              state.lastRenderOutcomeEvidence = {
+                generationId: renderGeneration,
+                legacyRendered: false, legacyFailed: false,
+                v2Rendered: false, v2Failed: true,
+                legacyBackingWidth: null, legacyBackingHeight: null,
+                v2BackingWidth: null, v2BackingHeight: null,
+              };
+            }
             // FIX 5 (EPIC 2E-H-C-F): a caught error must still produce a
             // VISIBLE failed state in the Preview section — not merely a
             // console warning that leaves the section silently stuck on
@@ -2125,6 +2234,7 @@ function handleReset() {
   // generation must never keep memory alive past this point.
   state.currentRetainedFile = null;
   state.lastCanonicalSourceEvidence = null;
+  state.lastRenderOutcomeEvidence = null;
   previewSourceGeometryNormalizer.releaseAll();
   if (state.curveEditor) state.curveEditor.resetAll();
   document.getElementById('uploadWrap').style.display  = 'block';

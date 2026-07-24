@@ -7,12 +7,14 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test:static",
+    "test:static": "node qa/run-static-suites.mjs",
+    "test:browser": "node qa/run-browser-suites.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
+  "devDependencies": {
     "playwright": "^1.61.1"
   }
 }

@@ -1,13 +1,13 @@
 {
   "suite": "DEPLOY GEOMETRY R1 — Preview Geometry local Browser suite",
-  "runId": "439fee1b-2506-4574-845d-a3eb7bda6cce",
-  "startedAt": "2026-07-22T19:56:03.862Z",
-  "completedAt": "2026-07-22T19:56:03.862Z",
+  "runId": "662df0e8-ca3c-4b76-8c68-0db0ff6f1ad4",
+  "startedAt": "2026-07-23T02:56:05.923Z",
+  "completedAt": "2026-07-23T02:56:05.923Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-22T19:56:03.862Z",
+  "generatedAt": "2026-07-23T02:56:05.923Z",
   "summary": {
     "total": 1,
     "pass": 0,

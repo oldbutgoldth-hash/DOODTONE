@@ -1,13 +1,13 @@
 {
   "suite": "COMBINED CLOSEOUT R3 — Phase A FIX A4: Cookie compatibility real-Browser self-test",
-  "runId": "9b3d3de0-6b76-4fe2-b65d-0e906d5601f3",
-  "startedAt": "2026-07-22T19:54:49.074Z",
-  "completedAt": "2026-07-22T19:54:49.074Z",
+  "runId": "c3912556-d512-4617-947f-d9a1e47d96f1",
+  "startedAt": "2026-07-23T02:56:06.493Z",
+  "completedAt": "2026-07-23T02:56:06.493Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-22T19:54:49.074Z",
+  "generatedAt": "2026-07-23T02:56:06.493Z",
   "summary": {
     "total": 1,
     "pass": 0,

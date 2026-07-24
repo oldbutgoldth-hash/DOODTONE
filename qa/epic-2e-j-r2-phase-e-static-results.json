@@ -1,6 +1,6 @@
 {
   "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
-  "generatedAt": "2026-07-22T19:54:31.400Z",
+  "generatedAt": "2026-07-23T02:55:54.951Z",
   "summary": {
     "total": 92,
     "pass": 92,
@@ -11,12 +11,12 @@
     {
       "test": "generateRunId() returns a non-empty string",
       "result": "PASS",
-      "evidence": "idA=9e2a0d45-0e07-4735-8aeb-7b9b87ba2b5b"
+      "evidence": "idA=a059211e-cf3c-4041-8d9f-85f79750d9f7"
     },
     {
       "test": "generateRunId() returns a fresh value on each call (never reused)",
       "result": "PASS",
-      "evidence": "idA=9e2a0d45-0e07-4735-8aeb-7b9b87ba2b5b, idB=e7d56211-169e-423a-a949-761a6215d1f9"
+      "evidence": "idA=a059211e-cf3c-4041-8d9f-85f79750d9f7, idB=d566171b-017b-437c-9dbd-b4b531e6d441"
     },
     {
       "test": "computeSourceHash() is deterministic for identical inputs",
@@ -131,7 +131,7 @@
     {
       "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
       "result": "PASS",
-      "evidence": "oldRunId=1172cbf9-4662-47eb-bf9f-ac1a4f690269, newRunId=f819729c-aeaf-4f93-9915-462637a332c2"
+      "evidence": "oldRunId=b777d6bf-8635-4f43-bbdd-adea9289189c, newRunId=3c95bce6-52c4-40d1-bbc4-2fe42c0b93d0"
     },
     {
       "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",
@@ -456,7 +456,7 @@
     {
       "test": "R3-12: qa/baselines/lufa42-production-lock-manifest.json is present and parses as JSON (checked-in, portable — never a machine-specific sibling directory)",
       "result": "PASS",
-      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_f1r/LUMIXA_AI_EPIC_2E_J_PHASE_C_RECOVERED_DEADCODE_CLEAN/qa/baselines/lufa42-production-lock-manifest.json"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r2/work/qa/baselines/lufa42-production-lock-manifest.json"
     },
     {
       "test": "R3-12: Production-lock manifest declares a non-empty locked-file set",

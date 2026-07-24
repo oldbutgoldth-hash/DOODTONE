@@ -1,0 +1,25 @@
+{
+  "suite": "SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 1B: Baseline Upload Contract",
+  "runId": "eb501760-107a-470c-8b2a-568bc239dfda",
+  "startedAt": "2026-07-23T02:56:03.033Z",
+  "completedAt": "2026-07-23T02:56:03.033Z",
+  "completed": true,
+  "sourceHash": null,
+  "browserExecutablePath": null,
+  "browserVersion": null,
+  "generatedAt": "2026-07-23T02:56:03.033Z",
+  "summary": {
+    "total": 1,
+    "pass": 0,
+    "fail": 0,
+    "notTested": 1
+  },
+  "results": [
+    {
+      "test": "Browser environment availability",
+      "result": "NOT_TESTED",
+      "evidence": "No usable Browser executable found among 6 candidates."
+    }
+  ],
+  "decision": "BROWSER_BINARY_UNAVAILABLE"
+}

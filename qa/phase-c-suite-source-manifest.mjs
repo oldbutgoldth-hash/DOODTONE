@@ -40,6 +40,16 @@ import path from 'node:path';
 import { computeSourceHash } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 export const SUITE_SOURCE_FILES = {
+  // SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 1B/10: the Baseline
+  // Upload Contract suite's own sourceHash inputs — includes ui/app.js
+  // itself, since this suite exists specifically to prove the upload/
+  // generation lifecycle inside that file.
+  uploadBaseline: [
+    'qa/epic-2e-j-safe-recovery-upload-baseline-test.mjs',
+    'qa/helpers/playwright-lumixa-test-runtime.mjs',
+    'qa/helpers/playwright-in-memory-app.mjs',
+    'ui/app.js',
+  ],
   liveApp: [
     'qa/epic-2e-j-phase-c-live-app-test.mjs',
     'qa/helpers/playwright-lumixa-test-runtime.mjs',

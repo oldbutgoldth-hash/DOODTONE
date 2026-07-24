@@ -1,0 +1,32 @@
+=== EC3_CURRENT_GEOMETRY_BASELINE — SHA-256 snapshot ===
+Captured: 2026-07-22T21:12:21Z
+
+--- ui/app.js ---
+43e97822fd9217824fb296aaa4663be69169323d1b8ef7c7ef6f3631daec4b60  ui/app.js
+--- Geometry/Preview modules ---
+f7217f27492902917abef2082dfa630726568b1a9a1af172b4e15f5761202838  ui/preview-source-geometry-normalizer-v2.js
+2570d9d3d33211f3a7f4786d94378c06734892766fb37dc856f142b6108ff473  ui/isolated-visual-preview-renderer-v2.js
+fa559630e36fa2850df08160a8bdfd86e3a10374bfc297b4074168bb774cd15d  ui/visual-preview-comparison-controller-v2.js
+7eaeac045083b9afbd2306872b0c1a1e1cd707c9ddec821d25211a0387525882  ui/visual-preview-comparison-renderer-v2.js
+880bee475083dc72e45b63d479c6abfbddefbaaf803aa1a7cb7700625e5cfe75  ui/interactive-before-after-controller-v2.js
+531714f7385591a0b02cac4522b98ff4180b35c3a90c174fdeee2b858729b4e3  ui/interactive-before-after-renderer-v2.js
+96fbcaddf3fed07ed0b709e0bffe02669bc31280eb2619fc260501e2049442de  ui/interactive-preview-observation-controller-v2.js
+f116f5d8e9a5c344c02dbefd6661c92f1b7dc566f4bc77144e8ed51b43fd69f4  ui/interactive-preview-observation-renderer-v2.js
+0a663bb63a1d604f238737f5e5b1a6f14d99c6bcd5606ab8c105bdd496656bf3  core/preview-rendering/visual-preview-render-plan-v2.js
+--- index.html ---
+06ca7c4785808c41edc253e3c37a61f4f81ce6494edebf00b51bdb615ee0f740  index.html
+--- Mapping and XMP modules ---
+f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099  core/lightroom-mapping-engine/index.js
+1bab396c49eaeb01ebca668b163977b2def96135a359067c952cae7a41e9e174  core/lightroom-mapping-engine/mapping-v2-activation-controller.js
+d675dcc58bcce7dc835d42cc38862aa7594a69bb4cbeaceb275af54a27aad934  core/lightroom-mapping-engine/mapping-v2-flags.js
+49a1f0095603bcb532f9db75d4d3f66455594fc32862a77a3eaa469997324d36  core/lightroom-mapping-engine/mapping-v2-legacy-safety-overlay.js
+2b4a7686913d957b2221dcceea6b5191ce9758403a43cf6b2c019e1cb890b4d1  core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js
+2c11452ffe7c8844be21917ac0d77b66fe2699fb344b2e5bfb06fc0632dc2e7b  core/lightroom-mapping-engine/mapping-v2-overlay-simulation.js
+2e2f34fec23962f81d8ed7456eb5a4ee5239f21ffccced609d2ca27cba4aa9d4  core/lightroom-mapping-engine/mapping-v2-overlay-test-gate.js
+bb0a8c10a5d2684b4042a2a9af557723ac001a782294678ed000dd1df5b914c4  core/lightroom-mapping-engine/mapping-v2-planner.js
+17fde1b934bff27e341c68150230395b5f7080aac6ad7bbf5259c8bd798c2d41  core/lightroom-mapping-engine/mapping-v2-preview-review-state.js
+d49d222cb1641312c953c8e45cfc3367958d7326596fa2b9ef924d7c9b8d990d  core/lightroom-mapping-engine/mapping-v2-safety-clamp.js
+70900e0bd3a6a27ef4e155cfcba93e11f03fffe2b29ef6c2da912ded9518b803  core/lightroom-mapping-engine/mapping-v2-shadow-compare.js
+8fa8470ab3b830686dd3927acb5baad397efd18fe2da3c1d5f6dd86a2fc41daa  core/lightroom-mapping-engine/mapping-v2-side-by-side-comparison.js
+5408b8de8f1a55df2bb3f74cab186f700cbfc1aceead45559ded8f4010100cee  core/lightroom-mapping-engine/mapping-v2-translator.js
+ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f  core/xmp-validator/index.js

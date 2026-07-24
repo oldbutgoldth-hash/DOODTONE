@@ -1,11 +1,11 @@
 {
   "suite": "EPIC 2E-J Phase C — Final Machine-Readable Result (COMBINED CLOSEOUT R3)",
-  "runId": "5157e5da-c3b9-435a-9c6e-8a4b8d3dd887",
-  "generatedAt": "2026-07-22T19:56:08.066Z",
+  "runId": "df5417f4-3852-4224-9605-75d953d081d6",
+  "generatedAt": "2026-07-23T02:56:12.361Z",
   "completed": true,
   "syntax": {
     "ran": true,
-    "total": 108,
+    "total": 113,
     "fail": 0
   },
   "focusedCoreRegression": {
@@ -17,6 +17,24 @@
   },
   "gates": [
     {
+      "key": "uploadBaseline",
+      "label": "Baseline Upload Contract",
+      "decision": "BROWSER_BINARY_UNAVAILABLE",
+      "summary": {
+        "total": 1,
+        "pass": 0,
+        "fail": 0,
+        "notTested": 1
+      },
+      "runId": "eb501760-107a-470c-8b2a-568bc239dfda",
+      "generatedAt": "2026-07-23T02:56:03.033Z",
+      "ok": false,
+      "reasons": [
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS_UPLOAD_BASELINE/FAIL_UPLOAD_BASELINE) — likely a Browser/environment-unavailable stub, not real evidence",
+        "result is missing a sourceHash — cannot prove freshness"
+      ]
+    },
+    {
       "key": "liveApp",
       "label": "Live App",
       "decision": "BROWSER_BINARY_UNAVAILABLE",
@@ -26,8 +44,8 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "54577035-0f9d-4e81-a009-243b85805c6d",
-      "generatedAt": "2026-07-22T19:55:52.693Z",
+      "runId": "1ae50d9f-09b4-4fab-87fb-7ed5c7b4e676",
+      "generatedAt": "2026-07-23T02:56:03.612Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -44,8 +62,8 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "01033ba8-1faa-429c-a2ff-677df333c65b",
-      "generatedAt": "2026-07-22T19:55:53.215Z",
+      "runId": "6104aab2-62e9-480e-a1df-1d3fcdaa3caa",
+      "generatedAt": "2026-07-23T02:56:04.166Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -62,8 +80,8 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "93a4e25c-8e8b-4ddd-be98-e0cc04ea1a04",
-      "generatedAt": "2026-07-22T19:55:53.757Z",
+      "runId": "57faa60a-7022-4ead-aae4-0f80b3d06d89",
+      "generatedAt": "2026-07-23T02:56:04.740Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -80,8 +98,8 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "35902fec-fd7a-40e0-9c4f-08fbe3f0fb20",
-      "generatedAt": "2026-07-22T19:55:54.265Z",
+      "runId": "40eb999a-a672-4452-9672-476506af0f65",
+      "generatedAt": "2026-07-23T02:56:05.291Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (CONDITIONAL_PASS/PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -98,8 +116,8 @@
         "fail": 0,
         "notTested": 0
       },
-      "runId": "bf7ce5be-91fe-4c24-bb9c-3b5c707f7e17",
-      "generatedAt": "2026-07-22T19:56:03.234Z",
+      "runId": "3d15919f-c6ef-45d5-bfc3-37643113d59a",
+      "generatedAt": "2026-07-23T02:55:56.785Z",
       "ok": true,
       "reasons": []
     },
@@ -113,8 +131,8 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "439fee1b-2506-4574-845d-a3eb7bda6cce",
-      "generatedAt": "2026-07-22T19:56:03.862Z",
+      "runId": "662df0e8-ca3c-4b76-8c68-0db0ff6f1ad4",
+      "generatedAt": "2026-07-23T02:56:05.923Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -128,8 +146,8 @@
     "decision": "DEPLOY_URL_REQUIRED",
     "deployUrl": null,
     "screenshotsGenerated": [],
-    "runId": "48547350-b266-4cf4-8cf2-8fb6733ca444",
-    "generatedAt": "2026-07-22T19:56:03.955Z",
+    "runId": "f6f64827-f31d-49a8-91a6-b616c5a92516",
+    "generatedAt": "2026-07-23T02:56:07.675Z",
     "ok": false,
     "reasons": [
       "decision is \"DEPLOY_URL_REQUIRED\", not PASS_DEPLOY_PREVIEW_GEOMETRY"
@@ -144,6 +162,7 @@
   "controlledTestState": "disabled",
   "decision": "BLOCKED_AUTOMATED_ACCEPTANCE_NOT_MET",
   "blockingReasons": [
+    "Baseline Upload Contract: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS_UPLOAD_BASELINE/FAIL_UPLOAD_BASELINE) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
     "Live App: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
     "Observation Smoke: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
     "Step 7B-A: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",

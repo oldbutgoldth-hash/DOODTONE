@@ -56,6 +56,18 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const FINAL_RESULTS_PATH = path.join(PROJECT_ROOT, 'qa', 'epic-2e-j-phase-c-final-results.json');
 
 const GATE_SUITES = [
+  // SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 10: the Baseline Upload
+  // Contract gate — first upload / Re-analyze / second upload / rapid
+  // A-then-B / Reset / Page+Console errors=0, all through the real DOM.
+  {
+    key: 'uploadBaseline',
+    label: 'Baseline Upload Contract',
+    resultFile: 'epic-2e-j-safe-recovery-upload-baseline-results.json',
+    sourceFile: 'epic-2e-j-safe-recovery-upload-baseline-test.mjs',
+    validDecisions: ['PASS_UPLOAD_BASELINE', 'FAIL_UPLOAD_BASELINE'],
+    acceptance: (r) => r.summary?.fail === 0 && r.decision === 'PASS_UPLOAD_BASELINE',
+    acceptanceLabel: 'FAIL 0, decision=PASS_UPLOAD_BASELINE',
+  },
   {
     key: 'liveApp',
     label: 'Live App',

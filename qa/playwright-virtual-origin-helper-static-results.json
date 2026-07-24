@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J ENV-B1A-R PART 11 — Virtual-Origin helper static/functional self-test",
-  "generatedAt": "2026-07-22T19:54:31.456Z",
+  "generatedAt": "2026-07-23T02:55:55.008Z",
   "summary": {
     "total": 40,
     "pass": 40,
@@ -20,7 +20,7 @@
     {
       "test": "resolveSafeLocalPath: a legitimate path resolves strictly inside projectRoot",
       "result": "PASS",
-      "evidence": "{\"ok\":true,\"filePath\":\"/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_f1r/LUMIXA_AI_EPIC_2E_J_PHASE_C_RECOVERED_DEADCODE_CLEAN/index.html\"}"
+      "evidence": "{\"ok\":true,\"filePath\":\"/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r2/work/index.html\"}"
     },
     {
       "test": "resolveSafeLocalPath: a traversal attempt is rejected before any filesystem access",

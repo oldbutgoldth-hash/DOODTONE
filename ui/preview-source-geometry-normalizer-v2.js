@@ -4,6 +4,22 @@
  * DEPLOY GEOMETRY R1 — Phase B: canonical image decode + EXIF
  * orientation handling for the Visual Preview Comparison pipeline.
  *
+ * SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 3 rewrite of this
+ * module's resource lifecycle. The R1 version tracked exactly one
+ * "current" bitmap via implicit closure-mutable state
+ * (`currentGenerationId`/`currentBitmap`) and closed the PREVIOUS
+ * bitmap unconditionally and immediately whenever a new generation's
+ * decode began — with no way to know whether that previous
+ * generation's own Preview render (Legacy/V2 canvas draw, which
+ * consumes the bitmap asynchronously via `visualPreviewComparison
+ * Controller.render({source: bitmap, ...})`) had actually finished
+ * consuming it yet. Phase 3 requires: "Current generation resources
+ * are released only after both Preview renders finish or the
+ * generation is cancelled" — this rewrite makes that literally true by
+ * construction, via an explicit per-generation resource map plus an
+ * explicit pending-render refcount, instead of a single implicit
+ * "current" slot.
+ *
  * Produces exactly ONE canonical decoded source per analysis
  * generation, shared identically by BOTH the Legacy and Controlled V2
  * render paths (this is what makes Phase C3's "same canonical source"
@@ -13,7 +29,7 @@
  * object for both the Legacy and V2 isolated-renderer calls). Neither
  * side ever decodes or infers orientation independently.
  *
- * DECODE CONTRACT (Phase B2):
+ * DECODE CONTRACT (Phase B2, unchanged from R1):
  *   - Preferred: createImageBitmap(file, { imageOrientation: 'from-image',
  *     premultiplyAlpha: 'default', colorSpaceConversion: 'default' }).
  *   - Safe, feature-detected fallback: an already-decoded
@@ -26,23 +42,43 @@
  *   - `encodedOrientation` is intentionally always reported as `null`:
  *     reading the raw EXIF Orientation tag safely requires a dedicated
  *     EXIF-parsing dependency, which is out of this task's allowed
- *     scope. Nothing downstream may guess this value — only the
- *     decoded (already-corrected) geometry is ever relied upon.
+ *     scope (the QA-side fixture verification uses its own independent
+ *     parser in qa/helpers/exif-orientation-reader.mjs — never
+ *     imported here). Nothing downstream may guess this value — only
+ *     the decoded (already-corrected) geometry is ever relied upon.
  *
- * PRIVACY (Phase B1): this module never persists anything anywhere —
- * no localStorage/sessionStorage/IndexedDB, no Network calls. It never
- * reads `file.name`/`file.path`/webkitRelativePath, and no filename or
- * path ever appears in any object this module returns. The `evidence`
- * object below is the ONLY externally observable output — bounded
- * primitives only (numbers, strings, booleans), never raw pixels,
- * ImageBitmap/canvas references, or EXIF blocks.
+ * PRIVACY (Phase B1, unchanged from R1): this module never persists
+ * anything anywhere — no localStorage/sessionStorage/IndexedDB, no
+ * Network calls. It never reads `file.name`/`file.path`/
+ * webkitRelativePath, and no filename or path ever appears in any
+ * object this module returns. The `evidence` object below is the ONLY
+ * externally observable output — bounded primitives only (numbers,
+ * strings, booleans), never raw pixels, ImageBitmap/canvas references,
+ * or EXIF blocks.
  *
- * RESOURCE LIFECYCLE (Phase B4): each new generation releases the
- * previous generation's decoded ImageBitmap (via `.close()`) before
- * decoding the new one. If a newer decode starts while an older one is
- * still in flight, the older result is discarded and immediately
- * closed the moment it resolves — a stale generation can never commit
- * its geometry/pixels into a newer one.
+ * RESOURCE LIFECYCLE (Phase 3, this rewrite):
+ *   - Each decoded bitmap is stored keyed by its own generationId in an
+ *     internal Map, alongside an explicit `pendingRenders` counter.
+ *   - `markRenderStarted(generationId)` / `markRenderSettled(generationId)`
+ *     are called by the caller (ui/app.js) immediately before invoking
+ *     the Preview render for that generation, and in BOTH its
+ *     `.then()` and `.catch()` — i.e. every settle path, success or
+ *     failure — never only the success path.
+ *   - A generation's bitmap is only ever closed when BOTH: (a) it is
+ *     no longer the newest generation this module has decoded, AND
+ *     (b) its `pendingRenders` counter is exactly 0 (no in-flight
+ *     render is still consuming it). This is checked every time a
+ *     newer decode completes AND every time a render settles — so a
+ *     generation superseded WHILE its render is still in flight is
+ *     released the moment that render settles, not before.
+ *   - `releaseGeneration(generationId)` remains available for an
+ *     explicit cancel (e.g. Reset during an in-flight decode) — this
+ *     one unconditionally closes that generation's bitmap regardless
+ *     of pendingRenders, since Reset means "abandon this generation
+ *     entirely", matching Phase 3's "or the generation is cancelled"
+ *     clause.
+ *   - `releaseAll()` unconditionally closes every tracked generation's
+ *     bitmap (Reset / new image / teardown).
  */
 
 function _isFiniteDim(n) {
@@ -68,22 +104,35 @@ function _emptyEvidence(generationId, decodePath) {
   };
 }
 
+function _closeBitmap(bitmap) {
+  if (bitmap && typeof bitmap.close === 'function') {
+    try { bitmap.close(); } catch { /* already closed, or unsupported in this environment — safe to ignore */ }
+  }
+}
+
 /**
  * Creates a normalizer instance. One instance is intended to be shared
- * for the lifetime of the page (module-level singleton in ui/app.js),
- * tracking exactly one "current" decoded resource at a time.
+ * for the lifetime of the page (module-level singleton in ui/app.js).
  */
 export function createPreviewSourceGeometryNormalizerV2() {
-  let currentGenerationId = null;
-  // Retained ONLY so it can be released later via .close() — never
-  // re-exposed to any caller, never read for pixels here.
-  let currentBitmap = null;
+  // generationId -> { bitmap: ImageBitmap|null, pendingRenders: number }
+  const generations = new Map();
+  let newestGenerationId = null;
 
-  function _releaseCurrentBitmap() {
-    if (currentBitmap && typeof currentBitmap.close === 'function') {
-      try { currentBitmap.close(); } catch { /* already closed, or unsupported in this environment — safe to ignore */ }
+  /**
+   * Releases every generation OTHER than the newest one whose
+   * pendingRenders is exactly 0. Called after every decode and after
+   * every render-settle so a superseded generation is released the
+   * instant it is safe to do so — never eagerly while a render might
+   * still be reading from it.
+   */
+  function _sweepReleasable() {
+    for (const [genId, entry] of generations.entries()) {
+      if (genId === newestGenerationId) continue;
+      if (entry.pendingRenders > 0) continue;
+      _closeBitmap(entry.bitmap);
+      generations.delete(genId);
     }
-    currentBitmap = null;
   }
 
   /**
@@ -95,11 +144,13 @@ export function createPreviewSourceGeometryNormalizerV2() {
    * @returns {Promise<{ source: (ImageBitmap|HTMLImageElement|null), evidence: object }>}
    */
   async function decodeCanonicalSource(file, generationId, fallbackImage = null) {
-    // Phase B4: release the previous generation's bitmap BEFORE
-    // starting a new decode — a new generation must never leave the
-    // prior generation's decoded pixel buffer alive in memory.
-    _releaseCurrentBitmap();
-    currentGenerationId = generationId;
+    // Phase 3: register this as the newest generation BEFORE the async
+    // decode begins, and immediately sweep — any older generation with
+    // zero pending renders is released now; one with a still-pending
+    // render is left untouched until that render settles.
+    newestGenerationId = generationId;
+    generations.set(generationId, { bitmap: null, pendingRenders: 0 });
+    _sweepReleasable();
 
     let source = null;
     let decodePath = 'unavailable';
@@ -113,15 +164,18 @@ export function createPreviewSourceGeometryNormalizerV2() {
           premultiplyAlpha: 'default',
           colorSpaceConversion: 'default',
         });
-        // Phase B4: if a NEWER decode has started while this one was
-        // in flight, this result is stale — release it immediately and
-        // report nothing, rather than ever letting it commit into a
-        // newer generation.
-        if (generationId !== currentGenerationId) {
-          try { bitmap.close(); } catch { /* ignore */ }
+        // Phase 3 (was Phase B4): if a NEWER decode has started while
+        // this one was in flight, this result is stale — release it
+        // immediately and report nothing, rather than ever letting it
+        // commit into a newer generation. The entry for THIS
+        // generationId may also have already been deleted by a
+        // newer decode's sweep — check both.
+        if (generationId !== newestGenerationId || !generations.has(generationId)) {
+          _closeBitmap(bitmap);
+          generations.delete(generationId);
           return { source: null, evidence: _emptyEvidence(generationId, 'stale-discarded') };
         }
-        currentBitmap = bitmap;
+        generations.set(generationId, { bitmap, pendingRenders: 0 });
         source = bitmap;
         decodePath = 'createImageBitmap';
         canonicalWidth = bitmap.width;
@@ -164,20 +218,49 @@ export function createPreviewSourceGeometryNormalizerV2() {
   }
 
   /**
-   * Phase B4 explicit release hook for cancel/reset — a no-op if the
-   * given generation is no longer the one currently held (i.e. it was
-   * already superseded and released by a later decodeCanonicalSource()
-   * call).
+   * Phase 3: call immediately BEFORE invoking the Preview render for
+   * this generation's decoded source. A no-op (never throws) if the
+   * generation is unknown (already released/cancelled) — the caller's
+   * own generation-token check is expected to have already skipped
+   * calling render() in that case; this is defense-in-depth only.
+   */
+  function markRenderStarted(generationId) {
+    const entry = generations.get(generationId);
+    if (entry) entry.pendingRenders += 1;
+  }
+
+  /**
+   * Phase 3: call in BOTH the `.then()` and `.catch()` of the Preview
+   * render promise for this generation — every settle path, success or
+   * failure. Decrements the pending-render count and sweeps, so a
+   * superseded generation whose render just finished is released
+   * immediately, and a still-current generation is simply left alone.
+   */
+  function markRenderSettled(generationId) {
+    const entry = generations.get(generationId);
+    if (entry) entry.pendingRenders = Math.max(0, entry.pendingRenders - 1);
+    _sweepReleasable();
+  }
+
+  /**
+   * Explicit cancel — unconditionally releases ONE generation's
+   * bitmap regardless of pendingRenders (Reset during an in-flight
+   * decode/render counts as "the generation is cancelled", not
+   * "finished"). A no-op if the given generation is already released.
    */
   function releaseGeneration(generationId) {
-    if (generationId === currentGenerationId) _releaseCurrentBitmap();
+    const entry = generations.get(generationId);
+    if (!entry) return;
+    _closeBitmap(entry.bitmap);
+    generations.delete(generationId);
   }
 
-  /** Releases any held resource unconditionally (Reset / new image / teardown). */
+  /** Releases every tracked generation's resource unconditionally (Reset / new image / teardown). */
   function releaseAll() {
-    currentGenerationId = null;
-    _releaseCurrentBitmap();
+    for (const entry of generations.values()) _closeBitmap(entry.bitmap);
+    generations.clear();
+    newestGenerationId = null;
   }
 
-  return { decodeCanonicalSource, releaseGeneration, releaseAll };
+  return { decodeCanonicalSource, markRenderStarted, markRenderSettled, releaseGeneration, releaseAll };
 }

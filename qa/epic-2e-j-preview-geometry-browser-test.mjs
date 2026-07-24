@@ -34,6 +34,9 @@
  *  12. select an Observation value via a REAL keyboard interaction
  *  13. verify Production/Mapping/Controlled-Test/XMP-adjacent fields
  *      are unchanged by that Observation selection
+ *  13b. (SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 7) verify the
+ *      actual exported XMP TEXT hash is byte-for-byte identical
+ *      before/after the Observation selection
  *  14. re-analyze the SAME fixture again and verify the new
  *      generation's canonical geometry is fresh (never the prior
  *      generation's stale committed pixels/dimensions)
@@ -48,6 +51,7 @@
 import { readFile, mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
 import {
   detectPlaywrightPackage,
   detectBrowserExecutable,
@@ -137,6 +141,29 @@ async function sampleCanvasMarker(page, canvasId, relX, relY) {
 function colorMatches(sample, expectedRgb, tolerance) {
   if (!sample) return false;
   return Math.abs(sample.r - expectedRgb[0]) <= tolerance && Math.abs(sample.g - expectedRgb[1]) <= tolerance && Math.abs(sample.b - expectedRgb[2]) <= tolerance;
+}
+
+// SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 7: captures the REAL
+// exported XMP text via the app's own real Download button (same
+// technique the Live App suite uses) so this suite can prove XMP is
+// byte-for-byte unchanged before/after Preview and Observation
+// actions — a genuine content hash, not merely a check that the
+// Production/Mapping FIELD state (selectedOutputSource etc.) looks
+// unchanged.
+async function captureXmpText(page) {
+  return page.evaluate(() => new Promise((resolve) => {
+    let captured = null;
+    const orig = URL.createObjectURL;
+    URL.createObjectURL = (b) => { captured = b; return orig.call(URL, b); };
+    const btn = document.getElementById('btnDownload');
+    if (!btn) { URL.createObjectURL = orig; resolve(null); return; }
+    btn.click();
+    setTimeout(async () => { URL.createObjectURL = orig; resolve(captured ? await captured.text() : null); }, 300);
+  }));
+}
+
+function sha256(text) {
+  return crypto.createHash('sha256').update(text ?? '').digest('hex');
 }
 
 async function main() {
@@ -273,6 +300,10 @@ async function main() {
       // Snapshot Production/Mapping/Controlled-Test fields BEFORE the
       // Observation selection, to prove step 13 afterward.
       const beforeObs = { selectedOutputSource: snap?.previewSandbox?.selectedOutputSource, canWriteProduction: snap?.previewSandbox?.canWriteProduction, canExportPreview: snap?.previewSandbox?.canExportPreview, canEnterControlledTest: snap?.testGate?.canEnterControlledTest };
+      // SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 7: also capture the
+      // REAL exported XMP text's hash BEFORE the Observation
+      // selection — genuine byte-content proof, not just field state.
+      const xmpBeforeHash = sha256(await captureXmpText(page));
 
       // Step 12: select Observation via a REAL keyboard interaction —
       // focus the radio input, then press Enter (activates the
@@ -300,6 +331,13 @@ async function main() {
         && beforeObs.canExportPreview === false && afterObs.canExportPreview === false
         && beforeObs.canEnterControlledTest === false && afterObs.canEnterControlledTest === false;
       recordCondition(`${tag} Step 13: Production/Mapping/Controlled-Test unchanged after Observation`, productionUnchanged, JSON.stringify({ before: beforeObs, after: afterObs }));
+
+      // Step 13b: the actual exported XMP TEXT hash is byte-for-byte
+      // identical before and after the Observation selection — the
+      // strongest available proof that Observation never touches
+      // Production/XMP, beyond the field-state check above.
+      const xmpAfterHash = sha256(await captureXmpText(page));
+      recordCondition(`${tag} Step 13b: exported XMP text is byte-for-byte unchanged after Observation`, xmpBeforeHash === xmpAfterHash && xmpBeforeHash !== sha256(null), `before=${xmpBeforeHash}, after=${xmpAfterHash}`);
 
       // Step 14: re-analyze the SAME fixture again — verify the new
       // generation's canonical geometry is fresh (stale geometry from
