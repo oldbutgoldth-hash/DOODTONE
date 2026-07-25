@@ -48,6 +48,54 @@ const VISUAL_REVIEW_IDS = new Set([
   'shadows-reviewed', 'white-balance-reviewed', 'color-stacking-reviewed',
 ]);
 
+// CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G2: the four items that
+// are NEVER manual — their status is derived fresh, every call, from
+// the real Preview Sandbox facts below, never from `existingItem`
+// (a prior manual click can never touch these, and a stale prior
+// "passed" can never survive if the underlying evidence regresses,
+// since nothing here is cached — every call re-derives from scratch).
+const SYSTEM_VERIFIED_IDS = new Set([
+  'legacy-output-preserved', 'rollback-confirmed',
+  'preview-non-production-confirmed', 'export-path-unchanged',
+]);
+
+/**
+ * Evaluates the exact required evidence for one system-verified item
+ * against the real `sandbox` (the authoritative
+ * controlledOverlayPreviewSandboxV2 object) — mirrors, field-for-field,
+ * the identical rules enforced independently in
+ * core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js's
+ * own `_buildHumanReviewChecklist()`. Kept as a SEPARATE, self-
+ * contained evaluation here (rather than imported) since this module
+ * documents itself as having no other core/ imports — but the exact
+ * evidence fields checked are identical by design, so the two modules
+ * can never honestly disagree about whether a given sandbox result
+ * satisfies a system-verified guarantee.
+ */
+function _evaluateSystemVerifiedAutoStatus(itemId, sandbox) {
+  if (itemId === 'legacy-output-preserved') {
+    const ok = sandbox?.selectedOutputSource === 'legacy' && sandbox?.fallbackStrategy?.useLegacyMapping === true;
+    return { ok, reason: ok ? null : 'System evidence for "legacy output preserved" is missing or incomplete — never auto-passed.' };
+  }
+  if (itemId === 'rollback-confirmed') {
+    const rp = sandbox?.rollbackPlan ?? null;
+    const ok = !!rp && rp.available === true && rp.restoreSource === 'legacy';
+    return { ok, reason: ok ? null : 'System evidence for "rollback confirmed" is missing or incomplete — never auto-passed.' };
+  }
+  if (itemId === 'preview-non-production-confirmed') {
+    const preset = sandbox?.simulatedPreviewPreset ?? null;
+    const ok = !!preset && preset.appliedToProduction === false && preset.exportEligible === false
+      && preset.containsRealSliderValues === false && preset.containsXMPValues === false
+      && sandbox?.canWriteProduction === false;
+    return { ok, reason: ok ? null : 'System evidence for "preview non-production confirmed" is missing or incomplete — never auto-passed.' };
+  }
+  if (itemId === 'export-path-unchanged') {
+    const ok = sandbox?.canExportPreview === false && sandbox?.selectedOutputSource === 'legacy';
+    return { ok, reason: ok ? null : 'System evidence for "export path unchanged" is missing or incomplete — never auto-passed.' };
+  }
+  return { ok: false, reason: null };
+}
+
 // Canonical review item definitions — id, label, description, category.
 const REVIEW_ITEM_DEFINITIONS = [
   { id: 'legacy-output-preserved', label: 'Legacy output preserved', description: 'Confirm the active production output still comes from legacy Lightroom Mapping, unaffected by this preview.', category: 'integrity' },
@@ -132,6 +180,27 @@ function _buildReviewItem(def, existingItem, ctx) {
   const warnings = [];
   if (warning) warnings.push(warning);
 
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G2: the four
+  // system-verified items are NEVER seeded from `existingItem` — a
+  // prior manual click (however it got there) must never be able to
+  // hold one of these open or closed against what the sandbox
+  // actually says RIGHT NOW. Status is re-derived fresh on every call.
+  if (SYSTEM_VERIFIED_IDS.has(def.id)) {
+    const { ok, reason } = _evaluateSystemVerifiedAutoStatus(def.id, ctx?.sandbox ?? null);
+    if (reason) warnings.push(reason);
+    return {
+      id: def.id, label: def.label, description: def.description, category: def.category,
+      required: true,
+      status: ok ? 'passed' : 'unavailable',
+      reviewed: ok,
+      reviewerDecision: ok ? 'approve' : 'undecided',
+      reviewerNote: null,
+      evidence, warnings, updatedAt: null,
+      manual: false,
+      reviewSource: ok ? 'system-verified' : 'system-unavailable',
+    };
+  }
+
   // Seed from existing state if present (immutably — we only read from it).
   const seededStatus = existingItem ? _normalizeStatus(existingItem.status) : 'pending';
   const seededReviewed = existingItem?.reviewed === true;
@@ -144,6 +213,8 @@ function _buildReviewItem(def, existingItem, ctx) {
     required: true, // all 10 canonical items are required by default in this phase
     status: seededStatus, reviewed: seededReviewed, reviewerDecision: seededDecision,
     reviewerNote: seededNote, evidence, warnings, updatedAt: seededUpdatedAt,
+    manual: true,
+    reviewSource: 'manual',
   };
 }
 
@@ -255,6 +326,46 @@ function _buildFallbackStrategy(reason) {
 }
 
 /**
+ * CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G2/G4: a bounded,
+ * pre-computed progress summary shared by createPreviewReviewStateV2,
+ * updatePreviewReviewItemV2, and resetPreviewReviewStateV2 — Visual
+ * review: X/6, System verified: X/4, Overall required: X/10 — so the
+ * Review Console UI never has to re-derive this from the raw
+ * checklist, and can never show guidance like "review all 10 items"
+ * when four of them are already system-verified and read-only.
+ */
+function _buildReviewGuidance(reviewItems) {
+  const required = reviewItems.filter(i => i.required);
+  const visualItems = required.filter(i => VISUAL_REVIEW_IDS.has(i.id));
+  const systemItems = required.filter(i => SYSTEM_VERIFIED_IDS.has(i.id));
+  const visualPassed = visualItems.filter(i => i.status === 'passed').length;
+  const systemVerified = systemItems.filter(i => i.status === 'passed').length;
+  const overallPassed = required.filter(i => i.status === 'passed').length;
+  const needsAdjustmentOrFailed = visualItems.some(i => i.status === 'failed' || i.reviewerDecision === 'needs-adjustment');
+  const readyToBuildV2 = required.length > 0 && required.every(i => i.status === 'passed');
+
+  return {
+    visualRequired: visualItems.length,
+    visualPassed,
+    systemRequired: systemItems.length,
+    systemVerified,
+    overallRequired: required.length,
+    overallPassed,
+    readyToBuildV2,
+    steps: [
+      '1. Review the six visual items (system-verified items need no action).',
+      '2. Resolve any Needs Adjustment or Fail.',
+      '3. Re-analyze to build the Controlled V2 Preview.',
+    ],
+    primaryGuidance: readyToBuildV2
+      ? 'All required review items are complete — you can build the Controlled V2 Preview.'
+      : needsAdjustmentOrFailed
+        ? 'Resolve the visual item(s) marked Needs Adjustment or Fail, then re-analyze.'
+        : `Review the remaining visual item(s) (${visualItems.length - visualPassed} of ${visualItems.length} left), then re-analyze.`,
+  };
+}
+
+/**
  * Core, shared state-builder used by both createPreviewReviewStateV2 and
  * evaluatePreviewReviewStateV2 — identical input shape, identical
  * output shape. `create` is for starting a fresh review flow;
@@ -330,7 +441,7 @@ function _buildReviewState(input) {
     mode: 'controlled-preview-human-review',
     reviewState: approval.approvalState, // top-level convenience mirror of approvalState
     reviewItems, requiredItemIds, completedItemIds, failedItemIds, pendingItemIds, unavailableItemIds,
-    reviewProgress, reviewSummary,
+    reviewProgress, reviewSummary, reviewGuidance: _buildReviewGuidance(reviewItems),
     canApprovePreview: approval.canApprovePreview, canRequestAdjustment: approval.canRequestAdjustment,
     canRejectPreview: approval.canRejectPreview, approvalState: approval.approvalState,
     blockers, warnings, reasons,
@@ -387,7 +498,16 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
   const currentItems = Array.isArray(state?.reviewItems) ? state.reviewItems : [];
   const targetIndex = currentItems.findIndex(i => i && i.id === itemId);
 
-  if (targetIndex === -1) {
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G2: the four
+  // system-verified items can NEVER be moved by a manual update, no
+  // matter what the caller (a UI click handler, a test, anything)
+  // passes in. Treated as a safe, fully-preserving no-op — identical
+  // shape to the unknown-item-id no-op below — with an honest warning
+  // explaining why, rather than silently succeeding or silently
+  // dropping the call.
+  const isSystemVerifiedNoOp = targetIndex !== -1 && SYSTEM_VERIFIED_IDS.has(itemId);
+
+  if (targetIndex === -1 || isSystemVerifiedNoOp) {
     // EPIC 2E-F-A-F Bug 2 fix: an unknown item ID must be a genuine
     // no-op on every derived field — it must NOT re-derive approval,
     // progress, or summary state (the previous implementation called
@@ -406,6 +526,9 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
     const clonedSummary = state?.reviewSummary
       ? { ...state.reviewSummary, riskSummary: [...(state.reviewSummary.riskSummary ?? [])] }
       : state?.reviewSummary;
+    const clonedGuidance = state?.reviewGuidance
+      ? { ...state.reviewGuidance, steps: [...(state.reviewGuidance.steps ?? [])] }
+      : state?.reviewGuidance;
     const clonedRollbackPlan = state?.rollbackPlan
       ? { ...state.rollbackPlan, steps: [...(state.rollbackPlan.steps ?? [])], triggerConditions: state.rollbackPlan.triggerConditions ? [...state.rollbackPlan.triggerConditions] : state.rollbackPlan.triggerConditions }
       : state?.rollbackPlan;
@@ -425,6 +548,7 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
       unavailableItemIds: [...(state?.unavailableItemIds ?? [])],
       reviewProgress: clonedProgress,
       reviewSummary: clonedSummary,
+      reviewGuidance: clonedGuidance,
       // Every approval-related field is PRESERVED exactly — never
       // recomputed on this path, since nothing about the real state
       // changed (the update targeted an ID that doesn't exist).
@@ -433,7 +557,12 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
       canRejectPreview: state?.canRejectPreview,
       approvalState: state?.approvalState,
       blockers: clonedBlockers,
-      warnings: [...(state?.warnings ?? []), `Unknown review item id "${itemId}" — update ignored safely.`],
+      warnings: [
+        ...(state?.warnings ?? []),
+        isSystemVerifiedNoOp
+          ? `Review item "${itemId}" is system-verified — it is derived automatically from the Preview Sandbox and cannot be changed manually. Update ignored safely.`
+          : `Unknown review item id "${itemId}" — update ignored safely.`,
+      ],
       reasons: clonedReasons,
       rollbackPlan: clonedRollbackPlan,
       fallbackStrategy: clonedFallbackStrategy,
@@ -510,7 +639,7 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
     mode: 'controlled-preview-human-review',
     reviewState: approval.approvalState,
     reviewItems: newItems, requiredItemIds, completedItemIds, failedItemIds, pendingItemIds, unavailableItemIds,
-    reviewProgress, reviewSummary,
+    reviewProgress, reviewSummary, reviewGuidance: _buildReviewGuidance(newItems),
     canApprovePreview: approval.canApprovePreview, canRequestAdjustment: approval.canRequestAdjustment,
     canRejectPreview: approval.canRejectPreview, approvalState: approval.approvalState,
     blockers, warnings: dedupedWarnings, reasons,
@@ -530,28 +659,59 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
 export function resetPreviewReviewStateV2(state) {
   const currentItems = Array.isArray(state?.reviewItems) ? state.reviewItems : REVIEW_ITEM_DEFINITIONS.map(def => ({ id: def.id, label: def.label, description: def.description, category: def.category, required: true }));
 
-  const resetItems = currentItems.map(it => ({
-    id: it.id, label: it.label, description: it.description, category: it.category, required: it.required ?? true,
-    status: 'pending', reviewed: false, reviewerDecision: 'undecided', reviewerNote: null,
-    evidence: it.evidence ? { ...it.evidence } : null, // evidence is preserved (it's system-observed, not reviewer input) but reviewer state is fully cleared
-    warnings: [...(it.warnings ?? [])],
-    updatedAt: null,
-  }));
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G2: "Reset Review"
+  // means "clear the human reviewer's own manual decisions" — it must
+  // NEVER fabricate a "pending" state for the four system-verified
+  // items, since those were never manual decisions to begin with and
+  // are not something a reset button can honestly put "back" to
+  // pending. Each system-verified item is carried forward completely
+  // unchanged (same status/evidence/reviewSource/help/etc.); only the
+  // six visual (manual) items are actually reset to pending.
+  const resetItems = currentItems.map(it => {
+    if (it && SYSTEM_VERIFIED_IDS.has(it.id) && typeof it.status === 'string') {
+      // A real, previously-built system-verified item — carry it
+      // forward completely unchanged (see comment above).
+      return { ...it, evidence: it.evidence ? { ...it.evidence } : it.evidence, warnings: [...(it.warnings ?? [])] };
+    }
+    if (it && SYSTEM_VERIFIED_IDS.has(it.id)) {
+      // Bootstrap-only edge case: reset was called with no real prior
+      // item for this system id (e.g. a synthetic REVIEW_ITEM_DEFINITIONS
+      // placeholder). Never invent "passed"/"pending" here — an honest
+      // "unavailable" shell is the only safe default without sandbox
+      // evidence to derive from.
+      return {
+        id: it.id, label: it.label, description: it.description, category: it.category, required: it.required ?? true,
+        status: 'unavailable', reviewed: false, reviewerDecision: 'undecided', reviewerNote: null,
+        evidence: null, warnings: ['No system evidence available yet — this item will be re-derived once a real review state is built.'],
+        updatedAt: null, manual: false, group: it.group, help: it.help, reviewSource: 'system-unavailable',
+      };
+    }
+    return {
+      id: it.id, label: it.label, description: it.description, category: it.category, required: it.required ?? true,
+      status: 'pending', reviewed: false, reviewerDecision: 'undecided', reviewerNote: null,
+      evidence: it.evidence ? { ...it.evidence } : null, // evidence is preserved (it's system-observed, not reviewer input) but reviewer state is fully cleared
+      warnings: [...(it.warnings ?? [])],
+      updatedAt: null,
+      manual: it.manual !== false, group: it.group, help: it.help, reviewSource: 'manual',
+    };
+  });
 
   const requiredItemIds = resetItems.filter(i => i.required).map(i => i.id);
   const reviewProgress = _computeProgress(resetItems);
-  const approval = { canApprovePreview: false, canRequestAdjustment: !!state, canRejectPreview: !!state, approvalState: 'not-started' };
+  const sandboxProxy = state?.metadata?.sandboxAvailable ? { canGeneratePreview: state?.metadata?.sandboxCanGeneratePreview === true } : null;
+  const approval = _computeApproval(resetItems, sandboxProxy);
   const reviewSummary = _computeReviewSummary(resetItems, reviewProgress, approval);
 
   return {
     mode: 'controlled-preview-human-review',
-    reviewState: 'not-started',
+    reviewState: approval.approvalState,
     reviewItems: resetItems, requiredItemIds,
-    completedItemIds: [], failedItemIds: [], pendingItemIds: [...requiredItemIds], unavailableItemIds: [],
-    reviewProgress, reviewSummary,
-    canApprovePreview: false, canRequestAdjustment: approval.canRequestAdjustment,
-    canRejectPreview: approval.canRejectPreview, approvalState: 'not-started',
-    blockers: [], warnings: ['Review state was reset — all required items returned to pending.'], reasons: ['Review state reset to a fresh, unreviewed baseline.'],
+    completedItemIds: resetItems.filter(i => i.status === 'passed').map(i => i.id),
+    failedItemIds: [], pendingItemIds: resetItems.filter(i => i.status === 'pending').map(i => i.id), unavailableItemIds: resetItems.filter(i => i.status === 'unavailable').map(i => i.id),
+    reviewProgress, reviewSummary, reviewGuidance: _buildReviewGuidance(resetItems),
+    canApprovePreview: approval.canApprovePreview, canRequestAdjustment: approval.canRequestAdjustment,
+    canRejectPreview: approval.canRejectPreview, approvalState: approval.approvalState,
+    blockers: [], warnings: ['Review state was reset — all manual review items returned to pending (system-verified items are unaffected, since they were never manual).'], reasons: ['Review state reset to a fresh, unreviewed baseline for manual items.'],
     rollbackPlan: _buildRollbackPlan(),
     fallbackStrategy: _buildFallbackStrategy('This review-state layer never writes production output or exported XMP — legacy Lightroom Mapping remains the exclusive production path regardless of review outcome.'),
     confidence: 0,

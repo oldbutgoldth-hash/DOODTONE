@@ -180,6 +180,29 @@ function _qaSafeCount(v) { return typeof v === 'number' && Number.isFinite(v) &&
 // REASON_LIMIT — defense in depth, never trusts the source array length).
 function _qaSafeReasons(v) { return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 5) : []; }
 
+// CONTROLLED V2 VISUAL TRANSLATION R1 — Phase J: bounded, defensive
+// projection of the translator's own `changedFields` entries for the
+// QA snapshot — never the full adjustmentModel, never any Lightroom
+// slider value beyond these 6 named, already-rounded numeric fields
+// plus 2 short strings. Malformed/extra entries are dropped, not
+// coerced; a max of 10 entries is enforced here too (defense-in-depth
+// on top of the render plan already slicing to 10).
+function _qaSafeChangedFields(v) {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((e) => e && typeof e === 'object')
+    .slice(0, 10)
+    .map((e) => ({
+      field: _qaSafeStr(e.field),
+      before: _qaSafeNum(e.before),
+      after: _qaSafeNum(e.after),
+      delta: _qaSafeNum(e.delta),
+      action: _qaSafeStr(e.action),
+      reason: _qaSafeStr(e.reason),
+    }))
+    .filter((e) => e.field !== null);
+}
+
 // DEPLOY GEOMETRY R1 — Phase A FIX A1/A2: bounded blocker-code
 // diagnostics traced across the real boundary chain
 // (controlledOverlayPreviewSandboxV2 -> buildVisualPreviewRenderPlanV2()
@@ -494,6 +517,45 @@ function ensureQaSnapshotHook() {
         observationGenerationId,
       },
       sessionSummary,
+      // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase J: bounded
+      // diagnostics for the translator's own honesty fields, read
+      // directly from the already-computed render-plan-level object
+      // (core/preview-rendering/visual-preview-render-plan-v2.js) —
+      // never re-derived, never a raw adjustmentModel, never any
+      // filename/image data. `mode` is one of
+      // 'legacy-derived-safety-restraint' | 'identity-fallback' |
+      // 'unavailable'; `changedFields` is capped at 10 entries, each a
+      // small {field, before, after, delta, action, reason} record.
+      controlledV2Translation: (() => {
+        const t = fsi?.visualPreviewRenderPlanV2?.controlledV2Translation ?? null;
+        return {
+          exists: !!t,
+          mode: _qaSafeStr(t?.mode),
+          meaningful: _qaSafeBool(t?.meaningful),
+          identityFallback: _qaSafeBool(t?.identityFallback),
+          visualizedAdjustmentCount: _qaSafeNum(t?.visualizedAdjustmentCount),
+          supportedAdjustments: _qaSafeStrArray(t?.supportedAdjustments),
+          changedFields: _qaSafeChangedFields(t?.changedFields),
+          confidence: _qaSafeNum(t?.confidence),
+        };
+      })(),
+      // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase J: bounded
+      // Human Review progress summary, read directly from the already-
+      // computed Review State Engine output
+      // (core/lightroom-mapping-engine/mapping-v2-preview-review-state.js)
+      // — never re-derived or re-filtered here, so this can never
+      // disagree with what the Review Console UI itself shows.
+      reviewGuidance: (() => {
+        const g = state.lastPreviewReviewState?.reviewGuidance ?? null;
+        return {
+          exists: !!g,
+          visualRequired: _qaSafeNum(g?.visualRequired),
+          visualPassed: _qaSafeNum(g?.visualPassed),
+          systemRequired: _qaSafeNum(g?.systemRequired),
+          systemVerified: _qaSafeNum(g?.systemVerified),
+          readyToBuildV2: _qaSafeBool(g?.readyToBuildV2),
+        };
+      })(),
     };
   }
 
@@ -831,6 +893,7 @@ function setupFileHandlers() {
   document.getElementById('btnDownload')?.addEventListener('click',  handleDownload);
   document.getElementById('btnReanalyze')?.addEventListener('click', handleReanalyze);
   document.getElementById('btnReset')?.addEventListener('click',     handleReset);
+  document.getElementById('btnBuildControlledV2')?.addEventListener('click', handleBuildControlledV2Preview);
 }
 
 function loadFile(file) {
@@ -959,7 +1022,136 @@ function renderReviewConsoleFromState() {
   const reviewInner = document.getElementById('reviewConsoleInner');
   if (!reviewInner) return;
   const uiState = reviewConsoleController ? reviewConsoleController.getUiState() : null;
-  renderReviewConsole(reviewInner, state.lastPreviewSandbox, state.lastPreviewReviewState, uiState);
+  renderReviewConsole(reviewInner, state.lastPreviewSandbox, state.lastPreviewReviewState, uiState, state.lang);
+  _syncBuildControlledV2Button();
+}
+
+// CONTROLLED V2 VISUAL TRANSLATION R1 — Phase H: module-level flag
+// preventing an overlapping second Build-V2 run — belt-and-braces on
+// top of the button's own `disabled` attribute (which is set
+// synchronously as the very first statement of the click handler,
+// before any await, so a second click cannot reach the guard below in
+// practice — this flag exists purely as defense-in-depth, e.g. against
+// a synthetic/programmatic click that bypasses the DOM attribute).
+let buildControlledV2InProgress = false;
+
+/**
+ * CONTROLLED V2 VISUAL TRANSLATION R1 — Phase H: keeps the "Build
+ * Controlled V2 Preview" button's disabled state and hint text in
+ * sync with `state.lastPreviewReviewState.reviewGuidance` on every
+ * Review Console re-render — this function NEVER decides readiness
+ * itself; it only ever reflects `reviewGuidance.readyToBuildV2` (and
+ * `primaryGuidance`), which is computed entirely by
+ * core/lightroom-mapping-engine/mapping-v2-preview-review-state.js.
+ * While a Build-V2 run is in progress (buildControlledV2InProgress),
+ * the button stays disabled regardless of readiness, to prevent a
+ * second overlapping runAnalysis() call.
+ */
+function _syncBuildControlledV2Button() {
+  const btn = document.getElementById('btnBuildControlledV2');
+  const label = document.getElementById('btnBuildControlledV2Label');
+  const hint = document.getElementById('btnBuildControlledV2Hint');
+  if (!btn) return;
+
+  const isThai = state.lang === 'th';
+
+  if (buildControlledV2InProgress) {
+    btn.disabled = true;
+    btn.setAttribute('aria-disabled', 'true');
+    btn.setAttribute('aria-busy', 'true');
+    if (label) label.textContent = isThai ? 'กำลังสร้างตัวอย่าง…' : 'Building…';
+    return;
+  }
+  btn.removeAttribute('aria-busy');
+  if (label) label.textContent = isThai ? 'สร้างตัวอย่าง Controlled V2' : 'Build Controlled V2 Preview';
+
+  const guidance = _isRecordLike(state.lastPreviewReviewState?.reviewGuidance) ? state.lastPreviewReviewState.reviewGuidance : null;
+  const ready = guidance?.readyToBuildV2 === true;
+  btn.disabled = !ready;
+  btn.setAttribute('aria-disabled', String(!ready));
+  if (hint) {
+    hint.textContent = typeof guidance?.primaryGuidance === 'string' ? guidance.primaryGuidance
+      : (state.lastPreviewReviewState ? '' : (isThai ? 'ยังไม่มีตัวอย่างให้ตรวจสอบ' : 'No preview is available to review yet.'));
+  }
+}
+
+/** Minimal record check local to app.js (mirrors the same guard used throughout the renderer modules) — avoids importing an internal helper across module boundaries just for this one check. */
+function _isRecordLike(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * CONTROLLED V2 VISUAL TRANSLATION R1 — Phase H: "Build Controlled V2
+ * Preview" — calls the EXISTING Re-analyze pipeline (runAnalysis()),
+ * never a new analysis engine. Gated on
+ * reviewGuidance.readyToBuildV2 (mirrored onto the button's own
+ * `disabled` attribute by _syncBuildControlledV2Button, checked again
+ * here defensively). Disables the button for the duration of the run,
+ * then — only if the image/analysis session is still the one this
+ * click started against (state.imageLoaded still true and the Review
+ * Console section still visible; a Reset or a brand-new image import
+ * firing mid-flight is the only way that could stop being true) —
+ * scrolls/focuses the Visual Preview Comparison section and announces
+ * the honest outcome (Safety-restraint translation / Identity
+ * fallback / blocked-unavailable) through a dedicated aria-live
+ * region, read directly from the already-rendered Visual Preview
+ * Comparison controller's own state — never re-derived or guessed.
+ */
+async function handleBuildControlledV2Preview() {
+  const btn = document.getElementById('btnBuildControlledV2');
+  if (!btn || btn.disabled || buildControlledV2InProgress) return;
+  const guidance = _isRecordLike(state.lastPreviewReviewState?.reviewGuidance) ? state.lastPreviewReviewState.reviewGuidance : null;
+  if (guidance?.readyToBuildV2 !== true) return; // defense-in-depth; the button should already be disabled in this case
+
+  const img = document.getElementById('previewImg');
+  if (!state.imageLoaded || !img?.complete || !img.naturalWidth) return;
+
+  buildControlledV2InProgress = true;
+  _syncBuildControlledV2Button();
+
+  const reviewSecVisibleBefore = document.getElementById('reviewConsoleSection')?.style.display !== 'none';
+
+  try {
+    await runAnalysis();
+  } finally {
+    buildControlledV2InProgress = false;
+    _syncBuildControlledV2Button();
+  }
+
+  // Staleness guard: only announce/scroll if this is still genuinely
+  // the same session (no Reset/new-image import happened while the
+  // above await was in flight).
+  const stillSameSession = state.imageLoaded && reviewSecVisibleBefore && document.getElementById('reviewConsoleSection')?.style.display !== 'none';
+  if (!stillSameSession) return;
+
+  const isThai = state.lang === 'th';
+  const vprState = visualPreviewComparisonController ? visualPreviewComparisonController.getState() : null;
+  const translationMode = vprState?.metadata?.controlledV2Translation?.mode ?? null;
+
+  let outcomeText;
+  if (translationMode === 'legacy-derived-safety-restraint') {
+    outcomeText = isThai
+      ? 'สร้างตัวอย่าง Controlled V2 สำเร็จ — เป็นตัวอย่างแบบสงวนความปลอดภัยที่มีการปรับเปลี่ยนจริง ดูผลเปรียบเทียบด้านล่าง'
+      : 'Controlled V2 Preview built — a Safety-restraint translation with real, bounded changes. See the comparison below.';
+  } else if (translationMode === 'identity-fallback') {
+    outcomeText = isThai
+      ? 'สร้างตัวอย่าง Controlled V2 สำเร็จ — ไม่มีการปรับเปลี่ยนที่รองรับได้ จึงแสดงเป็น Identity Preview แทน'
+      : 'Controlled V2 Preview built — no supported change was available, so an honest Identity preview is shown instead.';
+  } else {
+    outcomeText = isThai
+      ? 'การวิเคราะห์เสร็จสิ้น แต่ตัวอย่าง Controlled V2 ยังไม่พร้อม — ดูเหตุผลด้านล่าง'
+      : 'Analysis complete, but the Controlled V2 preview is not yet available — see the details below.';
+  }
+
+  const liveRegion = document.getElementById('buildControlledV2LiveRegion');
+  if (liveRegion) liveRegion.textContent = outcomeText;
+
+  const vprSec = document.getElementById('visualPreviewComparisonSection');
+  if (vprSec && vprSec.style.display !== 'none' && typeof vprSec.scrollIntoView === 'function') {
+    vprSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!vprSec.hasAttribute('tabindex')) vprSec.setAttribute('tabindex', '-1');
+    if (typeof vprSec.focus === 'function') vprSec.focus({ preventScroll: true });
+  }
 }
 
 // EPIC 2E-F Phase C-B: attaches the interactive controller EXACTLY
@@ -1074,6 +1266,24 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
     const rawV2State = safeGetVisualPreviewProperty(v2Result, 'state');
     const rawLegacyWarnings = safeGetVisualPreviewProperty(legacyResult, 'warnings');
     const rawV2Warnings = safeGetVisualPreviewProperty(v2Result, 'warnings');
+    // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase F: the Interactive
+    // Before/After section must also clearly identify whether its
+    // right-hand side is a meaningful Safety-restraint translation or
+    // an honest Identity fallback (never a vague, undifferentiated
+    // "Controlled V2" label) — reusing the SAME bounded, pre-sanitized
+    // controlledV2Translation object threaded through
+    // vprState.metadata (Phase D/F), never recomputed here. This is
+    // prepended to v2's own warnings list, which already flows through
+    // the existing, tested #ibaMessages display path — no new render
+    // path is introduced.
+    const rawControlledV2Translation = safeGetVisualPreviewProperty(vprMeta, 'controlledV2Translation');
+    const controlledV2TranslationMode = rawControlledV2Translation && typeof rawControlledV2Translation === 'object' ? rawControlledV2Translation.mode : null;
+    const v2WarningsWithLabel = Array.isArray(rawV2Warnings) ? [...rawV2Warnings] : [];
+    if (controlledV2TranslationMode === 'legacy-derived-safety-restraint') {
+      v2WarningsWithLabel.unshift('Right side: Controlled V2 — Safety-restraint preview (bounded restraints on the Legacy preview; not Lightroom/ACR, not Production).');
+    } else if (controlledV2TranslationMode === 'identity-fallback') {
+      v2WarningsWithLabel.unshift('Right side: Controlled V2 — Identity fallback (no supported safety restraint produced a meaningful visual change; not the final V2 appearance).');
+    }
 
     const compact = {
       generationId,
@@ -1087,7 +1297,7 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
         rendered: safeGetVisualPreviewProperty(v2Result, 'rendered') === true,
         state: _normalizeSideStateString(rawV2State),
         visualAdjustmentsApplied: (rawV2Effect === true || rawV2Effect === false) ? rawV2Effect : null,
-        warnings: Array.isArray(rawV2Warnings) ? rawV2Warnings.slice(0, 6) : [],
+        warnings: v2WarningsWithLabel.slice(0, 6),
       },
       bothRendered: safeGetVisualPreviewProperty(vprState, 'bothRendered') === true,
       visualComparisonAvailable: safeGetVisualPreviewProperty(vprState, 'visualComparisonAvailable') === true,
@@ -1485,7 +1695,7 @@ async function runAnalysis() {
     // represents the generation we JUST incremented above, so no
     // staleness check is needed here (FIX 8 applies to the later
     // asynchronous updates below, not this one).
-    if (vprInnerEarly) renderVisualPreviewComparison(vprInnerEarly, buildPreparingAnalysisState());
+    if (vprInnerEarly) renderVisualPreviewComparison(vprInnerEarly, buildPreparingAnalysisState(), state.lang);
   }
 
   // EPIC 2E-I Phase A: cancel/clear the Interactive Before/After viewer
@@ -1963,7 +2173,22 @@ async function runAnalysis() {
     const comparisonInner = document.getElementById('sideBySideComparisonInner');
     if (comparisonSec && comparisonInner && state.lastSideBySideComparison) {
       comparisonSec.style.display = 'block';
-      renderSideBySideComparison(comparisonInner, state.lastSideBySideComparison);
+      // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase I: pass the
+      // already-computed Visual Preview Render Plan's diagnostic
+      // fields through as a read-only hint so the Data Comparison
+      // renderer can honestly cross-reference the SEPARATE Visual
+      // Preview Comparison (pixel-based) evidence layer, without
+      // fetching/re-deriving anything itself and without this call
+      // site reinterpreting either layer's own values. This is plain
+      // data already present on finalStyleIntent at this point in the
+      // pipeline (built synchronously by decision-engine well before
+      // this render call) — no new computation, no pixel rendering
+      // triggered here.
+      const vprPlanForComparisonNote = finalPreset._decision?.finalStyleIntent?.visualPreviewRenderPlanV2 ?? null;
+      const visualPreviewInfoForComparisonNote = _isRecordLike(vprPlanForComparisonNote)
+        ? { renderable: vprPlanForComparisonNote.renderable === true, controlledV2Translation: _isRecordLike(vprPlanForComparisonNote.controlledV2Translation) ? vprPlanForComparisonNote.controlledV2Translation : null }
+        : null;
+      renderSideBySideComparison(comparisonInner, state.lastSideBySideComparison, visualPreviewInfoForComparisonNote);
     } else if (comparisonSec) {
       comparisonSec.style.display = 'none';
     }
@@ -2014,7 +2239,7 @@ async function runAnalysis() {
           // placeholder BEFORE render() begins — the section must never
           // show a stale "Waiting for analysis and Render Plan" message
           // while pixel rendering is actively starting.
-          renderVisualPreviewComparison(vprInner, buildRenderingPlaceholderState());
+          renderVisualPreviewComparison(vprInner, buildRenderingPlaceholderState(), state.lang);
           // DEPLOY GEOMETRY R1 — Phase A FIX A1/A4: compute the bounded
           // blocker-code diagnostic ONCE here (this is the only place with
           // access to BOTH state.lastPreviewSandbox and
@@ -2086,7 +2311,7 @@ async function runAnalysis() {
             // already started by the time this resolves — never let a
             // stale preview render overwrite the current one's display.
             if (renderGeneration !== analysisRenderGeneration) return;
-            renderVisualPreviewComparison(vprInner, vprState);
+            renderVisualPreviewComparison(vprInner, vprState, state.lang);
             // EPIC 2E-I Phase A: sync the Interactive Before/After
             // viewer from the SAME resolved Visual Preview Comparison
             // result — never a separate/duplicate render, never
@@ -2129,7 +2354,7 @@ async function runAnalysis() {
               warnings: [],
               blockers: ['Visual Preview rendering failed. Analysis results and production output were not changed.'],
               metadata: {},
-            });
+            }, state.lang);
             // EPIC 2E-I Phase A: a failed Visual Preview render means
             // the Interactive viewer has no valid sources either —
             // clear it rather than leaving stale content/interaction

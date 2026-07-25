@@ -367,6 +367,14 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
         // to select a more specific, honest UI message; never affects
         // eligibility or rendering.
         v2BlockerCode: typeof v2BlockerCode === 'string' ? v2BlockerCode : null,
+        // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase F: pass through
+        // the bounded, already-sanitized translation diagnostics object
+        // built by core/preview-rendering/visual-preview-render-plan-v2.js
+        // (Phase D) unchanged — this controller never recomputes or
+        // re-derives it, same single-source-of-truth pattern as
+        // v2BlockerCode above. Contains only bounded primitives/short
+        // arrays (never raw pixel/image data).
+        controlledV2Translation: _isRecord(safeGet(v2Plan, 'controlledV2Translation')) ? safeGet(v2Plan, 'controlledV2Translation') : null,
       },
     };
 

@@ -58,6 +58,8 @@
  * value. This is documented, not hidden.
  */
 
+import { translateControlledV2PreviewAdjustments } from './controlled-v2-preview-adjustment-translator.js';
+
 // ── Legacy preset field → normalized adjustment mapping ──────────────────────
 // Scale factors below are NOT guesses — each is the exact clamp range
 // verified directly in core/lightroom-mapping-engine/index.js (the
@@ -255,32 +257,60 @@ function _buildLegacyAdjustmentModel(legacyPreset) {
 }
 
 /**
- * Builds a normalized adjustment model from the V2 Sandbox's
- * `simulatedPreviewPreset`. See the file-level comment for why every
- * field here is honestly unsupported in Phase A:
- * `simulatedPreviewPreset.values`/`adjustments` carry abstract
- * risk-mitigation ACTION descriptions and a 0-1 mitigation
- * *intensity*, never a concrete signed pixel-adjustment magnitude a
- * renderer could apply. This function does not invent one.
+ * CONTROLLED V2 VISUAL TRANSLATION R1 — Phase D: builds the V2
+ * adjustment model by calling the pure Controlled V2 translator
+ * (core/preview-rendering/controlled-v2-preview-adjustment-translator.js)
+ * with the REAL, already-normalized Legacy adjustment model as its
+ * base, plus the Sandbox's abstract restraint-action evidence. The
+ * translator NEVER invents a stronger value than Legacy already has —
+ * it only ever restrains/shrinks toward zero, or leaves a field
+ * untouched. When the translator cannot produce a meaningful (>= 0.005)
+ * change anywhere, or when the Sandbox is unavailable/hard-stopped/
+ * contradictory, this honestly falls back to the exact same
+ * all-unsupported shape Phase A produced — no fabricated adjustment is
+ * ever returned from this function.
  */
-function _buildV2AdjustmentModel(sandbox) {
-  const preset = _isRecord(sandbox?.simulatedPreviewPreset) ? sandbox.simulatedPreviewPreset : null;
+function _buildV2AdjustmentModel(sandbox, legacyAdjustmentModel) {
+  const translation = translateControlledV2PreviewAdjustments({
+    legacyAdjustmentModel,
+    sandbox,
+    previewPlan: sandbox?.previewPlan ?? null,
+    simulatedPreviewPreset: sandbox?.simulatedPreviewPreset ?? null,
+    previewRiskReview: sandbox?.previewRiskReview ?? null,
+  });
+
+  if (translation.available && translation.meaningful && translation.translationMode === 'legacy-derived-safety-restraint') {
+    const model = { ...translation.adjustmentModel };
+    return {
+      ...model,
+      supportedAdjustments: translation.supportedAdjustments,
+      unsupportedAdjustments: SUPPORTED_ADJUSTMENTS.filter((f) => !translation.supportedAdjustments.includes(f)),
+      normalizationWarnings: [
+        `Controlled V2 safety-restraint preview: translated ${translation.visualizedAdjustmentCount} field(s) from the real Legacy adjustment model via ${translation.appliedPolicies.length} applied restraint polic(y/ies). These are bounded, restrained, browser-preview-only approximations — never real Lightroom/XMP/Production values.`,
+        ...(translation.unsupportedActions.length ? [`${translation.unsupportedActions.length} restraint action(s) were unsupported/unknown and produced no field change (fail-closed).`] : []),
+      ],
+      __controlledV2Translation: translation,
+    };
+  }
+
+  // Identity fallback / unavailable — honestly report every field as
+  // unsupported, exactly matching this function's pre-Phase-D shape,
+  // never fabricating a change.
   const model = {};
   for (const name of SUPPORTED_ADJUSTMENTS) model[name] = null;
-
-  const unsupportedAdjustments = [...SUPPORTED_ADJUSTMENTS];
   const normalizationWarnings = [];
-  if (preset && _isRecord(preset.values) && Object.keys(preset.values).length) {
-    normalizationWarnings.push(`V2 simulated preview data reports ${Object.keys(preset.values).length} risk-mitigation area(s), but these are abstract action descriptions (e.g. "reduce aggressive shift") with only a 0-1 mitigation intensity, never a concrete signed adjustment magnitude a pixel renderer can apply — all V2 adjustments remain unsupported until a future engine revision provides concrete adjustment values.`);
+  if (translation.available && !translation.meaningful) {
+    normalizationWarnings.push(translation.identityFallbackReason ?? 'Controlled V2 translation produced no meaningful (>= 0.005) field change — rendered as an honest Identity fallback.');
   } else {
-    normalizationWarnings.push('No V2 simulated preview adjustment data is available.');
+    normalizationWarnings.push(...(translation.reasons?.length ? translation.reasons : ['Controlled V2 translation is unavailable — no restraint evidence could be evaluated.']));
   }
 
   return {
     ...model,
     supportedAdjustments: [],
-    unsupportedAdjustments,
+    unsupportedAdjustments: [...SUPPORTED_ADJUSTMENTS],
     normalizationWarnings,
+    __controlledV2Translation: translation,
   };
 }
 
@@ -371,7 +401,7 @@ function _buildLegacyRenderPlan(legacyPreset) {
  * implies Production activation — Legacy Mapping remains the exclusive
  * Production/XMP source regardless of this Plan's `renderable` value.
  */
-function _buildV2RenderPlan(sandbox) {
+function _buildV2RenderPlan(sandbox, legacyAdjustmentModel) {
   const preset = _isRecord(sandbox?.simulatedPreviewPreset) ? sandbox.simulatedPreviewPreset : null;
   const warnings = [...HONESTY_WARNINGS];
   const reasons = [];
@@ -384,46 +414,51 @@ function _buildV2RenderPlan(sandbox) {
   if (!preset) reasons.push('No V2 Sandbox simulated preview preset was supplied — V2 render plan is unavailable.');
   else if (!presetAvailable) reasons.push('V2 simulated preview preset exists but is not currently available (Sandbox not eligible) — nothing to render yet.');
   else if (contradictoryEvidence) { reasons.push('V2 preview evidence is contradictory (appliedToProduction or exportEligible reports true) — blocking V2 rendering as a safety precaution.'); warnings.push('V2 preview evidence contradicts the expected non-production guarantees — this should never happen upstream; treat with caution.'); }
-  else {
-    reasons.push('V2 simulated preview preset is available and confirmed non-production; it contains no concrete signed adjustment values in Phase A, so the isolated preview renders as a valid identity (visually unchanged) preview rather than being blocked as unavailable.');
-    // FIX 4 (EPIC 2E-J-C-F2 Step 4): explicit, standalone honesty
-    // statement — an Identity Preview being reachable is never, in
-    // itself, evidence of (or a step toward) Production activation.
-    // Legacy remains the sole Production Mapping/XMP path regardless
-    // of this Render Plan's `renderable` value.
+
+  const available = !!preset;
+  const adjustmentModel = _buildV2AdjustmentModel(sandbox, legacyAdjustmentModel);
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase D: the translator's own
+  // decision (stashed on the model as `__controlledV2Translation` by
+  // `_buildV2AdjustmentModel`) is now the authority for translationMode/
+  // meaningful/identityFallback — extracted here, then stripped from the
+  // adjustmentModel object itself so the pixel renderer only ever sees
+  // the flat/nested adjustment fields it actually reads.
+  const controlledV2Translation = adjustmentModel.__controlledV2Translation ?? null;
+  delete adjustmentModel.__controlledV2Translation;
+
+  const translationMode = controlledV2Translation?.translationMode ?? 'unavailable';
+  const meaningfulTranslation = controlledV2Translation?.meaningful === true;
+  const identityFallback = controlledV2Translation?.identityFallback === true;
+  const translationUnavailable = !available || !presetAvailable || contradictoryEvidence || !controlledV2Translation?.available;
+
+  if (translationUnavailable) {
+    if (available && presetAvailable && !contradictoryEvidence && controlledV2Translation && !controlledV2Translation.available) {
+      // Sandbox itself looked fine but the translator independently
+      // refused (e.g. a hard stop inside previewPlan.actions, or a
+      // malformed plan) — surface its exact reason(s) rather than
+      // silently falling through to a generic Identity Preview.
+      reasons.push(...(controlledV2Translation.reasons ?? ['Controlled V2 translation is unavailable.']));
+    }
+  } else if (meaningfulTranslation) {
+    reasons.push(`Controlled V2 Safety-restraint preview: ${controlledV2Translation.visualizedAdjustmentCount} field(s) translated from the real Legacy adjustment model with bounded safety restraints — this is a restrained variant of the current Legacy Browser Preview, never an independent look and never Lightroom/XMP/Production values.`);
+    warnings.push(...controlledV2Translation.warnings ?? []);
+  } else {
+    reasons.push(controlledV2Translation?.identityFallbackReason ?? 'V2 simulated preview preset is available and confirmed non-production; the translator produced no meaningful (>= 0.005) field change, so the isolated preview renders as a valid identity (visually unchanged) preview rather than being blocked as unavailable.');
     warnings.push('An available, valid, zero-adjustment Controlled V2 result renders as an honest Identity Preview (visually unchanged from the source) — this does not change any pixel, and does not indicate or enable Production activation. Legacy Mapping remains the exclusive Production/XMP path.');
   }
 
-  const available = !!preset;
-  const adjustmentModel = _buildV2AdjustmentModel(sandbox);
-  // FIX (EPIC 2E-J-C-F2 root-cause correction): `renderable` previously
-  // additionally required `adjustmentModel.supportedAdjustments.length > 0`,
-  // which — per this file's own header documentation — can NEVER be
-  // true today, because `simulatedPreviewPreset` genuinely contains
-  // only abstract 0-1 risk-mitigation intensities, never concrete
-  // signed Lightroom values, at every upstream layer (verified across
-  // styleBudgetIntelligence, the Mapping V2 Planner, and the Budget-to-
-  // Lightroom Translator — all three are explicitly "SHADOW-ONLY,
-  // abstract 0-1 only" by deliberate design). That extra condition was
-  // therefore not distinguishing "valid but zero-adjustment" from
-  // "invalid/missing" — it was unconditionally blocking every
-  // otherwise-valid Sandbox result.
-  //
   // Corrected rule (matches this project's own valid-identity-preview
-  // policy): a Sandbox result that is available, confirmed non-
-  // production, and free of contradictory evidence is a VALID V2
-  // result — genuinely having zero concrete adjustments to apply is a
-  // real, honest identity-preview case, not invalid or missing data.
-  // `available: false` (no Sandbox supplied) and `!presetAvailable`
-  // (Sandbox itself reports not-yet-eligible) remain correctly
-  // unrenderable; `contradictoryEvidence` remains a hard safety block.
-  // The isolated preview renderer (ui/isolated-visual-preview-renderer-v2.js)
-  // already correctly reports `visualAdjustmentsApplied: false` and an
-  // honest "rendered without supported visual adjustments" reason for
-  // exactly this case — nothing was fabricated to reach this fix; the
-  // downstream renderer's own zero-adjustment handling was already
-  // complete and simply unreachable until this flag was corrected.
-  const renderable = available && presetAvailable && !contradictoryEvidence;
+  // policy, EPIC 2E-J-C-F2): a Sandbox result that is available,
+  // confirmed non-production, and free of contradictory evidence is a
+  // VALID V2 result — genuinely having zero concrete adjustments to
+  // apply (Identity fallback) is a real, honest case, not invalid or
+  // missing data. A translator-reported hard stop / malformed plan
+  // (`controlledV2Translation.available === false`) is the ONE
+  // additional case (beyond missing Sandbox / ineligible / contradictory)
+  // that keeps `renderable` false — an Identity Preview is never
+  // fabricated when the translator itself could not evaluate the
+  // evidence.
+  const renderable = available && presetAvailable && !contradictoryEvidence && !!controlledV2Translation?.available;
 
   if (adjustmentModel.unsupportedAdjustments.length) warnings.push(`Unsupported/unavailable V2 adjustments: ${adjustmentModel.unsupportedAdjustments.join(', ')}.`);
 
@@ -447,7 +482,29 @@ function _buildV2RenderPlan(sandbox) {
     previewAccuracy: 'approximate-browser-preview',
     adjustmentModel, protectedChannels: _buildProtectedChannels(), renderConstraints: _buildRenderConstraints(),
     warnings, reasons,
-    confidence: +(presetAvailable && !contradictoryEvidence ? 0.15 : 0.05).toFixed(2),
+    confidence: +(controlledV2Translation?.confidence ?? (presetAvailable && !contradictoryEvidence ? 0.15 : 0.05)).toFixed(3),
+    // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase D/J: bounded, honest
+    // translation diagnostics surfaced at the render-plan level (not
+    // just buried inside adjustmentModel) so the UI (Phase F) and the
+    // QA snapshot (Phase J) can read them directly.
+    controlledV2Translation: {
+      mode: translationMode,
+      meaningful: meaningfulTranslation,
+      identityFallback,
+      identityFallbackReason: controlledV2Translation?.identityFallbackReason ?? null,
+      visualizedAdjustmentCount: controlledV2Translation?.visualizedAdjustmentCount ?? 0,
+      supportedAdjustments: controlledV2Translation?.supportedAdjustments ?? [],
+      unsupportedActions: controlledV2Translation?.unsupportedActions ?? [],
+      appliedPolicies: controlledV2Translation?.appliedPolicies ?? [],
+      changedFields: (controlledV2Translation?.changedFields ?? []).slice(0, 10),
+      baseSource: controlledV2Translation?.baseSource ?? null,
+      confidence: controlledV2Translation?.confidence ?? 0,
+      containsRealLightroomValues: false,
+      containsXMPValues: false,
+      previewOnly: true,
+      appliedToProduction: false,
+      exportEligible: false,
+    },
   };
 }
 
@@ -473,7 +530,7 @@ export function buildVisualPreviewRenderPlanV2(input = {}) {
   const blockers = [], renderWarnings = [], reasons = [];
 
   const legacyRenderPlan = _buildLegacyRenderPlan(legacyPreset);
-  const v2RenderPlan = _buildV2RenderPlan(sandbox);
+  const v2RenderPlan = _buildV2RenderPlan(sandbox, legacyRenderPlan.adjustmentModel);
 
   renderWarnings.push(...legacyRenderPlan.warnings.filter(w => !HONESTY_WARNINGS.includes(w)));
   renderWarnings.push(...v2RenderPlan.warnings.filter(w => !HONESTY_WARNINGS.includes(w)));

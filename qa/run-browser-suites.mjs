@@ -51,6 +51,8 @@ const BROWSER_SUITES = [
   // combined epic-2e-j-preview-geometry-browser-test.mjs).
   'qa/epic-2e-j-preview-geometry-decoder-render-test.mjs',
   'qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs',
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase K.
+  'qa/epic-2e-j-controlled-v2-browser-test.mjs',
   'qa/helpers/playwright-opaque-origin-cookie.mjs',
   'qa/playwright-in-memory-app-smoke.mjs',
   'qa/playwright-virtual-origin-smoke.mjs',

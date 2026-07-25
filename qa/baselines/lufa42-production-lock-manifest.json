@@ -1,9 +1,12 @@
 {
-  "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
-  "generatedAt": "2026-07-22T19:44:21.562Z",
+  "description": "CONTROLLED V2 VISUAL TRANSLATION R1 update: every core/ and ui/ file EXCEPT this EPIC's (and prior rounds') explicitly allowed geometry/preview/Controlled-V2 files, plus index.html.",
+  "generatedAt": "2026-07-25T16:15:10Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
+    "core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js",
+    "core/lightroom-mapping-engine/mapping-v2-preview-review-state.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
+    "index.html",
     "ui/app.js",
     "ui/interactive-before-after-controller-v2.js",
     "ui/interactive-before-after-renderer-v2.js",
@@ -11,10 +14,12 @@
     "ui/interactive-preview-observation-renderer-v2.js",
     "ui/isolated-visual-preview-renderer-v2.js",
     "ui/preview-source-geometry-normalizer-v2.js",
+    "ui/review-console-renderer.js",
+    "ui/side-by-side-comparison-renderer.js",
     "ui/visual-preview-comparison-controller-v2.js",
     "ui/visual-preview-comparison-renderer-v2.js"
   ],
-  "lockedFileCount": 70,
+  "lockedFileCount": 65,
   "files": {
     "core/basic-panel-engine/index.js": "82467e72711b3d98359e9a50543a8a9f2cc98b7f9a42c9e5e25afbec620aae5b",
     "core/calibration-engine/index.js": "c62df0620585bcb16b0ee8a6e76cd9e66d64a1075756d28e18ff9fa301510281",
@@ -44,11 +49,9 @@
     "core/lightroom-mapping-engine/mapping-v2-activation-controller.js": "1bab396c49eaeb01ebca668b163977b2def96135a359067c952cae7a41e9e174",
     "core/lightroom-mapping-engine/mapping-v2-flags.js": "d675dcc58bcce7dc835d42cc38862aa7594a69bb4cbeaceb275af54a27aad934",
     "core/lightroom-mapping-engine/mapping-v2-legacy-safety-overlay.js": "49a1f0095603bcb532f9db75d4d3f66455594fc32862a77a3eaa469997324d36",
-    "core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js": "2b4a7686913d957b2221dcceea6b5191ce9758403a43cf6b2c019e1cb890b4d1",
     "core/lightroom-mapping-engine/mapping-v2-overlay-simulation.js": "2c11452ffe7c8844be21917ac0d77b66fe2699fb344b2e5bfb06fc0632dc2e7b",
     "core/lightroom-mapping-engine/mapping-v2-overlay-test-gate.js": "2e2f34fec23962f81d8ed7456eb5a4ee5239f21ffccced609d2ca27cba4aa9d4",
     "core/lightroom-mapping-engine/mapping-v2-planner.js": "bb0a8c10a5d2684b4042a2a9af557723ac001a782294678ed000dd1df5b914c4",
-    "core/lightroom-mapping-engine/mapping-v2-preview-review-state.js": "17fde1b934bff27e341c68150230395b5f7080aac6ad7bbf5259c8bd798c2d41",
     "core/lightroom-mapping-engine/mapping-v2-safety-clamp.js": "d49d222cb1641312c953c8e45cfc3367958d7326596fa2b9ef924d7c9b8d990d",
     "core/lightroom-mapping-engine/mapping-v2-shadow-compare.js": "70900e0bd3a6a27ef4e155cfcba93e11f03fffe2b29ef6c2da912ded9518b803",
     "core/lightroom-mapping-engine/mapping-v2-side-by-side-comparison.js": "8fa8470ab3b830686dd3927acb5baad397efd18fe2da3c1d5f6dd86a2fc41daa",
@@ -77,14 +80,11 @@
     "ui/palette-renderer.js": "d31aab02d6842cbf53733c14c8ebaa1ac7eda2b28508c9df1854ef458a0069d0",
     "ui/reference-color-match-panel.js": "ff291c143c5f9b1dcb1e0c134eb9d01fe404b33bf0220322cf567ed46ac93281",
     "ui/review-console-controller.js": "1e7c35516bf194fd0ed82a16439bf15124c86592139bb15cc06d86fd5e5b6141",
-    "ui/review-console-renderer.js": "fe4a46b58a63fc3b512bed980a687af780b719d49ac4cd3f01e17c34f590b5a4",
-    "ui/side-by-side-comparison-renderer.js": "3ed489a204cd16199ce8085ef487e9ca9ea720e4ee470748909191e1abe1b341",
     "ui/skintone-renderer.js": "876c0fb8f234872c3c0c1d5a8c41c6cd8538b40e5c428fad9e05943945060b24",
     "ui/style-recognition-renderer.js": "e25ad6e6a42f59b85d0ce6f375c071b44010db159f0402692cb36e5142f2dc38",
     "ui/tone-curve-editor.js": "677378a1c3091dc03cbdc16bef9e78eab356bbfb3333227d75727c728c4b48cb",
     "ui/tone-curve-renderer.js": "3424ad63b6c889a2025e23ea0c7513411e7c4c0bb4dddb1dbc305e1bbd254c6e",
     "ui/ui-engine.js": "50c7ba34b3a86eb0c97d80f36ffb2b4804a6c5ca47f3448782409629b583d354",
-    "ui/whitebalance-renderer.js": "af235b1af3f88d38415bb6d93f34d3a9302f2f94f32e3d39f3570d202abdbe60",
-    "index.html": "06ca7c4785808c41edc253e3c37a61f4f81ce6494edebf00b51bdb615ee0f740"
+    "ui/whitebalance-renderer.js": "af235b1af3f88d38415bb6d93f34d3a9302f2f94f32e3d39f3570d202abdbe60"
   }
 }

@@ -52,6 +52,16 @@ const STATIC_SUITES = [
   'qa/epic-2e-j-preview-geometry-static-test.mjs',
   'qa/epic-2e-j-preview-source-geometry-normalizer-static-test.mjs',
   'qa/epic-2e-j-safe-recovery-upload-baseline-static-test.mjs',
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase E/K: pure translator
+  // policy tests and pure pixel-pipeline proofs (both no-Browser).
+  'qa/epic-2e-j-controlled-v2-translator-static-test.mjs',
+  'qa/epic-2e-j-controlled-v2-translator-pixel-static-test.mjs',
+  'qa/epic-2e-j-controlled-v2-review-static-test.mjs',
+  'qa/epic-2e-j-review-state-engine-static-test.mjs',
+  'qa/epic-2e-j-review-console-ui-static-test.mjs',
+  'qa/epic-2e-j-build-controlled-v2-button-static-test.mjs',
+  'qa/epic-2e-j-comparison-honesty-note-static-test.mjs',
+  'qa/epic-2e-j-qa-snapshot-controlled-v2-static-test.mjs',
 ];
 
 let anyFailed = false;

@@ -502,6 +502,25 @@
             <div id="reviewConsoleSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
               <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;display:flex;align-items:center;gap:8px"><span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px;color:var(--accent)">rate_review</span>Controlled Preview Review Console <span style="color:var(--text-faint);font-weight:400;text-transform:none;letter-spacing:normal">&#183; shadow-only, does not affect exported preset</span></div>
               <div id="reviewConsoleInner"></div>
+
+              <!-- CONTROLLED V2 VISUAL TRANSLATION R1 — Phase H: a
+                   prominent action that calls the EXISTING Re-analyze
+                   workflow (runAnalysis() — no new analysis engine),
+                   gated on reviewGuidance.readyToBuildV2. Disabled
+                   until every required review item (6 visual + 4
+                   system-verified) is complete, and disabled again
+                   during processing to prevent overlapping runs.
+                   ui/app.js keeps this button's disabled state/label
+                   in sync on every Review Console re-render — never
+                   static markup deciding readiness on its own. -->
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+                <button id="btnBuildControlledV2" type="button" disabled aria-disabled="true" style="display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent)">
+                  <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px">auto_awesome</span>
+                  <span id="btnBuildControlledV2Label">Build Controlled V2 Preview</span>
+                </button>
+                <div id="btnBuildControlledV2Hint" style="font-size:11px;color:var(--text-faint);margin-top:8px;overflow-wrap:anywhere"></div>
+              </div>
+
               <!-- EPIC 2E-F Phase C-B: persistent (never cleared/re-created on
                    re-render) aria-live region for review-action feedback
                    ("Review item marked as passed.", etc). Must live OUTSIDE
@@ -513,6 +532,14 @@
                    directly into this element's textContent; the renderer
                    never touches it. -->
               <div id="reviewConsoleLiveRegion" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
+              <!-- CONTROLLED V2 VISUAL TRANSLATION R1 — Phase H: a SEPARATE
+                   persistent aria-live region for the Build-V2 button's own
+                   outcome announcement ("Controlled V2 Preview built — Safety-
+                   restraint preview.", etc) — kept distinct from
+                   reviewConsoleLiveRegion so a Pass/Fail click and a Build-V2
+                   click can never race each other's announcement in the same
+                   region. -->
+              <div id="buildControlledV2LiveRegion" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
             </div>
 
             <!-- EPIC 2E-G Phase C: Side-by-Side Preview Comparison —

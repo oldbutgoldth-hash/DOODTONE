@@ -4,7 +4,7 @@
  *
  * LOCAL-FIRST GEOMETRY R3 -- Phase E2: `npm run test:local-gate`, the
  * fail-closed everyday pre-commit/pre-deploy check for local Windows
- * development. Runs the 11 required steps IN ORDER, and exits non-zero
+ * development. Runs the 12 required steps IN ORDER, and exits non-zero
  * when any of the following is true:
  *   - any required suite fails
  *   - Browser is unavailable
@@ -55,6 +55,12 @@ const STEPS = [
   { n: 9, label: 'Step 7B-B', script: 'qa/epic-2e-j-phase-c-step7b-b-test.mjs', resultFile: 'qa/epic-2e-j-phase-c-step7b-b-results.json', manifestKey: 'step7bB', permittedNotTestedPattern: /physical touch hardware/i },
   { n: 10, label: 'Decoder geometry (Phase C1)', script: 'qa/epic-2e-j-preview-geometry-decoder-render-test.mjs', resultFile: 'qa/epic-2e-j-preview-geometry-decoder-render-results.json', manifestKey: 'previewGeometryDecoderRender' },
   { n: 11, label: 'Full-app eligible geometry (Phase C2)', script: 'qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs', resultFile: 'qa/epic-2e-j-preview-geometry-full-app-eligible-results.json', manifestKey: 'previewGeometryFullAppEligible', requireGeometryProofs: true },
+  // CONTROLLED V2 VISUAL TRANSLATION R1 -- Phase L: Step 12 proves the
+  // real Build-Controlled-V2-Preview workflow across 5 fixture flavors,
+  // with >=2 producing a genuinely meaningful (non-Identity)
+  // translation -- see computeControlledV2BrowserDecision's own
+  // MEANINGFUL_TRANSLATION_COUNT_BELOW_2 reason if that bar isn't met.
+  { n: 12, label: 'Controlled V2 Browser suite (Phase K/L)', script: 'qa/epic-2e-j-controlled-v2-browser-test.mjs', resultFile: 'qa/epic-2e-j-controlled-v2-browser-results.json', manifestKey: 'controlledV2Browser' },
 ];
 
 const BROWSER_UNAVAILABLE_STATUSES = new Set(['BROWSER_BINARY_UNAVAILABLE', 'PLAYWRIGHT_PACKAGE_UNAVAILABLE']);
@@ -107,7 +113,7 @@ function evaluateStepResult(step, resultObj) {
 }
 
 async function runStep(step) {
-  console.log(`\n=== Step ${step.n}/11: ${step.label} (${step.script}) ===`);
+  console.log(`\n=== Step ${step.n}/12: ${step.label} (${step.script}) ===`);
   const proc = spawnSync(process.execPath, [path.join(PROJECT_ROOT, step.script)], { stdio: 'inherit', cwd: PROJECT_ROOT });
   const exitCode = proc.status;
 
@@ -166,7 +172,7 @@ async function main() {
     console.log('\nLOCAL GATE: FAIL — one or more required steps did not pass. See reasons above.');
     process.exit(1);
   }
-  console.log('\nLOCAL GATE: PASS — all 11 required steps passed with fresh, non-stale, well-formed evidence.');
+  console.log('\nLOCAL GATE: PASS — all 12 required steps passed with fresh, non-stale, well-formed evidence.');
   process.exit(0);
 }
 

@@ -100,6 +100,22 @@ export const SUITE_SOURCE_FILES = {
     'ui/app.js',
     'qa/fixtures/epic-2e-j/ready/manifest.json',
   ],
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase K/L.
+  controlledV2Browser: [
+    'qa/epic-2e-j-controlled-v2-browser-test.mjs',
+    'qa/helpers/playwright-lumixa-test-runtime.mjs',
+    'ui/app.js',
+    'ui/review-console-renderer.js',
+    'core/lightroom-mapping-engine/mapping-v2-preview-review-state.js',
+    'core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js',
+    'core/preview-rendering/controlled-v2-preview-adjustment-translator.js',
+    'core/preview-rendering/visual-preview-render-plan-v2.js',
+    'qa/fixtures/epic-2e-j/ready/ready-portrait-orientation-1.jpg',
+    'qa/fixtures/epic-2e-j/neutral-balanced.png',
+    'qa/fixtures/epic-2e-j/warm-portrait-synthetic.png',
+    'qa/fixtures/epic-2e-j/cool-shadow-synthetic.png',
+    'qa/fixtures/epic-2e-j/highlight-shadow-range.png',
+  ],
   deployPreviewGeometry: [
     'qa/epic-2e-j-deploy-preview-geometry-test.mjs',
     'qa/helpers/playwright-lumixa-test-runtime.mjs',

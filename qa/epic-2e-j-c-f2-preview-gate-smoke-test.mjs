@@ -133,18 +133,37 @@ record('L: canExportPreview = false', sandboxK.canExportPreview === false, `valu
 record('L: allowControlledOverlayTest = false', LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest === false, `value=${LIGHTROOM_MAPPING_V2_FLAGS.allowControlledOverlayTest}`);
 record('L: selectedOutputSource = legacy', sandboxK.selectedOutputSource === 'legacy', `value=${sandboxK.selectedOutputSource}`);
 
-// ── C/D full-pipeline regression: reject/needs-adjustment must still block Preview ──
+// ── C/D full-pipeline regression: reject/needs-adjustment on a MANUAL
+// (visual-inspection) item must still block Preview. Index 0
+// ('legacy-output-preserved') is now SYSTEM-VERIFIED (Phase G) and
+// correctly ignores manual override — see the dedicated test below —
+// so C/D now target index 1 ('source-image-reviewed'), a genuine
+// manual item, to keep proving real manual-reject/adjust blocking. ──
 console.log('');
 console.log('=== Full-pipeline regression: reject/needs-adjustment still block Preview ===');
-const rejectedReview = { reviewItems: REQUIRED_IDS.map((id, i) => ({ id, status: i === 0 ? 'passed' : 'passed', reviewed: true, reviewerDecision: i === 0 ? 'reject' : 'approve' })) };
+const MANUAL_TEST_INDEX = 1; // 'source-image-reviewed' — a visual-inspection (manual-only) item
+const rejectedReview = { reviewItems: REQUIRED_IDS.map((id, i) => ({ id, status: 'passed', reviewed: true, reviewerDecision: i === MANUAL_TEST_INDEX ? 'reject' : 'approve' })) };
 const humanReviewStateReject = _projectHumanReviewStateV2(rejectedReview);
 const { sandbox: sandboxReject } = runFullPipeline(humanReviewStateReject);
-record('C (pipeline): a single reject blocks canGeneratePreview', sandboxReject.canGeneratePreview === false, `canGeneratePreview=${sandboxReject.canGeneratePreview}`);
+record('C (pipeline): a single reject on a manual item blocks canGeneratePreview', sandboxReject.canGeneratePreview === false, `canGeneratePreview=${sandboxReject.canGeneratePreview}`);
 
-const adjustReview = { reviewItems: REQUIRED_IDS.map((id, i) => ({ id, status: 'passed', reviewed: true, reviewerDecision: i === 0 ? 'needs-adjustment' : 'approve' })) };
+const adjustReview = { reviewItems: REQUIRED_IDS.map((id, i) => ({ id, status: 'passed', reviewed: true, reviewerDecision: i === MANUAL_TEST_INDEX ? 'needs-adjustment' : 'approve' })) };
 const humanReviewStateAdjust = _projectHumanReviewStateV2(adjustReview);
 const { sandbox: sandboxAdjust } = runFullPipeline(humanReviewStateAdjust);
-record('D (pipeline): a single needs-adjustment blocks canGeneratePreview', sandboxAdjust.canGeneratePreview === false, `canGeneratePreview=${sandboxAdjust.canGeneratePreview}`);
+record('D (pipeline): a single needs-adjustment on a manual item blocks canGeneratePreview', sandboxAdjust.canGeneratePreview === false, `canGeneratePreview=${sandboxAdjust.canGeneratePreview}`);
+
+// ── New: a system-verified item (index 0) correctly IGNORES a manual
+// reject override — its status is evidence-driven, not reviewer-driven.
+// This documents the Phase G behavior change rather than silently
+// dropping coverage of "can index 0 block Preview" (it never blocks via
+// manual override anymore; it can only ever be 'passed' or
+// 'unavailable' depending on systemEvidence). ──
+const rejectSystemReview = { reviewItems: REQUIRED_IDS.map((id, i) => ({ id, status: 'passed', reviewed: true, reviewerDecision: i === 0 ? 'reject' : 'approve' })) };
+const humanReviewStateRejectSystem = _projectHumanReviewStateV2(rejectSystemReview);
+const { sandbox: sandboxRejectSystem } = runFullPipeline(humanReviewStateRejectSystem);
+const legacyOutputItem = sandboxRejectSystem.humanReviewChecklist.find((c) => c.id === 'legacy-output-preserved');
+record('G: system-verified item ignores a manual reject override (evidence-driven, not reviewer-driven)', legacyOutputItem?.status === 'passed' && legacyOutputItem?.reviewSource === 'system-verified', JSON.stringify(legacyOutputItem));
+record('G: system-verified override does not block canGeneratePreview by itself', sandboxRejectSystem.canGeneratePreview === true, `canGeneratePreview=${sandboxRejectSystem.canGeneratePreview}`);
 
 // ── FIX 3-F (EPIC 2E-J-C-F2 Step 3-F): conservative rank-based duplicate precedence ──
 console.log('');
@@ -388,8 +407,20 @@ const renderPlanD7f2 = resultD7f2._decision?.finalStyleIntent?.visualPreviewRend
 record('D: buildFinalPreset (all approved) — authoritative Sandbox uses legacy-preset context', sandboxD7f2?.simulatedPreviewPreset?.metadata?.sourceType === 'legacy-preset', `sourceType=${sandboxD7f2?.simulatedPreviewPreset?.metadata?.sourceType}`);
 record('D: buildFinalPreset (all approved) — human-review-complete passes, canGeneratePreview=true', sandboxD7f2?.canGeneratePreview === true, `canGeneratePreview=${sandboxD7f2?.canGeneratePreview}`);
 record('D: buildFinalPreset (all approved) — V2 Render Plan renderable', renderPlanD7f2?.renderable === true, `renderable=${renderPlanD7f2?.renderable}`);
+// CONTROLLED V2 VISUAL TRANSLATION R1: with a real Legacy preset
+// context, the V2 Render Plan can now honestly resolve to EITHER an
+// Identity fallback OR a meaningful Controlled V2 Safety-restraint
+// translation — both are valid, honest outcomes; the previous
+// assertion assumed Identity was the ONLY possible outcome, which was
+// true only because the translator did not exist yet. The real
+// requirement that must still hold is: the outcome is truthfully
+// labeled as one or the other, never silently blank, and never
+// claiming real Lightroom/XMP/Production values.
 const identityWordingD = renderPlanD7f2?.reasons?.some((r) => /identity/i.test(r)) || renderPlanD7f2?.warnings?.some((w) => /identity/i.test(w));
-record('D: buildFinalPreset (all approved) — Identity Preview remains honest (no concrete adjustment)', identityWordingD, JSON.stringify(renderPlanD7f2?.reasons));
+const safetyRestraintWordingD = renderPlanD7f2?.reasons?.some((r) => /safety-restraint|legacy adjustment model/i.test(r)) || renderPlanD7f2?.controlledV2Translation?.mode === 'legacy-derived-safety-restraint';
+const honestOutcomeD = identityWordingD || safetyRestraintWordingD;
+const noFabricatedProductionClaimD = renderPlanD7f2?.containsRealLightroomValues !== true && renderPlanD7f2?.exportEligible !== true && renderPlanD7f2?.appliedToProduction !== true;
+record('D: buildFinalPreset (all approved) — V2 outcome is honestly labeled (Identity fallback OR Safety-restraint translation), never fabricated Production claims', honestOutcomeD && noFabricatedProductionClaimD, `identityWording=${identityWordingD}, safetyRestraintWording=${safetyRestraintWordingD}, translationMode=${renderPlanD7f2?.controlledV2Translation?.mode}, reasons=${JSON.stringify(renderPlanD7f2?.reasons)}`);
 
 // Test E: pending/reject duplicate regression (Step 3-F rules still hold post-rebuild).
 const mixedReviewE = { reviewItems: REQUIRED_IDS.flatMap((id) => [{ id, status: 'pending', reviewed: false, reviewerDecision: 'undecided' }, { id, status: 'passed', reviewed: true, reviewerDecision: 'approve' }]) };

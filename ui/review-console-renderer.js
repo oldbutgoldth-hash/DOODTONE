@@ -70,6 +70,29 @@ const ALLOWED_DECISIONS = new Set(Object.keys(DECISION_LABEL));
 
 const APPROVAL_COLOR = { approved: 'var(--success)', rejected: 'var(--danger)', blocked: 'var(--danger)', 'needs-adjustment': 'var(--warn)', 'in-progress': 'var(--accent)', 'not-started': 'var(--text-faint)', unavailable: 'var(--text-faint)' };
 
+// CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G2: the Review
+// Checklist is grouped into three sections. The four system-verified
+// items (group: 'system-integrity'/'safety-guarantees') are rendered
+// read-only — no Pass/Fail/Adjust controls, no note field — since a
+// manual click can never change them (see
+// core/lightroom-mapping-engine/mapping-v2-preview-review-state.js's
+// SYSTEM_VERIFIED_IDS / _evaluateSystemVerifiedAutoStatus). The one
+// group genuinely requiring human judgment is 'visual-inspection'.
+const GROUP_ORDER = ['visual-inspection', 'system-integrity', 'safety-guarantees'];
+const GROUP_LABEL = {
+  'visual-inspection': { en: 'Visual inspection — your review needed', th: 'ตรวจสอบด้วยสายตา — ต้องมีการตรวจสอบจากคุณ' },
+  'system-integrity': { en: 'System integrity — verified automatically', th: 'ความสมบูรณ์ของระบบ — ตรวจสอบอัตโนมัติ' },
+  'safety-guarantees': { en: 'Safety guarantees — verified automatically', th: 'การรับประกันความปลอดภัย — ตรวจสอบอัตโนมัติ' },
+};
+const GROUP_FALLBACK_LABEL = { en: 'Other checks', th: 'การตรวจสอบอื่น ๆ' };
+
+/** Bilingual text lookup — `lang` other than 'th' always falls back to English (never a blank string). */
+function _t(dict, lang) {
+  if (!dict || typeof dict !== 'object') return '';
+  const l = lang === 'th' ? 'th' : 'en';
+  return typeof dict[l] === 'string' ? dict[l] : (typeof dict.en === 'string' ? dict.en : '');
+}
+
 // Risk levels normalize to exactly these 5 — "unknown" must never be
 // treated or colored as "low". "none" is accepted as an upstream
 // synonym for "low" (it genuinely means equal-or-less risk than low,
@@ -462,7 +485,7 @@ function renderNoteField(item, itemId, itemLabel) {
  * currently just which item IDs have an armed "Confirm Fail?" prompt.
  * It is read-only here; this function never mutates it.
  */
-function renderChecklistItem(item, uiState) {
+function renderChecklistItem(item, uiState, lang) {
   const wrap = el('div', { style: 'padding:12px 0;border-bottom:1px solid var(--border)' });
 
   if (!_isRecord(item)) {
@@ -521,8 +544,29 @@ function renderChecklistItem(item, uiState) {
     wrap.appendChild(el('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;font-family:var(--font-mono)', text: `Updated ${updatedText}` }));
   }
 
-  // ── Interactive controls — only when the item has a real, actionable ID ──
-  if (itemId) {
+  // ── Bilingual help text — shown for every item (system-verified items
+  //    show "no manual look needed"; visual items show what/where/why) ──
+  if (_isRecord(item.help)) {
+    const helpWrap = el('div', { style: 'margin-top:8px;padding:8px 10px;background:var(--surface-2);border-radius:3px;font-size:11px;color:var(--text-dim);line-height:1.6;overflow-wrap:anywhere' });
+    const whatText = _t(item.help.en ? { en: item.help.en.whatThisChecks, th: item.help.th?.whatThisChecks } : null, lang);
+    const whereText = _t(item.help.en ? { en: item.help.en.whatToLookFor, th: item.help.th?.whatToLookFor } : null, lang);
+    const whyText = _t(item.help.en ? { en: item.help.en.whyItMatters, th: item.help.th?.whyItMatters } : null, lang);
+    if (whatText) helpWrap.appendChild(el('div', { text: whatText }));
+    if (whereText) helpWrap.appendChild(el('div', { style: 'margin-top:3px;color:var(--text-faint)', text: whereText }));
+    if (whyText) helpWrap.appendChild(el('div', { style: 'margin-top:3px;font-style:italic;color:var(--text-faint)', text: whyText }));
+    if (whatText || whereText || whyText) wrap.appendChild(helpWrap);
+  }
+
+  // ── Controls — system-verified items are always read-only (a manual
+  //    click can never change them; see updatePreviewReviewItemV2's
+  //    dedicated no-op guard); genuine manual (visual) items get the
+  //    interactive Pass/Fail/Adjust/Pending controls + note field ──
+  const isSystemVerified = item.manual === false;
+  if (isSystemVerified) {
+    const roWrap = el('div', { style: 'margin-top:9px;display:flex;align-items:center;gap:7px' });
+    roWrap.appendChild(badge(lang === 'th' ? 'ตรวจสอบโดยระบบ — อ่านอย่างเดียว' : 'System-verified — read-only', 'var(--text-faint)'));
+    wrap.appendChild(roWrap);
+  } else if (itemId) {
     const isFailConfirmPending = uiState?.pendingConfirmItemIds instanceof Set && uiState.pendingConfirmItemIds.has(itemId);
     wrap.appendChild(renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending));
     wrap.appendChild(renderNoteField(item, itemId, itemLabel));
@@ -608,7 +652,7 @@ function renderPreviewRiskReview(container, riskReview) {
  * (renderReviewConsole). Any exception thrown while building this body
  * is caught by the caller, never escapes to the host page.
  */
-function _renderBody(container, sandbox, reviewState, uiState) {
+function _renderBody(container, sandbox, reviewState, uiState, lang) {
   const sandboxRecord = _isRecord(sandbox) ? sandbox : null;
   const reviewRecord = _isRecord(reviewState) ? reviewState : null;
 
@@ -709,20 +753,66 @@ function _renderBody(container, sandbox, reviewState, uiState) {
       style: 'font-size:11px;color:var(--text-faint);overflow-wrap:anywhere',
       text: resolvedNext ? `Next: ${resolvedNext}` : 'All required review items completed',
     }));
+
+    // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G2/G4: a bounded
+    // "Visual X/6 · System X/4" summary plus one primary-guidance
+    // sentence, read directly from the engine's own reviewGuidance —
+    // never re-derived here, so the UI can never say something like
+    // "review all 10 items" when four are already system-verified.
+    const guidance = _isRecord(reviewRecord?.reviewGuidance) ? reviewRecord.reviewGuidance : null;
+    if (guidance) {
+      const guidanceWrap = el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px' });
+      const visualReq = typeof guidance.visualRequired === 'number' ? guidance.visualRequired : null;
+      const visualPass = typeof guidance.visualPassed === 'number' ? guidance.visualPassed : null;
+      const sysReq = typeof guidance.systemRequired === 'number' ? guidance.systemRequired : null;
+      const sysVerified = typeof guidance.systemVerified === 'number' ? guidance.systemVerified : null;
+      if (visualReq !== null && visualPass !== null) {
+        guidanceWrap.appendChild(badge(`${lang === 'th' ? 'ตรวจสอบด้วยสายตา' : 'Visual'} ${visualPass}/${visualReq}`, visualPass >= visualReq ? 'var(--success)' : 'var(--text-dim)'));
+      }
+      if (sysReq !== null && sysVerified !== null) {
+        guidanceWrap.appendChild(badge(`${lang === 'th' ? 'ระบบตรวจสอบ' : 'System'} ${sysVerified}/${sysReq}`, sysVerified >= sysReq ? 'var(--success)' : 'var(--text-faint)'));
+      }
+      container.appendChild(guidanceWrap);
+      const primaryGuidanceText = _safeText(guidance.primaryGuidance, '');
+      if (primaryGuidanceText) {
+        container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text);margin-top:6px;overflow-wrap:anywhere', text: primaryGuidanceText }));
+      }
+    }
   } else if (reviewRecord) {
     container.appendChild(sectionHeading('Review Progress', 'fact_check'));
     container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-faint)', text: 'Review progress unavailable.' }));
   }
 
-  // ── Checklist (interactive — Pass/Fail/Adjust/Pending + note) ────────────
+  // ── Checklist (grouped: Visual inspection / System integrity / Safety
+  //    guarantees — interactive Pass/Fail/Adjust/Pending + note ONLY
+  //    for the genuinely manual Visual items; the other two groups are
+  //    read-only, system-verified, and never manually overridable) ──
   const reviewItems = Array.isArray(reviewRecord?.reviewItems) ? reviewRecord.reviewItems : [];
   if (reviewItems.length) {
     container.appendChild(sectionHeading('Human Review Checklist', 'checklist'));
-    const listWrap = el('div');
+
+    const grouped = new Map();
     for (const item of reviewItems) {
-      listWrap.appendChild(renderChecklistItem(item, uiState));
+      const groupKey = _isRecord(item) && typeof item.group === 'string' && GROUP_LABEL[item.group] ? item.group : '__ungrouped__';
+      if (!grouped.has(groupKey)) grouped.set(groupKey, []);
+      grouped.get(groupKey).push(item);
     }
-    container.appendChild(listWrap);
+    const orderedKeys = [...GROUP_ORDER.filter((k) => grouped.has(k)), ...[...grouped.keys()].filter((k) => !GROUP_ORDER.includes(k))];
+
+    for (const groupKey of orderedKeys) {
+      const itemsInGroup = grouped.get(groupKey) ?? [];
+      if (!itemsInGroup.length) continue;
+      const groupLabelText = _t(GROUP_LABEL[groupKey] ?? GROUP_FALLBACK_LABEL, lang);
+      container.appendChild(el('div', {
+        style: 'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);margin:14px 0 4px;font-family:var(--font-mono)',
+        text: groupLabelText,
+      }));
+      const listWrap = el('div');
+      for (const item of itemsInGroup) {
+        listWrap.appendChild(renderChecklistItem(item, uiState, lang));
+      }
+      container.appendChild(listWrap);
+    }
     container.appendChild(renderResetButton(uiState));
   }
 
@@ -805,12 +895,12 @@ function _clearContainer(container) {
  * neutral, honest fallback message instead of leaving a half-built or
  * crashed console on screen.
  */
-export function renderReviewConsole(container, sandbox, reviewState, uiState = null) {
+export function renderReviewConsole(container, sandbox, reviewState, uiState = null, lang = 'en') {
   if (!container || typeof container.appendChild !== 'function') return;
 
   try {
     _clearContainer(container); // clearing our OWN previously-rendered (trusted, DOM-API-built) content — not an XSS vector
-    _renderBody(container, sandbox, reviewState, uiState);
+    _renderBody(container, sandbox, reviewState, uiState, lang === 'th' ? 'th' : 'en');
   } catch (err) {
     // Never let malformed upstream data crash the host page. Clear any
     // partial content and show a neutral, honest fallback — this never

@@ -50,6 +50,40 @@ function _safeArray(v) {
   return Array.isArray(v) ? v : [];
 }
 
+// CONTROLLED V2 VISUAL TRANSLATION R1 — Phase F: a small, bounded
+// bilingual (English/Thai) text dictionary for the NEW Controlled V2
+// honesty labels only — this module has no prior i18n mechanism, so
+// this is deliberately scoped to just the new strings rather than
+// retrofitting the whole file. `lang` is passed through by the caller
+// (ui/app.js's `state.lang`); any value other than 'th' resolves to
+// English.
+const V2_TEXT = {
+  safetyRestraintLabel: { en: 'Controlled V2 — Safety-restraint preview', th: 'Controlled V2 — ตัวอย่างที่ผ่านการจำกัดเพื่อความปลอดภัย' },
+  safetyRestraintLine1: { en: 'Browser visualization based on Legacy preview plus bounded V2 safety restraints.', th: 'ภาพจำลองในเบราว์เซอร์ที่อ้างอิงจากตัวอย่าง Legacy บวกกับการจำกัดความปลอดภัยของ V2 แบบมีขอบเขต' },
+  safetyRestraintLine2: { en: 'This is not Lightroom/ACR and is not a Production result.', th: 'นี่ไม่ใช่ผลลัพธ์จาก Lightroom/ACR และไม่ใช่ผลลัพธ์ Production' },
+  identityFallbackLabel: { en: 'Controlled V2 — Identity fallback', th: 'Controlled V2 — ตัวอย่างเหมือนต้นฉบับ (Identity fallback)' },
+  identityFallbackLine1: { en: 'No supported V2 safety restraint produced a meaningful browser-visible change.', th: 'ไม่มีการจำกัดความปลอดภัยของ V2 ที่รองรับซึ่งทำให้เกิดการเปลี่ยนแปลงที่มองเห็นได้อย่างมีนัยสำคัญ' },
+  identityFallbackLine2: { en: 'This is not the final V2 appearance.', th: 'นี่ไม่ใช่ลักษณะสุดท้ายของ V2' },
+  visualizedAdjustments: { en: 'Visualized adjustments', th: 'การปรับที่แสดงผล' },
+  translationMode: { en: 'Translation mode', th: 'โหมดการแปลง' },
+  confidence: { en: 'Confidence', th: 'ความเชื่อมั่น' },
+  topChanges: { en: 'Top preview changes', th: 'การเปลี่ยนแปลงหลักในตัวอย่าง' },
+  legacyPanelSubtitle: { en: 'Legacy Browser Preview', th: 'ตัวอย่าง Legacy ในเบราว์เซอร์' },
+};
+function _t(key, lang) {
+  const entry = V2_TEXT[key];
+  if (!entry) return '';
+  return lang === 'th' ? (entry.th ?? entry.en) : entry.en;
+}
+
+/** Formats one changed-field entry as a compact, honest "Field: +before -> +after" line — normalized browser-preview units, never labeled as a Lightroom slider value. */
+function _formatChangedField(entry) {
+  if (!entry || typeof entry !== 'object') return '';
+  const fieldLabel = _safeText(entry.field).replace(/\./g, ' ').replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()).trim();
+  const fmt = (n) => (Number.isFinite(n) ? `${n >= 0 ? '+' : ''}${n.toFixed(2)}` : '?');
+  return `${fieldLabel}: ${fmt(entry.before)} → ${fmt(entry.after)}`;
+}
+
 function badge(text, color) {
   const safeColor = typeof color === 'string' && color ? color : 'var(--text-faint)';
   return el('span', {
@@ -197,7 +231,7 @@ export function ensureVisualPreviewComparisonLayout(container) {
   container.replaceChildren(root);
 }
 
-function _renderSidePanel(side, sideResult, selectedProductionSource, v2BlockerCode) {
+function _renderSidePanel(side, sideResult, selectedProductionSource, v2BlockerCode, controlledV2Translation, lang) {
   const badgesEl = document.getElementById(`vpr${side}Badges`);
   const placeholderEl = document.getElementById(`vpr${side}Placeholder`);
   const statusLineEl = document.getElementById(`vpr${side}StatusLine`);
@@ -268,18 +302,46 @@ function _renderSidePanel(side, sideResult, selectedProductionSource, v2BlockerC
   statusLineEl.textContent = `Status: ${STATE_LABEL[state] ?? 'Unavailable'}`;
 
   const visualAdjustmentsApplied = sideResult?.metadata?.visualAdjustmentsApplied;
-  if (rendered && visualAdjustmentsApplied === false) {
-    // DEPLOY GEOMETRY R1 — Phase C2: for the V2 side, this is the
-    // valid Identity Preview state (available + renderable +
-    // previewOnly + zero supported adjustments) — use the spec's exact
-    // required wording. This branch only runs when `rendered` is
-    // already true (the "Unavailable" placeholder above is hidden in
-    // that case, and STATE_LABEL['rendered'] is 'Rendered') — an
-    // Identity Preview must never be described as Unavailable.
-    const identityText = side !== 'Legacy'
-      ? 'Identity preview — no supported browser adjustment was applied'
-      : 'Preview rendered from the source image, but no supported visual adjustments were applied.';
-    warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: identityText }));
+  if (side !== 'Legacy' && rendered) {
+    // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase F: the V2 panel now
+    // distinguishes a MEANINGFUL Safety-restraint translation from an
+    // honest Identity fallback — both are valid, non-Production,
+    // preview-only outcomes, but they must never share the same vague
+    // "Identity preview" wording, since only one of them actually
+    // changed a pixel.
+    const mode = controlledV2Translation?.mode ?? null;
+    if (mode === 'legacy-derived-safety-restraint') {
+      warningsEl.appendChild(el('div', { style: 'font-size:11px;font-weight:700;color:var(--accent)', text: _t('safetyRestraintLabel', lang) }));
+      warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-dim)', text: _t('safetyRestraintLine1', lang) }));
+      warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: _t('safetyRestraintLine2', lang) }));
+    } else if (mode === 'identity-fallback' || visualAdjustmentsApplied === false) {
+      warningsEl.appendChild(el('div', { style: 'font-size:11px;font-weight:700;color:var(--text-dim)', text: _t('identityFallbackLabel', lang) }));
+      warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-dim)', text: _t('identityFallbackLine1', lang) }));
+      warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: _t('identityFallbackLine2', lang) }));
+    }
+
+    // Bounded diagnostics — normalized browser-preview units only,
+    // never labeled as Lightroom slider values. Max 5 changed fields.
+    if (controlledV2Translation && typeof controlledV2Translation === 'object') {
+      const diagWrap = el('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:4px;display:flex;flex-direction:column;gap:2px' });
+      diagWrap.appendChild(el('div', { text: `${_t('visualizedAdjustments', lang)}: ${Number.isFinite(controlledV2Translation.visualizedAdjustmentCount) ? controlledV2Translation.visualizedAdjustmentCount : 0}` }));
+      diagWrap.appendChild(el('div', { text: `${_t('translationMode', lang)}: ${_safeText(controlledV2Translation.mode) || 'unavailable'}` }));
+      diagWrap.appendChild(el('div', { text: `${_t('confidence', lang)}: ${Number.isFinite(controlledV2Translation.confidence) ? controlledV2Translation.confidence : 0}` }));
+      const changed = _safeArray(controlledV2Translation.changedFields).slice(0, 5);
+      if (changed.length > 0) {
+        diagWrap.appendChild(el('div', { style: 'margin-top:2px;font-weight:600', text: `${_t('topChanges', lang)}:` }));
+        changed.forEach((c) => {
+          const line = _formatChangedField(c);
+          if (line) diagWrap.appendChild(el('div', { style: 'padding-left:8px', text: line }));
+        });
+      }
+      warningsEl.appendChild(diagWrap);
+    }
+  } else if (rendered && visualAdjustmentsApplied === false) {
+    // Legacy side — unchanged wording (this side is not affected by
+    // the Controlled V2 translation, so its Identity messaging stays
+    // exactly as before).
+    warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: 'Preview rendered from the source image, but no supported visual adjustments were applied.' }));
   }
   _safeArray(sideResult?.warnings).slice(0, 4).forEach(w => {
     const t = _safeText(w);
@@ -364,7 +426,7 @@ export function buildRenderingPlaceholderState() {
  * touches the canvas elements — the controller commits pixels to them
  * directly and independently of this function.
  */
-export function renderVisualPreviewComparison(container, comparisonState) {
+export function renderVisualPreviewComparison(container, comparisonState, lang) {
   if (!container) return;
   ensureVisualPreviewComparisonLayout(container);
 
@@ -412,14 +474,17 @@ export function renderVisualPreviewComparison(container, comparisonState) {
     ));
   }
 
-  _renderSidePanel('Legacy', cs.legacy, selectedProductionSource);
+  _renderSidePanel('Legacy', cs.legacy, selectedProductionSource, undefined, undefined, lang);
   // DEPLOY GEOMETRY R1 — Phase A FIX A1/A4: md.v2BlockerCode is a
   // bounded, stable diagnostic code (never a raw object/exception)
   // computed upstream (ui/app.js, which has access to both the Render
   // Plan and the Preview Sandbox) and threaded through in metadata —
   // used ONLY to select a more specific, honest placeholder message
   // for the V2 side; never changes eligibility/rendering itself.
-  _renderSidePanel('V2', cs.v2, undefined, md.v2BlockerCode);
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase F: md.controlledV2Translation
+  // is likewise a bounded, pre-sanitized diagnostics object threaded
+  // through unchanged from the Render Plan (Phase D) — never recomputed here.
+  _renderSidePanel('V2', cs.v2, undefined, md.v2BlockerCode, md.controlledV2Translation, lang);
 
   const overallMessagesEl = document.getElementById('vprOverallMessages');
   if (overallMessagesEl) {

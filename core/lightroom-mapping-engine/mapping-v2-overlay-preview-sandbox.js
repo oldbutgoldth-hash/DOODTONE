@@ -58,9 +58,80 @@ function _gate({ id, label, required, passed, status, reason }) {
 }
 
 /** Canonical humanReviewChecklist entry shape: {id, label, required, status, reason}. */
-function _checklistItem(id, label, required, status, reason) {
-  return { id, label, required, status, reason };
+function _checklistItem(id, label, required, status, reason, extra = {}) {
+  return { id, label, required, status, reason, ...extra };
 }
+
+// CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G1: the ten checklist
+// items are grouped into three genuinely different categories — this
+// grouping is metadata only, it changes no pass/fail logic:
+//   A. visual-inspection  — 6 items, always manual, can NEVER be
+//      automatically passed.
+//   B. system-integrity   — 1 item (legacy-output-preserved).
+//   C. safety-guarantees   — 3 items (rollback-confirmed,
+//      preview-non-production-confirmed, export-path-unchanged).
+// B+C together are the four "system-verified" items.
+const REVIEW_GROUP = {
+  'legacy-output-preserved': 'system-integrity',
+  'source-image-reviewed': 'visual-inspection',
+  'skin-tones-reviewed': 'visual-inspection',
+  'highlights-reviewed': 'visual-inspection',
+  'shadows-reviewed': 'visual-inspection',
+  'white-balance-reviewed': 'visual-inspection',
+  'color-stacking-reviewed': 'visual-inspection',
+  'rollback-confirmed': 'safety-guarantees',
+  'preview-non-production-confirmed': 'safety-guarantees',
+  'export-path-unchanged': 'safety-guarantees',
+};
+const SYSTEM_VERIFIED_IDS = new Set(['legacy-output-preserved', 'rollback-confirmed', 'preview-non-production-confirmed', 'export-path-unchanged']);
+
+// CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G3: bounded, bilingual
+// (English/Thai) user-facing help text for every checklist item — What
+// this checks / What to look for / Why it matters / Current automatic
+// evidence (system items only; null for manual items, filled in per-call
+// for system items since evidence is dynamic).
+const REVIEW_HELP = {
+  'legacy-output-preserved': {
+    en: { whatThisChecks: 'That the exported/production output still comes from Legacy Lightroom Mapping, not from any V2 value.', whatToLookFor: 'System-verified — no manual look is needed.', whyItMatters: 'Guarantees Controlled V2 can never silently become the production source.' },
+    th: { whatThisChecks: 'ผลลัพธ์ที่ส่งออก/ใช้งานจริงยังคงมาจาก Legacy Lightroom Mapping ไม่ใช่ค่าจาก V2', whatToLookFor: 'ระบบตรวจสอบให้อัตโนมัติ — ไม่ต้องตรวจสอบด้วยตนเอง', whyItMatters: 'รับประกันว่า Controlled V2 จะไม่กลายเป็นแหล่งข้อมูล Production โดยไม่รู้ตัว' },
+  },
+  'source-image-reviewed': {
+    en: { whatThisChecks: 'That you have looked at the original source image alongside both previews.', whatToLookFor: 'Open the source image and compare it to Legacy and Controlled V2.', whyItMatters: 'Confirms both previews are being judged against the real photo, not from memory.' },
+    th: { whatThisChecks: 'คุณได้ดูภาพต้นฉบับควบคู่กับตัวอย่างทั้งสองแบบแล้ว', whatToLookFor: 'เปิดภาพต้นฉบับแล้วเปรียบเทียบกับ Legacy และ Controlled V2', whyItMatters: 'ยืนยันว่าตัวอย่างทั้งสองถูกตัดสินโดยเทียบกับภาพจริง ไม่ใช่จากความจำ' },
+  },
+  'skin-tones-reviewed': {
+    en: { whatThisChecks: 'That skin tones look natural and protected in both previews.', whatToLookFor: 'Look for unnatural orange, red, or magenta shifts on faces/skin.', whyItMatters: 'Skin tones are the most sensitive area to get wrong in a portrait.' },
+    th: { whatThisChecks: 'โทนสีผิวดูเป็นธรรมชาติและได้รับการปกป้องในตัวอย่างทั้งสองแบบ', whatToLookFor: 'สังเกตการเปลี่ยนสีที่ไม่เป็นธรรมชาติไปทางส้ม แดง หรือม่วงแดงบนใบหน้า/ผิว', whyItMatters: 'โทนสีผิวเป็นจุดที่อ่อนไหวที่สุดหากผิดพลาดในภาพบุคคล' },
+  },
+  'highlights-reviewed': {
+    en: { whatThisChecks: 'That bright areas are not blown out, capped harshly, or damaged.', whatToLookFor: 'Look at skies, windows, or bright skin — check for lost detail or harsh clipping.', whyItMatters: 'Over-aggressive highlight handling is a common, visible failure mode.' },
+    th: { whatThisChecks: 'บริเวณสว่างไม่ถูกทำให้ขาว จำกัดแบบรุนแรง หรือเสียหาย', whatToLookFor: 'สังเกตท้องฟ้า หน้าต่าง หรือผิวสว่าง — ตรวจสอบรายละเอียดที่หายไปหรือการตัดขอบที่รุนแรง', whyItMatters: 'การจัดการไฮไลต์ที่รุนแรงเกินไปเป็นข้อผิดพลาดที่พบเห็นได้บ่อย' },
+  },
+  'shadows-reviewed': {
+    en: { whatThisChecks: 'That shadow detail is preserved, not crushed to solid black.', whatToLookFor: 'Look at dark clothing, hair, or shadow areas for lost detail.', whyItMatters: 'Crushed shadows lose information that cannot be recovered later.' },
+    th: { whatThisChecks: 'รายละเอียดในเงามืดยังคงอยู่ ไม่ถูกบีบจนดำสนิท', whatToLookFor: 'สังเกตเสื้อผ้าสีเข้ม เส้นผม หรือบริเวณเงาว่ามีรายละเอียดหายไปหรือไม่', whyItMatters: 'เงาที่ถูกบีบจะสูญเสียข้อมูลที่ไม่สามารถกู้คืนได้ในภายหลัง' },
+  },
+  'white-balance-reviewed': {
+    en: { whatThisChecks: 'That there is no unwanted color-temperature or tint shift.', whatToLookFor: 'Look for unexpected warm/cool or green/magenta casts vs. the source.', whyItMatters: 'An uncontrolled WB shift changes the whole mood of the photo.' },
+    th: { whatThisChecks: 'ไม่มีการเปลี่ยนอุณหภูมิสีหรือโทนสีที่ไม่ต้องการ', whatToLookFor: 'สังเกตโทนอุ่น/เย็น หรือเขียว/ม่วงแดงที่ไม่คาดคิดเมื่อเทียบกับต้นฉบับ', whyItMatters: 'การเปลี่ยนสมดุลแสงขาวที่ควบคุมไม่ได้จะเปลี่ยนอารมณ์ของภาพทั้งหมด' },
+  },
+  'color-stacking-reviewed': {
+    en: { whatThisChecks: 'That multiple color tools are not stacking into an unrealistic or risky look.', whatToLookFor: 'Look for oversaturated or unnatural color combinations.', whyItMatters: 'Compounding several aggressive color tools can push a look past what looks intentional.' },
+    th: { whatThisChecks: 'เครื่องมือสีหลายตัวไม่ได้ซ้อนกันจนเกิดลุคที่ไม่สมจริงหรือมีความเสี่ยง', whatToLookFor: 'สังเกตสีที่อิ่มตัวเกินไปหรือการผสมสีที่ไม่เป็นธรรมชาติ', whyItMatters: 'การรวมเครื่องมือสีที่รุนแรงหลายตัวอาจทำให้ลุคดูเกินความตั้งใจ' },
+  },
+  'rollback-confirmed': {
+    en: { whatThisChecks: 'That rolling back to Legacy mapping is always available and safe.', whatToLookFor: 'System-verified — no manual look is needed.', whyItMatters: 'Guarantees you can always return to the known-good Legacy result.' },
+    th: { whatThisChecks: 'สามารถย้อนกลับไปใช้ Legacy mapping ได้เสมออย่างปลอดภัย', whatToLookFor: 'ระบบตรวจสอบให้อัตโนมัติ — ไม่ต้องตรวจสอบด้วยตนเอง', whyItMatters: 'รับประกันว่าคุณสามารถย้อนกลับไปยังผลลัพธ์ Legacy ที่รู้ว่าใช้งานได้เสมอ' },
+  },
+  'preview-non-production-confirmed': {
+    en: { whatThisChecks: 'That the preview cannot be applied to Production or contain real slider/XMP values.', whatToLookFor: 'System-verified — no manual look is needed.', whyItMatters: 'Keeps the browser preview clearly separated from what is actually exported.' },
+    th: { whatThisChecks: 'ตัวอย่างไม่สามารถนำไปใช้กับ Production หรือมีค่าสไลเดอร์/XMP จริงได้', whatToLookFor: 'ระบบตรวจสอบให้อัตโนมัติ — ไม่ต้องตรวจสอบด้วยตนเอง', whyItMatters: 'แยกตัวอย่างในเบราว์เซอร์ออกจากสิ่งที่ส่งออกจริงอย่างชัดเจน' },
+  },
+  'export-path-unchanged': {
+    en: { whatThisChecks: 'That the current XMP export path still points at Legacy, unaffected by this preview.', whatToLookFor: 'System-verified — no manual look is needed.', whyItMatters: 'Confirms Controlled V2 cannot redirect what gets exported.' },
+    th: { whatThisChecks: 'เส้นทางส่งออก XMP ปัจจุบันยังคงชี้ไปที่ Legacy โดยไม่ได้รับผลกระทบจากตัวอย่างนี้', whatToLookFor: 'ระบบตรวจสอบให้อัตโนมัติ — ไม่ต้องตรวจสอบด้วยตนเอง', whyItMatters: 'ยืนยันว่า Controlled V2 ไม่สามารถเปลี่ยนเส้นทางสิ่งที่ส่งออกได้' },
+  },
+};
 
 // ── Legacy Preview Input — READ-ONLY, treats legacy data as immutable ──────
 function _buildLegacyPreviewInput(legacyPreset, legacyMapping, legacyStyleBudget) {
@@ -108,8 +179,27 @@ function _buildLegacyPreviewInput(legacyPreset, legacyMapping, legacyStyleBudget
  * overall flag disables the requirement) unless the caller explicitly
  * supplied a passed/failed status via `input.humanReviewState` (an
  * optional, read-only map of {[itemId]: 'passed'|'failed'}).
+ *
+ * CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G2: the four
+ * SYSTEM-VERIFIED items (legacy-output-preserved, rollback-confirmed,
+ * preview-non-production-confirmed, export-path-unchanged) are now
+ * evaluated from `systemEvidence` — never from `reviewState` (a manual
+ * override can never touch these four; they are read-only by design).
+ * Auto-pass is granted ONLY when the exact required evidence is
+ * present and safe; any missing/malformed evidence leaves the item
+ * `pending`/`unavailable`, NEVER auto-passed. Because this function is
+ * PURE and re-derives status from `systemEvidence` fresh on every call
+ * (nothing is cached/memoized across calls), a system approval can
+ * never go stale: if the evidence that justified a prior "passed"
+ * result changes on a later call, that later call's status reflects
+ * the new evidence honestly — there is no persisted "was passed once"
+ * state anywhere for these four items.
+ *
+ * The six VISUAL items are completely unchanged from the original
+ * manual-only Pass/Fail/Pending behavior — `reviewState` is still the
+ * sole source of their status.
  */
-function _buildHumanReviewChecklist(requireReview, reviewState) {
+function _buildHumanReviewChecklist(requireReview, reviewState, systemEvidence) {
   const items = [
     ['legacy-output-preserved', 'Confirm legacy output/preset is preserved and unmodified'],
     ['source-image-reviewed', 'Review the source image alongside the preview'],
@@ -122,13 +212,82 @@ function _buildHumanReviewChecklist(requireReview, reviewState) {
     ['preview-non-production-confirmed', 'Confirm the preview is clearly marked non-production'],
     ['export-path-unchanged', 'Confirm the current XMP export path is unchanged'],
   ];
+  const ev = systemEvidence && typeof systemEvidence === 'object' ? systemEvidence : {};
+
+  // Exact per-item evidence rules (verbatim from the phase spec) — each
+  // returns { ok: boolean, missing: string[] } so a partial-evidence
+  // case can honestly list exactly what is missing, never a vague
+  // "unavailable".
+  function _evaluateSystemEvidence(id) {
+    if (id === 'legacy-output-preserved') {
+      const missing = [];
+      if (ev.selectedOutputSource !== 'legacy') missing.push('selectedOutputSource !== "legacy"');
+      if (ev.useLegacyMapping !== true) missing.push('fallbackStrategy.useLegacyMapping !== true');
+      return { ok: missing.length === 0, missing };
+    }
+    if (id === 'rollback-confirmed') {
+      const missing = [];
+      if (ev.rollbackAvailable !== true) missing.push('rollbackPlan.available !== true');
+      if (ev.rollbackRestoreSource !== 'legacy') missing.push('rollbackPlan.restoreSource !== "legacy"');
+      return { ok: missing.length === 0, missing };
+    }
+    if (id === 'preview-non-production-confirmed') {
+      const missing = [];
+      if (ev.appliedToProduction !== false) missing.push('appliedToProduction !== false');
+      if (ev.exportEligible !== false) missing.push('exportEligible !== false');
+      if (ev.containsRealSliderValues !== false) missing.push('containsRealSliderValues !== false');
+      if (ev.containsXMPValues !== false) missing.push('containsXMPValues !== false');
+      if (ev.productionWriteDisabled !== true) missing.push('Production Write is not confirmed disabled');
+      return { ok: missing.length === 0, missing };
+    }
+    if (id === 'export-path-unchanged') {
+      const missing = [];
+      if (ev.canExportPreview !== false) missing.push('canExportPreview !== false');
+      if (ev.productionXmpPathLegacy !== true) missing.push('Production XMP path is not confirmed Legacy');
+      return { ok: missing.length === 0, missing };
+    }
+    return { ok: false, missing: ['unknown system-verified id'] };
+  }
+
   return items.map(([id, label]) => {
-    if (!requireReview) return _checklistItem(id, label, false, 'not-required', 'Human review is not required by current flags.');
+    const group = REVIEW_GROUP[id] ?? 'visual-inspection';
+    const isSystemVerified = SYSTEM_VERIFIED_IDS.has(id);
+
+    if (!requireReview) {
+      return _checklistItem(id, label, false, 'not-required', 'Human review is not required by current flags.', { group, manual: !isSystemVerified, reviewed: false, reviewerDecision: 'undecided', reviewSource: isSystemVerified ? 'system-not-required' : 'manual-not-required', help: REVIEW_HELP[id] ?? null });
+    }
+
+    if (isSystemVerified) {
+      const { ok, missing } = _evaluateSystemEvidence(id);
+      if (ok) {
+        return _checklistItem(id, label, true, 'passed', 'System-verified: all required evidence for this guarantee is present and safe.', {
+          group, manual: false, reviewed: true, reviewerDecision: 'approve', reviewSource: 'system-verified',
+          help: REVIEW_HELP[id] ?? null,
+        });
+      }
+      return _checklistItem(id, label, true, 'unavailable', `System evidence is missing/malformed — never auto-passed: ${missing.join('; ')}.`, {
+        group, manual: false, reviewed: false, reviewerDecision: 'undecided', reviewSource: 'system-unavailable',
+        help: REVIEW_HELP[id] ?? null,
+      });
+    }
+
+    // Manual visual-inspection item — unchanged behavior. `reviewState`
+    // still only ever carries 'passed'/'failed' (the caller's own
+    // review-state projection collapses 'pending'/'needs-adjustment' to
+    // an omitted entry) — Pending/Needs-Adjustment distinctions are a
+    // UI-layer concept (ui/review-console-controller.js), not
+    // reconstructed here.
     const suppliedStatus = reviewState?.[id];
     if (suppliedStatus === 'passed' || suppliedStatus === 'failed') {
-      return _checklistItem(id, label, true, suppliedStatus, `Status supplied by caller: "${suppliedStatus}".`);
+      return _checklistItem(id, label, true, suppliedStatus, `Status supplied by caller: "${suppliedStatus}".`, {
+        group, manual: true, reviewed: true, reviewerDecision: suppliedStatus === 'passed' ? 'approve' : 'reject', reviewSource: 'manual',
+        help: REVIEW_HELP[id] ?? null,
+      });
     }
-    return _checklistItem(id, label, true, 'pending', 'No review has been recorded yet — never assumed complete.');
+    return _checklistItem(id, label, true, 'pending', 'No review has been recorded yet — never assumed complete.', {
+      group, manual: true, reviewed: false, reviewerDecision: 'undecided', reviewSource: 'manual',
+      help: REVIEW_HELP[id] ?? null,
+    });
   });
 }
 
@@ -194,9 +353,62 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
     - (missingCount >= 3 ? 0.2 : missingCount * 0.05)
   ).toFixed(3);
 
+  // ── Canonical hard guarantees (moved up from their original later
+  // position — these are PURE hard-coded constants with no dependency
+  // on anything computed below, and the Human Review Checklist's four
+  // system-verified items need them as evidence). Never derived from
+  // any flag or input combination. ──
+  const canExportPreview = false; // hard-coded — never true in this EPIC, even if allowOverlayPreviewExport is forced true
+  const canWriteProduction = false; // hard-coded — never true in this EPIC
+  const selectedOutputSource = 'legacy'; // hard-coded — legacy remains the sole production path
+
+  // ── Rollback / Fallback (also moved up for the same reason) ────────────
+  const rollbackPlan = {
+    available: true,
+    restoreSource: 'legacy',
+    productionMutationDetected: false,
+    steps: [
+      'Discard the isolated preview object.',
+      'Restore the selected output source to legacy.',
+      'Keep production Lightroom Mapping unchanged.',
+      'Keep the existing XMP export path unchanged.',
+    ],
+    // Backward-compatible fields from EPIC 2E-E/2E-E-F — kept as-is.
+    strategy: 'preview-sandbox-no-production-write',
+    triggerConditions: ['preview gate failure', 'hard stop', 'critical overstack', 'XMP validation failure', 'user disables preview flag', 'confidence below threshold', 'human review failed'],
+    restoreTarget: 'legacy Lightroom Mapping',
+    reason: 'The preview sandbox never writes production output or exports real XMP in the first place — "rollback" here means simply not consuming the preview object, which leaves legacy mapping completely untouched.',
+  };
+  const fallbackStrategy = {
+    useLegacyMapping: true,
+    selectedFallback: 'legacy Lightroom Mapping',
+    safeMode: true,
+    reason: 'This module only builds an abstract, non-production preview object — legacy Lightroom Mapping remains the exclusive production path regardless of preview output.',
+  };
+
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G2: the exact evidence
+  // the four system-verified checklist items are graded against —
+  // every field sourced from the SAME constants used everywhere else
+  // in this module (never a re-derived or duplicated guess), so these
+  // four items can never silently diverge from the module's own real
+  // guarantees.
+  const systemEvidence = {
+    selectedOutputSource,
+    useLegacyMapping: fallbackStrategy.useLegacyMapping,
+    rollbackAvailable: rollbackPlan.available,
+    rollbackRestoreSource: rollbackPlan.restoreSource,
+    appliedToProduction: false, // hard invariant — simulatedPreviewPreset.appliedToProduction is always false in both branches below
+    exportEligible: false, // hard invariant — simulatedPreviewPreset.exportEligible is always false in both branches below
+    containsRealSliderValues: false, // hard invariant — documented at the top of this file
+    containsXMPValues: false, // hard invariant — documented at the top of this file
+    productionWriteDisabled: canWriteProduction === false,
+    canExportPreview,
+    productionXmpPathLegacy: true, // Production XMP export path is exclusively Legacy Lightroom Mapping in this codebase — this module has no code path that could redirect it
+  };
+
   // ── Human Review Checklist (never assumed complete) ─────────────────────
   const requireReview = flags.requireHumanReviewForPreview === true;
-  const humanReviewChecklist = _buildHumanReviewChecklist(requireReview, humanReviewState);
+  const humanReviewChecklist = _buildHumanReviewChecklist(requireReview, humanReviewState, systemEvidence);
   const requiredReviewItems = humanReviewChecklist.filter(c => c.required);
   const humanReviewComplete = !requireReview || (requiredReviewItems.length > 0 && requiredReviewItems.every(c => c.status === 'passed'));
   const humanReviewFailed = requiredReviewItems.some(c => c.status === 'failed');
@@ -228,10 +440,10 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
   const failedRequiredGates = previewGateChecks.filter(g => g.required && !g.passed);
   const allRequiredGatesPass = failedRequiredGates.length === 0;
 
-  // ── Canonical hard guarantees + the one genuinely gated output ─────────
-  const canExportPreview = false; // hard-coded — never true in this EPIC, even if allowOverlayPreviewExport is forced true
-  const canWriteProduction = false; // hard-coded — never true in this EPIC
-  const selectedOutputSource = 'legacy'; // hard-coded — legacy remains the sole production path
+  // ── The one genuinely gated output (canExportPreview/canWriteProduction/
+  // selectedOutputSource are now defined EARLIER, before the Human Review
+  // Checklist, since they are pure hard-coded constants the system-
+  // verified checklist items also need — see systemEvidence above) ─────
   const canGeneratePreview = allRequiredGatesPass; // EPIC 2E-E-F: requires EVERY required gate, not just "data exists"
 
   // ── Canonical Preview State ──────────────────────────────────────────────
@@ -350,30 +562,6 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
     warnings: globalSafetyScore == null ? ['Global safety score is unavailable — safety requirement cannot be confidently evaluated.'] : [],
   };
 
-  // ── Rollback / Fallback ───────────────────────────────────────────────────
-  const rollbackPlan = {
-    available: true,
-    restoreSource: 'legacy',
-    productionMutationDetected: false,
-    steps: [
-      'Discard the isolated preview object.',
-      'Restore the selected output source to legacy.',
-      'Keep production Lightroom Mapping unchanged.',
-      'Keep the existing XMP export path unchanged.',
-    ],
-    // Backward-compatible fields from EPIC 2E-E/2E-E-F — kept as-is.
-    strategy: 'preview-sandbox-no-production-write',
-    triggerConditions: ['preview gate failure', 'hard stop', 'critical overstack', 'XMP validation failure', 'user disables preview flag', 'confidence below threshold', 'human review failed'],
-    restoreTarget: 'legacy Lightroom Mapping',
-    reason: 'The preview sandbox never writes production output or exports real XMP in the first place — "rollback" here means simply not consuming the preview object, which leaves legacy mapping completely untouched.',
-  };
-  const fallbackStrategy = {
-    useLegacyMapping: true,
-    selectedFallback: 'legacy Lightroom Mapping',
-    safeMode: true,
-    reason: 'This module only builds an abstract, non-production preview object — legacy Lightroom Mapping remains the exclusive production path regardless of preview output.',
-  };
-
   // ── Blockers ──────────────────────────────────────────────────────────────
   const blockers = [];
   if (!flags.enableOverlayPreviewSandbox) blockers.push({ blocker: 'Preview sandbox is disabled.', severity: 'high', requiredFix: 'Set LIGHTROOM_MAPPING_V2_FLAGS.enableOverlayPreviewSandbox to true.', source: 'Feature Flags' });
@@ -414,13 +602,49 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
       : 'Legacy Mapping is still active. Preview Sandbox is prepared, but preview generation, export, and production write are all disabled by default.';
   const developerSummary = `canGeneratePreview=${canGeneratePreview}; canExportPreview=false and canWriteProduction=false always; selectedOutputSource=legacy; simulatedPreviewPreset contains no real Lightroom slider values or XMP fields. previewState=${previewState}, ${previewEligibility.missingRequirements.length} missing requirement(s), humanReviewComplete=${humanReviewComplete}.`;
 
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G4/J: a bounded,
+  // pre-computed progress summary — Visual review: X/6, System
+  // verified: X/4, Overall required: X/10 — plus primary guidance
+  // steps, so the UI never has to re-derive this from the raw
+  // checklist and can never show "Press Pass on all 10" when four are
+  // already system-verified.
+  const visualItems = humanReviewChecklist.filter(c => c.group === 'visual-inspection');
+  const systemItems = humanReviewChecklist.filter(c => c.group === 'system-integrity' || c.group === 'safety-guarantees');
+  const visualPassed = visualItems.filter(c => c.status === 'passed').length;
+  const systemVerified = systemItems.filter(c => c.status === 'passed').length;
+  const overallRequiredPassed = requiredReviewItems.filter(c => c.status === 'passed').length;
+  const needsAdjustmentOrFailed = visualItems.some(c => c.status === 'failed');
+  const reviewGuidance = {
+    visualRequired: visualItems.length,
+    visualPassed,
+    systemRequired: systemItems.length,
+    systemVerified,
+    overallRequired: requiredReviewItems.length,
+    overallPassed: overallRequiredPassed,
+    readyToBuildV2: humanReviewComplete,
+    steps: !requireReview
+      ? ['Human review is not required by current flags.']
+      : [
+        '1. Review the six visual items.',
+        '2. Resolve any Needs Adjustment or Fail.',
+        '3. Re-analyze to build the new Controlled V2 Preview.',
+      ],
+    primaryGuidance: !requireReview
+      ? 'Human review is not required by current flags.'
+      : humanReviewComplete
+        ? 'All required review items are complete — you can build the Controlled V2 Preview.'
+        : needsAdjustmentOrFailed
+          ? 'Resolve the visual item(s) marked Needs Adjustment or Fail, then re-analyze.'
+          : `Review the remaining visual item(s) (${visualItems.length - visualPassed} of ${visualItems.length} left), then re-analyze.`,
+  };
+
   const result = {
     // ── Canonical fields (EPIC 2E-E-F) ──
     mode: 'controlled-overlay-preview-sandbox',
     previewState, canGeneratePreview, canExportPreview, canWriteProduction, selectedOutputSource,
     previewGateChecks, blockers, productionRestrictions, warnings, reasons,
     previewEligibility, previewPlan, simulatedPreviewPreset, previewRiskReview,
-    humanReviewChecklist, safetyRequirements,
+    humanReviewChecklist, safetyRequirements, reviewGuidance,
     rollbackPlan, fallbackStrategy,
     confidence, safetyScore,
     photographerSummary, developerSummary,

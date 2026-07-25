@@ -341,7 +341,7 @@ function _renderRiskRow(risk) {
  * finalStyleIntent.sideBySidePreviewComparisonV2 object (or any
  * malformed/missing value — every access below is defensive).
  */
-function _renderBody(container, comparison) {
+function _renderBody(container, comparison, visualPreviewInfo) {
   const cmp = _isRecord(comparison) ? comparison : null;
 
   if (!cmp) {
@@ -356,7 +356,7 @@ function _renderBody(container, comparison) {
   headerRow.appendChild(el('div', { style: 'font-size:13px;font-weight:700;color:var(--text)', text: 'Side-by-Side Preview Comparison' }));
   headerRow.appendChild(badge(STATE_LABEL[state], STATE_COLOR[state]));
   container.appendChild(headerRow);
-  container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-bottom:12px', text: 'Data comparison only \u00B7 Visual previews not available yet' }));
+  container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-bottom:12px', text: 'Data comparison only \u00B7 a separate evidence layer from any rendered-pixel preview (see the note below)' }));
 
   // Extracted early (before the empty-state framing below) so both
   // this section and the Visual Honesty Banner can use the same
@@ -382,13 +382,40 @@ function _renderBody(container, comparison) {
   }
 
   // ── Visual honesty banner ────────────────────────────────────────────────
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase I: this Data Comparison
+  // layer NEVER renders pixels itself and NEVER reinterprets its own
+  // "Unknown"/not-available evidence based on what the SEPARATE Visual
+  // Preview Comparison section can do — the two are genuinely
+  // different evidence layers (semantic/planning data here vs.
+  // approximate rendered pixels there), and this banner says so
+  // explicitly rather than letting the reader assume "not available"
+  // here means "not available anywhere in the app". `visualPreviewInfo`
+  // (when supplied) is read-only diagnostic passed in from
+  // finalStyleIntent.visualPreviewRenderPlanV2 by the caller — this
+  // module never fetches or re-derives it, and never lets it override
+  // any value already shown above (legacyDataAvailable/v2DataAvailable
+  // stay exactly as read from THIS comparison object, always).
   const banner = el('div', { style: 'display:flex;flex-direction:column;gap:5px;margin:10px 0 14px;padding:12px 14px;background:var(--surface-2);border-radius:3px;border-left:2px solid var(--warn)' });
-  banner.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-dim);font-weight:600', text: 'Visual Legacy/V2 preview images are not available in this stage.' }));
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: `Legacy data available: ${_yesNoUnknown(legacyPreview ? legacyDataAvailable : undefined)}` }));
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: `V2 data available: ${_yesNoUnknown(v2Preview ? v2DataAvailable : undefined)}` }));
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: 'Legacy visual preview: Not available' }));
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: 'V2 visual preview: Not available' }));
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: 'Visual comparison: Not available' }));
+  banner.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-dim);font-weight:600', text: 'This Data Comparison layer never renders Legacy/V2 preview images itself.' }));
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: `Legacy data available (this layer): ${_yesNoUnknown(legacyPreview ? legacyDataAvailable : undefined)}` }));
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: `V2 data available (this layer): ${_yesNoUnknown(v2Preview ? v2DataAvailable : undefined)}` }));
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: 'Legacy visual (pixel) preview: rendered separately below, not by this layer' }));
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: 'V2 visual (pixel) preview: rendered separately below, not by this layer' }));
+
+  const vpInfo = _isRecord(visualPreviewInfo) ? visualPreviewInfo : null;
+  const vpTranslation = _isRecord(vpInfo?.controlledV2Translation) ? vpInfo.controlledV2Translation : null;
+  const vpRenderable = vpInfo?.renderable === true;
+  let visualLayerNote;
+  if (!vpInfo) {
+    visualLayerNote = 'Visual Preview Comparison (separate, pixel-based layer): status unknown here — see that section directly.';
+  } else if (vpRenderable && vpTranslation?.mode === 'legacy-derived-safety-restraint') {
+    visualLayerNote = 'Visual Preview Comparison (separate, pixel-based layer): a real, bounded Controlled V2 rendering is available below — this does NOT change any "Unknown" value shown above, which reflects only this Data Comparison layer\u2019s own semantic evidence.';
+  } else if (vpRenderable && vpTranslation?.mode === 'identity-fallback') {
+    visualLayerNote = 'Visual Preview Comparison (separate, pixel-based layer): an honest Identity preview is shown below (no supported change was available) — this does NOT change any "Unknown" value shown above.';
+  } else {
+    visualLayerNote = 'Visual Preview Comparison (separate, pixel-based layer): not currently available for this analysis — see that section for the exact reason.';
+  }
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:2px;font-style:italic;overflow-wrap:anywhere', text: visualLayerNote }));
   // Production Mapping / Preview Export / Production Write — only ever
   // claimed CONFIRMED when explicit evidence exists; an unexpected
   // (anomalous) explicit value is reported honestly, never hidden;
@@ -651,13 +678,13 @@ function _renderBody(container, comparison) {
  * missing value — always safe). PURE READ-ONLY: no interactive
  * controls, no state mutation, no engine calls.
  */
-export function renderSideBySideComparison(container, comparison) {
+export function renderSideBySideComparison(container, comparison, visualPreviewInfo = null) {
   if (!container || typeof container.appendChild !== 'function') return;
 
   try {
     if (typeof container.replaceChildren === 'function') container.replaceChildren();
     else container.innerHTML = '';
-    _renderBody(container, comparison);
+    _renderBody(container, comparison, visualPreviewInfo);
   } catch (err) {
     try {
       if (typeof container.replaceChildren === 'function') container.replaceChildren();

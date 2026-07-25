@@ -2,6 +2,8 @@
 
 **LOCAL-FIRST GEOMETRY R3 — Phase H.**
 
+**Updated by CONTROLLED V2 VISUAL TRANSLATION R1 — Phase M** (added Step 12, the Controlled V2 Browser suite; see doc 23 for the feature itself).
+
 This document is the everyday, Windows-desktop workflow for developing
 LUMIXA AI locally, testing it locally, and deploying to Preview only
 once per day. It assumes no prior context beyond a working Windows PC
@@ -105,7 +107,8 @@ clear PASS/FAIL summary at the end:
  2. Focused Core (`qa/epic-2e-j-focused-core-smoke-test.mjs` — plain-Node
     import smoke test of all 30 `core/*/index.js` analysis engines)
  3. Static suites (`qa/run-static-suites.mjs` — every no-Browser
-    self-test in the project)
+    self-test in the project, including the Controlled V2 translator/
+    review/UI suites added in CONTROLLED V2 VISUAL TRANSLATION R1)
  4. In-Memory startup (`qa/playwright-in-memory-app-smoke.mjs`)
  5. Upload baseline (`qa/epic-2e-j-safe-recovery-upload-baseline-test.mjs`)
  6. Live App (`qa/epic-2e-j-phase-c-live-app-test.mjs`)
@@ -114,11 +117,16 @@ clear PASS/FAIL summary at the end:
  9. Step 7B-B (`qa/epic-2e-j-phase-c-step7b-b-test.mjs`)
 10. Decoder/render geometry — Phase C1 (`qa/epic-2e-j-preview-geometry-decoder-render-test.mjs`)
 11. Full-app safety-eligible geometry — Phase C2 (`qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs`)
+12. Controlled V2 Browser suite — CONTROLLED V2 VISUAL TRANSLATION R1
+    Phase K/L (`qa/epic-2e-j-controlled-v2-browser-test.mjs` — the real
+    Build Controlled V2 Preview workflow across 5 fixture flavors, with
+    a required cross-fixture proof that at least 2 of the 5 produce a
+    genuinely meaningful, non-Identity translation)
 
 It exits **non-zero** (fails) if any of the following is true:
 - any required suite reports a FAIL
 - Chromium/Playwright is unavailable in the current environment (steps
-  4–11 need a real Browser; if none is resolvable, the gate fails
+  4–12 need a real Browser; if none is resolvable, the gate fails
   rather than silently skipping — this is a fail-closed design, not a
   bug, and it is exactly why step 3 above matters: install a real
   Chromium via `npx playwright install chromium`)
@@ -199,6 +207,17 @@ Preview URL), using a real photo (not a test fixture):
 - [ ] **XMP** — the exported XMP file downloads and opens correctly in
       Lightroom (or your target application), and is unchanged by
       selecting an Observation value.
+- [ ] **Controlled V2 Human Review** — open the Review Console and
+      confirm the 4 system-verified items (Legacy output preserved,
+      Rollback confirmed, Preview non-production confirmed, Export path
+      unchanged) show as passed and read-only with ZERO clicks; confirm
+      the 6 visual items are completable manually; confirm **Build
+      Controlled V2 Preview** stays disabled until all 10 are complete.
+- [ ] **Build Controlled V2 Preview** — click the button once ready;
+      confirm it disables itself while running, re-enables afterward,
+      announces an honest outcome (Safety-restraint / Identity
+      fallback), and scrolls to the Visual Preview Comparison section.
+      See doc 23 for the full feature explanation.
 
 Two further checks worth doing at least once per release, beyond the
 required list above:
