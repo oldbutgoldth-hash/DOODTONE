@@ -319,7 +319,22 @@ function ensureQaSnapshotHook() {
     try {
       const ibaState = interactiveBeforeAfterController ? interactiveBeforeAfterController.getState() : null;
       interactiveState = _qaSafeStr(ibaState?.state);
-      alignmentStatus = _qaSafeStr(ibaState?.metadata?.alignment?.status) ?? _qaSafeStr(ibaState?.blockedReason);
+      // LOCAL-FIRST QA FIX: Interactive Before/After stores its real
+      // geometry evidence on the top-level `alignment` object, not at
+      // `metadata.alignment.status`.  Reading the old path made the QA
+      // snapshot report null even while the rendered UI truthfully showed
+      // "Alignment: Exact dimensions".  Derive the same bounded friendly
+      // label from the canonical tri-state evidence used by the renderer.
+      const qaAlignment = ibaState && typeof ibaState === 'object' ? ibaState.alignment ?? null : null;
+      if (qaAlignment && typeof qaAlignment === 'object') {
+        if (qaAlignment.sameAspectRatio === false) alignmentStatus = 'Blocked geometry';
+        else if (qaAlignment.displayDimensionsNormalized === true) alignmentStatus = 'Normalized once';
+        else if (qaAlignment.exactSourcePixelMatch === true) alignmentStatus = 'Exact dimensions';
+        else if (qaAlignment.sameAspectRatio == null && qaAlignment.exactSourcePixelMatch == null) alignmentStatus = 'Not evaluated — both previews are required';
+        else alignmentStatus = 'Unknown';
+      } else {
+        alignmentStatus = _qaSafeStr(ibaState?.blockedReason);
+      }
     } catch { /* leave nulls, never throw from the QA hook */ }
 
     // COMBINED CLOSEOUT R2 — Phase B FIX B1: the QA-only snapshot now

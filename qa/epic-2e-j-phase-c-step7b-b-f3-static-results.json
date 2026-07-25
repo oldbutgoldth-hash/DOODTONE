@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J — Step 7B-B-F3-S: static coverage self-test (source audit only, no Chromium)",
-  "generatedAt": "2026-07-25T13:49:50.782Z",
+  "generatedAt": "2026-07-25T14:21:27.219Z",
   "summary": {
     "total": 68,
     "pass": 68,
@@ -340,7 +340,7 @@
     {
       "test": "FIX 9 (ENV-B2-F2): the real Browser environment status is computed LIVE every run via detectPlaywrightPackage()/detectBrowserExecutable(), and the legacy NOT_RUN_ENVIRONMENT_BLOCKED term is retired from this suite",
       "result": "PASS",
-      "evidence": "liveBrowserStatus=BROWSER_BINARY_UNAVAILABLE, pkgStatus=PLAYWRIGHT_PACKAGE_AVAILABLE, found=null, noLongerUsesLegacyTerm=true"
+      "evidence": "liveBrowserStatus=BROWSER_BINARY_AVAILABLE, pkgStatus=PLAYWRIGHT_PACKAGE_UNAVAILABLE, found=/usr/bin/chromium, noLongerUsesLegacyTerm=true"
     },
     {
       "test": "This static test never claims actual Keyboard PASS or real screen-reader (NVDA/JAWS/VoiceOver) PASS",
@@ -350,9 +350,9 @@
   ],
   "disclaimer": "This suite audits the SOURCE TEXT of qa/epic-2e-j-phase-c-step7b-b-test.mjs for the presence of required Keyboard-activation/MutationObserver/announcement-bounds/side-effect-isolation code paths and wiring. It does NOT execute a browser, does NOT measure real Tab order or real screen-reader announcements, and does NOT prove real Keyboard/ARIA PASS. A PASS here means \"the required code path is present and correctly wired,\" not \"the real UI passed Keyboard/ARIA testing.\"",
   "browserSuiteExecution": {
-    "status": "BROWSER_BINARY_UNAVAILABLE",
+    "status": "BROWSER_BINARY_AVAILABLE",
     "note": "FIX 9 (ENV-B2-F2): computed LIVE this run via detectPlaywrightPackage()/detectBrowserExecutable() rather than copied from a prior static-results record. This F3-S patch did not execute, simulate, or regenerate the real Step 7B-B Browser suite result JSON or the Final Phase C result JSON.",
-    "packageStatus": "PLAYWRIGHT_PACKAGE_AVAILABLE",
+    "packageStatus": "PLAYWRIGHT_PACKAGE_UNAVAILABLE",
     "browserOrFinalResultJsonRegenerated": false
   }
 }

@@ -1,0 +1,164 @@
+{
+  "reviewedPackage": "EP6E06~1.ZIP",
+  "reviewTimestamp": "2026-07-25T14:24:01.836652+00:00",
+  "browser": {
+    "executable": "system Chromium",
+    "version": "144.0.7559.96",
+    "mode": "headless in-memory harness"
+  },
+  "changesApplied": [
+    "Fixed QA alignmentStatus to derive from the canonical top-level Interactive Before/After alignment object.",
+    "Added ES-module package semantics (type=module).",
+    "Added LAN-capable local server command on 0.0.0.0:3000.",
+    "Added no-store development cache headers and HEAD support.",
+    "Added local display regression static suite.",
+    "Updated local-first documentation and README."
+  ],
+  "syntax": {
+    "passed": 123,
+    "total": 123
+  },
+  "static": {
+    "decision": "PASS",
+    "localDisplayRegression": "12/12 PASS"
+  },
+  "runtime": {
+    "firstUpload": true,
+    "analysisStarted": true,
+    "humanReviewItemsPassed": 10,
+    "controlledV2Rendered": true,
+    "identityPreviewEligible": true,
+    "alignmentStatus": "Exact dimensions",
+    "observationEnabled": true,
+    "pageErrors": 0,
+    "consoleErrors": 0
+  },
+  "fixtures": [
+    {
+      "fixture": "ready-landscape-orientation-1.jpg",
+      "canonicalWidth": 800,
+      "canonicalHeight": 600,
+      "legacyCanvas": {
+        "width": 800,
+        "height": 600
+      },
+      "controlledV2Canvas": {
+        "width": 800,
+        "height": 600
+      },
+      "legacyState": "renderable",
+      "controlledV2State": "renderable",
+      "alignmentStatus": "Exact dimensions",
+      "observationEnabled": true,
+      "hardStopCount": 0,
+      "blockerCode": null
+    },
+    {
+      "fixture": "ready-portrait-orientation-1.jpg",
+      "canonicalWidth": 600,
+      "canonicalHeight": 800,
+      "legacyCanvas": {
+        "width": 600,
+        "height": 800
+      },
+      "controlledV2Canvas": {
+        "width": 600,
+        "height": 800
+      },
+      "legacyState": "renderable",
+      "controlledV2State": "renderable",
+      "alignmentStatus": "Exact dimensions",
+      "observationEnabled": true,
+      "hardStopCount": 0,
+      "blockerCode": null
+    },
+    {
+      "fixture": "ready-landscape-orientation-3.jpg",
+      "canonicalWidth": 800,
+      "canonicalHeight": 600,
+      "legacyCanvas": {
+        "width": 800,
+        "height": 600
+      },
+      "controlledV2Canvas": {
+        "width": 800,
+        "height": 600
+      },
+      "legacyState": "renderable",
+      "controlledV2State": "renderable",
+      "alignmentStatus": "Exact dimensions",
+      "observationEnabled": true,
+      "hardStopCount": 0,
+      "blockerCode": null
+    },
+    {
+      "fixture": "ready-landscape-matrix-orientation-6.jpg",
+      "canonicalWidth": 800,
+      "canonicalHeight": 600,
+      "legacyCanvas": {
+        "width": 800,
+        "height": 600
+      },
+      "controlledV2Canvas": {
+        "width": 800,
+        "height": 600
+      },
+      "legacyState": "renderable",
+      "controlledV2State": "renderable",
+      "alignmentStatus": "Exact dimensions",
+      "observationEnabled": true,
+      "hardStopCount": 0,
+      "blockerCode": null
+    },
+    {
+      "fixture": "ready-portrait-matrix-orientation-8.jpg",
+      "canonicalWidth": 600,
+      "canonicalHeight": 800,
+      "legacyCanvas": {
+        "width": 600,
+        "height": 800
+      },
+      "controlledV2Canvas": {
+        "width": 600,
+        "height": 800
+      },
+      "legacyState": "renderable",
+      "controlledV2State": "renderable",
+      "alignmentStatus": "Exact dimensions",
+      "observationEnabled": true,
+      "hardStopCount": 0,
+      "blockerCode": null
+    },
+    {
+      "fixture": "ready-landscape-no-exif.png",
+      "canonicalWidth": 800,
+      "canonicalHeight": 600,
+      "legacyCanvas": {
+        "width": 800,
+        "height": 600
+      },
+      "controlledV2Canvas": {
+        "width": 800,
+        "height": 600
+      },
+      "legacyState": "renderable",
+      "controlledV2State": "renderable",
+      "alignmentStatus": "Exact dimensions",
+      "observationEnabled": true,
+      "hardStopCount": 0,
+      "blockerCode": null
+    }
+  ],
+  "localServer": {
+    "command": "npm run dev:lan",
+    "listen": "0.0.0.0:3000",
+    "exampleUrl": "http://192.168.1.105:3000/?qa=1",
+    "cacheControl": "no-store, max-age=0"
+  },
+  "productionLocks": {
+    "productionSource": "legacy",
+    "controlledTestDisabled": true,
+    "mappingUnchanged": true,
+    "xmpUnchanged": true
+  }
+}

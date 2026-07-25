@@ -7,6 +7,28 @@ This is a **drop-in replacement** for your original `PresetForge AI` static site
 2. `vercel.json` / `netlify.toml` / `.gitignore` are copied over unchanged — no deploy config changes needed.
 3. Push and deploy exactly as before (static site, ES module entrypoint at `ui/app.js`).
 
+
+## Local-first development (recommended)
+
+Use the computer as the daily test environment and deploy only after the local gate passes.
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://localhost:4173/?qa=1`. To open LUMIXA from another device on the same LAN/Wi-Fi, run:
+
+```bash
+npm run dev:lan
+```
+
+This binds to port `3000` on all local interfaces and prints a LAN URL such as `http://192.168.1.105:3000/?qa=1`. Development responses use `Cache-Control: no-store`, so a normal refresh reads the current source instead of an older cached ES module. Before any Preview deployment, run:
+
+```bash
+npm run test:local-gate
+```
+
 ## What changed (visual redesign)
 - Warm graphite/espresso surfaces, antique-brass accent, Cormorant Garamond (display) + Public Sans (UI) + JetBrains Mono (data) instead of the old "Lumina Precision" purple dark theme.
 - Dark/light theme, language switch, tabs, drag-drop, and modal open/close now toggle inline styles directly instead of CSS classes (since there's no external stylesheet). Behavior is identical to before.

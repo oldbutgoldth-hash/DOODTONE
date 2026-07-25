@@ -40,6 +40,7 @@ const STATIC_SUITES = [
   // classifier hostile self-tests (replaces the brittle absolute-RGB
   // comparison the old combined geometry suite used).
   'qa/epic-2e-j-marker-color-classifier-static-test.mjs',
+  'qa/epic-2e-j-local-display-static-test.mjs',
   'qa/epic-2e-j-c-f2-preview-gate-smoke-test.mjs',
   'qa/epic-2e-j-env-b2-f1-static-test.mjs',
   'qa/epic-2e-j-phase-c-step7b-b-f1-static-test.mjs',

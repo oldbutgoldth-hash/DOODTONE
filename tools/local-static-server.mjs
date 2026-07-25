@@ -2,33 +2,22 @@
 /**
  * tools/local-static-server.mjs
  *
- * LOCAL-FIRST GEOMETRY R3 -- Phase E1: a dependency-light local static
- * file server for everyday development on a Windows PC, no build step,
- * no external package beyond Node's own built-in http/fs/path modules.
+ * LOCAL-FIRST LAN-CAPABLE DEV SERVER.
  *
- * Default: http://localhost:4173/?qa=1
+ * Defaults:
+ *   host: 127.0.0.1
+ *   port: 4173
  *
- * Requirements met:
- *   - correct MIME types for .js/.mjs/.json/images (and the handful of
- *     other extensions this project actually uses)
- *   - project-root containment: every resolved path is verified to
- *     stay inside PROJECT_ROOT after resolution -- a request for
- *     "/../../etc/passwd" (or any encoded/traversal variant) is
- *     rejected with 403, never served
- *   - no directory traversal
- *   - a clear console message printing the exact URL to open
- *   - Ctrl+C (SIGINT) cleanup: closes the server and exits cleanly
+ * Overrides:
+ *   CLI:  node tools/local-static-server.mjs [port] [host]
+ *   ENV:  PORT=3000 HOST=0.0.0.0 node tools/local-static-server.mjs
  *
- * This server exists ONLY for local human/manual verification in a
- * real desktop browser -- it is NOT used by any Playwright suite in
- * this project (those all use the Navigation-Free In-Memory Harness,
- * qa/helpers/playwright-lumixa-test-runtime.mjs, which never spawns a
- * real network server or navigates to localhost).
- *
- * Run: node tools/local-static-server.mjs [port]
+ * Use `npm run dev:lan` for the user's current LAN workflow:
+ *   http://<computer-ip>:3000/?qa=1
  */
 
 import http from 'node:http';
+import os from 'node:os';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DEFAULT_PORT = 4173;
+const DEFAULT_HOST = '127.0.0.1';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -56,30 +46,39 @@ const MIME_TYPES = {
   '.woff2': 'font/woff2',
 };
 
-/**
- * Resolves a request path against PROJECT_ROOT and verifies the result
- * is still contained within PROJECT_ROOT (fails closed on any
- * traversal attempt -- ../, encoded variants, absolute-path overrides,
- * null bytes, etc.). Returns null when containment cannot be proven.
- */
 export function resolveContainedPath(requestUrl, projectRoot = PROJECT_ROOT) {
   let decoded;
   try {
     decoded = decodeURIComponent(requestUrl.split('?')[0].split('#')[0]);
   } catch {
-    return null; // malformed percent-encoding -- reject, never guess
+    return null;
   }
-  if (decoded.includes('\0')) return null; // reject embedded NUL bytes outright
+  if (decoded.includes('\0')) return null;
   const urlPath = decoded === '/' ? '/index.html' : decoded;
   const resolved = path.resolve(projectRoot, `.${urlPath}`);
   const rootWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
-  if (resolved !== projectRoot && !resolved.startsWith(rootWithSep)) {
-    return null; // escaped project root -- reject
-  }
+  if (resolved !== projectRoot && !resolved.startsWith(rootWithSep)) return null;
   return resolved;
 }
 
-export function startLocalStaticServer({ port = DEFAULT_PORT, projectRoot = PROJECT_ROOT, quiet = false } = {}) {
+export function listLanIpv4Addresses(networkInterfaces = os.networkInterfaces()) {
+  const addresses = [];
+  for (const records of Object.values(networkInterfaces ?? {})) {
+    for (const record of records ?? []) {
+      if (record && record.family === 'IPv4' && record.internal !== true && typeof record.address === 'string') {
+        addresses.push(record.address);
+      }
+    }
+  }
+  return [...new Set(addresses)].sort();
+}
+
+export function startLocalStaticServer({
+  port = DEFAULT_PORT,
+  host = DEFAULT_HOST,
+  projectRoot = PROJECT_ROOT,
+  quiet = false,
+} = {}) {
   const server = http.createServer(async (req, res) => {
     const resolved = resolveContainedPath(req.url ?? '/', projectRoot);
     if (!resolved) {
@@ -92,36 +91,58 @@ export function startLocalStaticServer({ port = DEFAULT_PORT, projectRoot = PROJ
       if (!st.isFile()) throw new Error('not a regular file');
       const data = await readFile(resolved);
       const ext = path.extname(resolved).toLowerCase();
-      res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
-      res.end(data);
+      res.writeHead(200, {
+        'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+        'Cache-Control': 'no-store, max-age=0',
+      });
+      if (req.method === 'HEAD') res.end();
+      else res.end(data);
     } catch {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('404 Not Found');
     }
   });
 
-  return new Promise((resolve) => {
-    server.listen(port, () => {
-      const url = `http://localhost:${port}/?qa=1`;
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, () => {
+      server.removeListener('error', reject);
+      const localHost = host === '0.0.0.0' || host === '::' ? 'localhost' : host;
+      const localUrl = `http://${localHost}:${port}/?qa=1`;
+      const lanUrls = (host === '0.0.0.0' || host === '::')
+        ? listLanIpv4Addresses().map((ip) => `http://${ip}:${port}/?qa=1`)
+        : [];
       if (!quiet) {
-        console.log(`LUMIXA local-first dev server running.`);
-        console.log(`Open: ${url}`);
+        console.log('LUMIXA local-first dev server running.');
+        console.log(`Local: ${localUrl}`);
+        for (const url of lanUrls) console.log(`LAN:   ${url}`);
         console.log('Press Ctrl+C to stop.');
       }
+      let closing = false;
       const cleanup = () => {
+        if (closing) return;
+        closing = true;
         if (!quiet) console.log('\nShutting down local-first dev server...');
         server.close(() => process.exit(0));
       };
-      process.on('SIGINT', cleanup);
-      process.on('SIGTERM', cleanup);
-      resolve({ server, url, port, cleanup });
+      process.once('SIGINT', cleanup);
+      process.once('SIGTERM', cleanup);
+      resolve({ server, localUrl, lanUrls, port, host, cleanup });
     });
   });
 }
 
-const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+const isMainModule = (() => {
+  try { return import.meta.url === new URL(`file://${path.resolve(process.argv[1])}`).href; } catch { return false; }
+})();
+
 if (isMainModule) {
-  const portArg = Number(process.argv[2]);
-  const port = Number.isFinite(portArg) && portArg > 0 ? portArg : DEFAULT_PORT;
-  startLocalStaticServer({ port });
+  const portArg = Number(process.argv[2] ?? process.env.PORT);
+  const port = Number.isFinite(portArg) && portArg > 0 && portArg <= 65535 ? portArg : DEFAULT_PORT;
+  const hostArg = process.argv[3] ?? process.env.HOST ?? DEFAULT_HOST;
+  const host = typeof hostArg === 'string' && hostArg.trim() ? hostArg.trim() : DEFAULT_HOST;
+  startLocalStaticServer({ port, host }).catch((err) => {
+    console.error(`Local server failed: ${err?.message ?? err}`);
+    process.exit(1);
+  });
 }

@@ -64,6 +64,11 @@ While actively working on a change:
    ```
    This runs `tools/local-static-server.mjs` — a dependency-light
    static file server (no build step) at **http://localhost:4173/?qa=1**.
+   For the current LAN workflow, run `npm run dev:lan`; it binds to
+   `0.0.0.0:3000` and prints the real computer-LAN URL, such as
+   **http://192.168.1.105:3000/?qa=1**. The server sends `Cache-Control:
+   no-store`, so refreshes show the current source instead of an older
+   browser-cached module.
    The `?qa=1` query flag enables the app's own bounded QA
    diagnostics hook (`window.__LUMIXA_QA__`), used by every automated
    suite and useful for manual poking in DevTools too. Press **Ctrl+C**
@@ -166,7 +171,8 @@ as a failure, never silently accepted.
    cannot cover)
 
 Run through this by hand at least once before a release, in a real
-desktop browser at `http://localhost:4173/?qa=1` (or your deployed
+desktop browser at `http://localhost:4173/?qa=1`, the LAN URL printed by
+   `npm run dev:lan`, or your deployed
 Preview URL), using a real photo (not a test fixture):
 
 - [ ] **First upload** — Analysis completes, Preview looks correct.

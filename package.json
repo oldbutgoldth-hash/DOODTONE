@@ -14,12 +14,14 @@
     "test:browser": "node qa/run-browser-suites.mjs",
     "test:browser:report": "node qa/run-browser-suites.mjs --report",
     "test:local-gate": "node tools/local-gate.mjs",
-    "test:deploy": "node qa/epic-2e-j-deploy-preview-geometry-test.mjs"
+    "test:deploy": "node qa/epic-2e-j-deploy-preview-geometry-test.mjs",
+    "dev:lan": "node tools/local-static-server.mjs 3000 0.0.0.0"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "playwright": "^1.61.1"
-  }
+  },
+  "type": "module"
 }
