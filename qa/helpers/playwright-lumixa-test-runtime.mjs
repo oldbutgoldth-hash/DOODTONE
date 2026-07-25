@@ -323,9 +323,9 @@ export async function computeSourceHash(absoluteFilePaths) {
   for (const p of absoluteFilePaths) {
     const contents = await readFile(p, 'utf8');
     hash.update(path.basename(p));
-    hash.update(' ');
+    hash.update('\x00');
     hash.update(contents);
-    hash.update(' ');
+    hash.update('\x00');
   }
   return hash.digest('hex');
 }

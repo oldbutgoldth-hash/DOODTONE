@@ -123,13 +123,33 @@ const GATE_SUITES = [
     acceptanceLabel: 'FAIL 0, NOT_TESTED 0, decision=PASS',
   },
   {
-    key: 'previewGeometryBrowser',
-    label: 'Preview Geometry local Browser suite',
-    resultFile: 'epic-2e-j-preview-geometry-browser-results.json',
-    sourceFile: 'epic-2e-j-preview-geometry-browser-test.mjs',
+    // LOCAL-FIRST GEOMETRY R3 — Phase C1: replaces the retired combined
+    // epic-2e-j-preview-geometry-browser-test.mjs, which incorrectly
+    // required synthetic marker fixtures to reach full-app safety
+    // eligibility. This gate covers decoder/render/geometry correctness
+    // ONLY (synthetic marker fixtures) — it never asserts, and must
+    // never be treated as proving, full Production safety approval,
+    // real canGeneratePreview, or Observation availability.
+    key: 'previewGeometryDecoderRender',
+    label: 'Preview Geometry decoder/render suite (Phase C1 — not production-safety-eligible)',
+    resultFile: 'epic-2e-j-preview-geometry-decoder-render-results.json',
+    sourceFile: 'epic-2e-j-preview-geometry-decoder-render-test.mjs',
     validDecisions: ['PASS', 'FAIL'],
     acceptance: (r) => r.summary?.fail === 0 && r.summary?.notTested === 0 && r.decision === 'PASS',
-    acceptanceLabel: 'FAIL 0, NOT_TESTED 0, decision=PASS — every geometry fixture PASS, V2 Unavailable count 0, Exact dimensions for all fixtures, Observation enabled for all fixtures',
+    acceptanceLabel: 'FAIL 0, NOT_TESTED 0, decision=PASS — canonical decode/EXIF/backing-dimensions/marker-orientation/Legacy-V2 parity all correct',
+  },
+  {
+    // LOCAL-FIRST GEOMETRY R3 — Phase C2: the other half of the split —
+    // real Analysis/Safety/Human-Review/V2-Plan/Interactive-Before-
+    // After/Observation, proven on photo-like fixtures that are
+    // designed to reach Preview Ready, never on synthetic markers.
+    key: 'previewGeometryFullAppEligible',
+    label: 'Preview Geometry full-app safety-eligible suite (Phase C2)',
+    resultFile: 'epic-2e-j-preview-geometry-full-app-eligible-results.json',
+    sourceFile: 'epic-2e-j-preview-geometry-full-app-eligible-test.mjs',
+    validDecisions: ['PASS', 'FAIL'],
+    acceptance: (r) => r.summary?.fail === 0 && r.summary?.notTested === 0 && r.decision === 'PASS',
+    acceptanceLabel: 'FAIL 0, NOT_TESTED 0, decision=PASS — every full-app fixture reaches canGeneratePreview=true, zero hard stops, Exact dimensions, Observation enabled, XMP unchanged',
   },
 ];
 
@@ -236,19 +256,37 @@ async function runFocusedCoreRegression() {
   }
 }
 
+/**
+ * LOCAL-FIRST GEOMETRY R3 -- Phase A3/G: this aggregator's own legacy
+ * inline sweep used `node --check`, exactly the check this whole round
+ * proved has a real blind spot for duplicate-lexical-declaration
+ * SyntaxErrors in files consumed as ES modules (see tools/esm-syntax-
+ * gate.mjs's header for the full empirical proof). Delegates to that
+ * same genuine ESM-parse-goal gate instead of re-running the
+ * discredited check inline. Also excludes qa/fixtures/ -- confirmed
+ * during this round to otherwise wrongly sweep up
+ * qa/fixtures/esm-syntax-gate/duplicate-const-same-scope.mjs, a
+ * DELIBERATELY broken fixture used only by that gate's own regression
+ * test, never real project source.
+ */
 async function runFreshSyntaxCheck() {
   try {
-    const out = execFileSync('bash', ['-lc', `
-      FAIL=0; COUNT=0
-      for f in $(find core ui qa -type f \\( -name "*.js" -o -name "*.mjs" \\) | sort); do
-        COUNT=$((COUNT+1))
-        node --check "$f" >/dev/null 2>&1 || FAIL=$((FAIL+1))
-      done
-      echo "$COUNT $FAIL"
-    `], { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 120000 });
-    const [total, fail] = out.trim().split(/\s+/).map(Number);
-    return { ran: true, total, fail };
+    const out = execFileSync('node', ['tools/esm-syntax-gate.mjs'], { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 120000 });
+    const m = out.match(/(\d+)\/(\d+) files parsed cleanly/);
+    if (!m) return { ran: true, total: null, fail: null, raw: out.slice(-400) };
+    const passCount = Number(m[1]);
+    const total = Number(m[2]);
+    return { ran: true, total, fail: total - passCount };
   } catch (err) {
+    // esm-syntax-gate.mjs exits non-zero on any parse failure -- that
+    // is itself the "fail > 0" signal, still captured via stdout.
+    const out = String(err.stdout ?? '');
+    const m = out.match(/(\d+)\/(\d+) files parsed cleanly/);
+    if (m) {
+      const passCount = Number(m[1]);
+      const total = Number(m[2]);
+      return { ran: true, total, fail: total - passCount };
+    }
     return { ran: false, error: err.message };
   }
 }

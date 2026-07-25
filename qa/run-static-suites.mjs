@@ -30,6 +30,16 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 // directory glob so this list can never silently pick up a future
 // Browser suite by accident.
 const STATIC_SUITES = [
+  // LOCAL-FIRST GEOMETRY R3 — Phase A2/A3: runs first, deliberately.
+  // This is the regression guard for the fatal duplicate-lexical-
+  // declaration defect class that every prior round's `node --check`
+  // sweep failed to catch. If this ever regresses, nothing else in the
+  // suite matters until it is fixed again.
+  'qa/epic-2e-j-esm-syntax-gate-static-test.mjs',
+  // LOCAL-FIRST GEOMETRY R3 — Phase D: dominance-based marker color
+  // classifier hostile self-tests (replaces the brittle absolute-RGB
+  // comparison the old combined geometry suite used).
+  'qa/epic-2e-j-marker-color-classifier-static-test.mjs',
   'qa/epic-2e-j-c-f2-preview-gate-smoke-test.mjs',
   'qa/epic-2e-j-env-b2-f1-static-test.mjs',
   'qa/epic-2e-j-phase-c-step7b-b-f1-static-test.mjs',

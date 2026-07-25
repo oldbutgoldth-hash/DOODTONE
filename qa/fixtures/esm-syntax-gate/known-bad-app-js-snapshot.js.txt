@@ -1339,17 +1339,7 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
     const rawV2Status = safeGetVisualPreviewProperty(rawMetadata, 'v2Status');
     const legacyStatusText = safeGetVisualPreviewProperty(rawLegacyStatus, 'text');
     const v2StatusText = safeGetVisualPreviewProperty(rawV2Status, 'text');
-    // FATAL DEFECT FIX (LOCAL-FIRST GEOMETRY R3 — Phase A1): `rawAlignment`
-    // was previously re-declared here with `const`, a duplicate lexical
-    // declaration in the same function scope as the `rawAlignment` declared
-    // above (originally line 1314). This is a genuine ES-module SyntaxError
-    // ("Identifier 'rawAlignment' has already been declared") that prevents
-    // ui/app.js from evaluating at all under a real ESM parse goal — proven
-    // via `node --input-type=module -e "import('./ui/app.js')..."`, which
-    // `node --check` (used by every prior syntax sweep) fails to catch. The
-    // single declaration above already holds the exact same value (same
-    // ibaState, same 'alignment' property, no reassignment in between), so
-    // it is reused here rather than redeclared.
+    const rawAlignment = safeGetVisualPreviewProperty(ibaState, 'alignment');
     const alignSameRatio = safeGetVisualPreviewProperty(rawAlignment, 'sameAspectRatio');
     const alignNormalized = safeGetVisualPreviewProperty(rawAlignment, 'displayDimensionsNormalized');
     const alignExactMatch = safeGetVisualPreviewProperty(rawAlignment, 'exactSourcePixelMatch');

@@ -19,6 +19,17 @@
  *
  * This script deliberately does NOT attempt physical-device or
  * screen-reader testing — those remain NOT_TESTED, never fabricated.
+ *
+ * LOCAL-FIRST GEOMETRY R3 — Phase B1 note: this is legacy EPIC-2E-I
+ * tooling, predating the shared Navigation-Free In-Memory Harness
+ * adopted by every other Browser suite in this project (it still spawns
+ * its own node:http server and navigates to a real localhost URL). It
+ * is NOT referenced by qa/run-browser-suites.mjs, qa/run-static-suites.mjs,
+ * or the Final Phase C aggregator — confirmed orphaned by a full-repo
+ * grep before this fix. It is being kept (not deleted) and given the
+ * same real-executable detection every other suite already has, rather
+ * than silently left both dead AND broken; a future round should decide
+ * whether to retire it outright or migrate it onto the shared harness.
  */
 
 import http from 'node:http';
@@ -26,6 +37,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { detectBrowserExecutable } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -60,8 +72,18 @@ function record(test, result, evidence) {
 }
 
 async function main() {
+  const browserDetect = await detectBrowserExecutable(chromium);
+  if (!browserDetect.found) {
+    console.log(`No usable Browser executable found among ${browserDetect.attempts.length} candidates (never downloaded one): ${JSON.stringify(browserDetect.attempts)}`);
+    console.log('Final decision: BROWSER_BINARY_UNAVAILABLE');
+    await writeFile(
+      path.join(__dirname, 'epic-2e-i-phase-c-results.json'),
+      JSON.stringify({ suite: 'EPIC-2E-I-C-F smoke test (legacy, orphaned)', status: 'BROWSER_BINARY_UNAVAILABLE', generatedAt: new Date().toISOString() }, null, 2)
+    );
+    return;
+  }
   const server = await startServer();
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ executablePath: browserDetect.found });
 
   try {
     // ── Harness page: real Interactive Before/After skeleton + controller,

@@ -1,13 +1,13 @@
 {
-  "suite": "EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test",
-  "runId": "b55f26fd-c871-461c-a1d8-b7df25a58c14",
-  "startedAt": "2026-07-25T13:49:54.259Z",
-  "completedAt": "2026-07-25T13:49:54.259Z",
+  "suite": "LOCAL-FIRST GEOMETRY R3 -- Phase C1: Decoder/Render Geometry suite (decoder-only, NOT production-safety-eligible)",
+  "runId": "6ee0bd98-bd64-48a1-a54d-0b2bf263f619",
+  "startedAt": "2026-07-25T13:49:55.736Z",
+  "completedAt": "2026-07-25T13:49:55.736Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-25T13:49:54.259Z",
+  "generatedAt": "2026-07-25T13:49:55.736Z",
   "summary": {
     "total": 1,
     "pass": 0,

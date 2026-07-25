@@ -1,0 +1,53 @@
+{
+  "sourceFixture": "qa/fixtures/epic-2e-j/neutral-balanced.png",
+  "fixtures": [
+    {
+      "filename": "ready-landscape-orientation-1.jpg",
+      "encodedPixelWidth": 800,
+      "encodedPixelHeight": 600,
+      "exifOrientation": 1,
+      "expectedDecodedWidth": 800,
+      "expectedDecodedHeight": 600
+    },
+    {
+      "filename": "ready-portrait-orientation-1.jpg",
+      "encodedPixelWidth": 600,
+      "encodedPixelHeight": 800,
+      "exifOrientation": 1,
+      "expectedDecodedWidth": 600,
+      "expectedDecodedHeight": 800
+    },
+    {
+      "filename": "ready-landscape-orientation-3.jpg",
+      "encodedPixelWidth": 800,
+      "encodedPixelHeight": 600,
+      "exifOrientation": 3,
+      "expectedDecodedWidth": 800,
+      "expectedDecodedHeight": 600
+    },
+    {
+      "filename": "ready-landscape-matrix-orientation-6.jpg",
+      "encodedPixelWidth": 600,
+      "encodedPixelHeight": 800,
+      "exifOrientation": 6,
+      "expectedDecodedWidth": 800,
+      "expectedDecodedHeight": 600
+    },
+    {
+      "filename": "ready-portrait-matrix-orientation-8.jpg",
+      "encodedPixelWidth": 800,
+      "encodedPixelHeight": 600,
+      "exifOrientation": 8,
+      "expectedDecodedWidth": 600,
+      "expectedDecodedHeight": 800
+    },
+    {
+      "filename": "ready-landscape-no-exif.png",
+      "encodedPixelWidth": 800,
+      "encodedPixelHeight": 600,
+      "exifOrientation": null,
+      "expectedDecodedWidth": 800,
+      "expectedDecodedHeight": 600
+    }
+  ]
+}

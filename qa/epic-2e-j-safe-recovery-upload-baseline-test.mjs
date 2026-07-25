@@ -130,7 +130,14 @@ async function main() {
     return;
   }
 
-  const browser = await chromium.launch({ headless: true, args: REQUIRED_LAUNCH_ARGS });
+  // LOCAL-FIRST GEOMETRY R3 — Phase B1 FIX: `browserDetect.found` was
+  // computed above but never passed to chromium.launch(), so Playwright
+  // fell back to its own default executable resolution — which fails
+  // (or launches a DIFFERENT binary than the one just detected/proven
+  // to exist) on any machine that has a real system Chromium but no
+  // Playwright-bundled browser download. Every other Browser suite in
+  // this project already passes executablePath; this suite did not.
+  const browser = await chromium.launch({ headless: true, executablePath: browserDetect.found, args: REQUIRED_LAUNCH_ARGS });
   try {
     const prebuiltApp = await buildLumixaAppSnapshot(PROJECT_ROOT);
     const pageErrors = [];

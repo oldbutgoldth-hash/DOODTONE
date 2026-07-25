@@ -80,12 +80,25 @@ export const SUITE_SOURCE_FILES = {
     'qa/helpers/exif-orientation-reader.mjs',
     'qa/fixtures/preview-geometry/manifest.json',
   ],
-  previewGeometryBrowser: [
-    'qa/epic-2e-j-preview-geometry-browser-test.mjs',
+  // LOCAL-FIRST GEOMETRY R3 — Phase C1/C2: replaces the single
+  // previewGeometryBrowser entry (retired combined suite) with two
+  // honest entries matching the split suites' own SOURCE_HASH_INPUTS.
+  previewGeometryDecoderRender: [
+    'qa/epic-2e-j-preview-geometry-decoder-render-test.mjs',
     'qa/helpers/playwright-lumixa-test-runtime.mjs',
     'qa/helpers/playwright-in-memory-app.mjs',
     'qa/helpers/exif-orientation-reader.mjs',
+    'qa/helpers/marker-color-classifier.mjs',
+    'ui/preview-source-geometry-normalizer-v2.js',
     'qa/fixtures/preview-geometry/manifest.json',
+  ],
+  previewGeometryFullAppEligible: [
+    'qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs',
+    'qa/helpers/playwright-lumixa-test-runtime.mjs',
+    'qa/helpers/playwright-in-memory-app.mjs',
+    'qa/helpers/exif-orientation-reader.mjs',
+    'ui/app.js',
+    'qa/fixtures/epic-2e-j/ready/manifest.json',
   ],
   deployPreviewGeometry: [
     'qa/epic-2e-j-deploy-preview-geometry-test.mjs',

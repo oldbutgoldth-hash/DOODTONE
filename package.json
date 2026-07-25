@@ -8,8 +8,13 @@
   },
   "scripts": {
     "test": "npm run test:static",
+    "dev": "node tools/local-static-server.mjs",
+    "test:syntax": "node tools/esm-syntax-gate.mjs",
     "test:static": "node qa/run-static-suites.mjs",
-    "test:browser": "node qa/run-browser-suites.mjs"
+    "test:browser": "node qa/run-browser-suites.mjs",
+    "test:browser:report": "node qa/run-browser-suites.mjs --report",
+    "test:local-gate": "node tools/local-gate.mjs",
+    "test:deploy": "node qa/epic-2e-j-deploy-preview-geometry-test.mjs"
   },
   "keywords": [],
   "author": "",

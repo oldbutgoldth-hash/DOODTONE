@@ -1,0 +1,173 @@
+{
+  "suite": "LOCAL-FIRST GEOMETRY R3 -- Focused Core smoke test (no-Browser, plain Node import)",
+  "runId": "d5279ff4-c413-4f09-b771-8dac21291493",
+  "startedAt": "2026-07-25T13:49:48.309Z",
+  "completedAt": "2026-07-25T13:49:48.802Z",
+  "completed": true,
+  "sourceHash": "470f2709516a218711e3ebd7f5fd8c03f09d6a5d3a7d426f08e2c37f28eb9274",
+  "generatedAt": "2026-07-25T13:49:48.802Z",
+  "summary": {
+    "total": 31,
+    "pass": 31,
+    "fail": 0,
+    "notTested": 0
+  },
+  "results": [
+    {
+      "test": "Discovered 30 core engine entry points",
+      "result": "PASS",
+      "evidence": "engines=[\"basic-panel-engine\",\"calibration-engine\",\"calibration-registry\",\"color-cast-detector\",\"color-engine\",\"color-harmony-engine\",\"colorgrading-ai-engine\",\"colorgrading-engine\",\"curve-engine\",\"decision-engine\",\"decision-report-engine\",\"feature-fusion-engine\",\"histogram-engine\",\"hsl-analyzer-engine\",\"hsl-engine\",\"image-analysis-core\",\"kmeans-engine\",\"lightroom-mapping-engine\",\"preset-engine\",\"processing-log\",\"reference-transfer-engine\",\"scene-classifier\",\"skin-classifier\",\"skintone-engine\",\"style-benchmark-engine\",\"style-fingerprint\",\"style-recognition-engine\",\"tone-curve-ai-engine\",\"whitebalance-engine\",\"xmp-validator\"]"
+    },
+    {
+      "test": "core/basic-panel-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"generateBasicPanel\"]"
+    },
+    {
+      "test": "core/calibration-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"analyzeCalibration\"]"
+    },
+    {
+      "test": "core/calibration-registry/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"getCalibration\",\"getCalibrationValue\",\"listAllCalibrations\",\"listCalibrationByCategory\",\"listCalibrationCategories\",\"validateCalibrationRegistry\"]"
+    },
+    {
+      "test": "core/color-cast-detector/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"detectColorCast\"]"
+    },
+    {
+      "test": "core/color-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"clamp\",\"hslToRgb\",\"lerp\",\"luminance\",\"mapRange\",\"rgbToHsl\"]"
+    },
+    {
+      "test": "core/color-harmony-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"analogous\",\"complementary\",\"generateHarmonies\",\"splitComplementary\",\"tetradic\",\"triadic\"]"
+    },
+    {
+      "test": "core/colorgrading-ai-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"LOOK_NAMES\",\"analyzeColorGrading\",\"getLook\"]"
+    },
+    {
+      "test": "core/colorgrading-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"defaultCalibration\",\"defaultColorGrade\",\"flattenCalibration\",\"flattenColorGrade\",\"inferCalibration\",\"inferColorGrade\"]"
+    },
+    {
+      "test": "core/curve-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"LINEAR_CURVE\",\"buildLUT\",\"defaultCurve\",\"defaultCurveSet\",\"evaluateCurve\",\"insertPoint\",\"movePoint\",\"parseCurvePoints\",\"removeNearestPoint\",\"scenePreset\",\"serializeCurvePoints\"]"
+    },
+    {
+      "test": "core/decision-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"_applyAuthoritativePreviewFailureStateV2\",\"_projectHumanReviewStateV2\",\"_safeNormalizeErrorText\",\"buildFinalPreset\"]"
+    },
+    {
+      "test": "core/decision-report-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"buildDecisionReport\"]"
+    },
+    {
+      "test": "core/feature-fusion-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"CONFLICT_THRESHOLDS\",\"ENGINE_PRIORITY\",\"buildStyleFeatureGraph\",\"normalizeFeature\"]"
+    },
+    {
+      "test": "core/histogram-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"analyzeImage\"]"
+    },
+    {
+      "test": "core/hsl-analyzer-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"analyzeHSL\"]"
+    },
+    {
+      "test": "core/hsl-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"HSL_CHANNELS\",\"HSL_LABELS\",\"defaultHSLMix\",\"flattenHSL\",\"inferHSLMix\"]"
+    },
+    {
+      "test": "core/image-analysis-core/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"analyzeImageCore\"]"
+    },
+    {
+      "test": "core/kmeans-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"extractPalette\"]"
+    },
+    {
+      "test": "core/lightroom-mapping-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"mapStyleFingerprintToLightroom\"]"
+    },
+    {
+      "test": "core/preset-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"buildPreset\",\"downloadXMP\",\"serializeXMP\"]"
+    },
+    {
+      "test": "core/processing-log/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"processingLog\"]"
+    },
+    {
+      "test": "core/reference-transfer-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"buildReferenceTransferReport\"]"
+    },
+    {
+      "test": "core/scene-classifier/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"classifyScene\"]"
+    },
+    {
+      "test": "core/skin-classifier/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"classifySkin\"]"
+    },
+    {
+      "test": "core/skintone-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"analyzeSkinTone\"]"
+    },
+    {
+      "test": "core/style-benchmark-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"benchmarkStylePreservation\"]"
+    },
+    {
+      "test": "core/style-fingerprint/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"buildStyleFingerprint\"]"
+    },
+    {
+      "test": "core/style-recognition-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"recognizeStyle\"]"
+    },
+    {
+      "test": "core/tone-curve-ai-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"generateToneCurves\"]"
+    },
+    {
+      "test": "core/whitebalance-engine/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"analyzeWhiteBalance\",\"inferWhiteBalance\",\"kelvinToSlider\",\"sliderToKelvin\"]"
+    },
+    {
+      "test": "core/xmp-validator/index.js imports cleanly with real exports",
+      "result": "PASS",
+      "evidence": "exports=[\"HARD_LIMITS\",\"quickSafetyClamp\",\"validateFinalPreset\"]"
+    }
+  ],
+  "decision": "PASS"
+}

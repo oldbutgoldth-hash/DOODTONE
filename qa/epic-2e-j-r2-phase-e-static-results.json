@@ -1,6 +1,6 @@
 {
   "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
-  "generatedAt": "2026-07-23T02:55:54.951Z",
+  "generatedAt": "2026-07-25T13:49:51.124Z",
   "summary": {
     "total": 92,
     "pass": 92,
@@ -11,12 +11,12 @@
     {
       "test": "generateRunId() returns a non-empty string",
       "result": "PASS",
-      "evidence": "idA=a059211e-cf3c-4041-8d9f-85f79750d9f7"
+      "evidence": "idA=14b8ac4f-cedb-42df-9e7c-dd173117809e"
     },
     {
       "test": "generateRunId() returns a fresh value on each call (never reused)",
       "result": "PASS",
-      "evidence": "idA=a059211e-cf3c-4041-8d9f-85f79750d9f7, idB=d566171b-017b-437c-9dbd-b4b531e6d441"
+      "evidence": "idA=14b8ac4f-cedb-42df-9e7c-dd173117809e, idB=63a8535e-e80e-4c6e-b917-57bfb9c4380f"
     },
     {
       "test": "computeSourceHash() is deterministic for identical inputs",
@@ -131,7 +131,7 @@
     {
       "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
       "result": "PASS",
-      "evidence": "oldRunId=b777d6bf-8635-4f43-bbdd-adea9289189c, newRunId=3c95bce6-52c4-40d1-bbc4-2fe42c0b93d0"
+      "evidence": "oldRunId=301a3b28-795a-4aa6-b53d-aa727af28367, newRunId=7b2e7e5e-6d09-4dd2-933a-aead838b6fb7"
     },
     {
       "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",
@@ -456,7 +456,7 @@
     {
       "test": "R3-12: qa/baselines/lufa42-production-lock-manifest.json is present and parses as JSON (checked-in, portable — never a machine-specific sibling directory)",
       "result": "PASS",
-      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r2/work/qa/baselines/lufa42-production-lock-manifest.json"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r3/qa/baselines/lufa42-production-lock-manifest.json"
     },
     {
       "test": "R3-12: Production-lock manifest declares a non-empty locked-file set",

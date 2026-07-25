@@ -179,16 +179,24 @@ async function main() {
     recordCondition(`Decision self-test: ${c.name}`, decision === c.expected, `expected=${c.expected}, got=${decision}`);
   }
 
-  // ── node --check on the two Phase F suite files themselves (syntax) ──
-  const { execFile } = await import('node:child_process');
-  const { promisify } = await import('node:util');
-  const execFileAsync = promisify(execFile);
-  const browserSuitePath = path.join(__dirname, 'epic-2e-j-preview-geometry-browser-test.mjs');
-  try {
-    await execFileAsync(process.execPath, ['--check', browserSuitePath]);
-    recordCondition('epic-2e-j-preview-geometry-browser-test.mjs passes node --check', true, browserSuitePath);
-  } catch (e) {
-    recordCondition('epic-2e-j-preview-geometry-browser-test.mjs passes node --check', false, e.stderr?.toString() ?? e.message);
+  // ── LOCAL-FIRST GEOMETRY R3 — Phase A3/C1/C2: a real ESM parse-goal
+  //    check (never the discredited `node --check`, which this exact
+  //    round proved blind to a genuine duplicate-lexical-declaration
+  //    SyntaxError elsewhere in this project — see tools/esm-syntax-
+  //    gate.mjs) on the two split geometry suite files that replaced
+  //    the retired combined epic-2e-j-preview-geometry-browser-test.mjs. ──
+  const { ensureVmModulesFlag } = await import('./helpers/ensure-vm-modules-flag.mjs');
+  ensureVmModulesFlag();
+  const { parseAsEsModule } = await import('../tools/esm-syntax-gate.mjs');
+  for (const splitSuiteFile of ['epic-2e-j-preview-geometry-decoder-render-test.mjs', 'epic-2e-j-preview-geometry-full-app-eligible-test.mjs']) {
+    const splitSuitePath = path.join(__dirname, splitSuiteFile);
+    try {
+      const src = await readFile(splitSuitePath, 'utf8');
+      const parsed = parseAsEsModule(src, splitSuiteFile);
+      recordCondition(`${splitSuiteFile} passes a real ESM parse-goal check`, parsed.ok === true, parsed.ok ? splitSuitePath : `${parsed.errorName}: ${parsed.errorMessage}`);
+    } catch (e) {
+      recordCondition(`${splitSuiteFile} passes a real ESM parse-goal check`, false, e.message);
+    }
   }
 
   sourceHash = await computeSourceHash(SOURCE_HASH_INPUTS);

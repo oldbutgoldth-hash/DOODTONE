@@ -1,14 +1,14 @@
 {
   "suite": "DEPLOY GEOMETRY R1 — Preview Geometry Static test",
-  "runId": "3d15919f-c6ef-45d5-bfc3-37643113d59a",
-  "startedAt": "2026-07-23T02:55:56.676Z",
-  "completedAt": "2026-07-23T02:55:56.785Z",
+  "runId": "3e213929-f3fe-4271-a8c0-66329f695cf9",
+  "startedAt": "2026-07-25T13:49:52.210Z",
+  "completedAt": "2026-07-25T13:49:52.256Z",
   "completed": true,
-  "sourceHash": "b7a3f5b7a4baea1b058ff13a7e092083d679874ad59488a928d4f24ac9ff9fdc",
-  "generatedAt": "2026-07-23T02:55:56.785Z",
+  "sourceHash": "53c62baa1e93df98e9dcacef7321f4eae73a211080f75fb39ba42f83ac778bb6",
+  "generatedAt": "2026-07-25T13:49:52.256Z",
   "summary": {
-    "total": 35,
-    "pass": 35,
+    "total": 36,
+    "pass": 36,
     "fail": 0,
     "notTested": 0
   },
@@ -16,7 +16,7 @@
     {
       "test": "manifest.json is present and parses as JSON",
       "result": "PASS",
-      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r2/work/qa/fixtures/preview-geometry/manifest.json"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r3/qa/fixtures/preview-geometry/manifest.json"
     },
     {
       "test": "manifest declares exactly the 6 required fixtures",
@@ -184,9 +184,14 @@
       "evidence": "expected=FAIL, got=FAIL"
     },
     {
-      "test": "epic-2e-j-preview-geometry-browser-test.mjs passes node --check",
+      "test": "epic-2e-j-preview-geometry-decoder-render-test.mjs passes a real ESM parse-goal check",
       "result": "PASS",
-      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r2/work/qa/epic-2e-j-preview-geometry-browser-test.mjs"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r3/qa/epic-2e-j-preview-geometry-decoder-render-test.mjs"
+    },
+    {
+      "test": "epic-2e-j-preview-geometry-full-app-eligible-test.mjs passes a real ESM parse-goal check",
+      "result": "PASS",
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r3/qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs"
     }
   ],
   "decision": "PASS",

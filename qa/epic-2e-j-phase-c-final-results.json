@@ -1,11 +1,11 @@
 {
   "suite": "EPIC 2E-J Phase C — Final Machine-Readable Result (COMBINED CLOSEOUT R3)",
-  "runId": "df5417f4-3852-4224-9605-75d953d081d6",
-  "generatedAt": "2026-07-23T02:56:12.361Z",
+  "runId": "78f1ce2f-897e-4703-9cfc-5b23cbc88159",
+  "generatedAt": "2026-07-25T13:50:56.821Z",
   "completed": true,
   "syntax": {
     "ran": true,
-    "total": 113,
+    "total": 122,
     "fail": 0
   },
   "focusedCoreRegression": {
@@ -26,8 +26,8 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "eb501760-107a-470c-8b2a-568bc239dfda",
-      "generatedAt": "2026-07-23T02:56:03.033Z",
+      "runId": "a9bb5b04-afee-4537-a2d4-e424f2985cb1",
+      "generatedAt": "2026-07-25T13:49:53.250Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS_UPLOAD_BASELINE/FAIL_UPLOAD_BASELINE) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -44,8 +44,8 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "1ae50d9f-09b4-4fab-87fb-7ed5c7b4e676",
-      "generatedAt": "2026-07-23T02:56:03.612Z",
+      "runId": "a56ef8e6-de83-42e2-a350-5fc8fa7c7150",
+      "generatedAt": "2026-07-25T13:49:53.668Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -62,8 +62,8 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "6104aab2-62e9-480e-a1df-1d3fcdaa3caa",
-      "generatedAt": "2026-07-23T02:56:04.166Z",
+      "runId": "b55f26fd-c871-461c-a1d8-b7df25a58c14",
+      "generatedAt": "2026-07-25T13:49:54.259Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -80,8 +80,8 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "57faa60a-7022-4ead-aae4-0f80b3d06d89",
-      "generatedAt": "2026-07-23T02:56:04.740Z",
+      "runId": "a05c0c88-4e69-4618-8563-ed029c129c36",
+      "generatedAt": "2026-07-25T13:49:54.694Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -98,8 +98,8 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "40eb999a-a672-4452-9672-476506af0f65",
-      "generatedAt": "2026-07-23T02:56:05.291Z",
+      "runId": "d2894771-b466-485a-bea1-91c876c29604",
+      "generatedAt": "2026-07-25T13:49:55.236Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (CONDITIONAL_PASS/PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -111,19 +111,19 @@
       "label": "Preview Geometry Static",
       "decision": "PASS",
       "summary": {
-        "total": 35,
-        "pass": 35,
+        "total": 36,
+        "pass": 36,
         "fail": 0,
         "notTested": 0
       },
-      "runId": "3d15919f-c6ef-45d5-bfc3-37643113d59a",
-      "generatedAt": "2026-07-23T02:55:56.785Z",
+      "runId": "3e213929-f3fe-4271-a8c0-66329f695cf9",
+      "generatedAt": "2026-07-25T13:49:52.256Z",
       "ok": true,
       "reasons": []
     },
     {
-      "key": "previewGeometryBrowser",
-      "label": "Preview Geometry local Browser suite",
+      "key": "previewGeometryDecoderRender",
+      "label": "Preview Geometry decoder/render suite (Phase C1 — not production-safety-eligible)",
       "decision": "BROWSER_BINARY_UNAVAILABLE",
       "summary": {
         "total": 1,
@@ -131,8 +131,26 @@
         "fail": 0,
         "notTested": 1
       },
-      "runId": "662df0e8-ca3c-4b76-8c68-0db0ff6f1ad4",
-      "generatedAt": "2026-07-23T02:56:05.923Z",
+      "runId": "6ee0bd98-bd64-48a1-a54d-0b2bf263f619",
+      "generatedAt": "2026-07-25T13:49:55.736Z",
+      "ok": false,
+      "reasons": [
+        "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
+        "result is missing a sourceHash — cannot prove freshness"
+      ]
+    },
+    {
+      "key": "previewGeometryFullAppEligible",
+      "label": "Preview Geometry full-app safety-eligible suite (Phase C2)",
+      "decision": "BROWSER_BINARY_UNAVAILABLE",
+      "summary": {
+        "total": 1,
+        "pass": 0,
+        "fail": 0,
+        "notTested": 1
+      },
+      "runId": "92283bb8-94a7-4a15-96da-ca207cb09b24",
+      "generatedAt": "2026-07-25T13:49:56.276Z",
       "ok": false,
       "reasons": [
         "decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence",
@@ -146,8 +164,8 @@
     "decision": "DEPLOY_URL_REQUIRED",
     "deployUrl": null,
     "screenshotsGenerated": [],
-    "runId": "f6f64827-f31d-49a8-91a6-b616c5a92516",
-    "generatedAt": "2026-07-23T02:56:07.675Z",
+    "runId": "312874e1-aaa5-4910-b4ba-331a12ad032e",
+    "generatedAt": "2026-07-25T13:49:56.353Z",
     "ok": false,
     "reasons": [
       "decision is \"DEPLOY_URL_REQUIRED\", not PASS_DEPLOY_PREVIEW_GEOMETRY"
@@ -167,7 +185,8 @@
     "Observation Smoke: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
     "Step 7B-A: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
     "Step 7B-B: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (CONDITIONAL_PASS/PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
-    "Preview Geometry local Browser suite: decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
+    "Preview Geometry decoder/render suite (Phase C1 — not production-safety-eligible): decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
+    "Preview Geometry full-app safety-eligible suite (Phase C2): decision \"BROWSER_BINARY_UNAVAILABLE\" is not one of this suite's valid outcomes (PASS/FAIL) — likely a Browser/environment-unavailable stub, not real evidence; result is missing a sourceHash — cannot prove freshness",
     "Deploy Preview Geometry: decision is \"DEPLOY_URL_REQUIRED\", not PASS_DEPLOY_PREVIEW_GEOMETRY"
   ],
   "finalDecisionNarrative": "NOT a CONDITIONAL_PASS. One or more automated acceptance gates were not satisfied by current, fresh evidence in this run — see blockingReasons. This is reported honestly rather than reusing/copying forward any older Final PASS/CONDITIONAL_PASS result."
