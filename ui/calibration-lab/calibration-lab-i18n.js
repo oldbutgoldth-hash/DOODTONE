@@ -105,6 +105,22 @@ const en = {
     issueChecklist: 'Issue checklist for this image', categoryChecklist: 'Image category checklist',
     closeDialog: 'Close dialog (Escape)',
   },
+  // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON: labels for the live,
+  // genuinely-rendered before/after canvases (reusing the exact same
+  // production isolated pixel renderer used by the main app's own
+  // Visual Preview Comparison -- never a reimplementation). These are
+  // UI labels only; the underlying render `state` values themselves
+  // stay as stable codes and are never stored.
+  pixelPreview: {
+    legacyLabel: 'LEGACY', v2Label: 'CONTROLLED V2',
+    rendering: 'Rendering live preview...',
+    unavailableNotInSession: 'Live pixel preview is only available for images added during this session (the source photo is never stored) -- the Legacy vs Controlled V2 numbers on the right are still the real recorded comparison.',
+    stateRendered: 'Live preview rendered.',
+    stateBlocked: 'Preview blocked by a safety rule -- see the numbers on the right.',
+    stateUnavailable: 'Preview unavailable for this side.',
+    stateFailed: 'Preview failed to render -- see the numbers on the right.',
+    stateCancelled: 'Preview render was superseded.',
+  },
 };
 
 const th = {
@@ -191,6 +207,16 @@ const th = {
     issueChecklist: 'รายการปัญหาสำหรับภาพนี้', categoryChecklist: 'รายการหมวดภาพ',
     closeDialog: 'ปิดกล่องข้อความ (Escape)',
   },
+  pixelPreview: {
+    legacyLabel: 'LEGACY', v2Label: 'CONTROLLED V2',
+    rendering: 'กำลังเรนเดอร์ภาพตัวอย่างสด...',
+    unavailableNotInSession: 'ภาพตัวอย่างพิกเซลสดใช้ได้เฉพาะภาพที่เพิ่มในเซสชันนี้เท่านั้น (ระบบไม่เก็บไฟล์ภาพต้นฉบับ) -- ตัวเลข Legacy เทียบกับ Controlled V2 ทางขวายังคงเป็นข้อมูลเปรียบเทียบจริงที่บันทึกไว้',
+    stateRendered: 'เรนเดอร์ภาพตัวอย่างสดสำเร็จแล้ว',
+    stateBlocked: 'ภาพตัวอย่างถูกบล็อกโดยกฎความปลอดภัย -- ดูตัวเลขทางขวา',
+    stateUnavailable: 'ไม่มีภาพตัวอย่างสำหรับด้านนี้',
+    stateFailed: 'เรนเดอร์ภาพตัวอย่างไม่สำเร็จ -- ดูตัวเลขทางขวา',
+    stateCancelled: 'การเรนเดอร์ภาพตัวอย่างถูกแทนที่ด้วยรายการใหม่',
+  },
 };
 
 const DICTIONARIES = { en, th };
@@ -226,6 +252,18 @@ export function checkCalibrationLabDictionaryCoverage() {
       for (const lang of ['en', 'th']) {
         if (_lookup(DICTIONARIES[lang], `${group}.${code}`) === undefined) missing.push(`${lang}.${group}.${code}`);
       }
+    }
+  }
+  // EPIC 2E-K-R2 -- the pixelPreview namespace's keys are UI labels for
+  // render states, not stable codes from codes.js, so they are checked
+  // explicitly here rather than via the codes-driven loop above.
+  const pixelPreviewKeys = [
+    'legacyLabel', 'v2Label', 'rendering', 'unavailableNotInSession',
+    'stateRendered', 'stateBlocked', 'stateUnavailable', 'stateFailed', 'stateCancelled',
+  ];
+  for (const key of pixelPreviewKeys) {
+    for (const lang of ['en', 'th']) {
+      if (_lookup(DICTIONARIES[lang], `pixelPreview.${key}`) === undefined) missing.push(`${lang}.pixelPreview.${key}`);
     }
   }
   return { ok: missing.length === 0, missing };

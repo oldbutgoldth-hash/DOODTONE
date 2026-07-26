@@ -247,5 +247,19 @@ export async function runCalibrationComparisonPipeline(imgElement, { analysisGen
     legacySnapshot: extractLegacySnapshot(finalPreset, benchmark),
     controlledV2Snapshot: extractControlledV2Snapshot(finalPreset),
     safetySnapshot: extractSafetySnapshot(finalPreset, benchmark),
+    // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON: the full Visual Preview
+    // Render Plan (the exact object `ui/visual-preview-comparison-controller-v2.js`
+    // already consumes for the production preview) is returned here
+    // TRANSIENT-ONLY, alongside the bounded snapshots above. The
+    // controller (ui/calibration-lab/calibration-lab-controller.js)
+    // MUST NEVER write this field into a persisted session/image
+    // record -- core/calibration-lab/schema.js's createImageTestRecord()
+    // has no field for it and validateImageRecord() does not accept
+    // one, so there is no schema path by which it could reach
+    // IndexedDB or JSON/CSV export. It exists purely so the Calibration
+    // Lab's before/after view can call the SAME production isolated
+    // pixel renderer (never a reimplementation) for the image that was
+    // just analyzed in this runtime session. See docs/project/29_EPIC_2E_K_R2_REAL_PIXEL_COMPARISON.md.
+    renderPlanForPixelPreviewTransientOnly: finalPreset?._decision?.finalStyleIntent?.visualPreviewRenderPlanV2 ?? null,
   };
 }

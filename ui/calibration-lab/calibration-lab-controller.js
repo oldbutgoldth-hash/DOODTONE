@@ -16,6 +16,7 @@
 
 import { createCalibrationLabStorage } from './calibration-lab-storage.js';
 import { runCalibrationComparisonPipeline } from '../../core/calibration-lab/run-comparison-pipeline.js';
+import { createBoundedLruCache } from '../../core/calibration-lab/bounded-lru-cache.js';
 import {
   createCalibrationSession, createImageTestRecord, recomputeSessionCounts, MAX_NOTES_LENGTH,
 } from '../../core/calibration-lab/schema.js';
@@ -25,6 +26,19 @@ import { computeReadinessReport } from '../../core/calibration-lab/readiness.js'
 import { buildExportJson, buildExportCsv } from '../../core/calibration-lab/export-dataset.js';
 
 const APP_VERSION_FALLBACK = 'unknown';
+
+// EPIC 2E-K-R2 -- REAL PIXEL COMPARISON: how many recently-added
+// images keep their decoded <img> element + transient Render Plan in
+// memory (bounded, never persisted) so the before/after view can call
+// the SAME production isolated pixel renderer the main app's own
+// Visual Preview Comparison uses. Bounded exactly like every other
+// Calibration Lab limit (MAX_STORED_SESSIONS, MAX_IMAGES_PER_SESSION)
+// -- never unlimited. Images beyond this bound, or images belonging to
+// a session RESTORED from storage (a fresh page load never re-decodes
+// the original photo), honestly report PIXEL_PREVIEW_UNAVAILABLE_NOT_IN_SESSION
+// rather than pretending a live preview exists.
+export const MAX_LIVE_PIXEL_PREVIEW_CACHE_SIZE = 5;
+export const PIXEL_PREVIEW_UNAVAILABLE_NOT_IN_SESSION = 'PIXEL_PREVIEW_UNAVAILABLE_NOT_IN_SESSION';
 
 export function createCalibrationLabController({ locale = 'th', appVersion = APP_VERSION_FALLBACK } = {}) {
   let storage = null;
@@ -36,6 +50,40 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
   let currentIndex = -1;
   let lastActionError = null;
   let currentLocale = locale === 'en' ? 'en' : 'th';
+
+  // Keyed by imageId -> { imgElement, objectUrl, renderPlan, analysisGenerationId }.
+  // The bounded-LRU mechanics themselves (recency, capacity eviction)
+  // are fully delegated to the pure, Node-testable
+  // createBoundedLruCache() -- this controller only supplies the
+  // eviction side-effect (revoking `objectUrl`, when present). NEVER
+  // exposed via getState()/getQaSnapshot() -- read only through
+  // getPixelPreviewInput() below.
+  function _revokeCacheEntry(entry) {
+    if (entry?.objectUrl) { try { URL.revokeObjectURL(entry.objectUrl); } catch { /* ignore */ } }
+  }
+  const pixelPreviewCache = createBoundedLruCache(MAX_LIVE_PIXEL_PREVIEW_CACHE_SIZE, { onEvict: _revokeCacheEntry });
+
+  function _cachePixelPreviewInput(imageId, entry) {
+    pixelPreviewCache.set(imageId, entry);
+  }
+
+  /** Real pixel preview input for `imageId`, or an honest unavailable reason. Never throws. Marks the entry as most-recently-used on hit (LRU, via the pure cache's own get()). */
+  function getPixelPreviewInput(imageId) {
+    if (!imageId || !pixelPreviewCache.has(imageId)) {
+      return { available: false, reasonCode: PIXEL_PREVIEW_UNAVAILABLE_NOT_IN_SESSION };
+    }
+    const entry = pixelPreviewCache.get(imageId);
+    return {
+      available: true,
+      imgElement: entry.imgElement,
+      renderPlan: entry.renderPlan,
+      analysisGenerationId: entry.analysisGenerationId,
+    };
+  }
+
+  function _clearPixelPreviewCache() {
+    pixelPreviewCache.clear();
+  }
 
   const listeners = new Set();
   function _notify() { for (const fn of listeners) { try { fn(getState()); } catch { /* a listener failure must never break the controller */ } } }
@@ -65,6 +113,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
 
   async function startNewSession() {
     lastActionError = null;
+    _clearPixelPreviewCache(); // a new session starts with zero live images
     try {
       const newSession = createCalibrationSession({ locale: currentLocale, appVersion });
       await storage.saveSession(newSession);
@@ -86,6 +135,12 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
 
   async function openSession(sessionId) {
     lastActionError = null;
+    // Opening ANY session (even the one that was just active) never
+    // has live decoded images available -- a resumed session's records
+    // came back from storage, never from a freshly-decoded <img> in
+    // this runtime. Real pixel preview is honestly unavailable until
+    // the user re-adds an image in the current runtime.
+    _clearPixelPreviewCache();
     try {
       const all = await storage.listSessions();
       const found = all.find(s => s.sessionId === sessionId);
@@ -110,7 +165,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
    * image, supplied by the caller (the renderer's "add image" form).
    * The `imgElement`/original file are never retained past this call.
    */
-  async function addImage(imgElement, { imageCategories, lightingCondition }) {
+  async function addImage(imgElement, { imageCategories, lightingCondition, objectUrl = null } = {}) {
     lastActionError = null;
     if (!session || sessionState !== 'ACTIVE') { lastActionError = 'NO_ACTIVE_SESSION'; _notify(); return getState(); }
     if (!isValidCategoryList(imageCategories)) { lastActionError = 'INVALID_CATEGORY_LIST'; _notify(); return getState(); }
@@ -131,6 +186,17 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
       currentIndex = records.length - 1;
       session = recomputeSessionCounts(session, records);
       await storage.saveSession(session);
+      // EPIC 2E-K-R2 -- cache the decoded element + transient Render
+      // Plan for REAL pixel preview, keyed by the record's own imageId
+      // (never the persisted record itself -- schema.js has no field
+      // for either of these, so there is no path by which this cache
+      // could leak into storage or export). Ownership of `objectUrl`'s
+      // lifecycle moves here from the caller once this call succeeds.
+      _cachePixelPreviewInput(record.imageId, {
+        imgElement, objectUrl,
+        renderPlan: pipelineResult.renderPlanForPixelPreviewTransientOnly,
+        analysisGenerationId: pipelineResult.analysisGenerationId,
+      });
     } catch (e) {
       lastActionError = e?.code ?? 'ADD_IMAGE_FAILED';
     }
@@ -175,12 +241,14 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
   async function endSession() {
     sessionState = 'ENDED';
     calibrationMode = 'CLOSED';
+    _clearPixelPreviewCache(); // no further edits to this session; release live images now
     _notify();
     return getState();
   }
 
   async function clearAllData() {
     lastActionError = null;
+    _clearPixelPreviewCache();
     try {
       await storage.clearAll();
       session = null; records = []; currentIndex = -1; sessionState = 'NO_SESSION'; calibrationMode = 'CLOSED';
@@ -233,5 +301,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
     saveCurrentDecision, clearCurrentAnswer, endSession, clearAllData,
     getDashboard, getReadinessReport, exportJson, exportCsv,
     getStorageUsageSummary, getQaSnapshot,
+    // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON
+    getPixelPreviewInput, clearPixelPreviewCache: _clearPixelPreviewCache,
   };
 }

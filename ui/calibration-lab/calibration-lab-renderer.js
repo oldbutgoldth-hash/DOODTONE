@@ -11,16 +11,21 @@
  * `calibration-lab-entry.js`), so it automatically follows dark/light
  * mode without its own theme system.
  *
- * KNOWN LIMITATION (disclosed in docs/development, not hidden here):
- * the Side-by-Side / Before-After views show the SAME source image on
- * both sides with the Legacy vs Controlled V2 NUMERIC snapshot shown
- * alongside -- this Lab does not (yet) render a pixel-differentiated
- * Controlled V2 preview the way Production's own Visual Preview
- * Comparison does. Reusing that renderer would require duplicating
- * its restrained-adjustment pixel pipeline outside of a real analysis
- * run, which risks a subtly-wrong preview; showing the real bounded
- * numbers next to the same source photo is the honest choice given
- * that constraint.
+ * EPIC 2E-K-R2 -- REAL PIXEL COMPARISON: the Side-by-Side / Before-
+ * After view now renders GENUINELY DIFFERENT Legacy vs Controlled V2
+ * pixels for any image added during the current runtime session, by
+ * reusing (never reimplementing) the exact same production functions
+ * ui/app.js's own Visual Preview Comparison uses --
+ * createVisualPreviewComparisonControllerV2 (from
+ * ui/visual-preview-comparison-controller-v2.js) bound to two
+ * Calibration-Lab-owned canvases, never the main app's own canvases or
+ * controller instance. The decoded <img> + transient Render Plan live
+ * in ui/calibration-lab/calibration-lab-controller.js's bounded,
+ * never-persisted pixelPreviewCache (see getPixelPreviewInput()/
+ * MAX_LIVE_PIXEL_PREVIEW_CACHE_SIZE) -- a session restored from
+ * storage (a fresh page load) honestly has no live image to render,
+ * and falls back to a clear, translated unavailable message rather
+ * than pretending.
  *
  * Accessibility (R1 Section 15): the overlay is a `role="dialog"
  * aria-modal="true"` with a focus trap while open, closes on Escape
@@ -34,6 +39,13 @@ import {
   IMAGE_CATEGORIES, LIGHTING_CONDITIONS, USER_DECISIONS, ISSUE_CODES,
 } from '../../core/calibration-lab/codes.js';
 import { computeImageFingerprint } from '../../core/calibration-lab/run-comparison-pipeline.js';
+// EPIC 2E-K-R2 -- REAL PIXEL COMPARISON: reuse the exact same
+// production Visual Preview Comparison controller the main app uses
+// (never a reimplementation of pixel rendering logic). A FRESH
+// instance is created for each render, bound to the Calibration Lab's
+// OWN two canvases -- it never touches ui/app.js's own controller
+// instance or canvases.
+import { createVisualPreviewComparisonControllerV2 } from '../visual-preview-comparison-controller-v2.js';
 
 const STYLE_ID = 'calibrationLabStyles';
 
@@ -81,6 +93,7 @@ function _injectStylesOnce() {
 .cal-check-label input { width:20px; height:20px; }
 .cal-slider-wrap { position:relative; width:100%; max-width:520px; aspect-ratio:4/3; background:var(--surface-2); border:1px solid var(--border); border-radius:6px; overflow:hidden; touch-action:none; }
 .cal-slider-wrap img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+.cal-slider-wrap canvas.cal-compare-canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
 .cal-slider-handle {
   position:absolute; top:0; bottom:0; width:3px; background:var(--accent); left:50%;
   transform:translateX(-1.5px); cursor:ew-resize;
@@ -105,16 +118,17 @@ const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disab
 export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
   _injectStylesOnce();
   let lastFocusedBeforeOpen = null;
-  let currentImgObjectUrl = null;
-  let currentImgElement = null;
-  // Which saved record (by imageId) `currentImgElement` currently
-  // belongs to -- a transient, in-memory-only association used solely
-  // to decide whether a live pixel preview can be shown for the record
-  // the user is looking at right now. Never persisted, never part of
-  // any exported dataset, and always revoked before it could belong to
-  // a second, different record.
-  let currentImgRecordId = null;
   let sliderPct = 50;
+  // EPIC 2E-K-R2 -- the live pixel-compare controller instance bound
+  // to the CURRENT comparison view's two canvases. Canvases are
+  // recreated fresh every render() call (render() does
+  // root.innerHTML = ''), so this instance must be disposed and
+  // recreated alongside them -- never reused across a DOM rebuild,
+  // and never shared with ui/app.js's own instance/canvases.
+  let pixelCompareCtrl = null;
+  function _disposePixelCompareCtrl() {
+    if (pixelCompareCtrl) { try { pixelCompareCtrl.dispose(); } catch { /* ignore */ } pixelCompareCtrl = null; }
+  }
 
   function lang() { return (getLocale ? getLocale() : controller.getState().locale) || 'th'; }
   function T(path) { return calibrationLabT(path, lang()); }
@@ -144,14 +158,8 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
   function close() {
     root.classList.remove('cal-open');
     document.removeEventListener('keydown', _trapFocus, true);
-    _revokeCurrentImage();
+    _disposePixelCompareCtrl();
     if (lastFocusedBeforeOpen && typeof lastFocusedBeforeOpen.focus === 'function') lastFocusedBeforeOpen.focus();
-  }
-
-  function _revokeCurrentImage() {
-    if (currentImgObjectUrl) { try { URL.revokeObjectURL(currentImgObjectUrl); } catch { /* ignore */ } currentImgObjectUrl = null; }
-    currentImgElement = null;
-    currentImgRecordId = null;
   }
 
   function _el(tag, attrs = {}, children = []) {
@@ -244,19 +252,14 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
       try {
         await img.decode();
         const before = controller.getState().records.length;
-        await controller.addImage(img, { imageCategories: selectedCats, lightingCondition: lightingSelect.value });
+        // EPIC 2E-K-R2 -- ownership of `objectUrl` moves to the
+        // controller's bounded pixelPreviewCache once addImage()
+        // succeeds (it revokes it later, on eviction/session change).
+        // This call site only revokes it itself on a FAILURE path
+        // below, where the controller never cached it.
+        await controller.addImage(img, { imageCategories: selectedCats, lightingCondition: lightingSelect.value, objectUrl });
         const afterState = controller.getState();
-        if (afterState.records.length > before) {
-          // A new record was genuinely created -- keep THIS image
-          // transiently in memory, associated only with that new
-          // record's imageId, so the comparison slider can show it
-          // immediately. Any previously-retained image is revoked
-          // first (at most one image is ever held in memory).
-          _revokeCurrentImage();
-          currentImgObjectUrl = objectUrl;
-          currentImgElement = img;
-          currentImgRecordId = afterState.currentRecord?.imageId ?? null;
-        } else {
+        if (afterState.records.length <= before) {
           URL.revokeObjectURL(objectUrl);
         }
       } catch {
@@ -283,23 +286,32 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
       class: 'cal-slider-wrap', role: 'slider', 'aria-label': T('a11y.beforeAfterSlider'),
       'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(sliderPct), tabindex: '0',
     });
-    const hasLivePreview = currentImgElement && record && currentImgRecordId === record.imageId;
-    if (hasLivePreview) {
-      const imgClone = currentImgElement.cloneNode();
-      imgClone.style.clipPath = `inset(0 ${100 - sliderPct}% 0 0)`;
-      sliderWrap.appendChild(_el('span', { class: 'cal-label-side', style: 'left:8px', text: 'LEGACY' }));
-      sliderWrap.appendChild(imgClone);
-      const imgClone2 = currentImgElement.cloneNode();
-      imgClone2.style.clipPath = `inset(0 0 0 ${sliderPct}%)`;
-      sliderWrap.appendChild(_el('span', { class: 'cal-label-side', style: 'right:8px', text: 'CONTROLLED V2' }));
-      sliderWrap.appendChild(imgClone2);
+
+    // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON: any pixel-compare instance
+    // bound to the PREVIOUS render's canvases is now stale (those
+    // canvases were just discarded by render()'s root.innerHTML = '')
+    // -- dispose it before possibly creating a fresh one below.
+    _disposePixelCompareCtrl();
+    const pixelInput = record
+      ? controller.getPixelPreviewInput(record.imageId)
+      : { available: false, reasonCode: 'PIXEL_PREVIEW_UNAVAILABLE_NOT_IN_SESSION' };
+
+    if (pixelInput.available) {
+      const legacyCanvas = _el('canvas', { class: 'cal-compare-canvas', 'aria-hidden': 'true', 'data-cal-role': 'pixel-canvas-legacy' });
+      const v2Canvas = _el('canvas', { class: 'cal-compare-canvas', 'aria-hidden': 'true', 'data-cal-role': 'pixel-canvas-v2' });
+      legacyCanvas.style.clipPath = `inset(0 ${100 - sliderPct}% 0 0)`;
+      v2Canvas.style.clipPath = `inset(0 0 0 ${sliderPct}%)`;
+      sliderWrap.appendChild(_el('span', { class: 'cal-label-side', style: 'left:8px', text: T('pixelPreview.legacyLabel') }));
+      sliderWrap.appendChild(legacyCanvas);
+      sliderWrap.appendChild(_el('span', { class: 'cal-label-side', style: 'right:8px', text: T('pixelPreview.v2Label') }));
+      sliderWrap.appendChild(v2Canvas);
       const handle = _el('div', { class: 'cal-slider-handle', style: `left:${sliderPct}%` });
       sliderWrap.appendChild(handle);
       function setPct(pct) {
         sliderPct = Math.max(0, Math.min(100, pct));
         handle.style.left = `${sliderPct}%`;
-        imgClone.style.clipPath = `inset(0 ${100 - sliderPct}% 0 0)`;
-        imgClone2.style.clipPath = `inset(0 0 0 ${sliderPct}%)`;
+        legacyCanvas.style.clipPath = `inset(0 ${100 - sliderPct}% 0 0)`;
+        v2Canvas.style.clipPath = `inset(0 0 0 ${sliderPct}%)`;
         sliderWrap.setAttribute('aria-valuenow', String(Math.round(sliderPct)));
       }
       sliderWrap.addEventListener('pointerdown', (e) => {
@@ -314,14 +326,50 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
         if (e.key === 'ArrowLeft') { setPct(sliderPct - 5); e.preventDefault(); }
         else if (e.key === 'ArrowRight') { setPct(sliderPct + 5); e.preventDefault(); }
       });
+      sliderPanel.appendChild(sliderWrap);
+
+      const pixelStatusNote = _el('div', {
+        class: 'cal-note', style: 'margin-top:6px', text: T('pixelPreview.rendering'), 'data-cal-role': 'pixel-preview-status',
+      });
+      sliderPanel.appendChild(pixelStatusNote);
+
+      // Reuse (never reimplement) the exact same production isolated
+      // pixel renderer ui/app.js's own Visual Preview Comparison uses,
+      // bound to THESE two Calibration-Lab-owned canvases only.
+      pixelCompareCtrl = createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canvas });
+      pixelCompareCtrl.render({
+        source: pixelInput.imgElement,
+        renderPlan: pixelInput.renderPlan,
+        analysisGenerationId: pixelInput.analysisGenerationId,
+      }).then((result) => {
+        // Guard: only touch this node if render() hasn't rebuilt the
+        // DOM again in the meantime (e.g. user navigated to a
+        // different image before this async render resolved).
+        if (!pixelStatusNote.isConnected) return;
+        const stateKey = (st) => (
+          st === 'rendered' ? 'stateRendered'
+          : st === 'blocked' ? 'stateBlocked'
+          : st === 'failed' ? 'stateFailed'
+          : st === 'cancelled' ? 'stateCancelled'
+          : 'stateUnavailable'
+        );
+        const legacyState = result?.legacy?.state ?? null;
+        const v2State = result?.v2?.state ?? null;
+        pixelStatusNote.textContent =
+          `${T('pixelPreview.legacyLabel')}: ${T('pixelPreview.' + stateKey(legacyState))} | ${T('pixelPreview.v2Label')}: ${T('pixelPreview.' + stateKey(v2State))}`;
+        pixelStatusNote.setAttribute('data-cal-pixel-legacy-state', legacyState ?? 'unknown');
+        pixelStatusNote.setAttribute('data-cal-pixel-v2-state', v2State ?? 'unknown');
+        pixelStatusNote.setAttribute('data-cal-pixel-overall-state', result?.state ?? 'unknown');
+      }).catch(() => {
+        if (pixelStatusNote.isConnected) pixelStatusNote.textContent = T('pixelPreview.stateFailed');
+      });
     } else {
       sliderWrap.appendChild(_el('div', {
-        class: 'cal-note', style: 'padding:16px',
-        text: 'No live image preview is kept for previously-saved images (the source photo is never stored) -- the Legacy vs Controlled V2 numbers on the right are still the real recorded comparison.',
+        class: 'cal-note', style: 'padding:16px', 'data-cal-role': 'pixel-preview-unavailable',
+        text: T('pixelPreview.unavailableNotInSession'),
       }));
+      sliderPanel.appendChild(sliderWrap);
     }
-    sliderPanel.appendChild(sliderWrap);
-    sliderPanel.appendChild(_el('div', { class: 'cal-note', style: 'margin-top:6px', text: 'Same source photo shown on both sides -- the numbers below are the real Legacy vs Controlled V2 comparison for this image.' }));
     wrap.appendChild(sliderPanel);
 
     const dataPanel = _el('div', { class: 'cal-panel' });

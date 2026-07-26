@@ -57,6 +57,12 @@ const SOURCE_HASH_INPUTS = [
   path.join(PROJECT_ROOT, 'core', 'calibration-lab', 'codes.js'),
   path.join(PROJECT_ROOT, 'core', 'calibration-lab', 'schema.js'),
   path.join(PROJECT_ROOT, 'core', 'calibration-lab', 'run-comparison-pipeline.js'),
+  // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON: the bounded-LRU cache module
+  // and the reused production pixel-rendering chain.
+  path.join(PROJECT_ROOT, 'core', 'calibration-lab', 'bounded-lru-cache.js'),
+  path.join(PROJECT_ROOT, 'ui', 'visual-preview-comparison-controller-v2.js'),
+  path.join(PROJECT_ROOT, 'ui', 'isolated-visual-preview-renderer-v2.js'),
+  path.join(PROJECT_ROOT, 'core', 'preview-rendering', 'visual-preview-render-plan-v2.js'),
   FIXTURE_1, FIXTURE_2,
 ];
 
@@ -143,6 +149,35 @@ async function main() {
     recordCondition('Add image 1: imageCount becomes 1, currentImageId set', snap.imageCount === 1 && !!snap.currentImageId, JSON.stringify(snap));
     const firstImageId = snap.currentImageId;
 
+    // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON: for an image added in the
+    // CURRENT runtime session, the comparison view must render two
+    // REAL <canvas> elements (not the old "same source image on both
+    // sides" placeholder), reusing the exact same production isolated
+    // pixel renderer the main app's own Visual Preview Comparison uses.
+    await page.waitForSelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-legacy"]', { timeout: 10000 });
+    await page.waitForSelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-v2"]', { timeout: 10000 });
+    recordCondition('Real Pixel Comparison: both canvas[data-cal-role=pixel-canvas-legacy] and pixel-canvas-v2 exist for a just-added image (never the old same-image-both-sides placeholder)', true, {});
+    // Wait for the async render() to resolve (status note moves off the transient "rendering..." text).
+    await page.waitForFunction(() => {
+      const note = document.querySelector('#calibrationLabRoot [data-cal-role="pixel-preview-status"]');
+      return !!note && note.getAttribute('data-cal-pixel-overall-state') != null;
+    }, null, { timeout: 20000 }).catch(() => {});
+    const pixelState1 = await page.evaluate(() => {
+      const note = document.querySelector('#calibrationLabRoot [data-cal-role="pixel-preview-status"]');
+      const legacyCanvas = document.querySelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-legacy"]');
+      const v2Canvas = document.querySelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-v2"]');
+      return {
+        overallState: note ? note.getAttribute('data-cal-pixel-overall-state') : null,
+        legacyState: note ? note.getAttribute('data-cal-pixel-legacy-state') : null,
+        v2State: note ? note.getAttribute('data-cal-pixel-v2-state') : null,
+        legacyBackingSize: legacyCanvas ? legacyCanvas.width * legacyCanvas.height : 0,
+        v2BackingSize: v2Canvas ? v2Canvas.width * v2Canvas.height : 0,
+      };
+    });
+    recordCondition('Real Pixel Comparison: the render actually resolved to a real state (rendered/blocked/failed/cancelled/unavailable), never left permanently in the transient "rendering" placeholder', pixelState1.overallState !== null, JSON.stringify(pixelState1));
+    recordCondition('Real Pixel Comparison: the Legacy canvas received real backing pixel dimensions (genuinely drawn to, not a blank 0x0 canvas) when its side is not blocked', pixelState1.legacyState !== 'rendered' || pixelState1.legacyBackingSize > 0, JSON.stringify(pixelState1));
+    recordCondition('Real Pixel Comparison: the Controlled V2 canvas received real backing pixel dimensions when its side is not blocked', pixelState1.v2State !== 'rendered' || pixelState1.v2BackingSize > 0, JSON.stringify(pixelState1));
+
     // Add image 2.
     await page.locator('#calibrationLabRoot .cal-chip[data-cal-category="EVENT"]').click();
     await page.setInputFiles('#calibrationLabRoot input[type="file"]', FIXTURE_2);
@@ -180,6 +215,14 @@ async function main() {
     await page.waitForFunction(() => window.__LUMIXA_QA__.getCalibrationLabSnapshot().sessionState === 'ACTIVE', null, { timeout: 5000 }).catch(() => {});
     snap = await calSnapshot(page);
     recordCondition('Save and Restore: reopening the session restores imageCount=2', snap.sessionState === 'ACTIVE' && snap.imageCount === 2, JSON.stringify(snap));
+
+    // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON honest fallback: a session
+    // reopened from storage never had its <img> elements re-decoded in
+    // THIS runtime (the source photo is never persisted) -- the
+    // comparison view must honestly show the unavailable placeholder,
+    // never a stale/incorrect canvas.
+    const pixelUnavailableAfterRestore = await page.locator('#calibrationLabRoot [data-cal-role="pixel-preview-unavailable"]').count();
+    recordCondition('Real Pixel Comparison honest fallback: after Save-and-Restore (session reopened from storage), the comparison view shows the translated "not in this session" message rather than a live canvas', pixelUnavailableAfterRestore > 0, { pixelUnavailableAfterRestore });
 
     // TH -> EN -> TH visible-locale audit, scoped to #calibrationLabRoot only.
     const thAudit1 = await auditVisibleLocaleSections(page, ['#calibrationLabRoot'], { mode: 'th', approvedTerms: ['IndexedDB', 'Controlled V2', 'JSON', 'CSV'] });

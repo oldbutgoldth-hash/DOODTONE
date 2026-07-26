@@ -102,6 +102,15 @@ const STATIC_SUITES = [
   // proof that a tampered result file can never survive a real local
   // gate run).
   'qa/epic-2e-k-calibration-lab-hostile-static-test.mjs',
+  // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON & BROWSER VERIFICATION
+  // CLOSURE: the pure bounded-LRU cache module's own behavior
+  // (eviction order, recency, onEvict correctness, hostile invalid-
+  // input handling), plus structural/grep proofs that the transient
+  // Render Plan used for live pixel rendering can never reach
+  // persisted storage or export, and that the reused production
+  // pixel-rendering chain never touches XMP serialization or
+  // Production-activation code.
+  'qa/epic-2e-k-r2-real-pixel-comparison-static-test.mjs',
 ];
 
 let anyFailed = false;

@@ -923,3 +923,77 @@ once enough real calibration sessions have been collected through the
 Lab, revisit the Controlled V2 Readiness Report's output as an input to
 a future, separately-scoped decision about production activation (never
 automatic, and never produced by this Lab itself).
+
+---
+
+## EPIC 2E-K-R2 -- Real Pixel Comparison & Browser Verification Closure
+
+**Status: Real Pixel Comparison complete and verified in this
+environment; Browser Verification Closure attempted and honestly not
+achievable in this sandbox.** Replaces the Calibration Lab's R1
+"same source image on both sides" before/after placeholder with a
+genuinely pixel-differentiated Legacy vs. Controlled V2 render, by
+directly reusing (never duplicating) `createVisualPreviewComparisonControllerV2`
+and `renderIsolatedVisualPreviewV2` -- the exact same functions the main
+app's own Visual Preview Comparison feature calls -- bound to two
+Calibration-Lab-owned canvases. See
+`docs/project/29_EPIC_2E_K_R2_REAL_PIXEL_COMPARISON.md`,
+`30_EPIC_2E_K_R2_QA_REPORT.md`, and `31_EPIC_2E_K_R2_RELEASE_NOTES.md`
+for full detail.
+
+**New module:** `core/calibration-lab/bounded-lru-cache.js` -- a small,
+pure, fully Node-testable bounded LRU cache (no DOM dependency),
+bounding the Calibration Lab's live in-memory image handles to the 5
+most-recently-touched images per runtime session (`MAX_LIVE_PIXEL_PREVIEW_CACHE_SIZE`).
+A session resumed from storage, or an image pushed out by this bound,
+honestly shows an "unavailable in this session" message rather than a
+stale or fabricated preview -- consistent with this project's
+established "bounded, never unlimited" convention for this feature.
+
+**Production isolation (re-verified after R2):** the reused pixel-
+rendering chain (`ui/visual-preview-comparison-controller-v2.js`,
+`ui/isolated-visual-preview-renderer-v2.js`,
+`core/preview-rendering/visual-preview-render-plan-v2.js`) was grepped
+and confirmed to contain no reference to
+`serializeXMP`/`downloadXMP`/`buildLightroomControlledActivationV2`
+anywhere; the transient Render Plan field
+(`renderPlanForPixelPreviewTransientOnly`) has no corresponding field in
+`schema.js` and is never referenced by `export-dataset.js`; `getState()`
+and `getQaSnapshot()` never expose the live-image cache. The
+production-lock manifest re-verification (65/65 locked core/ui files,
+including `core/preset-engine/index.js` and
+`core/lightroom-mapping-engine/index.js`) shows 0 mismatches -- R2
+touched no production file.
+
+**Test results (all real):** the pre-existing R1 Calibration Lab suites
+were re-run against the R2 code with zero changes and produced
+byte-identical pass counts (61/61, 16/16, 19/19) -- no regression. A
+new suite, `qa/epic-2e-k-r2-real-pixel-comparison-static-test.mjs`
+(34/34 PASS), covers the pure LRU cache's eviction/recency/hostile-input
+behavior plus the structural "never reaches storage/export/XMP" proofs.
+`node tools/esm-syntax-gate.mjs`: 166/166 PASS. Full
+`node qa/run-static-suites.mjs`: all green.
+
+**Browser Verification Closure attempt:** `detectBrowserExecutable()`
+again found no usable Chromium in this sandbox; a direct
+`npx playwright install chromium` attempt failed with an explicit
+network-level error (`403 Connection blocked by network allowlist`),
+confirming this sandbox's outbound network is restricted, not merely
+lacking a pre-installed binary. Closure genuinely requires a different
+environment (real Chromium + network access) and was not achieved here
+-- disclosed honestly rather than fabricated.
+
+**Known limitations:** live pixel preview is bounded to 5
+recently-touched images per runtime session (disclosed above); the
+actual rendered-pixel behavior (the two canvases genuinely differing,
+the async status badge) remains Browser-suite-verified-in-writing-only,
+pending a real Chromium environment; all R1 Known Limitations not
+specifically addressed by this round (empty migration scaffold, version
+badge not bumped, the pre-existing documentation-drift note) remain as
+previously described.
+
+**Next EPIC recommendation:** run
+`qa/epic-2e-k-calibration-lab-browser-test.mjs` (ideally the full
+`node tools/local-gate.mjs`) on a machine with real Chromium and network
+access to close out Browser verification for both R1 and R2 together.
+EPIC 2E-L was explicitly not started, per instruction.

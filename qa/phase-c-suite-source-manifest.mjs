@@ -163,6 +163,13 @@ export const SUITE_SOURCE_FILES = {
     'core/calibration-lab/export-dataset.js',
     'qa/fixtures/epic-2e-j/neutral-balanced.png',
     'qa/fixtures/epic-2e-j/warm-portrait-synthetic.png',
+    // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON: the bounded-LRU cache
+    // module, plus the reused production pixel-rendering chain the
+    // Calibration Lab's before/after view now calls directly.
+    'core/calibration-lab/bounded-lru-cache.js',
+    'ui/visual-preview-comparison-controller-v2.js',
+    'ui/isolated-visual-preview-renderer-v2.js',
+    'core/preview-rendering/visual-preview-render-plan-v2.js',
   ],
 };
 
