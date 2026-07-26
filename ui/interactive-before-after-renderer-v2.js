@@ -22,6 +22,7 @@
  */
 
 import { t } from './i18n/index.js';
+import { presentBeforeAfterBlockerCode, presentBeforeAfterWarningCode } from './i18n/domain-presenters.js';
 
 const LEGACY_DISPLAY_CANVAS_ID = 'ibaLegacyDisplayCanvasV2';
 const V2_DISPLAY_CANVAS_ID = 'ibaV2DisplayCanvasV2';
@@ -363,6 +364,8 @@ export function renderInteractiveBeforeAfterStatus(container, state, lang) {
   const rawMetadata = _safeGetR(s, 'metadata');
   const rawWarnings = _safeGetR(s, 'warnings');
   const rawBlockers = _safeGetR(s, 'blockers');
+  const rawWarningCodes = _safeGetR(s, 'warningCodes');
+  const rawBlockerCodes = _safeGetR(s, 'blockerCodes');
   const rawBlockedReason = _safeGetR(s, 'blockedReason');
 
   const normalized = _normalizeState(rawState);
@@ -503,8 +506,23 @@ export function renderInteractiveBeforeAfterStatus(container, state, lang) {
       seen.add(txt);
       messagesEl.appendChild(el('div', { style: `font-size:11px;color:${color}`, text: txt }));
     };
-    _safeArray(rawBlockers).slice(0, 3).forEach(b => pushUnique(b, 'var(--danger, red)'));
-    _safeArray(rawWarnings).slice(0, 3).forEach(w => pushUnique(w, 'var(--warn, orange)'));
+    // I18N RUNTIME CLOSURE R3 -- Phase G: prefer the controller's
+    // STABLE CODES (translated) over the raw English blockers/warnings
+    // arrays -- the raw arrays are used only when a given entry has no
+    // corresponding code (an older/unrecognized producer), same
+    // fail-open-toward-visibility convention used elsewhere in R3.
+    const blockerCodesList = _safeArray(rawBlockerCodes);
+    if (blockerCodesList.length) {
+      blockerCodesList.slice(0, 3).forEach(code => pushUnique(presentBeforeAfterBlockerCode(code, lang), 'var(--danger, red)'));
+    } else {
+      _safeArray(rawBlockers).slice(0, 3).forEach(b => pushUnique(b, 'var(--danger, red)'));
+    }
+    const warningCodesList = _safeArray(rawWarningCodes);
+    if (warningCodesList.length) {
+      warningCodesList.slice(0, 3).forEach(code => pushUnique(presentBeforeAfterWarningCode(code, lang), 'var(--warn, orange)'));
+    } else {
+      _safeArray(rawWarnings).slice(0, 3).forEach(w => pushUnique(w, 'var(--warn, orange)'));
+    }
   }
 
   // FIX 10 (EPIC 2E-I-A-F): compact alignment technical metadata,

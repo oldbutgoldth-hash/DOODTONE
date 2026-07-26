@@ -53,6 +53,7 @@ import {
   detectPlaywrightPackage,
   detectBrowserExecutable,
   REQUIRED_LAUNCH_ARGS,
+  BUILD_CONTROLLED_V2_BUTTON_SELECTOR,
   buildLumixaAppSnapshot,
   openLumixaInMemoryPage,
   generateRunId,
@@ -146,12 +147,12 @@ function sha256(text) {
 
 /** Clicks #btnBuildControlledV2 and waits for it to genuinely re-enable (processing finished) before returning. */
 async function clickBuildControlledV2AndWait(page, priorGeneration, maxWaitMs = 25000) {
-  const clicked = await page.evaluate(() => {
-    const btn = document.getElementById('btnBuildControlledV2');
+  const clicked = await page.evaluate((sel) => {
+    const btn = document.querySelector(sel);
     if (!btn || btn.disabled) return false;
     btn.click();
     return true;
-  });
+  }, BUILD_CONTROLLED_V2_BUTTON_SELECTOR);
   if (!clicked) return { clicked: false, completed: false, snapshot: null };
   const outcome = await waitForAnalysisCompletion(page, priorGeneration, maxWaitMs);
   return { clicked: true, ...outcome };

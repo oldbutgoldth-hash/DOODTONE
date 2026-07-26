@@ -1,6 +1,6 @@
 {
   "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
-  "generatedAt": "2026-07-26T03:11:08.051Z",
+  "generatedAt": "2026-07-26T08:00:08.892Z",
   "summary": {
     "total": 92,
     "pass": 92,
@@ -11,12 +11,12 @@
     {
       "test": "generateRunId() returns a non-empty string",
       "result": "PASS",
-      "evidence": "idA=12ee5133-cd95-4f20-b0cb-65f33d555f82"
+      "evidence": "idA=31bcf040-b779-4afd-9a02-770254e3473c"
     },
     {
       "test": "generateRunId() returns a fresh value on each call (never reused)",
       "result": "PASS",
-      "evidence": "idA=12ee5133-cd95-4f20-b0cb-65f33d555f82, idB=ada8c650-542d-4af9-aff5-e45e6014dce4"
+      "evidence": "idA=31bcf040-b779-4afd-9a02-770254e3473c, idB=058d5d98-4108-4ada-ae15-6552b977440e"
     },
     {
       "test": "computeSourceHash() is deterministic for identical inputs",
@@ -131,7 +131,7 @@
     {
       "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
       "result": "PASS",
-      "evidence": "oldRunId=67de9da1-021a-4261-b52f-3c66b7db16b9, newRunId=58af88d7-1cf2-4dd2-bc3a-2e3e30468163"
+      "evidence": "oldRunId=6d79fe8f-e630-4926-8c3a-5c475400930c, newRunId=3ffe8636-04c3-4e60-a76a-12155c51e13f"
     },
     {
       "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",

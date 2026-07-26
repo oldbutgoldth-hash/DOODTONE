@@ -1,13 +1,13 @@
 {
   "suite": "LOCAL-FIRST GEOMETRY R3 -- Phase C2: Full-App Safety-Eligible Geometry suite",
-  "runId": "57f1c9fa-e206-4776-912e-48f62d1950bf",
-  "startedAt": "2026-07-26T03:09:22.076Z",
-  "completedAt": "2026-07-26T03:09:22.076Z",
+  "runId": "6bb4e483-b9bf-41a2-8043-92c52b225bb9",
+  "startedAt": "2026-07-26T07:59:35.683Z",
+  "completedAt": "2026-07-26T07:59:35.683Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-26T03:09:22.076Z",
+  "generatedAt": "2026-07-26T07:59:35.683Z",
   "summary": {
     "total": 1,
     "pass": 0,

@@ -34,11 +34,29 @@ const execFileAsync = promisify(execFile);
 // paths, in that order. Never downloads a Browser binary.
 // ══════════════════════════════════════════════════════════════════
 export async function detectPlaywrightPackage() {
+  // I18N RUNTIME CLOSURE + QA INTEGRITY R3 — Phase A: single consistent
+  // contract for every consumer. `available`/`chromium` are the
+  // preferred fields going forward; `status`/`mod` are kept for the
+  // existing consumers that already destructure `{ chromium } = pkg.mod`
+  // — both shapes always agree with each other, verified by the
+  // self-test in qa/epic-2e-j-playwright-contract-static-test.mjs.
   try {
     const mod = await import('playwright');
-    return { status: 'PLAYWRIGHT_PACKAGE_AVAILABLE', mod };
+    return {
+      available: true,
+      status: 'PLAYWRIGHT_PACKAGE_AVAILABLE',
+      mod,
+      chromium: mod.chromium,
+      error: null,
+    };
   } catch (e) {
-    return { status: 'PLAYWRIGHT_PACKAGE_UNAVAILABLE', error: String((e && e.message) || e) };
+    return {
+      available: false,
+      status: 'PLAYWRIGHT_PACKAGE_UNAVAILABLE',
+      mod: null,
+      chromium: null,
+      error: String((e && e.message) || e),
+    };
   }
 }
 
@@ -87,6 +105,17 @@ export async function detectBrowserExecutable(chromium) {
 }
 
 export const REQUIRED_LAUNCH_ARGS = ['--no-sandbox', '--disable-dev-shm-usage'];
+
+// I18N RUNTIME CLOSURE + QA INTEGRITY R3 — Phase B: the ONE canonical
+// selector for the real guided "Build Controlled V2 Preview" button —
+// verified against index.html line 517 (`<button id="btnBuildControlledV2"`).
+// Every Browser suite that needs to click this specific button must
+// import this constant rather than hand-writing the ID string, so a
+// future ID rename can never silently desync a test again the way the
+// I18N RUNTIME CLOSURE R3 review found (`#buildControlledV2Btn` — an ID
+// that has never existed in this app).
+export const BUILD_CONTROLLED_V2_BUTTON_SELECTOR = '#btnBuildControlledV2';
+
 
 // ══════════════════════════════════════════════════════════════════
 // PART 1 — reusable in-memory page runtime.

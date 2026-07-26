@@ -1,13 +1,13 @@
 {
   "suite": "LOCAL-FIRST GEOMETRY R3 -- Phase C1: Decoder/Render Geometry suite (decoder-only, NOT production-safety-eligible)",
-  "runId": "dbefc216-cde4-4e46-9410-87d987ded4e9",
-  "startedAt": "2026-07-26T03:09:21.495Z",
-  "completedAt": "2026-07-26T03:09:21.495Z",
+  "runId": "86ead290-3d30-4bf3-b998-d445e4772ae4",
+  "startedAt": "2026-07-26T07:59:35.089Z",
+  "completedAt": "2026-07-26T07:59:35.089Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-26T03:09:21.495Z",
+  "generatedAt": "2026-07-26T07:59:35.089Z",
   "summary": {
     "total": 1,
     "pass": 0,

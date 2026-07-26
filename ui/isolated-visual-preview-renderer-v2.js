@@ -857,6 +857,13 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     reasons: [visualAdjustmentsApplied
       ? `Rendered ${uniqueApplied.length} adjustment(s), skipped ${uniqueSkipped.length} unsupported/unavailable adjustment(s).`
       : 'Preview rendered without supported visual adjustments.'],
+    // I18N RUNTIME CLOSURE R3 — Phase G: this was the confirmed "Rendered
+    // N adjustment(s), skipped M..." Runtime leak — the ONLY canvas-
+    // render success site in this file that omitted reasonCodes,
+    // reusing the same RENDERED_ADJUSTMENT_COUNTS/IDENTITY_NO_SUPPORTED_CHANGE
+    // codes+params the pixel-mutation path above already emits.
+    reasonCodes: [visualAdjustmentsApplied ? 'RENDERED_ADJUSTMENT_COUNTS' : 'IDENTITY_NO_SUPPORTED_CHANGE'],
+    reasonParams: visualAdjustmentsApplied ? { applied: uniqueApplied.length, skipped: uniqueSkipped.length } : null,
     processingTimeMs: endTime - startTime,
   });
   result.cssWidth = safeDims.width;

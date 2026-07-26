@@ -579,12 +579,32 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
   if (legacyPreviewInput.available !== true) blockers.push({ blocker: 'Legacy preset/mapping output is not fully available.', severity: 'medium', requiredFix: 'Supply legacyPreset/legacyMapping, or run the preview sandbox after legacy mapping completes.', source: 'Legacy Mapping' });
   if (missingCount > 0) blockers.push({ blocker: `${missingCount} of 4 core V2 inputs are missing or incomplete.`, severity: 'medium', requiredFix: 'Ensure the full V2 chain (EPIC 2A-2E-D) has run.', source: 'Input Validation' });
 
+  // I18N RUNTIME CLOSURE R3 — Phase E: additive stable-code twin of
+  // `blockers` above, same pattern used in mapping-v2-preview-review-
+  // state.js — never replaces the English `blocker` strings.
+  const blockerCodes = [];
+  if (!flags.enableOverlayPreviewSandbox) blockerCodes.push({ code: 'PREVIEW_SANDBOX_DISABLED', params: null });
+  if (!flags.allowOverlayPreviewGeneration) blockerCodes.push({ code: 'OVERLAY_PREVIEW_GENERATION_DISABLED', params: null });
+  if (!testGateEligible) blockerCodes.push({ code: 'TEST_GATE_NOT_ELIGIBLE', params: null });
+  if (requireReview && !humanReviewComplete) blockerCodes.push({ code: humanReviewFailed ? 'HUMAN_REVIEW_FAILED' : 'HUMAN_REVIEW_INCOMPLETE', params: { pendingCount: requiredReviewItems.filter(c => c.status === 'pending').length } });
+  if (hardStopsCount > 0) blockerCodes.push({ code: 'SAFETY_CLAMP_HARD_STOPS', params: { hardStopsCount } });
+  if (criticalOverstack) blockerCodes.push({ code: 'OVERSTACK_RISK_CRITICAL', params: null });
+  if (legacyPreviewInput.available !== true) blockerCodes.push({ code: 'LEGACY_OUTPUT_UNAVAILABLE', params: null });
+  if (missingCount > 0) blockerCodes.push({ code: 'V2_INPUTS_MISSING', params: { missingCount } });
+
   const warnings = [...(legacyPreviewInput.warnings ?? [])], reasons = [];
   reasons.push(`Preview state "${previewState}" — canGeneratePreview=${canGeneratePreview}, canExportPreview=${canExportPreview}, canWriteProduction=${canWriteProduction}, selectedOutputSource="${selectedOutputSource}".`);
   if (failedRequiredGates.length) reasons.push(`${failedRequiredGates.length} of ${previewGateChecks.filter(g => g.required).length} required gate(s) failed: ${failedRequiredGates.map(g => g.id).join(', ')}.`);
   if (missingCount > 0) warnings.push(`${missingCount} of 4 core inputs (testGate/simulation/overlay/safety) missing or incomplete — preview eligibility reflects a rough sketch.`);
   if (hardStopsCount > 0) warnings.push(`${hardStopsCount} active hard stop(s) — preview includes a require-human-review action.`);
   if (requireReview && !humanReviewComplete) warnings.push('Human review is not complete — never assumed passed by default.');
+
+  // I18N RUNTIME CLOSURE R3 — Phase E: additive stable-code twin of
+  // `warnings` above.
+  const warningCodes = [...(legacyPreviewInput.warningCodes ?? [])];
+  if (missingCount > 0) warningCodes.push({ code: 'CORE_INPUTS_MISSING_SKETCH', params: { missingCount } });
+  if (hardStopsCount > 0) warningCodes.push({ code: 'HARD_STOPS_REQUIRE_REVIEW', params: { hardStopsCount } });
+  if (requireReview && !humanReviewComplete) warningCodes.push({ code: 'HUMAN_REVIEW_NOT_COMPLETE', params: null });
 
   // EPIC 2E-E-G: intentional, by-design safety rails — always visible
   // and explicit, but never reported as a preview-generation blocker.
@@ -636,13 +656,25 @@ export function buildControlledOverlayPreviewSandboxV2(input = {}) {
         : needsAdjustmentOrFailed
           ? 'Resolve the visual item(s) marked Needs Adjustment or Fail, then re-analyze.'
           : `Review the remaining visual item(s) (${visualItems.length - visualPassed} of ${visualItems.length} left), then re-analyze.`,
+    // I18N RUNTIME CLOSURE R3 — Phase E: additive stable-code twin of
+    // `primaryGuidance` above (mirrors mapping-v2-preview-review-state.js).
+    primaryGuidanceCode: !requireReview
+      ? 'HUMAN_REVIEW_NOT_REQUIRED'
+      : humanReviewComplete
+        ? 'READY_TO_BUILD_V2'
+        : needsAdjustmentOrFailed
+          ? 'NEEDS_ADJUSTMENT_OR_FAILED'
+          : 'REVIEW_REMAINING_VISUAL_ITEMS',
+    primaryGuidanceParams: (!requireReview || humanReviewComplete || needsAdjustmentOrFailed)
+      ? null
+      : { remaining: visualItems.length - visualPassed, total: visualItems.length },
   };
 
   const result = {
     // ── Canonical fields (EPIC 2E-E-F) ──
     mode: 'controlled-overlay-preview-sandbox',
     previewState, canGeneratePreview, canExportPreview, canWriteProduction, selectedOutputSource,
-    previewGateChecks, blockers, productionRestrictions, warnings, reasons,
+    previewGateChecks, blockers, blockerCodes, productionRestrictions, warnings, warningCodes, reasons,
     previewEligibility, previewPlan, simulatedPreviewPreset, previewRiskReview,
     humanReviewChecklist, safetyRequirements, reviewGuidance,
     rollbackPlan, fallbackStrategy,

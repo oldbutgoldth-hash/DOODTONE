@@ -48,6 +48,7 @@ import { benchmarkStylePreservation } from '../core/style-benchmark-engine/index
 import { buildDecisionReport } from '../core/decision-report-engine/index.js';
 import { renderReviewConsole } from './review-console-renderer.js';
 import { t } from './i18n/index.js';
+import { presentReviewGuidanceCode } from './i18n/domain-presenters.js';
 import { createReviewConsoleController } from './review-console-controller.js';
 import { renderSideBySideComparison } from './side-by-side-comparison-renderer.js';
 import { createVisualPreviewComparisonControllerV2 } from './visual-preview-comparison-controller-v2.js';
@@ -506,6 +507,32 @@ function ensureQaSnapshotHook() {
         legacyState: _qaSafeStr(legacyPlan?.renderable === true ? 'renderable' : (legacyPlan ? 'not-renderable' : null)),
         controlledV2State: _qaSafeStr(v2Plan?.renderable === true ? 'renderable' : (v2Plan ? 'not-renderable' : null)),
       },
+      // I18N RUNTIME CLOSURE + QA INTEGRITY R3 — Phase C: the ACTUAL
+      // post-render outcome of the two isolated Canvas renderers,
+      // read directly from visualPreviewComparisonController.getState()
+      // — this is genuinely distinct from `visualPreview` above, which
+      // only reflects Render Plan *eligibility* (computed before any
+      // pixel work happens), never whether a render actually completed.
+      // A Browser test proving "Legacy rendered === true / V2 rendered
+      // === true" must read THIS field, never `visualPreview.*State`.
+      // Bounded/safe projection only — never the raw ImageData/canvas
+      // reference, never the full render-plan object.
+      visualPreviewControllerState: (() => {
+        try {
+          const vs = visualPreviewComparisonController ? visualPreviewComparisonController.getState() : null;
+          return {
+            exists: !!vs,
+            state: _qaSafeStr(vs?.state),
+            legacyRendered: _qaSafeBool(vs?.legacy?.rendered === true),
+            v2Rendered: _qaSafeBool(vs?.v2?.rendered === true),
+            bothRendered: _qaSafeBool(vs?.bothRendered),
+            visualComparisonAvailable: _qaSafeBool(vs?.visualComparisonAvailable),
+            analysisGenerationId: _qaSafeNum(vs?.analysisGenerationId),
+          };
+        } catch {
+          return { exists: false, state: null, legacyRendered: null, v2Rendered: null, bothRendered: null, visualComparisonAvailable: null, analysisGenerationId: null };
+        }
+      })(),
       interactive: {
         state: interactiveState,
         alignmentStatus,
@@ -1184,25 +1211,30 @@ function _syncBuildControlledV2Button() {
   const hint = document.getElementById('btnBuildControlledV2Hint');
   if (!btn) return;
 
-  const isThai = state.lang === 'th';
-
+  // I18N RUNTIME CLOSURE R3 — Phase H: removed the inline
+  // the old inline Thai/English ternary branches — every string here now comes
+  // from the centralized dictionary (review.buildButton.*,
+  // review.noPreview, review.guidance.*), all of which already existed
+  // in both ui/i18n/en.js and ui/i18n/th.js but were never wired to
+  // this function.
   if (buildControlledV2InProgress) {
     btn.disabled = true;
     btn.setAttribute('aria-disabled', 'true');
     btn.setAttribute('aria-busy', 'true');
-    if (label) label.textContent = isThai ? 'กำลังสร้างตัวอย่าง…' : 'Building…';
+    if (label) label.textContent = t('review.buildButton.building', null, state.lang);
     return;
   }
   btn.removeAttribute('aria-busy');
-  if (label) label.textContent = isThai ? 'สร้างตัวอย่าง Controlled V2' : 'Build Controlled V2 Preview';
+  if (label) label.textContent = t('review.buildButton.label', null, state.lang);
 
   const guidance = _isRecordLike(state.lastPreviewReviewState?.reviewGuidance) ? state.lastPreviewReviewState.reviewGuidance : null;
   const ready = guidance?.readyToBuildV2 === true;
   btn.disabled = !ready;
   btn.setAttribute('aria-disabled', String(!ready));
   if (hint) {
-    hint.textContent = typeof guidance?.primaryGuidance === 'string' ? guidance.primaryGuidance
-      : (state.lastPreviewReviewState ? '' : (isThai ? 'ยังไม่มีตัวอย่างให้ตรวจสอบ' : 'No preview is available to review yet.'));
+    hint.textContent = guidance
+      ? presentReviewGuidanceCode(guidance.primaryGuidanceCode, guidance.primaryGuidanceParams, state.lang, typeof guidance.primaryGuidance === 'string' ? guidance.primaryGuidance : '')
+      : (state.lastPreviewReviewState ? '' : t('review.noPreview', null, state.lang));
   }
 }
 
@@ -1255,23 +1287,20 @@ async function handleBuildControlledV2Preview() {
   const stillSameSession = state.imageLoaded && reviewSecVisibleBefore && document.getElementById('reviewConsoleSection')?.style.display !== 'none';
   if (!stillSameSession) return;
 
-  const isThai = state.lang === 'th';
+  // I18N RUNTIME CLOSURE R3 — Phase H: removed the inline
+  // the old inline Thai/English ternary branches — now sourced from
+  // review.outcome.safetyRestraint/identityFallback/unavailable,
+  // which already existed in both dictionaries but were never used.
   const vprState = visualPreviewComparisonController ? visualPreviewComparisonController.getState() : null;
   const translationMode = vprState?.metadata?.controlledV2Translation?.mode ?? null;
 
   let outcomeText;
   if (translationMode === 'legacy-derived-safety-restraint') {
-    outcomeText = isThai
-      ? 'สร้างตัวอย่าง Controlled V2 สำเร็จ — เป็นตัวอย่างแบบสงวนความปลอดภัยที่มีการปรับเปลี่ยนจริง ดูผลเปรียบเทียบด้านล่าง'
-      : 'Controlled V2 Preview built — a Safety-restraint translation with real, bounded changes. See the comparison below.';
+    outcomeText = t('review.outcome.safetyRestraint', null, state.lang);
   } else if (translationMode === 'identity-fallback') {
-    outcomeText = isThai
-      ? 'สร้างตัวอย่าง Controlled V2 สำเร็จ — ไม่มีการปรับเปลี่ยนที่รองรับได้ จึงแสดงเป็น Identity Preview แทน'
-      : 'Controlled V2 Preview built — no supported change was available, so an honest Identity preview is shown instead.';
+    outcomeText = t('review.outcome.identityFallback', null, state.lang);
   } else {
-    outcomeText = isThai
-      ? 'การวิเคราะห์เสร็จสิ้น แต่ตัวอย่าง Controlled V2 ยังไม่พร้อม — ดูเหตุผลด้านล่าง'
-      : 'Analysis complete, but the Controlled V2 preview is not yet available — see the details below.';
+    outcomeText = t('review.outcome.unavailable', null, state.lang);
   }
 
   const liveRegion = document.getElementById('buildControlledV2LiveRegion');
@@ -1457,6 +1486,12 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
     const rawV2State = safeGetVisualPreviewProperty(v2Result, 'state');
     const rawLegacyWarnings = safeGetVisualPreviewProperty(legacyResult, 'warnings');
     const rawV2Warnings = safeGetVisualPreviewProperty(v2Result, 'warnings');
+    // I18N RUNTIME CLOSURE R3 -- Phase G: parallel STABLE CODE arrays,
+    // additive alongside the raw English `warnings` above -- never
+    // replacing them (Developer Details / legacy consumers still read
+    // the raw text).
+    const rawLegacyWarningCodes = safeGetVisualPreviewProperty(legacyResult, 'warningCodes');
+    const rawV2WarningCodes = safeGetVisualPreviewProperty(v2Result, 'warningCodes');
     // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase F: the Interactive
     // Before/After section must also clearly identify whether its
     // right-hand side is a meaningful Safety-restraint translation or
@@ -1470,10 +1505,13 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
     const rawControlledV2Translation = safeGetVisualPreviewProperty(vprMeta, 'controlledV2Translation');
     const controlledV2TranslationMode = rawControlledV2Translation && typeof rawControlledV2Translation === 'object' ? rawControlledV2Translation.mode : null;
     const v2WarningsWithLabel = Array.isArray(rawV2Warnings) ? [...rawV2Warnings] : [];
+    const v2WarningCodesWithLabel = Array.isArray(rawV2WarningCodes) ? [...rawV2WarningCodes] : [];
     if (controlledV2TranslationMode === 'legacy-derived-safety-restraint') {
       v2WarningsWithLabel.unshift('Right side: Controlled V2 — Safety-restraint preview (bounded restraints on the Legacy preview; not Lightroom/ACR, not Production).');
+      v2WarningCodesWithLabel.unshift('V2_SAFETY_RESTRAINT_LABEL');
     } else if (controlledV2TranslationMode === 'identity-fallback') {
       v2WarningsWithLabel.unshift('Right side: Controlled V2 — Identity fallback (no supported safety restraint produced a meaningful visual change; not the final V2 appearance).');
+      v2WarningCodesWithLabel.unshift('V2_IDENTITY_FALLBACK_LABEL');
     }
 
     const compact = {
@@ -1483,12 +1521,14 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
         state: _normalizeSideStateString(rawLegacyState),
         visualAdjustmentsApplied: (rawLegacyEffect === true || rawLegacyEffect === false) ? rawLegacyEffect : null,
         warnings: Array.isArray(rawLegacyWarnings) ? rawLegacyWarnings.slice(0, 6) : [],
+        warningCodes: Array.isArray(rawLegacyWarningCodes) ? rawLegacyWarningCodes.slice(0, 6) : [],
       },
       v2: {
         rendered: safeGetVisualPreviewProperty(v2Result, 'rendered') === true,
         state: _normalizeSideStateString(rawV2State),
         visualAdjustmentsApplied: (rawV2Effect === true || rawV2Effect === false) ? rawV2Effect : null,
         warnings: v2WarningsWithLabel.slice(0, 6),
+        warningCodes: v2WarningCodesWithLabel.slice(0, 6),
       },
       bothRendered: safeGetVisualPreviewProperty(vprState, 'bothRendered') === true,
       visualComparisonAvailable: safeGetVisualPreviewProperty(vprState, 'visualComparisonAvailable') === true,
@@ -1521,6 +1561,7 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
         previewStatus: {
           legacyState: compact.legacy.state, v2State: compact.v2.state,
           legacyWarnings: compact.legacy.warnings, v2Warnings: compact.v2.warnings,
+          legacyWarningCodes: compact.legacy.warningCodes, v2WarningCodes: compact.v2.warningCodes,
         },
       });
     } else {
@@ -1786,11 +1827,12 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
     // this must read "Not evaluated", never be conflated with a real
     // geometry failure.
     let alignmentStatusText;
-    if (alignSameRatio === false) alignmentStatusText = 'Blocked geometry';
-    else if (alignNormalized === true) alignmentStatusText = 'Normalized once';
-    else if (alignExactMatch === true) alignmentStatusText = 'Exact dimensions';
-    else if (alignSameRatio === null && alignExactMatch === null) alignmentStatusText = 'Not evaluated — both previews are required';
-    else alignmentStatusText = 'Unknown';
+    let alignmentStatusCode;
+    if (alignSameRatio === false) { alignmentStatusText = 'Blocked geometry'; alignmentStatusCode = 'BLOCKED_GEOMETRY'; }
+    else if (alignNormalized === true) { alignmentStatusText = 'Normalized once'; alignmentStatusCode = 'NORMALIZED_ONCE'; }
+    else if (alignExactMatch === true) { alignmentStatusText = 'Exact dimensions'; alignmentStatusCode = 'EXACT_DIMENSIONS'; }
+    else if (alignSameRatio === null && alignExactMatch === null) { alignmentStatusText = 'Not evaluated — both previews are required'; alignmentStatusCode = 'NOT_EVALUATED'; }
+    else { alignmentStatusText = 'Unknown'; alignmentStatusCode = 'UNKNOWN'; }
 
     const obsStateForContext = interactivePreviewObservationController.getState();
     const obsMeta = safeGetVisualPreviewProperty(obsStateForContext, 'metadata');
@@ -1827,7 +1869,13 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
       generationId,
       legacyStatus: typeof cleanLegacyStatus === 'string' ? cleanLegacyStatus : 'Unknown',
       v2Status: typeof cleanV2Status === 'string' ? cleanV2Status : 'Unknown',
+      // I18N RUNTIME CLOSURE R3 -- Phase G: the confirmed Observation
+      // Runtime leak ("Exact dimensions" shown untranslated in Thai
+      // mode) -- additive STABLE CODE alongside the existing raw
+      // English `alignmentStatus`, which is kept for back-compat/dev
+      // fallback only.
       alignmentStatus: alignmentStatusText,
+      alignmentStatusCode: alignmentStatusCode,
       generationConfirmed: generationConfirmedForContext,
     };
     state.lastObservationContextInfo = observationContextInfo;

@@ -74,6 +74,13 @@ const STATIC_SUITES = [
   'qa/epic-2e-j-xmp-evidence-invariant-static-test.mjs',
   'qa/epic-2e-j-i18n-visible-text-audit-static-test.mjs',
   'qa/epic-2e-j-i18n-coverage-report-static-test.mjs',
+  // I18N RUNTIME CLOSURE + QA INTEGRITY R3 -- Phase J: static audit's
+  // own regression guard against the 7 QA-integrity defect classes the
+  // EP9CD1 review found (Playwright contract mismatch, wrong button
+  // selector, hardcoded-true acceptance, mixed-language fail-open,
+  // inline bilingual branches, uncoded raw arrays, wrong DOM
+  // selectors) -- each with a hostile self-test.
+  'qa/epic-2e-j-r3-qa-integrity-static-test.mjs',
 ];
 
 let anyFailed = false;

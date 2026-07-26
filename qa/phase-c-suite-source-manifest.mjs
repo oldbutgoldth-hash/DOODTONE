@@ -114,6 +114,17 @@ export const SUITE_SOURCE_FILES = {
     'ui/review-console-renderer.js',
     'ui/side-by-side-comparison-renderer.js',
     'ui/visual-preview-comparison-renderer-v2.js',
+    // I18N RUNTIME CLOSURE + QA INTEGRITY R3 -- Phase K: these four
+    // files were newly touched by R3 Phase G (Visual Preview honesty-
+    // warning reasonCodes, Interactive Before/After blockerCodes/
+    // warningCodes threading, Observation alignmentStatusCode) --
+    // omitting them from this staleness manifest would let a stale
+    // cached PASS survive a real regression in exactly the files this
+    // suite exists to prove clean.
+    'ui/isolated-visual-preview-renderer-v2.js',
+    'ui/interactive-before-after-controller-v2.js',
+    'ui/interactive-before-after-renderer-v2.js',
+    'ui/interactive-preview-observation-renderer-v2.js',
   ],
   controlledV2Browser: [
     'qa/epic-2e-j-controlled-v2-browser-test.mjs',

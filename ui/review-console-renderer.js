@@ -71,6 +71,7 @@ import { t } from './i18n/index.js';
 import {
   presentReviewItemField, presentUnknownReviewItemNote, isCanonicalReviewItemId,
   presentRiskLevel, presentReviewSummaryState,
+  presentReviewBlockerCode, presentReviewWarningCode, presentReviewGuidanceCode,
 } from './i18n/domain-presenters.js';
 
 const STATUS_COLOR = { passed: 'var(--success)', failed: 'var(--danger)', pending: 'var(--text-faint)', unavailable: 'var(--text-faint)', 'not-required': 'var(--text-faint)' };
@@ -355,6 +356,33 @@ function _mergeAndDedupe(...lists) {
 }
 
 /**
+ * I18N RUNTIME CLOSURE R3 — Phase E: the code-array counterpart of
+ * `_mergeAndDedupe()` above — merges the additive `blockerCodes`/
+ * `warningCodes` arrays (each entry `{ code, params }`, added
+ * alongside the existing English `blockers`/`warnings` arrays in
+ * core/lightroom-mapping-engine/mapping-v2-preview-review-state.js and
+ * mapping-v2-overlay-preview-sandbox.js — never replacing them).
+ * Dedupes by `code|JSON(params)` signature. A malformed entry (missing
+ * `code`, non-record `params`) is silently skipped, never crashes.
+ */
+function _mergeAndDedupeCodes(...lists) {
+  const seen = new Set();
+  const out = [];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const raw of list) {
+      if (!_isRecord(raw) || typeof raw.code !== 'string' || !raw.code) continue;
+      const params = _isRecord(raw.params) ? raw.params : null;
+      const signature = `${raw.code}|${JSON.stringify(params)}`;
+      if (seen.has(signature)) continue;
+      seen.add(signature);
+      out.push({ code: raw.code, params });
+    }
+  }
+  return out;
+}
+
+/**
  * Normalizes a reviewProgress record into safe, finite, non-negative
  * display values. Never produces NaN/Infinity/undefined/negative
  * counts and never silently shows 0% when progress genuinely cannot
@@ -626,7 +654,14 @@ function renderChecklistItem(item, uiState, lang) {
   const itemLabel = canonicalTitle ?? _safeText(item.label, t('review.console.untitledItem', null, lang));
   const isDeveloperDefinedItem = !isCanonicalReviewItemId(item.id);
   labelCol.appendChild(el('div', { style: 'font-size:13px;font-weight:600;color:var(--text);overflow-wrap:anywhere', text: itemLabel }));
-  const descriptionText = _safeText(item.description, '');
+  // I18N RUNTIME CLOSURE R3 — Phase E: for the ten canonical items the
+  // visible description must ALSO come from the stable ID (mirrors
+  // canonicalTitle immediately above) — this call site was the single
+  // biggest source of the 28 Runtime leaks the R3 review found, since
+  // every canonical item's raw Core English `item.description` was
+  // rendered unconditionally with no canonical override at all.
+  const canonicalDescription = presentReviewItemField(item.id, 'description', lang);
+  const descriptionText = canonicalDescription ?? _safeText(item.description, '');
   if (descriptionText) {
     labelCol.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:2px;line-height:1.4;overflow-wrap:anywhere', text: descriptionText }));
   }
@@ -649,11 +684,22 @@ function renderChecklistItem(item, uiState, lang) {
   if (reasonText) {
     wrap.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:6px;font-style:italic;overflow-wrap:anywhere', text: reasonText }));
   }
+  // I18N RUNTIME CLOSURE R3 — Phase E: raw evidence field identifiers
+  // (selectedOutputSource=legacy, skinRisk=low, useLegacyMapping=true,
+  // ...) are internal diagnostic keys, not photographer-facing prose —
+  // per the spec these must live inside collapsed Developer Details,
+  // never in the always-visible card body. This is the same
+  // `common.developerDetails` <details>/<summary> pattern already used
+  // by ui/side-by-side-comparison-renderer.js.
   if (_isRecord(item.evidence) && Object.keys(item.evidence).length) {
-    const evWrap = el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:6px;font-family:var(--font-mono);overflow-wrap:anywhere' });
+    const evDetails = el('details', { style: 'margin-top:6px' });
+    const evSummary = el('summary', { style: 'cursor:pointer;font-size:10px;font-family:var(--font-mono);color:var(--text-faint);letter-spacing:.04em;text-transform:uppercase;min-height:28px;display:flex;align-items:center', text: t('common.developerDetails', null, lang) });
+    evDetails.appendChild(evSummary);
+    const evWrap = el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:4px;font-family:var(--font-mono);overflow-wrap:anywhere' });
     const parts = Object.entries(item.evidence).map(([k, v]) => `${_safeText(k, '?')}=${_safeText(v, 'null')}`);
     evWrap.textContent = parts.join(' \u00B7 '); // evidence values (e.g. "skinRisk=low") — plain text only, never HTML
-    wrap.appendChild(evWrap);
+    evDetails.appendChild(evWrap);
+    wrap.appendChild(evDetails);
   }
   // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase H:
   // FIX for Defect 3 -- a manual visual item's "no automatic evidence"
@@ -672,10 +718,20 @@ function renderChecklistItem(item, uiState, lang) {
       text: t('review.manualNoAutoEvidence', null, lang),
     }));
   } else if (itemWarnings.length) {
+    // I18N RUNTIME CLOSURE R3 — Phase E: every one of the four
+    // system-verified items' possible warnings follows the exact same
+    // Core template ('System evidence for "<title>" is missing or
+    // incomplete — never auto-passed.', see
+    // _evaluateSystemVerifiedAutoStatus() in
+    // mapping-v2-preview-review-state.js) — translated generically by
+    // ONE localized template using the item's own already-canonical
+    // title, rather than displaying Core's raw English sentence.
     const warnWrap = el('div', { style: 'margin-top:6px;display:flex;flex-direction:column;gap:3px' });
+    const translatedSystemWarning = t('review.console.systemEvidenceIncomplete', { title: itemLabel }, lang);
     for (const w of itemWarnings) {
-      const text = typeof w === 'string' ? w : _safeText(w, '(unrepresentable warning)');
-      if (!text) continue;
+      const rawText = typeof w === 'string' ? w : _safeText(w, '(unrepresentable warning)');
+      if (!rawText) continue;
+      const text = !isManualItem ? translatedSystemWarning : rawText; // !isManualItem === item.manual === false (system-verified) — isSystemVerified is defined later in this function
       warnWrap.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn);overflow-wrap:anywhere', text: `\u26A0  ${text}` }));
     }
     wrap.appendChild(warnWrap);
@@ -950,7 +1006,11 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
         guidanceWrap.appendChild(badge(t('review.console.systemProgress', { done: sysVerified, total: sysReq }, lang), sysVerified >= sysReq ? 'var(--success)' : 'var(--text-faint)'));
       }
       container.appendChild(guidanceWrap);
-      const primaryGuidanceText = _safeText(guidance.primaryGuidance, '');
+      // I18N RUNTIME CLOSURE R3 — Phase E: translate by stable code
+      // first (guidance.primaryGuidanceCode, additive alongside the
+      // raw English guidance.primaryGuidance which Core still emits
+      // and which is used only as the last-resort fallback).
+      const primaryGuidanceText = presentReviewGuidanceCode(guidance.primaryGuidanceCode, guidance.primaryGuidanceParams, lang, _safeText(guidance.primaryGuidance, ''));
       if (primaryGuidanceText) {
         container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text);margin-top:6px;overflow-wrap:anywhere', text: primaryGuidanceText }));
       }
@@ -994,22 +1054,40 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
   }
 
   // ── Blockers — merged and deduplicated from BOTH sources ─────────────────
+  // I18N RUNTIME CLOSURE R3 — Phase E: these three section headings
+  // were literal English strings ('Blockers'/'Warnings'/'Rollback')
+  // passed directly to sectionHeading() — never routed through t(),
+  // even though the matching review.console.blockers/.warnings/
+  // .rollback dictionary keys already existed in both locales. Also,
+  // blockers/warnings themselves are now translated by stable code
+  // (via presentReviewBlockerCode/presentReviewWarningCode) whenever
+  // Core supplied one, with the raw English merged-and-deduped string
+  // kept only as the last-resort fallback for a genuinely unknown
+  // blocker/warning (never silently dropped).
+  const blockerCodes = _mergeAndDedupeCodes(reviewRecord?.blockerCodes, sandboxRecord?.blockerCodes);
   const blockers = _mergeAndDedupe(reviewRecord?.blockers, sandboxRecord?.blockers);
   if (blockers.length) {
-    container.appendChild(sectionHeading('Blockers', 'block'));
+    container.appendChild(sectionHeading(t('review.console.blockers', null, lang), 'block'));
     const blkWrap = el('div', { style: 'display:flex;flex-direction:column;gap:5px' });
-    for (const text of blockers) {
+    const translatedBlockers = blockerCodes.length
+      ? blockerCodes.map((entry) => presentReviewBlockerCode(entry.code, entry.params, lang))
+      : blockers.map((text) => presentReviewBlockerCode(null, null, lang, text));
+    for (const text of translatedBlockers) {
       blkWrap.appendChild(el('div', { style: 'font-size:11.5px;color:var(--danger);padding:6px 9px;background:var(--surface-2);border-radius:3px;border-left:2px solid var(--danger);overflow-wrap:anywhere', text }));
     }
     container.appendChild(blkWrap);
   }
 
   // ── Warnings — merged and deduplicated from BOTH sources ─────────────────
+  const warningCodes = _mergeAndDedupeCodes(reviewRecord?.warningCodes, sandboxRecord?.warningCodes);
   const warnings = _mergeAndDedupe(reviewRecord?.warnings, sandboxRecord?.warnings);
   if (warnings.length) {
-    container.appendChild(sectionHeading('Warnings', 'warning'));
+    container.appendChild(sectionHeading(t('review.console.warnings', null, lang), 'warning'));
     const warnWrap = el('div', { style: 'display:flex;flex-direction:column;gap:4px' });
-    for (const text of warnings) {
+    const translatedWarnings = warningCodes.length
+      ? warningCodes.map((entry) => presentReviewWarningCode(entry.code, entry.params, lang))
+      : warnings.map((text) => presentReviewWarningCode(null, null, lang, text));
+    for (const text of translatedWarnings) {
       warnWrap.appendChild(el('div', { style: 'font-size:11px;color:var(--warn);overflow-wrap:anywhere', text: `\u26A0  ${text}` }));
     }
     container.appendChild(warnWrap);
@@ -1020,19 +1098,27 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
     : _isRecord(sandboxRecord?.rollbackPlan) ? sandboxRecord.rollbackPlan
     : null;
   if (rollback) {
-    container.appendChild(sectionHeading('Rollback', 'settings_backup_restore'));
-    container.appendChild(listRow('Available', rollback.available === true ? 'Yes' : 'No'));
+    container.appendChild(sectionHeading(t('review.console.rollback', null, lang), 'settings_backup_restore'));
+    container.appendChild(listRow(t('review.console.available', null, lang), rollback.available === true ? t('common.yes', null, lang) : t('common.no', null, lang)));
     const restoreSourceText = _safeText(rollback.restoreSource, '');
-    if (restoreSourceText) container.appendChild(listRow(t('review.console.restoreSource', null, lang), restoreSourceText));
+    if (restoreSourceText) container.appendChild(listRow(t('review.console.restoreSource', null, lang), restoreSourceText === 'legacy' ? t('common.legacy', null, lang) || restoreSourceText : restoreSourceText));
     if (Array.isArray(rollback.steps) && rollback.steps.length) {
       const stepsList = el('ol', { style: 'margin:6px 0 0;padding-left:18px;font-size:11.5px;color:var(--text-dim);line-height:1.7;overflow-wrap:anywhere' });
-      for (const step of rollback.steps) {
-        stepsList.appendChild(el('li', { text: _safeText(step, '(unrepresentable step)') }));
-      }
+      // The five rollback steps are a fixed, stable sequence (never
+      // dynamic/parameterized) — translated by ordinal position via
+      // the review.console.rollbackStep.<n> dictionary namespace,
+      // falling back to Core's raw English only for an unexpected
+      // (6th+) step, which should never happen in practice.
+      rollback.steps.forEach((step, idx) => {
+        const stepKey = `review.console.rollbackStep.${idx}`;
+        const translated = t(stepKey, null, lang);
+        const text = translated !== stepKey ? translated : _safeText(step, '(unrepresentable step)');
+        stepsList.appendChild(el('li', { text }));
+      });
       container.appendChild(stepsList);
     }
   } else {
-    container.appendChild(sectionHeading('Rollback', 'settings_backup_restore'));
+    container.appendChild(sectionHeading(t('review.console.rollback', null, lang), 'settings_backup_restore'));
     container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-faint)', text: t('review.rollbackUnavailable', null, lang) }));
   }
 }

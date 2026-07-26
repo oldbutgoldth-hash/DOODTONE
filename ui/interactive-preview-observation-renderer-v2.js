@@ -494,7 +494,20 @@ export function renderInteractivePreviewObservationContextV2(container, contextI
   const unknownLabel = t('observation.context.unknown', null, lang);
   const legacyStatus = _safeText(_safeGetR(c, 'legacyStatus')) ?? unknownLabel;
   const v2Status = _safeText(_safeGetR(c, 'v2Status')) ?? unknownLabel;
-  const alignmentStatus = _safeText(_safeGetR(c, 'alignmentStatus')) ?? unknownLabel;
+  const alignmentStatusCode = _safeText(_safeGetR(c, 'alignmentStatusCode'));
+  const alignmentStatusRaw = _safeText(_safeGetR(c, 'alignmentStatus'));
+  // I18N RUNTIME CLOSURE R3 -- Phase G: prefer the STABLE CODE
+  // (translated) over the raw English `alignmentStatus` -- the raw
+  // text is the fallback only when no code is supplied (older/
+  // unrecognized producer), same fail-open-toward-visibility
+  // convention used throughout R3.
+  const alignmentStatus = alignmentStatusCode
+    ? (() => {
+        const key = `observation.context.alignmentStatusCode.${alignmentStatusCode}`;
+        const text = t(key, null, lang);
+        return text === key ? (alignmentStatusRaw ?? unknownLabel) : text;
+      })()
+    : (alignmentStatusRaw ?? unknownLabel);
   const rawConfirmed = _safeGetR(c, 'generationConfirmed');
   const confirmedLabel = rawConfirmed === true ? t('observation.context.confirmed', null, lang) : rawConfirmed === false ? t('observation.context.contextFallback', null, lang) : t('observation.context.unavailable', null, lang);
 

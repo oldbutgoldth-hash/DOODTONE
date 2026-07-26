@@ -119,6 +119,126 @@ export function presentBlockerCode(code, lang) {
   return _present('previewCode.blocker', code, 'previewCode.unknownCode', lang);
 }
 
+/**
+ * I18N RUNTIME CLOSURE R3 — Phase G: Interactive Before/After
+ * blocker/warning codes (CANCELLED_NEWER_ANALYSIS,
+ * SAFETY_ANOMALY_BLOCKED, V2_PREVIEW_FAILED, ...), emitted additively
+ * by `interactive-before-after-controller-v2.js`'s pure
+ * `deriveInteractiveBeforeAfterStateV2()` alongside its existing raw
+ * English `blockers`/`warnings` arrays.
+ */
+export function presentBeforeAfterBlockerCode(code, lang) {
+  return _present('beforeAfter.blockerCode', code, 'beforeAfter.blockerCode.unknown', lang);
+}
+
+export function presentBeforeAfterWarningCode(code, lang) {
+  // NOTE: warningCodes reaching Before/After are merged from TWO
+  // sources -- this controller's own codes (BOTH_NO_SUPPORTED_
+  // ADJUSTMENTS, SAFETY_EVIDENCE_NOT_CONFIRMED, V2_SAFETY_RESTRAINT_
+  // LABEL, V2_IDENTITY_FALLBACK_LABEL, under `beforeAfter.warningCode`)
+  // AND the isolated Visual Preview renderer's honesty/limitation
+  // codes (BROWSER_APPROXIMATION, RAW_NOT_SIMULATED, CAMERA_PROFILE_
+  // NOT_REPRODUCED, ...) that are threaded through unchanged from each
+  // side's own `warningCodes` (already dictionaried under
+  // `previewCode.limitation`, per `presentLimitationCode` above) --
+  // try the Before/After namespace first, then fall back to the
+  // shared limitation namespace, before finally giving up.
+  const safe = _safeCode(code);
+  if (!safe) return t('beforeAfter.warningCode.unknown', null, lang);
+  const primaryKey = `beforeAfter.warningCode.${safe}`;
+  const primaryText = t(primaryKey, null, lang);
+  if (primaryText !== primaryKey) return primaryText;
+  const limitationKey = `previewCode.limitation.${safe}`;
+  const limitationText = t(limitationKey, null, lang);
+  if (limitationText !== limitationKey) return limitationText;
+  return t('beforeAfter.warningCode.unknown', null, lang);
+}
+
+/**
+ * I18N RUNTIME CLOSURE R3 — Phase F: Data Comparison blocker/warning/
+ * recommendation/summary codes, emitted additively by
+ * `mapping-v2-side-by-side-comparison.js`'s `buildSideBySidePreviewComparisonV2()`
+ * alongside its existing raw English `blockers`/`warnings`/
+ * `recommendations`/`photographerSummary` fields.
+ */
+export function presentComparisonBlockerCode(code, params, lang, rawFallbackText = '') {
+  const safe = _safeCode(code);
+  if (!safe) return rawFallbackText || t('comparison.blockerCode.unknown', null, lang);
+  const key = `comparison.blockerCode.${safe}`;
+  const text = t(key, params ?? null, lang);
+  return text === key ? (rawFallbackText || t('comparison.blockerCode.unknown', null, lang)) : text;
+}
+
+export function presentComparisonWarningCode(code, params, lang, rawFallbackText = '') {
+  const safe = _safeCode(code);
+  if (!safe) return rawFallbackText || t('comparison.warningCode.unknown', null, lang);
+  const key = `comparison.warningCode.${safe}`;
+  const text = t(key, params ?? null, lang);
+  return text === key ? (rawFallbackText || t('comparison.warningCode.unknown', null, lang)) : text;
+}
+
+export function presentComparisonRecommendationCode(code, params, lang, rawFallbackText = '') {
+  const safe = _safeCode(code);
+  if (!safe) return rawFallbackText || t('comparison.recommendationCode.unknown', null, lang);
+  const key = `comparison.recommendationCode.${safe}`;
+  const text = t(key, params ?? null, lang);
+  return text === key ? (rawFallbackText || t('comparison.recommendationCode.unknown', null, lang)) : text;
+}
+
+export function presentComparisonSummaryCode(code, lang, rawFallbackText = '') {
+  const safe = _safeCode(code);
+  if (!safe) return rawFallbackText || t('comparison.summaryCode.unknown', null, lang);
+  const key = `comparison.summaryCode.${safe}`;
+  const text = t(key, null, lang);
+  return text === key ? (rawFallbackText || t('comparison.summaryCode.unknown', null, lang)) : text;
+}
+
+/**
+ * I18N RUNTIME CLOSURE R3 — Phase E: Review Console blocker/warning
+ * codes (NO_SANDBOX_AVAILABLE, REQUIRED_ITEM_FAILED, ...), emitted
+ * additively alongside the existing English `blockers`/`warnings`
+ * arrays by mapping-v2-preview-review-state.js and
+ * mapping-v2-overlay-preview-sandbox.js. `rawFallbackText` is the
+ * corresponding raw Core English sentence (already merged/deduped by
+ * the renderer) — used ONLY when `code` is missing/unrecognized, so a
+ * genuinely new blocker/warning Core adds before its code is wired up
+ * is never silently hidden, just shown in English until the dictionary
+ * catches up (fail-open toward visibility, never toward data loss).
+ */
+export function presentReviewBlockerCode(code, params, lang, rawFallbackText = '') {
+  const safe = _safeCode(code);
+  if (!safe) return rawFallbackText || t('review.blockerCode.unknown', null, lang);
+  const key = `review.blockerCode.${safe}`;
+  const text = t(key, params ?? null, lang);
+  return text === key ? (rawFallbackText || t('review.blockerCode.unknown', null, lang)) : text;
+}
+
+export function presentReviewWarningCode(code, params, lang, rawFallbackText = '') {
+  const safe = _safeCode(code);
+  if (!safe) return rawFallbackText || t('review.warningCode.unknown', null, lang);
+  const key = `review.warningCode.${safe}`;
+  const text = t(key, params ?? null, lang);
+  return text === key ? (rawFallbackText || t('review.warningCode.unknown', null, lang)) : text;
+}
+
+/**
+ * I18N RUNTIME CLOSURE R3 — Phase E: the Review Console's top
+ * "primary guidance" sentence (READY_TO_BUILD_V2,
+ * NEEDS_ADJUSTMENT_OR_FAILED, REVIEW_REMAINING_VISUAL_ITEMS,
+ * HUMAN_REVIEW_NOT_REQUIRED), emitted additively alongside Core's
+ * existing English `reviewGuidance.primaryGuidance` string by both
+ * _buildReviewGuidance() (mapping-v2-preview-review-state.js) and the
+ * local `reviewGuidance` builder in
+ * mapping-v2-overlay-preview-sandbox.js.
+ */
+export function presentReviewGuidanceCode(code, params, lang, rawFallbackText = '') {
+  const safe = _safeCode(code);
+  if (!safe) return rawFallbackText || t('review.guidance.unknown', null, lang);
+  const key = `review.guidance.${safe}`;
+  const text = t(key, params ?? null, lang);
+  return text === key ? (rawFallbackText || t('review.guidance.unknown', null, lang)) : text;
+}
+
 /** Risk levels: low | medium | high | critical | unknown. */
 export function presentRiskLevel(level, lang) {
   const safe = _safeCode(level);

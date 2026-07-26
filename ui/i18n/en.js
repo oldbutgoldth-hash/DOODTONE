@@ -151,6 +151,46 @@ export const en = {
       none: 'None',
       activeCount: '{{count}} active',
       unrepresentableValue: '(unrepresentable value)',
+      systemEvidenceIncomplete: 'System evidence for "{{title}}" is missing or incomplete — this item is never auto-passed.',
+      rollbackStep: {
+        0: 'Discard the current human-review state.',
+        1: 'Discard the isolated preview object.',
+        2: 'Restore the selected output source to legacy.',
+        3: 'Keep production Lightroom Mapping unchanged.',
+        4: 'Keep the existing XMP export path unchanged.',
+      },
+    },
+    blockerCode: {
+      NO_SANDBOX_AVAILABLE: 'No Controlled Overlay Preview Sandbox is available to review.',
+      SANDBOX_NOT_PREVIEW_READY: 'The preview sandbox has not reached a preview-ready state yet.',
+      REQUIRED_ITEM_FAILED: 'A required review item failed — address it and re-review.',
+      REQUIRED_ITEM_NEEDS_ADJUSTMENT: 'A required review item needs adjustment before you can continue.',
+      PREVIEW_SANDBOX_DISABLED: 'The preview sandbox is currently disabled.',
+      OVERLAY_PREVIEW_GENERATION_DISABLED: 'Overlay preview generation is currently disabled.',
+      TEST_GATE_NOT_ELIGIBLE: 'The Controlled Overlay Test Gate does not yet indicate preview eligibility.',
+      HUMAN_REVIEW_FAILED: 'Human review has failed ({{pendingCount}} item(s) pending).',
+      HUMAN_REVIEW_INCOMPLETE: 'Human review is incomplete ({{pendingCount}} item(s) pending).',
+      SAFETY_CLAMP_HARD_STOPS: 'The Safety Clamp reports {{hardStopsCount}} hard stop(s) — resolve them before trusting this preview.',
+      OVERSTACK_RISK_CRITICAL: 'Over-stack risk is critical — reduce over-stacked tool combinations.',
+      LEGACY_OUTPUT_UNAVAILABLE: 'Legacy preset/mapping output is not fully available yet.',
+      V2_INPUTS_MISSING: '{{missingCount}} of 4 core V2 inputs are missing or incomplete.',
+      unknown: 'An unrecognized blocker is present — see Developer Details.',
+    },
+    warningCode: {
+      NO_SANDBOX_SUPPLIED: 'No preview sandbox has been supplied yet — review is being tracked ahead of an actual preview.',
+      SANDBOX_NOT_APPROVABLE: 'The preview sandbox exists but is not yet ready to be approved.',
+      SYSTEM_EVIDENCE_INCOMPLETE: '{{count}} system-verified review item(s) have incomplete automatic evidence.',
+      CORE_INPUTS_MISSING_SKETCH: '{{missingCount}} of 4 core inputs are missing or incomplete — preview eligibility reflects a rough sketch.',
+      HARD_STOPS_REQUIRE_REVIEW: '{{hardStopsCount}} active hard stop(s) require human review before proceeding.',
+      HUMAN_REVIEW_NOT_COMPLETE: 'Human review is not complete yet — never assumed passed by default.',
+      unknown: 'An unrecognized warning is present — see Developer Details.',
+    },
+    guidance: {
+      READY_TO_BUILD_V2: 'All required review items are complete — you can build the Controlled V2 Preview.',
+      NEEDS_ADJUSTMENT_OR_FAILED: 'Resolve the visual item(s) marked Needs Adjustment or Fail, then re-analyze.',
+      REVIEW_REMAINING_VISUAL_ITEMS: 'Review the remaining visual item(s) ({{remaining}} of {{total}} left), then re-analyze.',
+      HUMAN_REVIEW_NOT_REQUIRED: 'Human review is not required by the current settings.',
+      unknown: 'Review guidance is unavailable.',
     },
     risk: {
       overallLevel: 'Overall Level',
@@ -310,6 +350,44 @@ export const en = {
   },
   comparison: {
     sourceCode: { legacy: 'Legacy', legacyPreset: 'Legacy preset', legacyMapping: 'Legacy mapping', controlledV2Preview: 'Controlled V2 preview', unknown: 'Unknown' },
+    // I18N RUNTIME CLOSURE R3 -- Phase F: Data Comparison STABLE CODE
+    // dictionaries, additive alongside `mapping-v2-side-by-side-
+    // comparison.js`'s existing raw English blockers/warnings/
+    // recommendations/photographerSummary fields.
+    blockerCode: {
+      unknown: 'Unrecognised comparison blocker.',
+      BOTH_PREVIEWS_DATA_UNAVAILABLE: 'Both Legacy and V2 preview data are unavailable.',
+      V2_DATA_UNAVAILABLE: 'V2 preview is unavailable — nothing to compare against Legacy yet.',
+      LEGACY_EVIDENCE_MISSING: 'Legacy comparison evidence is missing.',
+      HARD_STOPS_ACTIVE: '{{count}} hard stop(s) are currently active.',
+      CRITICAL_OVERSTACK_ACTIVE: 'Critical over-stack severity is currently active.',
+      CONFIDENCE_TOO_LOW: 'Comparison confidence is too low (insufficient evidence).',
+      VISUAL_REVIEW_INCOMPLETE: 'Human visual evidence is required but not yet complete.',
+    },
+    warningCode: {
+      unknown: 'Unrecognised comparison notice.',
+      PARTIAL_EVIDENCE: 'Comparison is based on partial evidence — one or both preview sides are unavailable.',
+    },
+    recommendationCode: {
+      unknown: 'Unrecognised recommendation.',
+      CONTINUE_LEGACY_MAPPING: 'Continue using Legacy Mapping — production output is unaffected by this comparison.',
+      RERUN_OR_WAIT_FOR_SANDBOX: 'Rerun analysis or wait for the V2 Preview Sandbox to become eligible before comparing.',
+      REVIEW_SKIN_TONES_MANUALLY: 'Review skin tones manually.',
+      REVIEW_HIGHLIGHTS_MANUALLY: 'Review highlights manually.',
+      COMPARE_WHITE_BALANCE_VISUALLY: 'Compare white balance visually.',
+      RESOLVE_OVERSTACK_RISK: 'Resolve over-stack risk before further review.',
+      COLLECT_LEGACY_DATA: 'Collect legacy mapping data before drawing conclusions.',
+      COLLECT_MORE_EVIDENCE: 'Collect more evidence (rerun analysis) for a more reliable comparison.',
+      DO_NOT_ACTIVATE_PRODUCTION: 'Do not activate production output based on this comparison.',
+    },
+    summaryCode: {
+      unknown: 'Comparison summary unavailable.',
+      INSUFFICIENT_EVIDENCE: 'There is not enough evidence to compare the two previews reliably.',
+      V2_NOT_READY: 'The V2 preview is not ready yet, so there is nothing to compare against the Legacy preview right now. Legacy remains the active production path.',
+      V2_UNRESOLVED_SAFETY_CONCERNS: 'The V2 preview currently has unresolved safety concerns, so a confident comparison is not possible yet. Legacy remains the active production path.',
+      SIMILAR_NEEDS_MANUAL_REVIEW: 'The Legacy and V2 data comparisons are similar in most areas, but some parts still require manual human review — no rendered image preview is available yet. Legacy remains the active production path.',
+      DIFFERS_NEEDS_MANUAL_REVIEW: 'The Legacy and V2 data comparisons differ in some areas and still require manual human review before any conclusions are drawn — no rendered image preview is available yet. Legacy remains the active production path.',
+    },
     scoreLevel: { veryLow: 'Very low', low: 'Low', moderate: 'Moderate', high: 'High', veryHigh: 'Very high', unknown: 'Unknown' },
     field: {
       uncertain: 'Uncertain',
@@ -598,6 +676,33 @@ export const en = {
   },
   beforeAfter: {
       sliderAriaLabel: 'Comparison split between Legacy and Controlled V2 previews',
+    // I18N RUNTIME CLOSURE R3 -- Phase G: Interactive Before/After
+    // STABLE CODE dictionaries, additive alongside the controller's
+    // existing raw English blockers/warnings arrays.
+    blockerCode: {
+      unknown: 'Unrecognised comparison status.',
+      CANCELLED_NEWER_ANALYSIS: 'Interactive comparison was cancelled because a newer analysis is active.',
+      SAFETY_ANOMALY_BLOCKED: 'Interactive comparison is blocked because production safety evidence reports an anomaly.',
+      ALIGNMENT_BLOCKED_TOLERANCE: 'Alignment blocked: preview geometry differs beyond the safe tolerance.',
+      V2_PREVIEW_FAILED: 'Controlled V2 preview failed.',
+      V2_PREVIEW_BLOCKED: 'Controlled V2 preview blocked.',
+      V2_PREVIEW_UNAVAILABLE: 'Controlled V2 preview unavailable.',
+      LEGACY_PREVIEW_FAILED: 'Legacy preview failed.',
+      LEGACY_PREVIEW_BLOCKED: 'Legacy preview blocked.',
+      LEGACY_PREVIEW_UNAVAILABLE: 'Legacy preview unavailable.',
+      BOTH_PREVIEWS_FAILED: 'Interactive comparison could not be prepared. Existing analysis and production output were not changed.',
+      PREVIEW_STATE_BLOCKED: 'Interactive comparison is blocked because one preview did not pass its render requirements.',
+      CONTROLLER_DISPOSED: 'Interactive Before/After controller has been disposed.',
+    },
+    warningCode: {
+      unknown: 'Unrecognised comparison notice.',
+      BOTH_NO_SUPPORTED_ADJUSTMENTS: 'Both previews contain no supported visual adjustments and may appear identical.',
+      ONE_NO_SUPPORTED_ADJUSTMENT: 'One preview contains no supported visual adjustment and may match the source image.',
+      SAFETY_EVIDENCE_NOT_CONFIRMED: 'Production safety evidence is not fully confirmed.',
+      V2_SAFETY_RESTRAINT_LABEL: 'Right side: Controlled V2 — Safety-restraint preview (bounded restraints on the Legacy preview; not Lightroom/ACR, not Production).',
+      V2_IDENTITY_FALLBACK_LABEL: 'Right side: Controlled V2 — Identity fallback (no supported safety restraint produced a meaningful visual change; not the final V2 appearance).',
+    },
+
     title: 'Interactive Before / After',
     subtitle: 'Legacy vs. Controlled V2 · Approximate browser preview',
     notice: 'Before/After uses approximate browser previews and may differ from Lightroom and Adobe Camera Raw.',
@@ -728,6 +833,15 @@ export const en = {
       noneYet: 'None yet',
       available: 'Available',
       unknown: 'Unknown',
+      // I18N RUNTIME CLOSURE R3 -- Phase G: the confirmed Observation
+      // Runtime leak ("Exact dimensions" untranslated).
+      alignmentStatusCode: {
+        BLOCKED_GEOMETRY: 'Blocked geometry',
+        NORMALIZED_ONCE: 'Normalized once',
+        EXACT_DIMENSIONS: 'Exact dimensions',
+        NOT_EVALUATED: 'Not evaluated — both previews are required',
+        UNKNOWN: 'Unknown',
+      },
     },
   },
   session: {

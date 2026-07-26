@@ -1,13 +1,13 @@
 {
-  "suite": "FULL-SYSTEM I18N COMPLETION R2 — Phase M: full-system EN/TH Browser suite",
-  "runId": "edca28dd-5b9f-4c1b-bff1-3d831a6f3e66",
-  "startedAt": "2026-07-26T03:09:23.073Z",
-  "completedAt": "2026-07-26T03:09:23.073Z",
+  "suite": "I18N RUNTIME CLOSURE + QA INTEGRITY R3 — Phase I: full-system EN/TH Browser suite",
+  "runId": "7fd7cf30-5332-4f97-986a-870cdad8e777",
+  "startedAt": "2026-07-26T07:59:36.763Z",
+  "completedAt": "2026-07-26T07:59:36.763Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-26T03:09:23.073Z",
+  "generatedAt": "2026-07-26T07:59:36.763Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -17,8 +17,9 @@
   "results": [
     {
       "test": "Browser environment availability",
-      "result": "NOT_TESTED"
+      "result": "NOT_TESTED",
+      "evidence": "[{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
     }
   ],
-  "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"
+  "decision": "BROWSER_BINARY_UNAVAILABLE"
 }

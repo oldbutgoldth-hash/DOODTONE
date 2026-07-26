@@ -1,13 +1,13 @@
 {
   "suite": "EPIC 2E-J-C-F2 Step 7B-A Final Closeout (incl. Step 7B-A-F/F2/F3) - Privacy, Storage/Network, Session-Schema and Responsive Final Audit",
-  "runId": "f367cc9c-3873-42f1-9cdb-5fea8d90f96c",
-  "startedAt": "2026-07-26T03:09:20.332Z",
-  "completedAt": "2026-07-26T03:09:20.332Z",
+  "runId": "90b1c831-2a7f-4c29-ae40-30cca343a833",
+  "startedAt": "2026-07-26T07:59:34.061Z",
+  "completedAt": "2026-07-26T07:59:34.061Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-26T03:09:20.332Z",
+  "generatedAt": "2026-07-26T07:59:34.061Z",
   "summary": {
     "total": 1,
     "pass": 0,

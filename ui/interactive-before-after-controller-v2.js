@@ -294,6 +294,25 @@ function _dedupeWarnings(list, limit = 6) {
   return out;
 }
 
+// I18N RUNTIME CLOSURE R3 -- Phase G: parallel, additive STABLE CODE
+// dedupe -- never removes/repurposes `_dedupeWarnings` (raw English,
+// kept for Developer Details / legacy consumers). Codes are already
+// clean machine tokens, so this only bounds count and drops
+// non-string/empty/duplicate entries -- never invents a code.
+function _dedupeCodes(list, limit = 6) {
+  const seen = new Set();
+  const out = [];
+  for (const item of Array.isArray(list) ? list : []) {
+    if (typeof item !== 'string' || !item.trim()) continue;
+    const c = item.trim();
+    if (seen.has(c)) continue;
+    seen.add(c);
+    out.push(c);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 /**
  * FIX 7 (EPIC 2E-I-B-F): the single, authoritative state-priority
  * function — used both by `ui/app.js` (BEFORE any canvas bind is even
@@ -349,6 +368,8 @@ export function deriveInteractiveBeforeAfterStateV2(input) {
   const v2Effect = _triState(safeGet(v2Side, 'visualAdjustmentsApplied'));
   const legacyWarnings = _dedupeWarnings(safeGet(legacySide, 'warnings'));
   const v2Warnings = _dedupeWarnings(safeGet(v2Side, 'warnings'));
+  const legacyWarningCodes = _dedupeCodes(safeGet(legacySide, 'warningCodes'));
+  const v2WarningCodes = _dedupeCodes(safeGet(v2Side, 'warningCodes'));
 
   const legacyStatus = _friendlySideStatus('Legacy', legacyRendered, legacyState, legacyEffect);
   const v2Status = _friendlySideStatus('Controlled V2', v2Rendered, v2State, v2Effect);
@@ -365,6 +386,7 @@ export function deriveInteractiveBeforeAfterStateV2(input) {
       legacyAvailable: false, v2Available: false, bothAvailable: false, interactive: false,
       sourceGenerationId, currentGenerationId, alignment: alignment ?? emptyAlignment,
       warnings: [], blockers: ['Interactive comparison was cancelled because a newer analysis is active.'],
+      warningCodes: [], blockerCodes: ['CANCELLED_NEWER_ANALYSIS'],
       metadata: baseMetadata,
     };
   }
@@ -377,7 +399,9 @@ export function deriveInteractiveBeforeAfterStateV2(input) {
       legacyAvailable: legacyRendered, v2Available: v2Rendered, bothAvailable: legacyRendered && v2Rendered, interactive: false,
       sourceGenerationId, currentGenerationId, alignment: alignment ?? emptyAlignment,
       warnings: _dedupeWarnings([...legacyWarnings, ...v2Warnings]),
+      warningCodes: _dedupeCodes([...legacyWarningCodes, ...v2WarningCodes]),
       blockers: ['Interactive comparison is blocked because production safety evidence reports an anomaly.'],
+      blockerCodes: ['SAFETY_ANOMALY_BLOCKED'],
       metadata: baseMetadata,
     };
   }
@@ -390,22 +414,27 @@ export function deriveInteractiveBeforeAfterStateV2(input) {
         legacyAvailable: true, v2Available: true, bothAvailable: true, interactive: false,
         sourceGenerationId, currentGenerationId, alignment,
         warnings: _dedupeWarnings([...legacyWarnings, ...v2Warnings]),
+        warningCodes: _dedupeCodes([...legacyWarningCodes, ...v2WarningCodes]),
         blockers: ['Alignment blocked: preview geometry differs beyond the safe tolerance.'],
+        blockerCodes: ['ALIGNMENT_BLOCKED_TOLERANCE'],
         metadata: baseMetadata,
       };
     }
     const legacyNoOp = legacyEffect === false;
     const v2NoOp = v2Effect === false;
     const effectWarnings = [];
-    if (legacyNoOp && v2NoOp) effectWarnings.push('Both previews contain no supported visual adjustments and may appear identical.');
-    else if (legacyNoOp || v2NoOp) effectWarnings.push('One preview contains no supported visual adjustment and may match the source image.');
+    const effectWarningCodes = [];
+    if (legacyNoOp && v2NoOp) { effectWarnings.push('Both previews contain no supported visual adjustments and may appear identical.'); effectWarningCodes.push('BOTH_NO_SUPPORTED_ADJUSTMENTS'); }
+    else if (legacyNoOp || v2NoOp) { effectWarnings.push('One preview contains no supported visual adjustment and may match the source image.'); effectWarningCodes.push('ONE_NO_SUPPORTED_ADJUSTMENT'); }
     const missingSafetyWarning = _hasMissingSafetyEvidence(safety) ? ['Production safety evidence is not fully confirmed.'] : [];
+    const missingSafetyWarningCode = _hasMissingSafetyEvidence(safety) ? ['SAFETY_EVIDENCE_NOT_CONFIRMED'] : [];
     return {
       state: 'ready', blockedReason: null, splitPercent,
       legacyAvailable: true, v2Available: true, bothAvailable: true, interactive: true,
       sourceGenerationId, currentGenerationId, alignment: alignment ?? emptyAlignment,
       warnings: _dedupeWarnings([...effectWarnings, ...missingSafetyWarning, ...legacyWarnings, ...v2Warnings]),
-      blockers: [], metadata: baseMetadata,
+      warningCodes: _dedupeCodes([...effectWarningCodes, ...missingSafetyWarningCode, ...legacyWarningCodes, ...v2WarningCodes]),
+      blockers: [], blockerCodes: [], metadata: baseMetadata,
     };
   }
 
@@ -415,12 +444,17 @@ export function deriveInteractiveBeforeAfterStateV2(input) {
     const missingLabel = legacyRendered
       ? (v2State === 'failed' ? 'Controlled V2 preview failed.' : v2State === 'blocked' ? 'Controlled V2 preview blocked.' : 'Controlled V2 preview unavailable.')
       : (legacyState === 'failed' ? 'Legacy preview failed.' : legacyState === 'blocked' ? 'Legacy preview blocked.' : 'Legacy preview unavailable.');
+    const missingCode = legacyRendered
+      ? (v2State === 'failed' ? 'V2_PREVIEW_FAILED' : v2State === 'blocked' ? 'V2_PREVIEW_BLOCKED' : 'V2_PREVIEW_UNAVAILABLE')
+      : (legacyState === 'failed' ? 'LEGACY_PREVIEW_FAILED' : legacyState === 'blocked' ? 'LEGACY_PREVIEW_BLOCKED' : 'LEGACY_PREVIEW_UNAVAILABLE');
     return {
       state: 'partial', blockedReason: null, splitPercent: 50,
       legacyAvailable: legacyRendered, v2Available: v2Rendered, bothAvailable: false, interactive: false,
       sourceGenerationId: null, currentGenerationId, alignment: emptyAlignment,
       warnings: _dedupeWarnings([...legacyWarnings, ...v2Warnings]),
+      warningCodes: _dedupeCodes([...legacyWarningCodes, ...v2WarningCodes]),
       blockers: [missingLabel],
+      blockerCodes: [missingCode],
       metadata: baseMetadata,
     };
   }
@@ -433,7 +467,9 @@ export function deriveInteractiveBeforeAfterStateV2(input) {
       legacyAvailable: false, v2Available: false, bothAvailable: false, interactive: false,
       sourceGenerationId: null, currentGenerationId, alignment: emptyAlignment,
       warnings: _dedupeWarnings([...legacyWarnings, ...v2Warnings]),
+      warningCodes: _dedupeCodes([...legacyWarningCodes, ...v2WarningCodes]),
       blockers: ['Interactive comparison could not be prepared. Existing analysis and production output were not changed.'],
+      blockerCodes: ['BOTH_PREVIEWS_FAILED'],
       metadata: baseMetadata,
     };
   }
@@ -445,7 +481,9 @@ export function deriveInteractiveBeforeAfterStateV2(input) {
       legacyAvailable: false, v2Available: false, bothAvailable: false, interactive: false,
       sourceGenerationId: null, currentGenerationId, alignment: emptyAlignment,
       warnings: _dedupeWarnings([...legacyWarnings, ...v2Warnings]),
+      warningCodes: _dedupeCodes([...legacyWarningCodes, ...v2WarningCodes]),
       blockers: ['Interactive comparison is blocked because one preview did not pass its render requirements.'],
+      blockerCodes: ['PREVIEW_STATE_BLOCKED'],
       metadata: baseMetadata,
     };
   }
@@ -457,7 +495,7 @@ export function deriveInteractiveBeforeAfterStateV2(input) {
       state: 'preparing', blockedReason: null, splitPercent: 50,
       legacyAvailable: false, v2Available: false, bothAvailable: false, interactive: false,
       sourceGenerationId: null, currentGenerationId, alignment: emptyAlignment,
-      warnings: [], blockers: [],
+      warnings: [], blockers: [], warningCodes: [], blockerCodes: [],
       metadata: baseMetadata,
     };
   }
@@ -469,7 +507,7 @@ export function deriveInteractiveBeforeAfterStateV2(input) {
     state: 'unavailable', blockedReason: null, splitPercent: 50,
     legacyAvailable: false, v2Available: false, bothAvailable: false, interactive: false,
     sourceGenerationId: null, currentGenerationId, alignment: emptyAlignment,
-    warnings: [], blockers: [],
+    warnings: [], blockers: [], warningCodes: [], blockerCodes: [],
     metadata: baseMetadata,
   };
 }
@@ -487,6 +525,8 @@ function _unavailableState(extra = {}) {
     alignment: _computeAlignment(null, null),
     warnings: [],
     blockers: [],
+    warningCodes: [],
+    blockerCodes: [],
     metadata: { legacyVisualAdjustmentsApplied: null, v2VisualAdjustmentsApplied: null },
     ...extra,
   };
@@ -623,7 +663,7 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
   }
 
   function _computeInteractiveState() {
-    if (disposed) return _unavailableState({ warnings: [], blockers: ['Interactive Before/After controller has been disposed.'] });
+    if (disposed) return _unavailableState({ warnings: [], blockers: ['Interactive Before/After controller has been disposed.'], blockerCodes: ['CONTROLLER_DISPOSED'] });
 
     // FIX 7 (EPIC 2E-I-B-F): delegates to the single shared
     // state-priority function — after a canvas bind attempt,
@@ -633,8 +673,8 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     // caller supplied via `updateSources()`'s `previewStatus`.
     return deriveInteractiveBeforeAfterStateV2({
       stale: _isStale(),
-      legacySide: { rendered: legacyAvailable, state: legacyAvailable ? 'rendered' : (safeGet(legacySideState, 'state') ?? 'unavailable'), visualAdjustmentsApplied: legacyVisualAdjustmentsApplied, warnings: safeGet(legacySideState, 'warnings') },
-      v2Side: { rendered: v2Available, state: v2Available ? 'rendered' : (safeGet(v2SideState, 'state') ?? 'unavailable'), visualAdjustmentsApplied: v2VisualAdjustmentsApplied, warnings: safeGet(v2SideState, 'warnings') },
+      legacySide: { rendered: legacyAvailable, state: legacyAvailable ? 'rendered' : (safeGet(legacySideState, 'state') ?? 'unavailable'), visualAdjustmentsApplied: legacyVisualAdjustmentsApplied, warnings: safeGet(legacySideState, 'warnings'), warningCodes: safeGet(legacySideState, 'warningCodes') },
+      v2Side: { rendered: v2Available, state: v2Available ? 'rendered' : (safeGet(v2SideState, 'state') ?? 'unavailable'), visualAdjustmentsApplied: v2VisualAdjustmentsApplied, warnings: safeGet(v2SideState, 'warnings'), warningCodes: safeGet(v2SideState, 'warningCodes') },
       safety: safetyEvidence,
       alignment,
       splitPercent,
@@ -673,8 +713,8 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     // deriveInteractiveBeforeAfterStateV2() helper, never to alter
     // pixel data or source validity.
     const rawPreviewStatus = _isRecord(previewStatus) ? previewStatus : null;
-    legacySideState = { state: safeGet(rawPreviewStatus, 'legacyState'), warnings: safeGet(rawPreviewStatus, 'legacyWarnings') };
-    v2SideState = { state: safeGet(rawPreviewStatus, 'v2State'), warnings: safeGet(rawPreviewStatus, 'v2Warnings') };
+    legacySideState = { state: safeGet(rawPreviewStatus, 'legacyState'), warnings: safeGet(rawPreviewStatus, 'legacyWarnings'), warningCodes: safeGet(rawPreviewStatus, 'legacyWarningCodes') };
+    v2SideState = { state: safeGet(rawPreviewStatus, 'v2State'), warnings: safeGet(rawPreviewStatus, 'v2Warnings'), warningCodes: safeGet(rawPreviewStatus, 'v2WarningCodes') };
 
     const proposedGenerationId = generationId ?? null;
     // FIX 2 (EPIC 2E-I-B-F2): normalize via the shared single-read
@@ -697,6 +737,7 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
         state: 'cancelled',
         currentGenerationId: _currentGeneration(),
         blockers: ['Interactive comparison was cancelled because a newer analysis is active.'],
+        blockerCodes: ['CANCELLED_NEWER_ANALYSIS'],
       });
     }
 
@@ -990,7 +1031,7 @@ export function createInteractiveBeforeAfterControllerV2(options = {}) {
     }
     listeners.length = 0;
     _clearDisplayCanvases();
-    lastState = _unavailableState({ blockers: ['Interactive Before/After controller has been disposed.'] });
+    lastState = _unavailableState({ blockers: ['Interactive Before/After controller has been disposed.'], blockerCodes: ['CONTROLLER_DISPOSED'] });
   }
 
   function getState() {

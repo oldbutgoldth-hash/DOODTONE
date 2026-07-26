@@ -334,6 +334,38 @@ function _buildFallbackStrategy(reason) {
  * checklist, and can never show guidance like "review all 10 items"
  * when four of them are already system-verified and read-only.
  */
+/**
+ * I18N RUNTIME CLOSURE + QA INTEGRITY R3 — Phase E: additive, stable
+ * blocker/warning CODE arrays parallel to the existing English
+ * `blockers`/`warnings` arrays built by both _buildReviewState (fresh
+ * create) and updatePreviewReviewItemV2 (incremental update) below —
+ * never replacing the English text (existing consumers/tests keep
+ * working unchanged), only giving the UI a locale-independent signal
+ * to translate by. Each entry is `{ code, params }`; `params` is
+ * always a small bounded object of primitives (itemId/counts), never
+ * a raw internal object.
+ */
+function _buildReviewBlockerCodes(items, sandboxAvailable, sandboxCanGeneratePreview) {
+  const codes = [];
+  if (!sandboxAvailable) codes.push({ code: 'NO_SANDBOX_AVAILABLE', params: null });
+  else if (sandboxCanGeneratePreview !== true) codes.push({ code: 'SANDBOX_NOT_PREVIEW_READY', params: null });
+  for (const item of items.filter(i => i.required && i.status === 'failed')) {
+    codes.push({ code: 'REQUIRED_ITEM_FAILED', params: { itemId: item.id } });
+  }
+  for (const item of items.filter(i => i.required && i.reviewerDecision === 'needs-adjustment')) {
+    codes.push({ code: 'REQUIRED_ITEM_NEEDS_ADJUSTMENT', params: { itemId: item.id } });
+  }
+  return codes;
+}
+
+function _buildReviewWarningCodes(sandboxAvailable, sandboxCanGeneratePreview, missingSystemEvidenceCount) {
+  const codes = [];
+  if (!sandboxAvailable) codes.push({ code: 'NO_SANDBOX_SUPPLIED', params: null });
+  if (sandboxAvailable && sandboxCanGeneratePreview !== true) codes.push({ code: 'SANDBOX_NOT_APPROVABLE', params: null });
+  if (missingSystemEvidenceCount > 0) codes.push({ code: 'SYSTEM_EVIDENCE_INCOMPLETE', params: { count: missingSystemEvidenceCount } });
+  return codes;
+}
+
 function _buildReviewGuidance(reviewItems) {
   const required = reviewItems.filter(i => i.required);
   const visualItems = required.filter(i => VISUAL_REVIEW_IDS.has(i.id));
@@ -362,6 +394,18 @@ function _buildReviewGuidance(reviewItems) {
       : needsAdjustmentOrFailed
         ? 'Resolve the visual item(s) marked Needs Adjustment or Fail, then re-analyze.'
         : `Review the remaining visual item(s) (${visualItems.length - visualPassed} of ${visualItems.length} left), then re-analyze.`,
+    // I18N RUNTIME CLOSURE R3 — Phase E: additive stable-code twin of
+    // `primaryGuidance` above — the UI must present THIS by locale,
+    // never the raw English sentence (which stays for Developer
+    // Details / non-UI consumers only).
+    primaryGuidanceCode: readyToBuildV2
+      ? 'READY_TO_BUILD_V2'
+      : needsAdjustmentOrFailed
+        ? 'NEEDS_ADJUSTMENT_OR_FAILED'
+        : 'REVIEW_REMAINING_VISUAL_ITEMS',
+    primaryGuidanceParams: readyToBuildV2 || needsAdjustmentOrFailed
+      ? null
+      : { remaining: visualItems.length - visualPassed, total: visualItems.length },
   };
 }
 
@@ -460,6 +504,8 @@ function _buildReviewState(input) {
     canApprovePreview: approval.canApprovePreview, canRequestAdjustment: approval.canRequestAdjustment,
     canRejectPreview: approval.canRejectPreview, approvalState: approval.approvalState,
     blockers, warnings, reasons,
+    blockerCodes: _buildReviewBlockerCodes(reviewItems, !!sandbox, sandbox?.canGeneratePreview === true),
+    warningCodes: _buildReviewWarningCodes(!!sandbox, sandbox?.canGeneratePreview === true, missingSystemEvidenceCount),
     rollbackPlan: _buildRollbackPlan(),
     fallbackStrategy: _buildFallbackStrategy('This review-state layer never writes production output or exported XMP — legacy Lightroom Mapping remains the exclusive production path regardless of review outcome.'),
     confidence,
@@ -662,6 +708,8 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
     canApprovePreview: approval.canApprovePreview, canRequestAdjustment: approval.canRequestAdjustment,
     canRejectPreview: approval.canRejectPreview, approvalState: approval.approvalState,
     blockers, warnings: dedupedWarnings, reasons,
+    blockerCodes: _buildReviewBlockerCodes(newItems, state?.metadata?.sandboxAvailable === true, state?.metadata?.sandboxCanGeneratePreview === true),
+    warningCodes: _buildReviewWarningCodes(state?.metadata?.sandboxAvailable === true, state?.metadata?.sandboxCanGeneratePreview === true, missingSystemEvidenceCount),
     rollbackPlan: _buildRollbackPlan(),
     fallbackStrategy: _buildFallbackStrategy('This review-state layer never writes production output or exported XMP — legacy Lightroom Mapping remains the exclusive production path regardless of review outcome.'),
     confidence: +clamp01((reviewProgress.percentage / 100) * 0.5 + (state?.confidence ?? 0.3) * 0.5).toFixed(3),

@@ -91,16 +91,31 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
 
 // ── Outcome announcement covers all three translationMode branches, honestly ──
 {
-  const coversSafetyRestraint = /translationMode === 'legacy-derived-safety-restraint'/.test(appSrc);
-  const coversIdentityFallback = /translationMode === 'identity-fallback'/.test(appSrc);
-  const hasHonestElseBranch = /Analysis complete, but the Controlled V2 preview is not yet available/.test(appSrc);
+  // I18N RUNTIME CLOSURE R3 — Phase H: the outcome announcement now
+  // resolves through the centralized dictionary
+  // (review.outcome.safetyRestraint/identityFallback/unavailable) via
+  // t('review.outcome.<key>', null, state.lang) instead of an inline
+  // isThai ternary — the same three distinct, honest outcomes are
+  // still covered, just sourced from one place instead of duplicated
+  // English/Thai literals in app.js itself.
+  const coversSafetyRestraint = /translationMode === 'legacy-derived-safety-restraint'/.test(appSrc)
+    && /t\('review\.outcome\.safetyRestraint', null, state\.lang\)/.test(appSrc);
+  const coversIdentityFallback = /translationMode === 'identity-fallback'/.test(appSrc)
+    && /t\('review\.outcome\.identityFallback', null, state\.lang\)/.test(appSrc);
+  const hasHonestElseBranch = /t\('review\.outcome\.unavailable', null, state\.lang\)/.test(appSrc);
   record('The outcome announcement distinguishes Safety-restraint, Identity-fallback, and an honest else/unavailable case', coversSafetyRestraint && coversIdentityFallback && hasHonestElseBranch, { coversSafetyRestraint, coversIdentityFallback, hasHonestElseBranch });
 
   const readsFromControllerState = /visualPreviewComparisonController\.getState\(\)/.test(appSrc) && /vprState\?\.metadata\?\.controlledV2Translation\?\.mode/.test(appSrc);
   record('translationMode is read from the already-rendered Visual Preview Comparison controller\'s own state — never guessed or re-derived', readsFromControllerState, { readsFromControllerState });
 
-  const bilingualOutcome = /isThai\s*\n?\s*\? '/.test(appSrc.replace(/\s+/g, ' '));
-  record('The outcome text is bilingual (Thai/English), matching the app\'s existing state.lang pattern', /isThai/.test(appSrc) && /state\.lang === 'th'/.test(appSrc), { hasIsThai: /isThai/.test(appSrc) });
+  // No inline isThai ternary may reappear in this outcome block — the
+  // Static visible-text audit (Phase J) separately guards against a
+  // FUTURE inline bilingual branch anywhere in the file; this check is
+  // the narrow, file-specific regression guard for the exact defect
+  // fixed in this round.
+  const noInlineIsThaiInOutcomeBlock = !/isThai\s*\?\s*'/.test(appSrc);
+  const usesCentralizedDictionaryForOutcome = /t\('review\.outcome\./.test(appSrc);
+  record('The outcome text is sourced from the centralized i18n dictionary (review.outcome.*) rather than an inline isThai ternary', noInlineIsThaiInOutcomeBlock && usesCentralizedDictionaryForOutcome, { noInlineIsThaiInOutcomeBlock, usesCentralizedDictionaryForOutcome });
 }
 
 // ── Staleness guard before scroll/focus ─────────────────────────────────

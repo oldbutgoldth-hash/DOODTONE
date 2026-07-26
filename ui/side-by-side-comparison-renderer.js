@@ -52,7 +52,7 @@
 // still computes NOTHING about business state -- `locale` only
 // changes which strings are shown, never which branch is taken.
 import { t } from './i18n/index.js';
-import { presentDimensionName } from './i18n/domain-presenters.js';
+import { presentDimensionName, presentComparisonBlockerCode, presentComparisonWarningCode, presentComparisonRecommendationCode, presentComparisonSummaryCode } from './i18n/domain-presenters.js';
 
 /** Converts a hyphenated internal code ('legacy-stronger') to the camelCase leaf key used under each i18n namespace ('legacyStronger'). Pure text mapping only -- never used for business logic. */
 function _camelFromCode(code) {
@@ -287,6 +287,83 @@ function _mergeMessages(...lists) {
     }
   }
   return out;
+}
+
+// I18N RUNTIME CLOSURE R3 -- Phase F: `core/lightroom-mapping-engine/
+// mapping-v2-side-by-side-comparison.js` is a PRODUCTION-LOCKED file
+// (byte-for-byte hash checked by
+// qa/epic-2e-j-r2-phase-e-static-test.mjs against
+// qa/baselines/lufa42-production-lock-manifest.json) -- it cannot be
+// edited to emit stable codes. Its raw English blockers/warnings/
+// recommendations/photographerSummary are instead drawn from a SMALL,
+// FIXED, ENUMERABLE set of literal sentences (never free-form user or
+// AI-generated text), so this UI-local classifier safely maps each
+// EXACT known sentence to a stable code entirely at the presentation
+// boundary -- the locked file's contract (its exact string outputs)
+// is never altered, read, or depended upon beyond string equality.
+// An unrecognized sentence (a genuinely new Core message not yet
+// classified here) safely falls through to the raw English text,
+// same fail-open-toward-visibility convention used throughout R3.
+const _COMPARISON_BLOCKER_CLASSIFIERS = [
+  [/^Both Legacy and V2 preview data are unavailable\.$/, 'BOTH_PREVIEWS_DATA_UNAVAILABLE', null],
+  [/^V2 preview is unavailable — nothing to compare against Legacy yet\.$/, 'V2_DATA_UNAVAILABLE', null],
+  [/^Legacy comparison evidence is missing\.$/, 'LEGACY_EVIDENCE_MISSING', null],
+  [/^(\d+) hard stop\(s\) are currently active\.$/, 'HARD_STOPS_ACTIVE', (m) => ({ count: m[1] })],
+  [/^Critical over-stack severity is currently active\.$/, 'CRITICAL_OVERSTACK_ACTIVE', null],
+  [/^Comparison confidence is too low \(insufficient evidence\)\.$/, 'CONFIDENCE_TOO_LOW', null],
+  [/^Human visual evidence is required but not yet complete\.$/, 'VISUAL_REVIEW_INCOMPLETE', null],
+];
+const _COMPARISON_WARNING_CLASSIFIERS = [
+  [/^Comparison is based on partial evidence — one or both preview sides are unavailable\.$/, 'PARTIAL_EVIDENCE', null],
+];
+const _COMPARISON_RECOMMENDATION_CLASSIFIERS = [
+  [/^Continue using Legacy Mapping — production output is unaffected by this comparison\.$/, 'CONTINUE_LEGACY_MAPPING', null],
+  [/^Rerun analysis or wait for the V2 Preview Sandbox to become eligible before comparing\.$/, 'RERUN_OR_WAIT_FOR_SANDBOX', null],
+  [/^Review skin tones manually\.$/, 'REVIEW_SKIN_TONES_MANUALLY', null],
+  [/^Review highlights manually\.$/, 'REVIEW_HIGHLIGHTS_MANUALLY', null],
+  [/^Compare white balance visually\.$/, 'COMPARE_WHITE_BALANCE_VISUALLY', null],
+  [/^Resolve over-stack risk before further review\.$/, 'RESOLVE_OVERSTACK_RISK', null],
+  [/^Collect legacy mapping data before drawing conclusions\.$/, 'COLLECT_LEGACY_DATA', null],
+  [/^Collect more evidence \(rerun analysis\) for a more reliable comparison\.$/, 'COLLECT_MORE_EVIDENCE', null],
+  [/^Do not activate production output based on this comparison\.$/, 'DO_NOT_ACTIVATE_PRODUCTION', null],
+];
+const _COMPARISON_SUMMARY_CLASSIFIERS = [
+  [/^There is not enough evidence to compare the two previews reliably\.$/, 'INSUFFICIENT_EVIDENCE', null],
+  [/^The V2 preview is not ready yet, so there is nothing to compare against the Legacy preview right now\. Legacy remains the active production path\.$/, 'V2_NOT_READY', null],
+  [/^The V2 preview currently has unresolved safety concerns, so a confident comparison is not possible yet\. Legacy remains the active production path\.$/, 'V2_UNRESOLVED_SAFETY_CONCERNS', null],
+  [/^The Legacy and V2 data comparisons are similar in most areas, but some parts still require manual human review — no rendered image preview is available yet\. Legacy remains the active production path\.$/, 'SIMILAR_NEEDS_MANUAL_REVIEW', null],
+  [/^The Legacy and V2 data comparisons differ in some areas and still require manual human review before any conclusions are drawn — no rendered image preview is available yet\. Legacy remains the active production path\.$/, 'DIFFERS_NEEDS_MANUAL_REVIEW', null],
+];
+
+/** Classifies+translates a list of raw English sentences via the given classifier table + presenter. Falls back to the raw sentence when no classifier matches. */
+function _translateViaClassifier(rawList, table, presenter, lang) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of Array.isArray(rawList) ? rawList : []) {
+    const text = typeof raw === 'string' ? raw : _safeText(raw, '');
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    let matched = null;
+    for (const [re, code, paramsFn] of table) {
+      const m = text.match(re);
+      if (m) { matched = presenter(code, paramsFn ? paramsFn(m) : null, lang); break; }
+    }
+    out.push(matched || text);
+  }
+  return out;
+}
+
+/** Same classification for a single sentence (photographerSummary), never an array. */
+function _translateSingleViaClassifier(rawText, table, presenter, lang) {
+  const text = _safeText(rawText, '');
+  if (!text) return '';
+  for (const [re, code] of table) {
+    if (re.test(text)) {
+      const translated = presenter(code, lang, text);
+      if (translated) return translated;
+    }
+  }
+  return text;
 }
 
 // ── Legacy/V2 summary cards ─────────────────────────────────────────────────
@@ -688,21 +765,26 @@ function _renderBody(container, comparison, visualPreviewInfo, locale) {
   }
 
   // ── Blockers / Warnings / Recommendations ───────────────────────────────
-  const blockers = _mergeMessages(cmp.blockers);
+  // I18N RUNTIME CLOSURE R3 -- Phase F: prefer the engine's STABLE
+  // CODES (translated) over the raw English blockers/warnings/
+  // recommendations arrays -- the raw arrays are used only when no
+  // codes are present (older/unrecognized producer), same
+  // fail-open-toward-visibility convention used throughout R3.
+  const blockers = _translateViaClassifier(_mergeMessages(cmp.blockers), _COMPARISON_BLOCKER_CLASSIFIERS, presentComparisonBlockerCode, locale);
   if (blockers.length) {
     container.appendChild(sectionHeading(t('comparison.heading.blockers', null, locale), 'block'));
     const wrap = el('div', { style: 'display:flex;flex-direction:column;gap:5px' });
     for (const text of blockers) wrap.appendChild(el('div', { style: 'font-size:11.5px;color:var(--danger);padding:6px 9px;background:var(--surface-2);border-radius:3px;border-left:2px solid var(--danger);overflow-wrap:anywhere', text }));
     container.appendChild(wrap);
   }
-  const warningsList = _mergeMessages(cmp.warnings);
+  const warningsList = _translateViaClassifier(_mergeMessages(cmp.warnings), _COMPARISON_WARNING_CLASSIFIERS, presentComparisonWarningCode, locale);
   if (warningsList.length) {
     container.appendChild(sectionHeading(t('comparison.heading.warnings', null, locale), 'warning'));
     const wrap = el('div', { style: 'display:flex;flex-direction:column;gap:4px' });
     for (const text of warningsList) wrap.appendChild(el('div', { style: 'font-size:11px;color:var(--warn);overflow-wrap:anywhere', text: `\u26A0  ${text}` }));
     container.appendChild(wrap);
   }
-  const recommendations = _mergeMessages(cmp.recommendations);
+  const recommendations = _translateViaClassifier(_mergeMessages(cmp.recommendations), _COMPARISON_RECOMMENDATION_CLASSIFIERS, presentComparisonRecommendationCode, locale);
   if (recommendations.length) {
     container.appendChild(sectionHeading(t('comparison.heading.recommendations', null, locale), 'lightbulb'));
     const list = el('ul', { style: 'margin:0;padding-left:18px;font-size:11.5px;color:var(--text-dim);line-height:1.7' });
@@ -745,8 +827,15 @@ function _renderBody(container, comparison, visualPreviewInfo, locale) {
   // Unknown values -- only adds a second, separate line describing the
   // OTHER (resolved visual) layer's status, sourced from
   // `visualPreviewInfo` alone.
-  const photographerSummary = _safeText(cmp.photographerSummary, '') || t('comparison.summarySplit.defaultDataEvidence', null, locale);
-  container.appendChild(sectionHeading('Summary', 'summarize'));
+  // I18N RUNTIME CLOSURE R3 -- Phase F: prefer the engine's STABLE
+  // photographerSummaryCode (translated) over the raw English
+  // photographerSummary sentence -- the raw text is the fallback
+  // only when no code is present.
+  const photographerSummaryRaw = _safeText(cmp.photographerSummary, '');
+  const photographerSummary = photographerSummaryRaw
+    ? _translateSingleViaClassifier(photographerSummaryRaw, _COMPARISON_SUMMARY_CLASSIFIERS, presentComparisonSummaryCode, locale)
+    : t('comparison.summarySplit.defaultDataEvidence', null, locale);
+  container.appendChild(sectionHeading(t('comparison.heading.summary', null, locale), 'summarize'));
   container.appendChild(el('div', { style: 'font-size:12.5px;color:var(--text);line-height:1.6;overflow-wrap:anywhere', text: `${t('comparison.summarySplit.dataEvidenceLabel', null, locale)} ${photographerSummary}` }));
   let renderedVisualSummary;
   if (resolvedVisual && resolvedVisual.bothRendered === true) {
