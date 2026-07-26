@@ -471,7 +471,18 @@ export async function inlineLocalHtmlAssets(html, projectRoot) {
 // of its canonical ID, insert the Import Map, inline any local assets.
 // ══════════════════════════════════════════════════════════════════
 const GOOGLE_FONTS_LINK_RE = /<link\b[^>]*fonts\.googleapis\.com[^>]*>\s*/gi;
-const APP_ENTRY_SCRIPT_RE = /<script\s+type="module"\s+src="ui\/app\.js">\s*<\/script>/i;
+// EPIC 2E-K -- CONTROLLED V2 CALIBRATION LAB: index.html now legitimately
+// carries TWO `<script type="module" src="...">` entry-point tags (the
+// original `ui/app.js`, and the fully separate
+// `ui/calibration-lab/calibration-lab-entry.js` -- see that module's own
+// doc comment for why it is intentionally never imported by ui/app.js
+// itself). This regex is now GENERIC over any such tag's `src` path
+// (previously hardcoded to `ui/app.js` only, which silently left any
+// additional module-src tag unconverted -- an in-memory `page.setContent()`
+// document cannot resolve a bare relative `src="..."` path the way a real
+// HTTP navigation can, so every such tag must become an inline import of
+// its own canonical/data-URL module id, not just the first one found).
+const MODULE_SRC_SCRIPT_RE = /<script\s+type="module"\s+src="([^"]+)">\s*<\/script>/gi;
 const INLINE_MODULE_SCRIPT_RE = /<script\s+type="module">([\s\S]*?)<\/script>/gi;
 
 export async function transformIndexHtml({ projectRoot, indexHtmlSource, moduleGraph, appEntryProjectRelativePath }) {
@@ -490,11 +501,14 @@ export async function transformIndexHtml({ projectRoot, indexHtmlSource, moduleG
     return `<script type="module">${rewrittenSource}</script>`;
   });
 
-  if (!APP_ENTRY_SCRIPT_RE.test(html)) {
-    throw new Error('expected <script type="module" src="ui/app.js"></script> tag not found in index.html — cannot build the in-memory entry point');
+  const foundSrcEntryPaths = [...html.matchAll(MODULE_SRC_SCRIPT_RE)].map((m) => m[1]);
+  if (!foundSrcEntryPaths.includes(appEntryProjectRelativePath)) {
+    throw new Error(`expected <script type="module" src="${appEntryProjectRelativePath}"></script> tag not found in index.html — cannot build the in-memory entry point`);
   }
-  const appCanonicalId = canonicalIdFor(appEntryProjectRelativePath);
-  html = html.replace(APP_ENTRY_SCRIPT_RE, `<script type="module">import "${appCanonicalId}";</script>`);
+  html = html.replace(MODULE_SRC_SCRIPT_RE, (whole, srcPath) => {
+    const canonicalId = canonicalIdFor(srcPath);
+    return `<script type="module">import "${canonicalId}";</script>`;
+  });
 
   const { html: assetInlinedHtml, inlined: localAssets, rejected: assetRejected } = await inlineLocalHtmlAssets(html, projectRoot);
   html = assetInlinedHtml;
@@ -524,7 +538,16 @@ export async function transformIndexHtml({ projectRoot, indexHtmlSource, moduleG
 // ══════════════════════════════════════════════════════════════════
 export async function buildInMemoryApp(projectRoot) {
   const indexHtmlSource = await readFile(path.join(projectRoot, 'index.html'), 'utf8');
-  const entryProjectRelativePaths = ['ui/app.js'];
+  // EPIC 2E-K: discover EVERY `<script type="module" src="...">` entry
+  // point in the real index.html (previously hardcoded to `['ui/app.js']`
+  // only) so a second, fully separate entry-point script -- e.g.
+  // `ui/calibration-lab/calibration-lab-entry.js` -- is genuinely
+  // crawled into the module graph too, not merely left as dead weight
+  // that `transformIndexHtml` would otherwise fail to resolve. `ui/app.js`
+  // is kept first for readability/back-compat; order does not affect
+  // correctness since `buildModuleGraph` de-duplicates via its own queue.
+  const discoveredSrcEntryPaths = [...indexHtmlSource.matchAll(/<script\s+type="module"\s+src="([^"]+)">\s*<\/script>/gi)].map((m) => m[1]);
+  const entryProjectRelativePaths = ['ui/app.js', ...discoveredSrcEntryPaths.filter((p) => p !== 'ui/app.js')];
 
   // The two existing inline module scripts also reference local
   // modules (./core/project-version.js via a literal dynamic import,

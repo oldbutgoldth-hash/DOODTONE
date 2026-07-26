@@ -142,6 +142,28 @@ export const SUITE_SOURCE_FILES = {
     'qa/helpers/exif-orientation-reader.mjs',
     'qa/fixtures/preview-geometry/manifest.json',
   ],
+  // CONTROLLED V2 CALIBRATION LAB R1 -- Phase K/L: the Calibration Lab's
+  // own Browser suite, its full module tree, and the shared visible-
+  // locale-audit helper it reuses for its scoped TH<->EN check.
+  calibrationLabBrowser: [
+    'qa/epic-2e-k-calibration-lab-browser-test.mjs',
+    'qa/helpers/playwright-lumixa-test-runtime.mjs',
+    'qa/helpers/visible-locale-audit.mjs',
+    'index.html',
+    'ui/calibration-lab/calibration-lab-entry.js',
+    'ui/calibration-lab/calibration-lab-controller.js',
+    'ui/calibration-lab/calibration-lab-renderer.js',
+    'ui/calibration-lab/calibration-lab-storage.js',
+    'ui/calibration-lab/calibration-lab-i18n.js',
+    'core/calibration-lab/codes.js',
+    'core/calibration-lab/schema.js',
+    'core/calibration-lab/run-comparison-pipeline.js',
+    'core/calibration-lab/aggregate.js',
+    'core/calibration-lab/readiness.js',
+    'core/calibration-lab/export-dataset.js',
+    'qa/fixtures/epic-2e-j/neutral-balanced.png',
+    'qa/fixtures/epic-2e-j/warm-portrait-synthetic.png',
+  ],
 };
 
 /**

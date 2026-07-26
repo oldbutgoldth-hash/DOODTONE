@@ -834,3 +834,92 @@ above remains outstanding, with no known defect in any of those areas.
 preferred / No visible difference" observation capture; UI-local only, no
 production activation, no Mapping/XMP write, no automatic model
 decision). Not implemented yet.
+
+---
+
+## EPIC 2E-K — Controlled V2 Calibration Lab (Preview/Shadow-only)
+
+**Status: complete in this environment, Browser suite pending a real
+Chromium run.** Adds a fully separate Controlled V2 Calibration Lab for
+collecting structured Legacy-vs-Controlled-V2 comparisons across many
+images, so a future decision about Controlled V2's production readiness
+can be grounded in real calibration data. Built as `core/calibration-lab/*`
++ `ui/calibration-lab/*`, with zero edits to `ui/app.js` and zero edits
+to any production engine. See `docs/project/25_EPIC_2E_K_CALIBRATION_LAB_ARCHITECTURE.md`,
+`26_EPIC_2E_K_CALIBRATION_SCHEMA.md`, `27_EPIC_2E_K_QA_REPORT.md`, and
+`28_EPIC_2E_K_RELEASE_NOTES.md` for full detail.
+
+**What it adds:** its own nav button and full-screen dialog; multi-image
+calibration sessions (IndexedDB-backed, with an explicit bounded
+in-memory fallback); a Semantic Image Test Record per image (stable
+codes only — 14 image categories, 9 lighting conditions, 6 comparison
+decisions, 20 issue codes — never Thai/English sentences as data);
+Legacy-vs-Controlled-V2 numeric snapshots read directly from the exact
+same `visualPreviewRenderPlanV2`/`lightroomSafetyClampV2` objects the
+production preview UI already reads (never re-derived a second way); a
+Calibration Dashboard and a Controlled V2 Readiness Report (5 stable
+readiness codes that structurally can never include `PRODUCTION_READY`);
+a separate, informational-only Calibration Policy; JSON/CSV export
+scoped to a fixed field allow-list that excludes the original image,
+Base64 image data, and local file paths; full keyboard/focus-trap/
+reduced-motion/44px-touch-target accessibility; and a Semantic QA
+Snapshot merged additively onto `window.__LUMIXA_QA__`.
+
+**Production isolation (structural, not just tested):** `controlledV2Apply`,
+`productionWrite`, `previewExport`, `controlledTestActivation`, and
+`controlledV2ProductionActivation` all remain hardcoded `false`;
+`productionSource` remains hardcoded `'legacy'`; no file in the new
+module tree imports `serializeXMP`/`downloadXMP` or the Controlled V2
+Production Activation controller; `computeReadinessReport()`'s source
+contains no `'PRODUCTION_READY'` string literal anywhere. Verified via
+a dedicated Section-17 hostile test suite (19/19 PASS) covering all 9
+required hostile items, including a real spawn of `node
+tools/local-gate.mjs` proving a tampered/stale result file for this
+EPIC's Browser suite cannot survive a real gate run (the gate always
+re-runs each suite fresh before evaluating its result file — a stronger
+guarantee than sourceHash checking alone).
+
+**Real bugs found and fixed during development:** an accumulating
+`corruptRecordCount` diagnostic counter in the storage layer (fixed to
+recompute fresh on every call); an `arguments.callee`-in-an-arrow-function
+defect in the renderer's original category-chip design, caught by code
+review before runtime (arrow functions have no `arguments`, and it's
+forbidden in strict-mode ES modules regardless); and a shared
+Browser-test-harness regression in `qa/helpers/playwright-in-memory-app.mjs`
+caused by this EPIC's `index.html` edit adding a second
+`<script type="module" src="...">` tag (the harness's previously
+hardcoded single-tag regex/discovery logic was generalized to handle any
+number of such tags, re-verified against the full 93-module graph).
+
+**Test results (all real, see QA report for detail):** 61/61 PASS
+(`qa/epic-2e-k-calibration-lab-static-test.mjs`), 16/16 PASS (`qa/epic-2e-k-calibration-lab-storage-test.mjs`,
+genuine IndexedDB via `fake-indexeddb`), 19/19 PASS (`qa/epic-2e-k-calibration-lab-hostile-static-test.mjs`,
+all 9 Section-17 items), full `node qa/run-static-suites.mjs` green. The
+Browser suite (`qa/epic-2e-k-calibration-lab-browser-test.mjs`) is
+complete but honestly reports `BROWSER_BINARY_UNAVAILABLE` in this
+sandbox (no Chromium binary available), consistent with every prior
+EPIC's environment constraint in this project.
+
+**Version badge:** deliberately **not** bumped for this EPIC (see the
+Release Notes' Known Limitations for the reasoning) — `core/project-version.js`
+remains at whatever value the prior EPIC left it. A pre-existing
+mismatch between this file's "Current Version" header (top of this
+document) and `core/project-version.js`/the EPIC 2E-I section below was
+also found during this EPIC and is disclosed, not silently fixed, in
+the Release Notes.
+
+**Known limitations:** the before/after comparison view shows the same
+source image on both sides (not a genuinely pixel-differentiated
+Controlled V2 render) alongside the real numeric snapshot table — a
+deliberate scope decision to avoid risking a subtly-wrong fabricated
+preview; the schema-migration scaffold (`SESSION_MIGRATIONS`) is
+intentionally empty since only schema v1 exists; the Browser suite
+remains unverified against a real browser in this environment.
+
+**Next EPIC recommendation:** run `qa/epic-2e-k-calibration-lab-browser-test.mjs`
+on a machine with a real Chromium/Playwright install and confirm its
+result before treating the Calibration Lab as browser-verified; then,
+once enough real calibration sessions have been collected through the
+Lab, revisit the Controlled V2 Readiness Report's output as an input to
+a future, separately-scoped decision about production activation (never
+automatic, and never produced by this Lab itself).

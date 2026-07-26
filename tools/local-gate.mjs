@@ -68,6 +68,11 @@ const STEPS = [
   // state mutation caused by the language switch — every one of those
   // is a FAIL row inside this suite's own results.
   { n: 13, label: 'Full-system EN/TH i18n Browser suite (Phase M)', script: 'qa/epic-2e-j-full-system-i18n-browser-test.mjs', resultFile: 'qa/epic-2e-j-full-system-i18n-browser-results.json', manifestKey: 'fullSystemI18nBrowser' },
+  // CONTROLLED V2 CALIBRATION LAB R1 -- Phase L: the Calibration Lab's
+  // own Browser suite -- fails closed the same way every other step
+  // does (any FAIL or unpermitted NOT_TESTED row, staleness, or an
+  // honestly-reported Browser-unavailable status all block the gate).
+  { n: 14, label: 'Controlled V2 Calibration Lab Browser suite (EPIC 2E-K)', script: 'qa/epic-2e-k-calibration-lab-browser-test.mjs', resultFile: 'qa/epic-2e-k-calibration-lab-browser-results.json', manifestKey: 'calibrationLabBrowser' },
 ];
 
 const BROWSER_UNAVAILABLE_STATUSES = new Set(['BROWSER_BINARY_UNAVAILABLE', 'PLAYWRIGHT_PACKAGE_UNAVAILABLE']);

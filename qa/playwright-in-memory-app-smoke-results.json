@@ -1,13 +1,13 @@
 {
   "suite": "EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test",
-  "generatedAt": "2026-07-26T13:47:35.463Z",
+  "generatedAt": "2026-07-26T17:21:43.151Z",
   "completed": true,
-  "decision": "PASS_IN_MEMORY_HARNESS_READY",
+  "decision": "BROWSER_BINARY_UNAVAILABLE",
   "summary": {
-    "total": 22,
-    "pass": 22,
+    "total": 2,
+    "pass": 1,
     "fail": 0,
-    "notTested": 0
+    "notTested": 1
   },
   "results": [
     {
@@ -17,120 +17,20 @@
     },
     {
       "test": "PART 2: Browser executable detection",
-      "result": "PASS",
-      "evidence": "found=/usr/bin/chromium, version=Chromium 144.0.7559.96 built on Debian GNU/Linux 13 (trixie)"
-    },
-    {
-      "test": "PART 3/4/5/6: in-memory app graph built from disk (no network) — modules discovered, specifiers rewritten to canonical IDs, Import Map + data: URLs constructed",
-      "result": "PASS",
-      "evidence": "moduleCount=82, importEdgeCount=132, dynamicImportLiteralCount=1, inlineModuleCount=2, rejectedSpecifiers=0, duplicateCanonicalIds=0"
-    },
-    {
-      "test": "PART 1/7: navigate to about:blank?qa=1 (the only navigation target used anywhere in this harness)",
-      "result": "PASS",
-      "evidence": "aboutBlankResult=SUCCEEDED"
-    },
-    {
-      "test": "ENV-B1B-F1 PART 1: storage access detected on about:blank before setContent (errorName only, never a full stack)",
-      "result": "PASS",
-      "evidence": "{\"localStorageAccessible\":false,\"sessionStorageAccessible\":false,\"localStorageErrorName\":\"SecurityError\",\"sessionStorageErrorName\":\"SecurityError\"}"
-    },
-    {
-      "test": "ENV-B1B-F1: Test-only in-memory Storage compatibility layer installed (native Storage inaccessible on this opaque origin)",
-      "result": "PASS",
-      "evidence": "{\"installed\":true,\"reason\":null}"
-    },
-    {
-      "test": "ENV-B1B-F1: window.localStorage/sessionStorage are accessible immediately after install (SecurityError eliminated)",
-      "result": "PASS",
-      "evidence": "{\"localStorageAccessible\":true,\"sessionStorageAccessible\":true,\"localStorageErrorName\":null,\"sessionStorageErrorName\":null}"
-    },
-    {
-      "test": "ENV-B1B-F1 PART 7: full Storage runtime self-test (A-F) plus PART 4 instrumentation-compatibility proof",
-      "result": "PASS",
-      "evidence": "{\"totalChecks\":22,\"failCount\":0}"
-    },
-    {
-      "test": "ENV-B1B-F1 PART 6: a second, independent BrowserContext's Storage starts completely empty (page-memory-only, never shared across Contexts)",
-      "result": "PASS",
-      "evidence": "secondContextStartsEmpty=true"
-    },
-    {
-      "test": "PART 7: page.setContent() loads the in-memory HTML document",
-      "result": "PASS",
-      "evidence": "setContent resolved"
-    },
-    {
-      "test": "PART 7: Page URL remains about:blank?qa=1 after setContent (no navigation occurred)",
-      "result": "PASS",
-      "evidence": "finalUrl=about:blank?qa=1"
-    },
-    {
-      "test": "PART 9: app.js executes and at least one Core module executes (window.__LUMIXA_QA__ assigned after all static imports evaluate)",
-      "result": "PASS",
-      "evidence": "window.__LUMIXA_QA__ observed"
-    },
-    {
-      "test": "PART 9: document.readyState is interactive or complete",
-      "result": "PASS",
-      "evidence": "readyState=complete"
-    },
-    {
-      "test": "PART 9: main application root (#lumixaApp) is present with visible non-empty content",
-      "result": "PASS",
-      "evidence": "{\"rootExists\":true,\"rootTextLength\":14088,\"hasHeaderVersion\":true,\"hasViewerViewport\":true,\"hasPreviewImg\":true,\"hasRedeemButton\":true,\"locationSearch\":\"?qa=1\"}"
-    },
-    {
-      "test": "PART 9: expected LUMIXA UI elements exist (#aiWorkflowHeaderVersion, #viewerViewport, #previewImg, #btnRedeem)",
-      "result": "PASS",
-      "evidence": "{\"rootExists\":true,\"rootTextLength\":14088,\"hasHeaderVersion\":true,\"hasViewerViewport\":true,\"hasPreviewImg\":true,\"hasRedeemButton\":true,\"locationSearch\":\"?qa=1\"}"
-    },
-    {
-      "test": "PART 9: the QA query is visible through location.search",
-      "result": "PASS",
-      "evidence": "locationSearch=?qa=1"
-    },
-    {
-      "test": "ENV-B1B-F1 PART 8: App startup storage writes stay within the in-memory shim; only key NAMES recorded (never values); no Observation/Reason persistence key appears during Smoke startup (Theme \"dm\" / Language \"lang\" writes are normal and not misclassified)",
-      "result": "PASS",
-      "evidence": "appStorageKeysObserved=[]"
-    },
-    {
-      "test": "PART 9: no page errors",
-      "result": "PASS",
-      "evidence": "(none)"
-    },
-    {
-      "test": "PART 9: no console errors",
-      "result": "PASS",
-      "evidence": "(none)"
-    },
-    {
-      "test": "PART 8: network-zero contract — every observed request is a data: module load (or the initial about: target); zero http/https/file/localhost requests",
-      "result": "PASS",
-      "evidence": "requestsByScheme={}, nonDataRequests=[]"
-    },
-    {
-      "test": "PART 10: no unresolved/rejected import in the graph (module-path-resolution or module-read failures)",
-      "result": "PASS",
-      "evidence": "rejectedSpecifiers=[]"
-    },
-    {
-      "test": "PART 10: no duplicate canonical module ID in the graph",
-      "result": "PASS",
-      "evidence": "duplicateCanonicalIds=[]"
+      "result": "NOT_TESTED",
+      "evidence": "no usable Browser executable found among 6 candidates (never downloaded one): [{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
     }
   ],
   "playwrightPackageStatus": "PLAYWRIGHT_PACKAGE_AVAILABLE",
-  "browserExecutablePath": "/usr/bin/chromium",
-  "browserVersion": "Chromium 144.0.7559.96 built on Debian GNU/Linux 13 (trixie)",
+  "browserExecutablePath": null,
+  "browserVersion": null,
   "aboutBlankUrl": "about:blank?qa=1",
-  "aboutBlankResult": "SUCCEEDED",
-  "finalPageUrl": "about:blank?qa=1",
-  "moduleCount": 82,
-  "importEdgeCount": 132,
-  "dynamicImportLiteralCount": 1,
-  "inlineModuleCount": 2,
+  "aboutBlankResult": null,
+  "finalPageUrl": null,
+  "moduleCount": 0,
+  "importEdgeCount": 0,
+  "dynamicImportLiteralCount": 0,
+  "inlineModuleCount": 0,
   "localAssetCount": 0,
   "requestsByScheme": {},
   "totalNetworkRequests": 0,
@@ -140,17 +40,17 @@
   "rejectedSpecifiers": [],
   "duplicateCanonicalIds": [],
   "storageCompatibility": {
-    "status": "OPAQUE_ORIGIN_MEMORY_STORAGE_INSTALLED",
-    "localStorageAccessibleBefore": false,
-    "sessionStorageAccessibleBefore": false,
-    "localStorageErrorName": "SecurityError",
-    "sessionStorageErrorName": "SecurityError",
-    "localStoragePrototypeCompatible": true,
-    "sessionStoragePrototypeCompatible": true,
-    "localSessionIsolated": true,
-    "prototypeInstrumentationCompatible": true,
-    "secondContextStartsEmpty": true,
+    "status": null,
+    "localStorageAccessibleBefore": null,
+    "sessionStorageAccessibleBefore": null,
+    "localStorageErrorName": null,
+    "sessionStorageErrorName": null,
+    "localStoragePrototypeCompatible": null,
+    "sessionStoragePrototypeCompatible": null,
+    "localSessionIsolated": null,
+    "prototypeInstrumentationCompatible": null,
+    "secondContextStartsEmpty": null,
     "appStorageKeysObserved": []
   },
-  "finalDecision": "PASS_IN_MEMORY_HARNESS_READY"
+  "finalDecision": "BROWSER_BINARY_UNAVAILABLE"
 }

@@ -87,6 +87,21 @@ const STATIC_SUITES = [
   'qa/epic-2e-j-r4-locale-runtime-truth-static-test.mjs',
   // FINAL LOCALE CLOSURE + SEMANTIC QA R5.
   'qa/epic-2e-j-r5-semantic-presentation-static-test.mjs',
+  // CONTROLLED V2 CALIBRATION LAB R1 -- Phase J: pure schema/codes/
+  // aggregate/readiness/export logic, and a genuine IndexedDB behavior
+  // test (via fake-indexeddb, a real IndexedDB implementation -- not a
+  // mock) covering schemaVersion, migration guard, corrupt-record
+  // handling, session limits, clear-current/clear-all, and the storage
+  // usage summary. Both are no-Browser, no-network.
+  'qa/epic-2e-k-calibration-lab-static-test.mjs',
+  'qa/epic-2e-k-calibration-lab-storage-test.mjs',
+  // CONTROLLED V2 CALIBRATION LAB R1 -- Phase M: the dedicated Section-17
+  // hostile-test suite (production-lock immutability, no-XMP, no raw
+  // Core prose, no localized-sentence-as-decision, no Base64/file-path
+  // in exports, corrupt-session-never-crashes, and a genuine end-to-end
+  // proof that a tampered result file can never survive a real local
+  // gate run).
+  'qa/epic-2e-k-calibration-lab-hostile-static-test.mjs',
 ];
 
 let anyFailed = false;
