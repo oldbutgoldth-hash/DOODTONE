@@ -1,25 +1,354 @@
 {
   "suite": "EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test",
-  "runId": "583a21b7-f771-4dc7-90bb-e11c77a0d5eb",
-  "startedAt": "2026-07-26T07:59:33.509Z",
-  "completedAt": "2026-07-26T07:59:33.509Z",
+  "runId": "50f48ef7-9c0d-4e1c-ac3a-d9a6cb120313",
+  "startedAt": "2026-07-26T13:47:18.087Z",
+  "completedAt": "2026-07-26T13:49:44.082Z",
   "completed": true,
-  "sourceHash": null,
-  "browserExecutablePath": null,
-  "browserVersion": null,
-  "generatedAt": "2026-07-26T07:59:33.509Z",
+  "sourceHash": "9c3f504e89dda78cfa3f515c7062e7e241ae62ff746a6fe1da611a8e06f65151",
+  "browserExecutablePath": "/usr/bin/chromium",
+  "browserVersion": "144.0.7559.96",
+  "generatedAt": "2026-07-26T13:49:44.082Z",
   "summary": {
-    "total": 1,
-    "pass": 0,
+    "total": 64,
+    "pass": 64,
     "fail": 0,
-    "notTested": 1
+    "notTested": 0
   },
+  "coverage": {
+    "fullApplicationWorkflow": "PASS",
+    "syntheticIntegrationHarness": "PASS",
+    "physicalDevice": "NOT_TESTED",
+    "screenReader": "NOT_TESTED"
+  },
+  "manualTestsNotPerformed": [
+    "Physical mobile device",
+    "Physical touch hardware",
+    "NVDA/JAWS/VoiceOver",
+    "Long-duration memory profiling",
+    "Real user privacy study"
+  ],
   "results": [
     {
-      "test": "Browser environment availability",
-      "result": "NOT_TESTED",
-      "evidence": "[{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
+      "test": "Full application Ready reachability",
+      "result": "PASS",
+      "evidence": "Reached Ready through the real Human Review workflow: {\"qaContractVersion\":\"2E-J-C-R2\",\"imageLoaded\":true,\"analysisGeneration\":2,\"testGate\":{\"exists\":true,\"confidence\":0.689,\"safetyScore\":0.812,\"canPreviewOverlayPreset\":true,\"canEnterControlledTest\":false},\"overlaySimulation\":{\"exists\":true,\"confidence\":0.604,\"safetyScore\":0.783},\"legacySafetyOverlay\":{\"exists\":true,\"confidence\":0.648,\"safetyScore\":0.851},\"shadowCompare\":{\"exists\":true,\"confidence\":0.606,\"safetyScore\":null},\"safetyClamp\":{\"exists\":true,\"globalSafetyScore\":0.628},\"previewSandbox\":{\"exists\":true,\"previewState\":\"preview-ready\",\"confidence\":0.747,\"safetyScore\":0.804,\"canGeneratePreview\":true,\"missingRequirements\":[],\"failedGateIds\":[],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":\"legacy-preset\"},\"renderPlan\":{\"exists\":true,\"v2Renderable\":true,\"v2State\":null,\"visualAdjustmentsApplied\":null},\"previewGeometryDiagnostics\":{\"generationId\":2,\"sandboxExists\":true,\"humanReviewComplete\":true,\"canGeneratePreview\":true,\"simulatedPreviewPresetAvailable\":true,\"contradictoryEvidence\":false,\"hardStopCount\":0,\"renderPlanExists\":true,\"v2PlanExists\":true,\"v2Available\":true,\"v2Renderable\":true,\"identityFallbackEligible\":false,\"blockerCode\":null},\"canonicalSourceGeometry\":{\"generationId\":2,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true},\"visualPreview\":{\"legacyState\":\"renderable\",\"controlledV2State\":\"renderable\"},\"visualPreviewControllerState\":{\"exists\":true,\"state\":\"rendered\",\"legacyRendered\":true,\"v2Rendered\":true,\"bothRendered\":true,\"visualComparisonAvailable\":true,\"analysisGenerationId\":2},\"interactive\":{\"state\":\"ready\",\"alignmentStatus\":\"Exact dimensions\"},\"observation\":{\"enabled\":true,\"state\":\"ready\",\"selectedValue\":null,\"reasons\":[],\"observationGenerationId\":null},\"sessionSummary\":{\"totalObserved\":0,\"activeObservations\":0,\"preferLegacy\":0,\"preferV2\":0,\"noVisibleDifference\":0,\"unsure\":0,\"cleared\":0,\"invalidated\":0,\"reasonCounts\":{\"skinTone\":0,\"whiteBalance\":0,\"highlightDetail\":0,\"shadowDetail\":0,\"contrast\":0,\"colorBalance\":0,\"saturation\":0,\"naturalLook\":0,\"clarityDetail\":0,\"noSpecificReason\":0},\"topReasons\":[],\"lastObservation\":null},\"controlledV2Translation\":{\"exists\":true,\"mode\":\"legacy-derived-safety-restraint\",\"meaningful\":true,\"identityFallback\":false,\"visualizedAdjustmentCount\":2,\"supportedAdjustments\":[\"exposure\",\"contrast\",\"highlights\",\"shadows\",\"whites\",\"blacks\",\"temperature\",\"tint\",\"saturation\",\"vibrance\",\"clarity\",\"dehaze\",\"toneCurve\",\"colorGrading\"],\"changedFields\":[{\"field\":\"contrast\",\"before\":0.04,\"after\":0.0312,\"delta\":-0.0088,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"},{\"field\":\"vibrance\",\"before\":1,\"after\":0.7797,\"delta\":-0.2203,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"}],\"confidence\":0.36},\"reviewGuidance\":{\"exists\":true,\"visualRequired\":6,\"visualPassed\":6,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":true}}"
+    },
+    {
+      "test": "[Controller/Renderer/Session integration harness] Initial unavailable state",
+      "result": "PASS",
+      "evidence": "state=\"unavailable\""
+    },
+    {
+      "test": "[Controller/Renderer/Session integration harness] Ready state reachable",
+      "result": "PASS",
+      "evidence": "state=\"ready\""
+    },
+    {
+      "test": "[Controller/Renderer/Session integration harness] Select observation \"prefer-legacy\"",
+      "result": "PASS",
+      "evidence": "observation=\"prefer-legacy\""
+    },
+    {
+      "test": "[Controller/Renderer/Session integration harness] Select observation \"prefer-v2\"",
+      "result": "PASS",
+      "evidence": "observation=\"prefer-v2\""
+    },
+    {
+      "test": "[Controller/Renderer/Session integration harness] Select observation \"no-visible-difference\"",
+      "result": "PASS",
+      "evidence": "observation=\"no-visible-difference\""
+    },
+    {
+      "test": "[Controller/Renderer/Session integration harness] Select observation \"unsure\"",
+      "result": "PASS",
+      "evidence": "observation=\"unsure\""
+    },
+    {
+      "test": "Five-reason limit reached",
+      "result": "PASS",
+      "evidence": "count=5, limitReached=true"
+    },
+    {
+      "test": "Sixth reason rejected",
+      "result": "PASS",
+      "evidence": "count=5"
+    },
+    {
+      "test": "No-specific-reason exclusivity",
+      "result": "PASS",
+      "evidence": "reasons=[\"no-specific-reason\"]"
+    },
+    {
+      "test": "Clear Reasons keeps Observation selected",
+      "result": "PASS",
+      "evidence": "reasons=0, observation=\"prefer-legacy\""
+    },
+    {
+      "test": "Clear Observation",
+      "result": "PASS",
+      "evidence": "observation=null"
+    },
+    {
+      "test": "Generation invalidation clears Observation",
+      "result": "PASS",
+      "evidence": "state=\"unavailable\""
+    },
+    {
+      "test": "Stale selection does not revive",
+      "result": "PASS",
+      "evidence": "state=\"ready\""
+    },
+    {
+      "test": "Session invalidated count",
+      "result": "PASS",
+      "evidence": "invalidated=1"
+    },
+    {
+      "test": "Session active count after new selection",
+      "result": "PASS",
+      "evidence": "active=1, unsure=1"
+    },
+    {
+      "test": "Session cleared count",
+      "result": "PASS",
+      "evidence": "cleared=2"
+    },
+    {
+      "test": "[App-level] Session Clear pre-check: active observation present",
+      "result": "PASS",
+      "evidence": "active=1"
+    },
+    {
+      "test": "[App-level] Session Clear + current re-record: history reset",
+      "result": "PASS",
+      "evidence": "cleared=0, invalidated=0"
+    },
+    {
+      "test": "[App-level] Session Clear + current re-record: current Observation preserved",
+      "result": "PASS",
+      "evidence": "{\"totalObserved\":1,\"activeObservations\":1,\"preferLegacy\":1,\"preferV2\":0,\"noVisibleDifference\":0,\"unsure\":0,\"cleared\":0,\"invalidated\":0,\"reasonCounts\":{\"skinTone\":1,\"whiteBalance\":0,\"highlightDetail\":0,\"shadowDetail\":0,\"contrast\":1,\"colorBalance\":0,\"saturation\":0,\"naturalLook\":0,\"clarityDetail\":0,\"noSpecificReason\":0},\"topReasons\":[{\"reason\":\"skin-tone\",\"count\":1},{\"reason\":\"contrast\",\"count\":1}],\"lastObservation\":{\"generationId\":3,\"observation\":\"prefer-legacy\",\"reasons\":[\"skin-tone\",\"contrast\"]}}"
+    },
+    {
+      "test": "[App-level] Session Clear + current re-record: Reasons preserved",
+      "result": "PASS",
+      "evidence": "{\"skinTone\":1,\"whiteBalance\":0,\"highlightDetail\":0,\"shadowDetail\":0,\"contrast\":1,\"colorBalance\":0,\"saturation\":0,\"naturalLook\":0,\"clarityDetail\":0,\"noSpecificReason\":0}"
+    },
+    {
+      "test": "[App-level] Session Clear + current re-record: radio remains checked",
+      "result": "PASS",
+      "evidence": "checked=true"
+    },
+    {
+      "test": "Provider unavailable produces neutral warning, stays usable",
+      "result": "PASS",
+      "evidence": "{\"state\":\"ready\",\"generationConfirmed\":false,\"warnings\":[\"provider-unconfirmed\"]}"
+    },
+    {
+      "test": "Provider mismatch clears observation via getState",
+      "result": "PASS",
+      "evidence": "{\"state\":\"unavailable\",\"observation\":null}"
+    },
+    {
+      "test": "No duplicate element IDs",
+      "result": "PASS",
+      "evidence": "total=338, unique=338"
+    },
+    {
+      "test": "Tab reaches Observation radio group",
+      "result": "PASS",
+      "evidence": "activeElement.id=\"ipoOption_prefer-legacy\""
+    },
+    {
+      "test": "Arrow keys change selected radio",
+      "result": "PASS",
+      "evidence": "{\"id\":\"ipoOption_prefer-v2\",\"checked\":true}"
+    },
+    {
+      "test": "Space toggles Reason checkbox",
+      "result": "PASS",
+      "evidence": "checked=true"
+    },
+    {
+      "test": "Tab reaches Clear Observation button",
+      "result": "PASS",
+      "evidence": "activeElement.id=\"ipoClearButton\""
+    },
+    {
+      "test": "Tab reaches Clear Reasons button",
+      "result": "PASS",
+      "evidence": "activeElement.id=\"ipoClearReasonsButton\""
+    },
+    {
+      "test": "Tab reaches Clear Session button",
+      "result": "PASS",
+      "evidence": "activeElement.id=\"ipoClearSessionButton\""
+    },
+    {
+      "test": "Focus-visible has non-zero computed outline style",
+      "result": "PASS",
+      "evidence": "outlineStyle=\"solid\""
+    },
+    {
+      "test": "Storage instrumentation: zero Observation-related storage calls",
+      "result": "PASS",
+      "evidence": "{\"localStorageSet\":0,\"localStorageRemove\":0,\"localStorageClear\":0,\"sessionStorageSet\":0,\"sessionStorageRemove\":0,\"sessionStorageClear\":0}"
+    },
+    {
+      "test": "Network instrumentation: zero Observation-related network calls",
+      "result": "PASS",
+      "evidence": "{\"fetch\":0,\"xhr\":0,\"sendBeacon\":0,\"webSocket\":0,\"broadcastChannel\":0}"
+    },
+    {
+      "test": "No Canvas drawImage calls from Observation actions",
+      "result": "PASS",
+      "evidence": "drawImage calls=0"
+    },
+    {
+      "test": "FIX 6 Scenario A: Clear Reasons preserves Observation, sets reasonAnnouncement=\"reasons-cleared\", exactly one callback",
+      "result": "PASS",
+      "evidence": "{\"observationPreserved\":true,\"reasonsEmpty\":true,\"announcement\":\"reasons-cleared\",\"callbackCount\":1}"
+    },
+    {
+      "test": "FIX 6 Scenario B: repeated empty clearReasons() does not crash, does not emit a duplicate callback, does not create a new announcement transition",
+      "result": "PASS",
+      "evidence": "{\"crashed\":false,\"callbackCount\":0,\"announcementUnchanged\":true}"
+    },
+    {
+      "test": "FIX 6 Scenario C: adding a Reason after Clear Reasons selects the new Reason and clears reasonAnnouncement to null",
+      "result": "PASS",
+      "evidence": "{\"reasonSelected\":true,\"announcement\":null}"
+    },
+    {
+      "test": "FIX 6 Scenario D: clearing Observation after Clear Reasons empties Reasons and clears reasonAnnouncement to null",
+      "result": "PASS",
+      "evidence": "{\"observationCleared\":true,\"reasonsEmpty\":true,\"announcement\":null}"
+    },
+    {
+      "test": "FIX 6 Scenario E: stale generation after Clear Reasons preserves existing stale behavior and clears reasonAnnouncement to null",
+      "result": "PASS",
+      "evidence": "{\"beforeAnnouncement\":\"reasons-cleared\",\"staleObservationCleared\":true,\"staleWarningPresent\":true,\"announcementAfterStale\":null}"
+    },
+    {
+      "test": "FIX 6 Scenario F: QA state remains DOM-free, Error-free, and reasonAnnouncement is bounded to exactly the two allowed values",
+      "result": "PASS",
+      "evidence": "{\"jsonSafe\":true,\"hasDomOrErrorRef\":false,\"tokenTypeBounded\":true}"
+    },
+    {
+      "test": "FIX 7: \"reasons-cleared\" renders the exact message into #ipoReasonLimit",
+      "result": "PASS",
+      "evidence": "text=\"Reasons cleared. Observation remains selected. Production output was not changed.\""
+    },
+    {
+      "test": "FIX 7: #ipoReasonLimit is set via textContent only (no HTML markup present in innerHTML)",
+      "result": "PASS",
+      "evidence": "innerHTML=\"Reasons cleared. Observation remains selected. Production output was not changed.\""
+    },
+    {
+      "test": "FIX 7: five-Reason limit still renders the existing limit message when there is no announcement",
+      "result": "PASS",
+      "evidence": "text=\"You can select up to five reasons.\""
+    },
+    {
+      "test": "FIX 7: Clear Reasons message has priority over the limit message when both are simultaneously true",
+      "result": "PASS",
+      "evidence": "text=\"Reasons cleared. Observation remains selected. Production output was not changed.\""
+    },
+    {
+      "test": "FIX 7: null token renders no Clear Reasons message",
+      "result": "PASS",
+      "evidence": "text=\"\""
+    },
+    {
+      "test": "FIX 7: a hostile string token (HTML-like) is ignored and never rendered as markup",
+      "result": "PASS",
+      "evidence": "text=\"\", html=\"\""
+    },
+    {
+      "test": "FIX 7: a hostile non-string (object) token is ignored (only the exact string \"reasons-cleared\" is ever accepted)",
+      "result": "PASS",
+      "evidence": "text=\"\""
+    },
+    {
+      "test": "Phase G Scenario G1: first analysis with no prior Observation never produces a stale-generation warning (neither on preparing nor the following ready)",
+      "result": "PASS",
+      "evidence": "{\"noWarningOnFirstPreparing\":true,\"noWarningOnFirstReady\":true}"
+    },
+    {
+      "test": "Phase G Scenario G2: Re-analyze with a selected Observation clears the old Observation/Reasons and emits the stale warning exactly once on preparing, then genuinely clears on the next ready for the same generation",
+      "result": "PASS",
+      "evidence": "{\"beforeObservation\":\"prefer-legacy\",\"clearedAfterPreparing\":true,\"warningEmittedOnce\":true,\"warningClearedOnReady\":true}"
+    },
+    {
+      "test": "Phase G Scenario G3: setReasons([]) then clearReasons() with no real Reason ever selected produces no announcement and no callback",
+      "result": "PASS",
+      "evidence": "{\"announcementAfterSetEmpty\":null,\"announcementAfterClear\":null,\"callbackCountAfterClear\":0}"
+    },
+    {
+      "test": "Phase G Scenario G4: removing the final Reason then calling clearReasons() on the now-empty set produces no announcement and no callback",
+      "result": "PASS",
+      "evidence": "{\"reasonsEmpty\":true,\"announcement\":null,\"callbackCount\":0}"
+    },
+    {
+      "test": "Phase B FIX B3: a disabled unchecked Reason (sixth, over the five-Reason limit) is visually distinct via data-ipo-disabled + dimmed INPUT opacity + distinguishing background/border + not-allowed cursor, while LABEL and text/span opacity remain exactly 1 for measurable Contrast",
+      "result": "PASS",
+      "evidence": "{\"disabled\":true,\"checked\":false,\"dataAttr\":\"true\",\"labelOpacity\":\"1\",\"spanOpacity\":\"1\",\"inputOpacity\":\"0.6\",\"backgroundColor\":\"var(--surface-2)\",\"borderColor\":\"var(--border-strong, var(--border))\",\"cursor\":\"not-allowed\"}"
+    },
+    {
+      "test": "Phase B FIX B3: checked Reasons at the five-Reason limit remain enabled with normal (non-disabled) style — label/span/input opacity all 1",
+      "result": "PASS",
+      "evidence": "{\"disabled\":false,\"checked\":true,\"dataAttrPresent\":false,\"labelOpacity\":\"1\",\"spanOpacity\":\"1\",\"inputOpacity\":\"1\",\"backgroundColor\":\"transparent\",\"cursor\":\"pointer\"}"
+    },
+    {
+      "test": "Phase B FIX B3: removing one checked Reason restores the previously-disabled Reason to fully enabled — data attribute absent, input opacity/background/border/cursor all restored",
+      "result": "PASS",
+      "evidence": "{\"disabled\":false,\"dataAttrPresent\":false,\"labelOpacity\":\"1\",\"inputOpacity\":\"1\",\"backgroundColor\":\"transparent\",\"borderColor\":\"var(--border)\",\"cursor\":\"pointer\"}"
+    },
+    {
+      "test": "Phase G: the semantic stale-generation warning code is localized into #ipoWarning via textContent only (innerHTML equals the same plain text, no markup/injection)",
+      "result": "PASS",
+      "evidence": "text=\"การสังเกตก่อนหน้านี้ถูกล้างเนื่องจากมีการวิเคราะห์ใหม่ที่ใหม่กว่ากำลังทำงานอยู่\", html=\"การสังเกตก่อนหน้านี้ถูกล้างเนื่องจากมีการวิเคราะห์ใหม่ที่ใหม่กว่ากำลังทำงานอยู่\""
+    },
+    {
+      "test": "Element-level overflow containment at 320px",
+      "result": "PASS",
+      "evidence": "docScrollW=320, no clipped children"
+    },
+    {
+      "test": "Element-level overflow containment at 360px",
+      "result": "PASS",
+      "evidence": "docScrollW=360, no clipped children"
+    },
+    {
+      "test": "Element-level overflow containment at 390px",
+      "result": "PASS",
+      "evidence": "docScrollW=390, no clipped children"
+    },
+    {
+      "test": "Element-level overflow containment at 430px",
+      "result": "PASS",
+      "evidence": "docScrollW=430, no clipped children"
+    },
+    {
+      "test": "Element-level overflow containment at 768px",
+      "result": "PASS",
+      "evidence": "docScrollW=768, no clipped children"
+    },
+    {
+      "test": "Element-level overflow containment at 1024px",
+      "result": "PASS",
+      "evidence": "docScrollW=1024, no clipped children"
+    },
+    {
+      "test": "Element-level overflow containment at 1440px",
+      "result": "PASS",
+      "evidence": "docScrollW=1440, no clipped children"
+    },
+    {
+      "test": "Console errors across entire smoke test",
+      "result": "PASS",
+      "evidence": "(none)"
     }
   ],
-  "decision": "BROWSER_BINARY_UNAVAILABLE"
+  "decision": "PASS",
+  "decisionReasons": []
 }

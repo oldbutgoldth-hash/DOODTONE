@@ -1,0 +1,78 @@
+{
+  "suite": "EPIC 2E-J R5 Semantic Presentation Static",
+  "completed": true,
+  "generatedAt": "2026-07-26T13:47:33.878Z",
+  "summary": {
+    "total": 13,
+    "pass": 13,
+    "fail": 0
+  },
+  "results": [
+    {
+      "test": "Hostile detector rejects every raw-Core main-UI presentation class",
+      "result": "PASS",
+      "evidence": "[1,1,1,1,1]"
+    },
+    {
+      "test": "Current Data Comparison renderer has zero raw-Core main-UI presentation patterns",
+      "result": "PASS",
+      "evidence": "[]"
+    },
+    {
+      "test": "Unknown comparison lists use a bounded localized presenter fallback",
+      "result": "PASS",
+      "evidence": "presenter UNKNOWN fallback"
+    },
+    {
+      "test": "Unknown comparison summaries use a bounded localized presenter fallback",
+      "result": "PASS",
+      "evidence": "summary UNKNOWN fallback"
+    },
+    {
+      "test": "Rollback and fallback prose are projected through stable presentation codes",
+      "result": "PASS",
+      "evidence": "stable rollback/fallback keys"
+    },
+    {
+      "test": "Observation controller stores semantic stale/provider warning codes",
+      "result": "PASS",
+      "evidence": "semantic warning codes"
+    },
+    {
+      "test": "Observation renderer localizes semantic warning codes before DOM presentation",
+      "result": "PASS",
+      "evidence": "code-to-current-locale projection"
+    },
+    {
+      "test": "Live App honesty assertion uses semantic data attributes, not English mode prose",
+      "result": "PASS",
+      "evidence": "semantic preview evidence"
+    },
+    {
+      "test": "Step 7B-B Session correctness uses QA snapshot rather than localized counter parsing",
+      "result": "PASS",
+      "evidence": "locale-neutral sessionSummary"
+    },
+    {
+      "test": "Step 7B-B canonical Reason assertions use stable reason codes",
+      "result": "PASS",
+      "evidence": "canonical reason codes"
+    },
+    {
+      "test": "Full-system i18n has precise per-region sections plus bodyAggregate",
+      "result": "PASS",
+      "evidence": "18 section keys"
+    },
+    {
+      "test": "Hidden language/payment modals are explicitly opened for locale audit",
+      "result": "PASS",
+      "evidence": "explicit modal workflow"
+    },
+    {
+      "test": "Visible locale audit fails closed on zero visible nodes",
+      "result": "PASS",
+      "evidence": "visibility and coverage proof"
+    }
+  ],
+  "decision": "PASS"
+}

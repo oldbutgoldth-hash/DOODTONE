@@ -84,7 +84,7 @@
     "ui/style-recognition-renderer.js": "e25ad6e6a42f59b85d0ce6f375c071b44010db159f0402692cb36e5142f2dc38",
     "ui/tone-curve-editor.js": "677378a1c3091dc03cbdc16bef9e78eab356bbfb3333227d75727c728c4b48cb",
     "ui/tone-curve-renderer.js": "3424ad63b6c889a2025e23ea0c7513411e7c4c0bb4dddb1dbc305e1bbd254c6e",
-    "ui/ui-engine.js": "50c7ba34b3a86eb0c97d80f36ffb2b4804a6c5ca47f3448782409629b583d354",
+    "ui/ui-engine.js": "147a55ca9acb75b6b5fa05fbede5d246ddc0b37a8ceacd055ff5c1a4d11f6711",
     "ui/whitebalance-renderer.js": "af235b1af3f88d38415bb6d93f34d3a9302f2f94f32e3d39f3570d202abdbe60"
   }
 }

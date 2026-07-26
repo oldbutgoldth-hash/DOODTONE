@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J ENV-B1A-R — Playwright Virtual-Origin Harness smoke test",
-  "generatedAt": "2026-07-25T16:22:55.801Z",
+  "generatedAt": "2026-07-26T13:40:33.508Z",
   "results": [
     {
       "test": "PART 1: Playwright Node package resolvability",
@@ -9,15 +9,80 @@
     },
     {
       "test": "PART 2: Browser executable detection",
-      "result": "NOT_TESTED",
-      "evidence": "no usable Browser executable found among 6 candidates (never downloaded one): [{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
+      "result": "PASS",
+      "evidence": "found=/usr/bin/chromium, version=Chromium 144.0.7559.96 built on Debian GNU/Linux 13 (trixie)"
+    },
+    {
+      "test": "PART 3: virtual-origin navigation succeeds and final URL begins with the virtual origin",
+      "result": "FAIL",
+      "evidence": "navigationStatus=THREW: page.goto: net::ERR_BLOCKED_BY_ADMINISTRATOR at http://lumixa.test/index.html?qa=1\nCall log:\n  - navigating to \"http://lumixa.test/index.html?qa=1\", waiting until \"domcontentloaded\"\n, finalUrl=null"
+    },
+    {
+      "test": "PART 8: document becomes interactive or complete",
+      "result": "PASS",
+      "evidence": "readyState=complete"
+    },
+    {
+      "test": "PART 8: application body contains visible non-empty content",
+      "result": "PASS",
+      "evidence": "bodyTextLength=892"
+    },
+    {
+      "test": "PART 8: index.html loads from disk under the virtual origin",
+      "result": "FAIL",
+      "evidence": "matchingRequests=[]"
+    },
+    {
+      "test": "PART 8: at least one JS/MJS module loads",
+      "result": "FAIL",
+      "evidence": "jsRequests=0"
+    },
+    {
+      "test": "PART 8: CSS loads when present (informational — not required to be non-zero)",
+      "result": "PASS",
+      "evidence": "cssRequests=0"
+    },
+    {
+      "test": "PART 8: no local JS/CSS/module/image 404 under the virtual origin",
+      "result": "PASS",
+      "evidence": "local404s=[]"
+    },
+    {
+      "test": "PART 8: no unexpected external request reached the real network",
+      "result": "PASS",
+      "evidence": "unexpectedExternalRequests=[]"
+    },
+    {
+      "test": "PART 8: no localhost/127.0.0.1/private-IP request was made",
+      "result": "PASS",
+      "evidence": "localhostAttempts=[]"
+    },
+    {
+      "test": "PART 8: no page errors",
+      "result": "PASS",
+      "evidence": "(none)"
+    },
+    {
+      "test": "PART 8: no console errors",
+      "result": "PASS",
+      "evidence": "(none)"
+    },
+    {
+      "test": "PART 8: no request failures",
+      "result": "PASS",
+      "evidence": "(none)"
+    },
+    {
+      "test": "PART 9: route security self-test — every traversal path is rejected with 403, outside file never read",
+      "result": "FAIL",
+      "evidence": "[{\"path\":\"/../secret.txt\",\"status\":404,\"threw\":null},{\"path\":\"/%2e%2e/secret.txt\",\"status\":404,\"threw\":null},{\"path\":\"/qa/../../secret.txt\",\"status\":404,\"threw\":null},{\"path\":\"/qa/%2e%2e/%2e%2e/secret.txt\",\"status\":404,\"threw\":null},{\"path\":\"/qa%2f..%2fsecret.txt\",\"status\":403,\"threw\":null},{\"path\":\"/qa%5c..%5csecret.txt\",\"status\":403,\"threw\":null},{\"path\":\"/C:%5csecret.txt\",\"status\":403,\"threw\":null},{\"path\":\"/%00secret.txt\",\"status\":403,\"threw\":null}]"
     }
   ],
   "playwrightPackageStatus": "PLAYWRIGHT_PACKAGE_AVAILABLE",
-  "browserExecutablePath": null,
-  "browserVersion": null,
+  "browserExecutablePath": "/usr/bin/chromium",
+  "browserVersion": "Chromium 144.0.7559.96 built on Debian GNU/Linux 13 (trixie)",
   "origin": "http://lumixa.test",
-  "navigationStatus": "NOT_ATTEMPTED_BROWSER_BINARY_UNAVAILABLE",
+  "navigationStatus": "THREW: page.goto: net::ERR_BLOCKED_BY_ADMINISTRATOR at http://lumixa.test/index.html?qa=1\nCall log:\n  - navigating to \"http://lumixa.test/index.html?qa=1\", waiting until \"domcontentloaded\"\n",
   "totalRequests": 0,
   "jsRequests": 0,
   "cssRequests": 0,
@@ -26,9 +91,18 @@
   "forbiddenRequests": 0,
   "unexpectedExternalRequests": 0,
   "pageErrors": [],
-  "consoleErrors": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
   "requestFailures": [],
   "fontFallbackUsed": false,
-  "finalDecision": "BROWSER_BINARY_UNAVAILABLE",
+  "finalDecision": "FAIL_VIRTUAL_ORIGIN",
   "knownSandboxLimitation": "Per EPIC 2E-J ENV-B1B: this sandbox blocks Browser navigation to any non-\"about:\" target (net::ERR_BLOCKED_BY_ADMINISTRATOR), including this harness's own virtual origin — independent of Browser-binary availability. The navigation-free in-memory harness (qa/helpers/playwright-in-memory-app.mjs) exists specifically because of this limitation."
 }

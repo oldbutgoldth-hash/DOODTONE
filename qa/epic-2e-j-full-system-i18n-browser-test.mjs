@@ -99,35 +99,46 @@ const SOURCE_HASH_INPUTS = [
   path.join(PROJECT_ROOT, 'ui', 'review-console-renderer.js'),
   path.join(PROJECT_ROOT, 'ui', 'side-by-side-comparison-renderer.js'),
   path.join(PROJECT_ROOT, 'ui', 'visual-preview-comparison-renderer-v2.js'),
+  path.join(PROJECT_ROOT, 'ui', 'interactive-before-after-controller-v2.js'),
   path.join(PROJECT_ROOT, 'ui', 'interactive-before-after-renderer-v2.js'),
+  path.join(PROJECT_ROOT, 'ui', 'interactive-preview-observation-renderer-v2.js'),
   FIXTURE,
 ];
 
-// Sections whose visible text must be fully Thai in TH mode.
-// R4 Phase B: expanded from 6 to the full 8 required sections the
-// spec names explicitly (App shell/nav, Analysis status/panels, Review
-// Console, Data Comparison, Visual Preview, Before/After, Observation,
-// Session Summary). `analysisStatus` and `sessionSummary` were
-// previously uncovered by this suite's per-section audit entirely.
+// R5 precise locale audit: every major photographer-facing region is
+// audited independently, while bodyAggregate remains only a final safety net.
+// Hidden language/payment modals are explicitly opened during each locale run.
 const REQUIRED_SECTIONS = [
-  { key: 'appShell', selector: 'body' },
-  { key: 'analysisStatus', selector: '#imageAnalysisSection' },
+  { key: 'appHeader', selector: 'header' },
+  { key: 'primaryNavigation', selector: '.lx-sidebar-left' },
+  { key: 'rightSidebar', selector: '.lx-sidebar-right' },
+  { key: 'appFooter', selector: 'footer' },
+  { key: 'languageControl', selector: '#langModal' },
+  { key: 'uploadArea', selector: '#previewWrap' },
+  { key: 'analysisSummary', selector: '#aiBox' },
+  { key: 'analysisTabsAndControls', selector: '#analysisGroups' },
+  { key: 'supportPanel', selector: '#supSec' },
+  { key: 'promptPayModal', selector: '#ppModal' },
+  { key: 'usdtModal', selector: '#usdtModal' },
   { key: 'reviewConsole', selector: '#reviewConsoleSection' },
   { key: 'dataComparison', selector: '#sideBySideComparisonSection' },
   { key: 'visualPreview', selector: '#visualPreviewComparisonSection' },
   { key: 'beforeAfter', selector: '#interactiveBeforeAfterSection' },
   { key: 'observation', selector: '#interactivePreviewObservationSection' },
   { key: 'sessionSummary', selector: '#interactivePreviewObservationSessionSection' },
+  { key: 'bodyAggregate', selector: 'body' },
 ];
-// R4 Phase B: NO section key is permitted to be NOT_TESTED in this
-// suite. `#imageAnalysisSection` (analysisStatus) is set to
-// display:block once analyzeImageCore() resolves (ui/app.js) and is
-// only ever hidden again by the Reset workflow, which this suite
-// never triggers -- by the time the TH/EN audits run (well after
-// Review + Build Controlled V2), every one of the 8 required sections
-// is expected to be genuinely present. Verified directly against
-// ui/app.js rather than assumed.
 const PERMITTED_NOT_TESTED_SECTIONS = [];
+
+async function setAuditModalsOpen(page, open) {
+  await page.evaluate((shouldOpen) => {
+    for (const id of ['langModal', 'ppModal', 'usdtModal']) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = shouldOpen ? 'flex' : 'none';
+    }
+  }, open);
+  await page.waitForTimeout(80);
+}
 
 const APPROVED_TERMS = [
   'Visual Preview Comparison', 'Visual Preview', 'Data Comparison', 'Review Console',
@@ -424,6 +435,7 @@ async function main() {
       // PERMITTED_NOT_TESTED_SECTIONS above), and an audit that throws
       // is distinguished from "section absent" instead of both being
       // silently swallowed into a false zero-leak PASS.
+      await setAuditModalsOpen(page, true);
       const thAuditRows = await auditVisibleLocaleSections(page, REQUIRED_SECTIONS, { mode: 'th', approvedTerms: APPROVED_TERMS });
       for (const row of thAuditRows) {
         if (row.status === 'NOT_TESTED') {
@@ -433,18 +445,21 @@ async function main() {
           // as an explicit FAIL, never silently downgraded.
           recordStatus(`Step 9: Thai audit -- ${row.key} audit ran without error`, 'FAIL', `audit-threw: ${row.error}`);
         } else {
-          record(`Step 9: Thai audit -- ${row.key} has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)`, row.status === 'PASS', JSON.stringify({ leaks: row.leaks.length, unresolvedTemplateLeaks: row.unresolvedTemplateLeaks.length, sample: row.leaks.slice(0, 5) }));
+          record(`Step 9: Thai audit -- ${row.key} has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)`, row.status === 'PASS', JSON.stringify({ visibleNodeCount: row.visibleNodeCount, leaks: row.leaks.length, unresolvedTemplateLeaks: row.unresolvedTemplateLeaks.length, sample: row.leaks.slice(0, 5) }));
         }
         await page.screenshot({ path: path.join(SCREENSHOT_DIR, `th-${row.key}.png`), fullPage: false }).catch(() => {});
       }
       const thDecision = decideVisibleLocaleAudit(thAuditRows, { permittedNotTested: PERMITTED_NOT_TESTED_SECTIONS });
-      record('Step 9: fail-closed decision across all 8 required Thai sections is PASS (no FAIL rows, no unpermitted NOT_TESTED rows)', thDecision.decision === 'PASS', JSON.stringify({ decision: thDecision.decision, totalLeaks: thDecision.totalLeaks, failedKeys: thDecision.failures.map((r) => r.key), notTestedKeys: thDecision.unpermittedNotTested.map((r) => r.key) }));
+      record('Step 9: fail-closed decision across all 18 required Thai sections is PASS (no FAIL rows, no unpermitted NOT_TESTED rows)', thDecision.decision === 'PASS', JSON.stringify({ decision: thDecision.decision, totalLeaks: thDecision.totalLeaks, failedKeys: thDecision.failures.map((r) => r.key), notTestedKeys: thDecision.unpermittedNotTested.map((r) => r.key) }));
+
+      await setAuditModalsOpen(page, false);
 
       // -- 10+11. TH -> EN -> TH (R4 Phase C/K: visibility-aware EN audit,
       //    replacing the old truncated whole-body innerText slice
       //    check, which was neither visibility-aware nor per-section) --
       await page.evaluate(() => window.setLang && window.setLang('en'));
       await page.waitForTimeout(600);
+      await setAuditModalsOpen(page, true);
       const enAuditRows = await auditVisibleLocaleSections(page, REQUIRED_SECTIONS, { mode: 'en', approvedTerms: APPROVED_TERMS });
       for (const row of enAuditRows) {
         if (row.status === 'NOT_TESTED') {
@@ -452,20 +467,21 @@ async function main() {
         } else if (row.status === 'FAIL' && row.reason === 'audit-threw') {
           recordStatus(`Step 10: English audit -- ${row.key} audit ran without error`, 'FAIL', `audit-threw: ${row.error}`);
         } else {
-          record(`Step 10: English audit -- ${row.key} has zero visible Thai fragments / unresolved template tokens`, row.status === 'PASS', JSON.stringify({ leaks: row.leaks.length, unresolvedTemplateLeaks: row.unresolvedTemplateLeaks.length, sample: row.leaks.slice(0, 5) }));
+          record(`Step 10: English audit -- ${row.key} has zero visible Thai fragments / unresolved template tokens`, row.status === 'PASS', JSON.stringify({ visibleNodeCount: row.visibleNodeCount, leaks: row.leaks.length, unresolvedTemplateLeaks: row.unresolvedTemplateLeaks.length, sample: row.leaks.slice(0, 5) }));
         }
         await page.screenshot({ path: path.join(SCREENSHOT_DIR, `en-${row.key}.png`), fullPage: false }).catch(() => {});
       }
       const enDecision = decideVisibleLocaleAudit(enAuditRows, { permittedNotTested: PERMITTED_NOT_TESTED_SECTIONS });
-      record('Step 10: fail-closed decision across all 8 required English sections is PASS (no FAIL rows, no unpermitted NOT_TESTED rows)', enDecision.decision === 'PASS', JSON.stringify({ decision: enDecision.decision, totalLeaks: enDecision.totalLeaks, failedKeys: enDecision.failures.map((r) => r.key), notTestedKeys: enDecision.unpermittedNotTested.map((r) => r.key) }));
+      record('Step 10: fail-closed decision across all 18 required English sections is PASS (no FAIL rows, no unpermitted NOT_TESTED rows)', enDecision.decision === 'PASS', JSON.stringify({ decision: enDecision.decision, totalLeaks: enDecision.totalLeaks, failedKeys: enDecision.failures.map((r) => r.key), notTestedKeys: enDecision.unpermittedNotTested.map((r) => r.key) }));
+      await setAuditModalsOpen(page, false);
 
       await page.evaluate(() => window.setLang && window.setLang('th'));
       await page.waitForTimeout(600);
+      await setAuditModalsOpen(page, true);
       const thRoundTripRows = await auditVisibleLocaleSections(page, REQUIRED_SECTIONS, { mode: 'th', approvedTerms: APPROVED_TERMS });
       const thRoundTripDecision = decideVisibleLocaleAudit(thRoundTripRows, { permittedNotTested: PERMITTED_NOT_TESTED_SECTIONS });
-      record('Step 11: switching back to Thai renders Thai again with zero English leaks (fail-closed across all 8 sections)', thRoundTripDecision.decision === 'PASS', JSON.stringify({ decision: thRoundTripDecision.decision, totalLeaks: thRoundTripDecision.totalLeaks, failedKeys: thRoundTripDecision.failures.map((r) => r.key), notTestedKeys: thRoundTripDecision.unpermittedNotTested.map((r) => r.key) }));
-
-
+      record('Step 11: switching back to Thai renders Thai again with zero English leaks (fail-closed across all 18 sections)', thRoundTripDecision.decision === 'PASS', JSON.stringify({ decision: thRoundTripDecision.decision, totalLeaks: thRoundTripDecision.totalLeaks, failedKeys: thRoundTripDecision.failures.map((r) => r.key), notTestedKeys: thRoundTripDecision.unpermittedNotTested.map((r) => r.key) }));
+      await setAuditModalsOpen(page, false);
 
       // ── 12. State invariants after TH -> EN -> TH ───────────────────
       const after = await captureInvariants(page);

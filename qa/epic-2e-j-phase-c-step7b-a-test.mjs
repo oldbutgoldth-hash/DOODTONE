@@ -770,15 +770,11 @@ async function main() {
         const clearReasonsBtn = req(document.getElementById('ipoClearReasonsButton'), 'Clear Reasons button');
         const clearObsBtn = req(document.getElementById('ipoClearButton'), 'Clear Observation button');
         const clearSessionBtn = req(document.getElementById('ipoClearSessionButton'), 'Clear Session button');
-        // Privacy note: any element whose text mentions privacy/production-safety wording within the Observation/Session sections.
-        // FIX 6 (Step 7B-A-F2): locate the ACTUAL Privacy-note element by
-        // exact text match (never a broad parent textContent search),
-        // then verify it is genuinely visible: non-none display,
-        // non-hidden visibility, non-zero opacity, non-zero bounding
-        // rect, contained within its parent and the viewport.
-        const PRIVACY_NOTE_TEXT = 'Observation details stay in this page session only and do not change production output.';
-        const privacyNoteEl = Array.from(document.querySelectorAll('#interactivePreviewObservationInner div, #interactivePreviewObservationInner p'))
-          .find((el) => el.textContent && el.textContent.trim() === PRIVACY_NOTE_TEXT);
+        // Privacy note: resolve the stable semantic element, never one locale's
+        // rendered prose. The full-system i18n suite separately proves the
+        // current-language text. This viewport test proves real visibility and
+        // containment without becoming English-bound.
+        const privacyNoteEl = document.getElementById('ipoDetailsNote');
         let privacyNoteFound = false;
         if (privacyNoteEl) {
           const style = getComputedStyle(privacyNoteEl);
@@ -789,7 +785,7 @@ async function main() {
             checkContained(privacyNoteEl, obsSection, 'privacyNote-in-obsSection');
           }
         }
-        if (!privacyNoteFound) missing.push('Privacy note (exact-text element, genuinely visible)');
+        if (!privacyNoteFound) missing.push('Privacy note (semantic element, genuinely visible)');
 
         radioLabels.forEach((l, i) => checkContained(l, ipoFieldset, 'obs-label-' + radioValues[i]));
         reasonLabels.forEach((l, i) => checkContained(l, ipoReasonFieldset, 'reason-label-' + reasonValues[i]));

@@ -180,13 +180,13 @@ record('Setup: qa/playwright-in-memory-app-smoke.mjs is readable', smokeSrc.leng
 // ══════════════════════════════════════════════════════════════════
 {
   const usesClearSessionAsSetup = /await safeClickIfEnabled\(page, 'ipoClearSessionButton'\); \/\/ setup only: establishes a known Cleared=0 baseline/.test(testSrc);
-  const verifiesKnownBaseline = /p3ParsedBaseline\.activeObservationsDerived === 1 && p3SecondaryBaseline\.cleared === 0/.test(testSrc);
-  const verifiesZeroToOneTransition = /p3ParsedAfterFirst\.activeObservationsDerived === 0 && p3ClearedAfterFirst === 1/.test(testSrc);
+  const verifiesKnownBaseline = /p3SemanticBaseline\?\.activeObservations === 1 && p3SemanticBaseline\?\.cleared === 0/.test(testSrc);
+  const verifiesZeroToOneTransition = /p3SemanticAfterFirst\?\.activeObservations === 0 && p3ClearedAfterFirst === 1/.test(testSrc);
   const verifiesRepeatDoesNotIncrement = /p3ClearedAfterFirst === 1 && p3ClearedAfterSecond === 1/.test(testSrc);
   const oldRelativeAssumptionGone = !/p3ClearedAfterFirst === p3ClearedBefore \+ 1/.test(testSrc) && !/const p3ClearedBefore =/.test(testSrc);
   const pass = usesClearSessionAsSetup && verifiesKnownBaseline && verifiesZeroToOneTransition && verifiesRepeatDoesNotIncrement && oldRelativeAssumptionGone;
   record(
-    'FIX 5 (ENV-B2-F1): Part 3 (Clear Observation) uses Clear Session as isolated setup to reach a KNOWN 0/1 baseline, verifies that baseline BEFORE the tested action, reaches Clear Observation via real Tab, activates with Space, verifies activeObservationsDerived===0 && cleared===1, and verifies a repeat activation leaves cleared at 1 — the old relative "+1 from an uncontrolled baseline" assumption is gone',
+    'FIX 5 (ENV-B2-F1): Part 3 (Clear Observation) uses Clear Session as isolated setup to reach a KNOWN 0/1 baseline, verifies that baseline BEFORE the tested action, reaches Clear Observation via real Tab, activates with Space, verifies activeObservations===0 && cleared===1, and verifies a repeat activation leaves cleared at 1 — the old relative "+1 from an uncontrolled baseline" assumption is gone',
     pass,
     `usesClearSessionAsSetup=${usesClearSessionAsSetup}, verifiesKnownBaseline=${verifiesKnownBaseline}, verifiesZeroToOneTransition=${verifiesZeroToOneTransition}, verifiesRepeatDoesNotIncrement=${verifiesRepeatDoesNotIncrement}, oldRelativeAssumptionGone=${oldRelativeAssumptionGone}`
   );

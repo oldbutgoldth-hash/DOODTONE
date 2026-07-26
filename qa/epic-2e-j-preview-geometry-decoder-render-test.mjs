@@ -284,11 +284,21 @@ async function main() {
     //    flow or runAnalysis() -- Production/Mapping/Controlled-Test
     //    fields must read identically to the pre-suite baseline. ──
     const productionAfter = await qaSnapshot(page);
-    const noProductionWrites = productionBaseline?.previewSandbox?.selectedOutputSource === 'legacy'
-      && productionAfter?.previewSandbox?.selectedOutputSource === 'legacy'
-      && productionBaseline?.previewSandbox?.canWriteProduction === false && productionAfter?.previewSandbox?.canWriteProduction === false
-      && productionBaseline?.previewSandbox?.canExportPreview === false && productionAfter?.previewSandbox?.canExportPreview === false;
-    recordCondition('No Production writes: decoder/render-only pass never touched Production/Mapping/Controlled-Test state', noProductionWrites, JSON.stringify({ before: productionBaseline?.previewSandbox, after: productionAfter?.previewSandbox }));
+    const productionLockProjection = (snapshot) => ({
+      previewSandbox: {
+        exists: snapshot?.previewSandbox?.exists ?? false,
+        selectedOutputSource: snapshot?.previewSandbox?.selectedOutputSource ?? null,
+        canWriteProduction: snapshot?.previewSandbox?.canWriteProduction ?? null,
+        canExportPreview: snapshot?.previewSandbox?.canExportPreview ?? null,
+      },
+      controlledTest: {
+        canEnterControlledTest: snapshot?.testGate?.canEnterControlledTest ?? null,
+      },
+    });
+    const productionBeforeProjection = productionLockProjection(productionBaseline);
+    const productionAfterProjection = productionLockProjection(productionAfter);
+    const noProductionWrites = JSON.stringify(productionBeforeProjection) === JSON.stringify(productionAfterProjection);
+    recordCondition('No Production writes: decoder/render-only pass never touched Production/Mapping/Controlled-Test state', noProductionWrites, JSON.stringify({ before: productionBeforeProjection, after: productionAfterProjection }));
 
     recordCondition('Zero page errors across the decoder/render suite', runtime.collectors.pageErrors.length === 0, runtime.collectors.pageErrors.length === 0 ? '(none)' : runtime.collectors.pageErrors.join('; '));
     recordCondition('Zero non-allowed Network requests (data:/about: only)', runtime.collectors.nonAllowedNetworkRequests.length === 0, JSON.stringify(runtime.collectors.nonAllowedNetworkRequests));

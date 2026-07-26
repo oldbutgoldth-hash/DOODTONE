@@ -1,9 +1,12 @@
 {
-  "generatedAt": "2026-07-21T10:23:30.122Z",
+  "runId": "7515aad4-8082-45af-8987-1618aae3efb5",
+  "generatedAt": "2026-07-26T13:47:18.042Z",
   "liveEvidenceRecords": [
     {
       "fixture": "neutral-balanced.png",
       "snapshot": {
+        "qaContractVersion": "2E-J-C-R2",
+        "imageLoaded": true,
         "analysisGeneration": 2,
         "testGate": {
           "exists": true,
@@ -51,13 +54,47 @@
           "v2State": null,
           "visualAdjustmentsApplied": null
         },
+        "previewGeometryDiagnostics": {
+          "generationId": 2,
+          "sandboxExists": true,
+          "humanReviewComplete": true,
+          "canGeneratePreview": true,
+          "simulatedPreviewPresetAvailable": true,
+          "contradictoryEvidence": false,
+          "hardStopCount": 0,
+          "renderPlanExists": true,
+          "v2PlanExists": true,
+          "v2Available": true,
+          "v2Renderable": true,
+          "identityFallbackEligible": false,
+          "blockerCode": null
+        },
+        "canonicalSourceGeometry": {
+          "generationId": 2,
+          "decodePath": "createImageBitmap",
+          "encodedOrientation": null,
+          "orientationAppliedByDecoder": true,
+          "canonicalWidth": 800,
+          "canonicalHeight": 600,
+          "sourceAspectRatio": 1.3333333333333333,
+          "decodeComplete": true
+        },
         "visualPreview": {
           "legacyState": "renderable",
           "controlledV2State": "renderable"
         },
+        "visualPreviewControllerState": {
+          "exists": true,
+          "state": "rendered",
+          "legacyRendered": true,
+          "v2Rendered": true,
+          "bothRendered": true,
+          "visualComparisonAvailable": true,
+          "analysisGenerationId": 2
+        },
         "interactive": {
           "state": "ready",
-          "alignmentStatus": null
+          "alignmentStatus": "Exact dimensions"
         },
         "observation": {
           "enabled": true,
@@ -86,13 +123,67 @@
             "naturalLook": 0,
             "clarityDetail": 0,
             "noSpecificReason": 0
-          }
+          },
+          "topReasons": [],
+          "lastObservation": null
+        },
+        "controlledV2Translation": {
+          "exists": true,
+          "mode": "legacy-derived-safety-restraint",
+          "meaningful": true,
+          "identityFallback": false,
+          "visualizedAdjustmentCount": 2,
+          "supportedAdjustments": [
+            "exposure",
+            "contrast",
+            "highlights",
+            "shadows",
+            "whites",
+            "blacks",
+            "temperature",
+            "tint",
+            "saturation",
+            "vibrance",
+            "clarity",
+            "dehaze",
+            "toneCurve",
+            "colorGrading"
+          ],
+          "changedFields": [
+            {
+              "field": "contrast",
+              "before": 0.04,
+              "after": 0.0312,
+              "delta": -0.0088,
+              "action": "C1-skin-protection",
+              "reason": "Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask."
+            },
+            {
+              "field": "vibrance",
+              "before": 1,
+              "after": 0.7797,
+              "delta": -0.2203,
+              "action": "C1-skin-protection",
+              "reason": "Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask."
+            }
+          ],
+          "confidence": 0.36
+        },
+        "reviewGuidance": {
+          "exists": true,
+          "visualRequired": 6,
+          "visualPassed": 6,
+          "systemRequired": 4,
+          "systemVerified": 4,
+          "readyToBuildV2": true
         }
       }
     },
     {
       "fixture": "warm-portrait-synthetic.png",
       "snapshot": {
+        "qaContractVersion": "2E-J-C-R2",
+        "imageLoaded": true,
         "analysisGeneration": 2,
         "testGate": {
           "exists": true,
@@ -140,13 +231,47 @@
           "v2State": null,
           "visualAdjustmentsApplied": null
         },
+        "previewGeometryDiagnostics": {
+          "generationId": 2,
+          "sandboxExists": true,
+          "humanReviewComplete": true,
+          "canGeneratePreview": true,
+          "simulatedPreviewPresetAvailable": true,
+          "contradictoryEvidence": false,
+          "hardStopCount": 0,
+          "renderPlanExists": true,
+          "v2PlanExists": true,
+          "v2Available": true,
+          "v2Renderable": true,
+          "identityFallbackEligible": false,
+          "blockerCode": null
+        },
+        "canonicalSourceGeometry": {
+          "generationId": 2,
+          "decodePath": "createImageBitmap",
+          "encodedOrientation": null,
+          "orientationAppliedByDecoder": true,
+          "canonicalWidth": 800,
+          "canonicalHeight": 600,
+          "sourceAspectRatio": 1.3333333333333333,
+          "decodeComplete": true
+        },
         "visualPreview": {
           "legacyState": "renderable",
           "controlledV2State": "renderable"
         },
+        "visualPreviewControllerState": {
+          "exists": true,
+          "state": "rendered",
+          "legacyRendered": true,
+          "v2Rendered": true,
+          "bothRendered": true,
+          "visualComparisonAvailable": true,
+          "analysisGenerationId": 2
+        },
         "interactive": {
           "state": "ready",
-          "alignmentStatus": null
+          "alignmentStatus": "Exact dimensions"
         },
         "observation": {
           "enabled": true,
@@ -175,13 +300,67 @@
             "naturalLook": 0,
             "clarityDetail": 0,
             "noSpecificReason": 0
-          }
+          },
+          "topReasons": [],
+          "lastObservation": null
+        },
+        "controlledV2Translation": {
+          "exists": true,
+          "mode": "legacy-derived-safety-restraint",
+          "meaningful": true,
+          "identityFallback": false,
+          "visualizedAdjustmentCount": 2,
+          "supportedAdjustments": [
+            "exposure",
+            "contrast",
+            "highlights",
+            "shadows",
+            "whites",
+            "blacks",
+            "temperature",
+            "tint",
+            "saturation",
+            "vibrance",
+            "clarity",
+            "dehaze",
+            "toneCurve",
+            "colorGrading"
+          ],
+          "changedFields": [
+            {
+              "field": "contrast",
+              "before": 0.2,
+              "after": 0.1689,
+              "delta": -0.0311,
+              "action": "C1-skin-protection",
+              "reason": "Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask."
+            },
+            {
+              "field": "vibrance",
+              "before": 0.3,
+              "after": 0.2534,
+              "delta": -0.0466,
+              "action": "C1-skin-protection",
+              "reason": "Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask."
+            }
+          ],
+          "confidence": 0.36
+        },
+        "reviewGuidance": {
+          "exists": true,
+          "visualRequired": 6,
+          "visualPassed": 6,
+          "systemRequired": 4,
+          "systemVerified": 4,
+          "readyToBuildV2": true
         }
       }
     },
     {
       "fixture": "cool-shadow-synthetic.png",
       "snapshot": {
+        "qaContractVersion": "2E-J-C-R2",
+        "imageLoaded": true,
         "analysisGeneration": 2,
         "testGate": {
           "exists": true,
@@ -229,13 +408,47 @@
           "v2State": null,
           "visualAdjustmentsApplied": null
         },
+        "previewGeometryDiagnostics": {
+          "generationId": 2,
+          "sandboxExists": true,
+          "humanReviewComplete": true,
+          "canGeneratePreview": true,
+          "simulatedPreviewPresetAvailable": true,
+          "contradictoryEvidence": false,
+          "hardStopCount": 0,
+          "renderPlanExists": true,
+          "v2PlanExists": true,
+          "v2Available": true,
+          "v2Renderable": true,
+          "identityFallbackEligible": false,
+          "blockerCode": null
+        },
+        "canonicalSourceGeometry": {
+          "generationId": 2,
+          "decodePath": "createImageBitmap",
+          "encodedOrientation": null,
+          "orientationAppliedByDecoder": true,
+          "canonicalWidth": 800,
+          "canonicalHeight": 600,
+          "sourceAspectRatio": 1.3333333333333333,
+          "decodeComplete": true
+        },
         "visualPreview": {
           "legacyState": "renderable",
           "controlledV2State": "renderable"
         },
+        "visualPreviewControllerState": {
+          "exists": true,
+          "state": "rendered",
+          "legacyRendered": true,
+          "v2Rendered": true,
+          "bothRendered": true,
+          "visualComparisonAvailable": true,
+          "analysisGenerationId": 2
+        },
         "interactive": {
           "state": "ready",
-          "alignmentStatus": null
+          "alignmentStatus": "Exact dimensions"
         },
         "observation": {
           "enabled": true,
@@ -264,13 +477,67 @@
             "naturalLook": 0,
             "clarityDetail": 0,
             "noSpecificReason": 0
-          }
+          },
+          "topReasons": [],
+          "lastObservation": null
+        },
+        "controlledV2Translation": {
+          "exists": true,
+          "mode": "legacy-derived-safety-restraint",
+          "meaningful": true,
+          "identityFallback": false,
+          "visualizedAdjustmentCount": 2,
+          "supportedAdjustments": [
+            "exposure",
+            "contrast",
+            "highlights",
+            "shadows",
+            "whites",
+            "blacks",
+            "temperature",
+            "tint",
+            "saturation",
+            "vibrance",
+            "clarity",
+            "dehaze",
+            "toneCurve",
+            "colorGrading"
+          ],
+          "changedFields": [
+            {
+              "field": "contrast",
+              "before": 0.2,
+              "after": 0.1559,
+              "delta": -0.0441,
+              "action": "C1-skin-protection",
+              "reason": "Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask."
+            },
+            {
+              "field": "vibrance",
+              "before": 0.3333,
+              "after": 0.2599,
+              "delta": -0.0734,
+              "action": "C1-skin-protection",
+              "reason": "Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask."
+            }
+          ],
+          "confidence": 0.36
+        },
+        "reviewGuidance": {
+          "exists": true,
+          "visualRequired": 6,
+          "visualPassed": 6,
+          "systemRequired": 4,
+          "systemVerified": 4,
+          "readyToBuildV2": true
         }
       }
     },
     {
       "fixture": "highlight-shadow-range.png",
       "snapshot": {
+        "qaContractVersion": "2E-J-C-R2",
+        "imageLoaded": true,
         "analysisGeneration": 2,
         "testGate": {
           "exists": true,
@@ -318,13 +585,47 @@
           "v2State": null,
           "visualAdjustmentsApplied": null
         },
+        "previewGeometryDiagnostics": {
+          "generationId": 2,
+          "sandboxExists": true,
+          "humanReviewComplete": true,
+          "canGeneratePreview": true,
+          "simulatedPreviewPresetAvailable": true,
+          "contradictoryEvidence": false,
+          "hardStopCount": 0,
+          "renderPlanExists": true,
+          "v2PlanExists": true,
+          "v2Available": true,
+          "v2Renderable": true,
+          "identityFallbackEligible": false,
+          "blockerCode": null
+        },
+        "canonicalSourceGeometry": {
+          "generationId": 2,
+          "decodePath": "createImageBitmap",
+          "encodedOrientation": null,
+          "orientationAppliedByDecoder": true,
+          "canonicalWidth": 800,
+          "canonicalHeight": 600,
+          "sourceAspectRatio": 1.3333333333333333,
+          "decodeComplete": true
+        },
         "visualPreview": {
           "legacyState": "renderable",
           "controlledV2State": "renderable"
         },
+        "visualPreviewControllerState": {
+          "exists": true,
+          "state": "rendered",
+          "legacyRendered": true,
+          "v2Rendered": true,
+          "bothRendered": true,
+          "visualComparisonAvailable": true,
+          "analysisGenerationId": 2
+        },
         "interactive": {
           "state": "ready",
-          "alignmentStatus": null
+          "alignmentStatus": "Exact dimensions"
         },
         "observation": {
           "enabled": true,
@@ -353,7 +654,59 @@
             "naturalLook": 0,
             "clarityDetail": 0,
             "noSpecificReason": 0
-          }
+          },
+          "topReasons": [],
+          "lastObservation": null
+        },
+        "controlledV2Translation": {
+          "exists": true,
+          "mode": "legacy-derived-safety-restraint",
+          "meaningful": true,
+          "identityFallback": false,
+          "visualizedAdjustmentCount": 2,
+          "supportedAdjustments": [
+            "exposure",
+            "contrast",
+            "highlights",
+            "shadows",
+            "whites",
+            "blacks",
+            "temperature",
+            "tint",
+            "saturation",
+            "vibrance",
+            "clarity",
+            "dehaze",
+            "toneCurve",
+            "colorGrading"
+          ],
+          "changedFields": [
+            {
+              "field": "contrast",
+              "before": -0.16,
+              "after": -0.1248,
+              "delta": 0.0352,
+              "action": "C1-skin-protection",
+              "reason": "Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask."
+            },
+            {
+              "field": "vibrance",
+              "before": 1,
+              "after": 0.7797,
+              "delta": -0.2203,
+              "action": "C1-skin-protection",
+              "reason": "Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask."
+            }
+          ],
+          "confidence": 0.36
+        },
+        "reviewGuidance": {
+          "exists": true,
+          "visualRequired": 6,
+          "visualPassed": 6,
+          "systemRequired": 4,
+          "systemVerified": 4,
+          "readyToBuildV2": true
         }
       }
     }

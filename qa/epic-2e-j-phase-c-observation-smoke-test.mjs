@@ -58,6 +58,7 @@ import {
   importAndReachReady,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
 import { CANONICAL_ORIGIN } from './helpers/playwright-in-memory-app.mjs';
+import { th as TH_DICT } from '../ui/i18n/th.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -835,7 +836,7 @@ async function main() {
     // ══════════════════════════════════════════════════════════════
     const phaseGControllerTest = await page.evaluate(async (origin) => {
       const { createInteractivePreviewObservationControllerV2 } = await import(`${origin}/ui/interactive-preview-observation-controller-v2.js`);
-      const STALE_MSG = 'The previous observation was cleared because a newer analysis is active.';
+      const STALE_CODE = 'stale-generation';
 
       // G1: first analysis, no Observation ever selected -> no stale
       // warning on the 'preparing' transition or the following 'ready'.
@@ -864,7 +865,7 @@ async function main() {
       const scenarioG2 = {
         beforeObservation: beforeReanalyze.observation,
         clearedAfterPreparing: afterPreparing.observation === null && afterPreparing.reasons.length === 0,
-        warningEmittedOnce: Array.isArray(afterPreparing.warnings) && afterPreparing.warnings.length === 1 && afterPreparing.warnings[0] === STALE_MSG,
+        warningEmittedOnce: Array.isArray(afterPreparing.warnings) && afterPreparing.warnings.length === 1 && afterPreparing.warnings[0] === STALE_CODE,
         warningClearedOnReady: Array.isArray(afterReady.warnings) && afterReady.warnings.length === 0,
       };
       c2.dispose();
@@ -988,7 +989,7 @@ async function main() {
       };
 
       // Exact stale-warning rendering: textContent only, no markup.
-      renderInteractivePreviewObservationV2(testDiv, { state: 'cleared', observation: null, warnings: ['The previous observation was cleared because a newer analysis is active.'], reasons: [], reasonLimitReached: false, metadata: {} });
+      renderInteractivePreviewObservationV2(testDiv, { state: 'cleared', observation: null, warnings: ['stale-generation'], reasons: [], reasonLimitReached: false, metadata: {} }, 'th');
       const warningEl = testDiv.querySelector('#ipoWarning');
       const warningText = warningEl.textContent;
       const warningHtml = warningEl.innerHTML;
@@ -996,7 +997,7 @@ async function main() {
       document.body.removeChild(testDiv);
       return { disabledStyle, checkedStyle, reEnabledStyle, warningText, warningHtml };
     }, CANONICAL_ORIGIN);
-    const EXPECTED_STALE_WARNING = 'The previous observation was cleared because a newer analysis is active.';
+    const EXPECTED_STALE_WARNING = TH_DICT.observation.unavailableReason.cancelled;
     // COMBINED CLOSEOUT R3 — Phase B FIX B3: updated to match the actual
     // Production contract (R2 Phase A) rather than a stale assumption
     // that the LABEL's opacity itself must drop below 1. Label AND
@@ -1039,7 +1040,7 @@ async function main() {
         && phaseGRendererTest.reEnabledStyle.cursor === 'pointer',
       JSON.stringify(phaseGRendererTest.reEnabledStyle)
     );
-    recordCondition('Phase G: the exact stale-generation warning message is rendered into #ipoWarning via textContent only (innerHTML equals the same plain text, no markup/injection)',phaseGRendererTest.warningText === EXPECTED_STALE_WARNING && phaseGRendererTest.warningHtml === EXPECTED_STALE_WARNING,`text="${phaseGRendererTest.warningText}", html="${phaseGRendererTest.warningHtml}"`);
+    recordCondition('Phase G: the semantic stale-generation warning code is localized into #ipoWarning via textContent only (innerHTML equals the same plain text, no markup/injection)',phaseGRendererTest.warningText === EXPECTED_STALE_WARNING && phaseGRendererTest.warningHtml === EXPECTED_STALE_WARNING,`text="${phaseGRendererTest.warningText}", html="${phaseGRendererTest.warningHtml}"`);
 
     await harnessRuntime.cleanup();
     coverage.syntheticIntegrationHarness = results.filter((r) => r.result === 'FAIL').length === 0 ? 'PASS' : 'FAIL';
@@ -1135,7 +1136,7 @@ const isMainModule = (() => {
 })();
 if (isMainModule) {
   main().catch(async (err) => {
-    console.error('Smoke test crashed:', err && err.name ? err.name : err);
+    console.error('Smoke test crashed:', err?.stack ?? err);
     try {
       const nowIso = new Date().toISOString();
       await writeResultAtomic(RESULTS_PATH, {

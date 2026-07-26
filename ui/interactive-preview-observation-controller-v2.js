@@ -187,9 +187,9 @@ const UNAVAILABLE_REASON_MESSAGE = {
   'pixel-mismatch': 'Observation is unavailable because exact pixel dimensions between the two previews have not been proven.',
 };
 const SAFETY_BLOCKED_MESSAGE = 'Observation is unavailable while the comparison is blocked by a safety anomaly.';
-const STALE_WARNING_MESSAGE = 'The previous observation was cleared because a newer analysis is active.';
+const STALE_WARNING_MESSAGE = 'stale-generation';
 // Neutral, not an error — never labeled "stale".
-const PROVIDER_UNCONFIRMED_WARNING = 'Current generation could not be independently confirmed.';
+const PROVIDER_UNCONFIRMED_WARNING = 'provider-unconfirmed';
 
 // Step 7B-B-F3-P1 FIX 1 — the only two values this compact semantic
 // token may ever take. Never arbitrary announcement text.

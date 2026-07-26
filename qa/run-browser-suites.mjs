@@ -35,6 +35,7 @@
  *     results JSON. Never used as a gate anywhere in this project.
  */
 import { spawnSync } from 'node:child_process';
+import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,40 +43,68 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 const BROWSER_SUITES = [
-  'qa/epic-2e-j-safe-recovery-upload-baseline-test.mjs',
-  'qa/epic-2e-j-phase-c-live-app-test.mjs',
-  'qa/epic-2e-j-phase-c-observation-smoke-test.mjs',
-  'qa/epic-2e-j-phase-c-step7b-a-test.mjs',
-  'qa/epic-2e-j-phase-c-step7b-b-test.mjs',
-  // LOCAL-FIRST GEOMETRY R3 — Phase C1/C2 split (replaces the retired
-  // combined epic-2e-j-preview-geometry-browser-test.mjs).
-  'qa/epic-2e-j-preview-geometry-decoder-render-test.mjs',
-  'qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs',
-  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase K.
-  'qa/epic-2e-j-controlled-v2-browser-test.mjs',
-  // FULL-SYSTEM I18N COMPLETION R2 — Phase M.
-  'qa/epic-2e-j-full-system-i18n-browser-test.mjs',
-  'qa/helpers/playwright-opaque-origin-cookie.mjs',
-  'qa/playwright-in-memory-app-smoke.mjs',
-  'qa/playwright-virtual-origin-smoke.mjs',
+  { script: 'qa/epic-2e-j-safe-recovery-upload-baseline-test.mjs', result: 'qa/epic-2e-j-safe-recovery-upload-baseline-results.json' },
+  { script: 'qa/epic-2e-j-phase-c-live-app-test.mjs', result: 'qa/epic-2e-j-phase-c-live-app-results.json' },
+  { script: 'qa/epic-2e-j-phase-c-observation-smoke-test.mjs', result: 'qa/epic-2e-j-phase-c-results.json' },
+  { script: 'qa/epic-2e-j-phase-c-step7b-a-test.mjs', result: 'qa/epic-2e-j-phase-c-step7b-a-results.json' },
+  { script: 'qa/epic-2e-j-phase-c-step7b-b-test.mjs', result: 'qa/epic-2e-j-phase-c-step7b-b-results.json', allowNotTested: /physical touch hardware/i },
+  { script: 'qa/epic-2e-j-preview-geometry-decoder-render-test.mjs', result: 'qa/epic-2e-j-preview-geometry-decoder-render-results.json' },
+  { script: 'qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs', result: 'qa/epic-2e-j-preview-geometry-full-app-eligible-results.json' },
+  { script: 'qa/epic-2e-j-controlled-v2-browser-test.mjs', result: 'qa/epic-2e-j-controlled-v2-browser-results.json' },
+  { script: 'qa/epic-2e-j-full-system-i18n-browser-test.mjs', result: 'qa/epic-2e-j-full-system-i18n-browser-results.json' },
+  { script: 'qa/helpers/playwright-opaque-origin-cookie.mjs', result: 'qa/epic-2e-j-r3-cookie-compat-browser-selftest-results.json' },
+  { script: 'qa/playwright-in-memory-app-smoke.mjs', result: 'qa/playwright-in-memory-app-smoke-results.json' },
+  { script: 'qa/playwright-virtual-origin-smoke.mjs', result: 'qa/playwright-virtual-origin-smoke-results.json' },
 ];
 
+const UNAVAILABLE = new Set(['BROWSER_BINARY_UNAVAILABLE', 'PLAYWRIGHT_PACKAGE_UNAVAILABLE']);
+
+function inspectFreshResult(suite, startedAtMs) {
+  const resultPath = path.join(PROJECT_ROOT, suite.result);
+  let parsed;
+  try {
+    const stat = statSync(resultPath);
+    if (stat.mtimeMs + 1000 < startedAtMs) return { ok: false, reason: 'result JSON was not refreshed by this run' };
+    parsed = JSON.parse(readFileSync(resultPath, 'utf8'));
+  } catch (error) {
+    return { ok: false, reason: `result JSON missing or malformed: ${error.message}` };
+  }
+
+  const decision = typeof parsed.decision === 'string' ? parsed.decision : (typeof parsed.status === 'string' ? parsed.status : null);
+  if (decision && UNAVAILABLE.has(decision)) return { ok: false, reason: `environment unavailable (${decision})` };
+  const rows = Array.isArray(parsed.results) ? parsed.results : [];
+  if (rows.length === 0) return { ok: false, reason: 'results array missing or empty' };
+  const fail = rows.filter((row) => row?.result === 'FAIL');
+  if (fail.length) return { ok: false, reason: `${fail.length} FAIL row(s)` };
+  const notTested = rows.filter((row) => row?.result === 'NOT_TESTED');
+  const unexpected = notTested.filter((row) => !(suite.allowNotTested && suite.allowNotTested.test(String(row?.test ?? ''))));
+  if (unexpected.length) return { ok: false, reason: `${unexpected.length} unexpected NOT_TESTED row(s)` };
+  if (parsed.completed === false) return { ok: false, reason: 'completed is false' };
+  if (typeof decision === 'string' && /FAIL|UNAVAILABLE/i.test(decision)) return { ok: false, reason: `decision=${decision}` };
+  return { ok: true, reason: 'fresh result has no FAIL/unavailable/unexpected NOT_TESTED rows' };
+}
+
 const exitCodes = {};
-for (const rel of BROWSER_SUITES) {
-  console.log(`\n=== ${rel} ===`);
-  const result = spawnSync(process.execPath, [path.join(PROJECT_ROOT, rel)], { stdio: 'inherit', cwd: PROJECT_ROOT });
-  exitCodes[rel] = result.status;
+const evidenceChecks = {};
+for (const suite of BROWSER_SUITES) {
+  console.log(`\n=== ${suite.script} ===`);
+  const startedAtMs = Date.now();
+  const result = spawnSync(process.execPath, [path.join(PROJECT_ROOT, suite.script)], { stdio: 'inherit', cwd: PROJECT_ROOT });
+  exitCodes[suite.script] = result.status;
+  evidenceChecks[suite.script] = inspectFreshResult(suite, startedAtMs);
 }
 
 console.log('\n=== Browser suite exit codes (0 = suite\'s own PASS/available-and-clean, non-zero = suite reports FAIL or an unavailable-environment status — see each suite\'s own results JSON for the honest reason) ===');
 console.log(JSON.stringify(exitCodes, null, 2));
+console.log('\n=== Fresh result evidence checks ===');
+console.log(JSON.stringify(evidenceChecks, null, 2));
 
 const reportOnly = process.argv.includes('--report');
 if (reportOnly) {
   console.log('\n(--report mode: this runner never fails CI. Use `npm run test:browser` — no flag — for a real gate, or `npm run test:local-gate` for the full fail-closed local check.)');
   process.exit(0);
 }
-const anyNonZero = Object.values(exitCodes).some((code) => code !== 0);
+const anyNonZero = Object.values(exitCodes).some((code) => code !== 0) || Object.values(evidenceChecks).some((check) => !check.ok);
 if (anyNonZero) {
   console.log('\ntest:browser FAILED — one or more suites exited non-zero (FAIL or unavailable-Browser environment). Use `npm run test:browser:report` for a non-blocking view of the same results.');
   process.exit(1);

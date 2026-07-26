@@ -21,11 +21,9 @@
  * other NOT_TESTED row anywhere is treated as a failure.
  *
  * This is explicitly SEPARATE from:
- *   - `npm run test:browser` / qa/run-browser-suites.mjs, which is a
- *     non-blocking REPORT runner (always exits 0 by design, so a
- *     Chromium-unavailable dev machine never blocks on it) -- this
- *     fixes the R2-era defect where that runner was the ONLY Browser
- *     entry point and never itself failed CI.
+ *   - `npm run test:browser` / qa/run-browser-suites.mjs, which is also
+ *     fail-closed and verifies each suite's fresh result JSON. The explicit
+ *     `npm run test:browser:report` alias is the only non-blocking mode.
  *   - `npm run test:deploy`, which targets a real deployed URL and is
  *     never part of the everyday local inner loop.
  *

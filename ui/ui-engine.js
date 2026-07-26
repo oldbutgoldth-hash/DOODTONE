@@ -7,6 +7,7 @@
  */
 
 import { HSL_CHANNELS, HSL_LABELS } from '../core/hsl-engine/index.js';
+import { t } from './i18n/index.js';
 
 // ─── Slider fill ─────────────────────────────────────────────────────────────
 
@@ -70,8 +71,8 @@ const cardHd   = 'font-family:var(--font-mono);font-size:10px;font-weight:700;le
 const zoneLbl  = 'font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px;font-family:var(--font-mono)';
 const rangeStyle = "flex:1;cursor:pointer;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;background:linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct,50%), var(--surface-3) var(--pct,50%), var(--surface-3) 100%)";
 
-export function renderHSLPanel(container) {
-  let html = `<div style="${cardHd}">HSL Colour Mixer</div>`;
+export function renderHSLPanel(container, locale = 'en') {
+  let html = `<div data-i18n-key="appShell.panelHsl" style="${cardHd}">${t('appShell.panelHsl', null, locale)}</div>`;
 
   for (const ch of HSL_CHANNELS) {
     html += `
@@ -90,26 +91,26 @@ export function renderHSLPanel(container) {
   bindSliders(container);
 }
 
-export function renderGradingPanel(container) {
+export function renderGradingPanel(container, locale = 'en') {
   const zones = [
-    { key: 'sh',  label: 'Shadows' },
-    { key: 'mid', label: 'Midtones' },
-    { key: 'hi',  label: 'Highlights' },
+    { key: 'sh', keyLabel: 'appShell.shadows' },
+    { key: 'mid', keyLabel: 'appShell.midtones' },
+    { key: 'hi', keyLabel: 'appShell.highlights' },
   ];
 
-  let html = `<div style="${cardHd}">Colour Grading — Split Tone</div>`;
+  let html = `<div data-i18n-key="appShell.panelGrading" style="${cardHd}">${t('appShell.panelGrading', null, locale)}</div>`;
 
-  for (const { key, label } of zones) {
+  for (const { key, keyLabel } of zones) {
     html += `
       <div style="margin-bottom:16px">
-        <div style="${zoneLbl}">${label}</div>
-        <div class="slider-row" style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><label style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">Hue</label>
+        <div data-i18n-key="${keyLabel}" style="${zoneLbl}">${t(keyLabel, null, locale)}</div>
+        <div class="slider-row" style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><label data-i18n-key="appShell.hue" style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">${t('appShell.hue', null, locale)}</label>
           <input type="range" id="grd_${key}_h" min="0" max="360" value="0" style="${rangeStyle}">
           <span class="sv" id="grd_${key}_hV" style="${swatch}">0&deg;</span></div>
-        <div class="slider-row" style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><label style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">Saturation</label>
+        <div class="slider-row" style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><label data-i18n-key="appShell.saturation" style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">${t('appShell.saturation', null, locale)}</label>
           <input type="range" id="grd_${key}_s" min="0" max="100" value="0" style="${rangeStyle}">
           <span class="sv" id="grd_${key}_sV" style="${swatch}">0</span></div>
-        <div class="slider-row" style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><label style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">Luminance</label>
+        <div class="slider-row" style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><label data-i18n-key="appShell.luminance" style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">${t('appShell.luminance', null, locale)}</label>
           <input type="range" id="grd_${key}_l" min="-100" max="100" value="0" style="${rangeStyle}">
           <span class="sv" id="grd_${key}_lV" style="${swatch}">0</span></div>
       </div>`;
@@ -117,8 +118,8 @@ export function renderGradingPanel(container) {
 
   html += `
     <div>
-      <div style="${zoneLbl}">Blending</div>
-      <div class="slider-row" style="display:flex;align-items:center;gap:10px"><label style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">Blend</label>
+      <div data-i18n-key="appShell.blending" style="${zoneLbl}">${t('appShell.blending', null, locale)}</div>
+      <div class="slider-row" style="display:flex;align-items:center;gap:10px"><label data-i18n-key="appShell.blend" style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">${t('appShell.blend', null, locale)}</label>
         <input type="range" id="grd_blend" min="0" max="100" value="50" style="${rangeStyle}">
         <span class="sv" id="grd_blendV" style="${swatch}">50</span></div>
     </div>`;
@@ -138,23 +139,23 @@ export function renderGradingPanel(container) {
   });
 }
 
-export function renderCalibrationPanel(container) {
+export function renderCalibrationPanel(container, locale = 'en') {
   const channels = [
-    { key: 'red',   label: 'Red' },
-    { key: 'green', label: 'Green' },
-    { key: 'blue',  label: 'Blue' },
+    { key: 'red', keyLabel: 'appShell.redPrimary' },
+    { key: 'green', keyLabel: 'appShell.greenPrimary' },
+    { key: 'blue', keyLabel: 'appShell.bluePrimary' },
   ];
 
-  let html = `<div style="${cardHd}">Camera Calibration</div>`;
+  let html = `<div data-i18n-key="appShell.panelCalibration" style="${cardHd}">${t('appShell.panelCalibration', null, locale)}</div>`;
 
-  for (const { key, label } of channels) {
+  for (const { key, keyLabel } of channels) {
     html += `
       <div style="margin-bottom:14px">
-        <div style="${zoneLbl}">${label} Primary</div>
-        <div class="slider-row" style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><label style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">Hue</label>
+        <div data-i18n-key="${keyLabel}" style="${zoneLbl}">${t(keyLabel, null, locale)}</div>
+        <div class="slider-row" style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><label data-i18n-key="appShell.hue" style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">${t('appShell.hue', null, locale)}</label>
           <input type="range" id="cal_${key}_h" min="-100" max="100" value="0" style="${rangeStyle}">
           <span class="sv" id="cal_${key}_hV" style="${swatch}">0</span></div>
-        <div class="slider-row" style="display:flex;align-items:center;gap:10px"><label style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">Saturation</label>
+        <div class="slider-row" style="display:flex;align-items:center;gap:10px"><label data-i18n-key="appShell.saturation" style="font-size:12px;min-width:96px;color:var(--text);font-family:var(--font-sans)">${t('appShell.saturation', null, locale)}</label>
           <input type="range" id="cal_${key}_s" min="-100" max="100" value="0" style="${rangeStyle}">
           <span class="sv" id="cal_${key}_sV" style="${swatch}">0</span></div>
       </div>`;
@@ -164,16 +165,40 @@ export function renderCalibrationPanel(container) {
   bindSliders(container);
 }
 
-export function renderAnalysisPanel(container, stats) {
+export function renderAnalysisPanel(container, stats, locale = 'en') {
+  const LABEL_KEYS = {
+    'Scene Type': 'appShell.analysisSceneType',
+    'Average / Median': 'appShell.analysisAverageMedian',
+    'Dynamic Range': 'appShell.analysisDynamicRange',
+    'Contrast Ratio': 'appShell.analysisContrastRatio',
+    'Highlight Clipping': 'appShell.analysisHighlightClipping',
+    'Shadow Clipping': 'appShell.analysisShadowClipping',
+    'White Balance': 'appShell.analysisWhiteBalance',
+    'Avg Saturation': 'appShell.analysisAverageSaturation',
+    'Skin Tone': 'appShell.analysisSkinTone',
+    'Black / White Point': 'appShell.analysisBlackWhitePoint',
+  };
+  const presentValue = (value) => {
+    const raw = String(value ?? '');
+    const avg = raw.match(/^Avg\s+(.+?)\s+·\s+Median\s+(.+)$/i);
+    if (avg) return `${t('appShell.analysisAverageMedian', null, locale)}: ${avg[1]} · ${avg[2]}`;
+    const neutral = raw.match(/^Neutral\s*\(temp\s*([^)]*)\)$/i);
+    if (neutral) return `${t('appShell.analysisWhiteBalance', null, locale)} (${neutral[1]})`;
+    if (/^Not detected$/i.test(raw)) return t('appShell.analysisNotDetected', null, locale);
+    return raw;
+  };
+  container.__lumixaAnalysisStats = { ...stats };
   let rows = '';
   for (const [key, val] of Object.entries(stats)) {
+    const keyPath = LABEL_KEYS[key];
+    const label = keyPath ? t(keyPath, null, locale) : key;
     rows += `
       <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px">
-        <span style="color:var(--text-dim);font-weight:500;font-family:var(--font-sans)">${key}</span>
-        <span style="font-family:var(--font-mono);font-size:12px;color:var(--text)">${val}</span>
+        <span${keyPath ? ` data-i18n-key="${keyPath}"` : ''} style="color:var(--text-dim);font-weight:500;font-family:var(--font-sans)">${label}</span>
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--text)">${presentValue(val)}</span>
       </div>`;
   }
-  container.innerHTML = `<div><div style="${cardHd}">Image Statistics</div>${rows}</div>`;
+  container.innerHTML = `<div><div data-i18n-key="appShell.panelImageStats" style="${cardHd}">${t('appShell.panelImageStats', null, locale)}</div>${rows}</div>`;
 }
 
 // ─── Notification helpers ─────────────────────────────────────────────────────

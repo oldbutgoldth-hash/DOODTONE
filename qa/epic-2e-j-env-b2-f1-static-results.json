@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J ENV-B2-F1 FIX 10 — Real Browser QA Determinism and Evidence Integrity static/functional self-test",
-  "generatedAt": "2026-07-26T11:10:39.176Z",
+  "generatedAt": "2026-07-26T13:47:32.098Z",
   "summary": {
     "total": 35,
     "pass": 35,
@@ -11,7 +11,7 @@
     {
       "test": "Setup: qa/epic-2e-j-phase-c-step7b-b-test.mjs is readable",
       "result": "PASS",
-      "evidence": "206144 bytes"
+      "evidence": "204436 bytes"
     },
     {
       "test": "Setup: qa/helpers/playwright-lumixa-test-runtime.mjs is readable",
@@ -21,7 +21,7 @@
     {
       "test": "Setup: qa/playwright-in-memory-app-smoke.mjs is readable",
       "result": "PASS",
-      "evidence": "27902 bytes"
+      "evidence": "28394 bytes"
     },
     {
       "test": "FIX 1 (ENV-B2-F1): enterObservationRadioGroupDeterministically() queries the real focusable order, locates the target radio, locates the immediately preceding focusable Element outside BOTH Observation roots, focuses it for setup only (never the radio), presses exactly ONE real Tab, and requires activeElement === target",
@@ -69,7 +69,7 @@
       "evidence": "installedOnceReused=true"
     },
     {
-      "test": "FIX 5 (ENV-B2-F1): Part 3 (Clear Observation) uses Clear Session as isolated setup to reach a KNOWN 0/1 baseline, verifies that baseline BEFORE the tested action, reaches Clear Observation via real Tab, activates with Space, verifies activeObservationsDerived===0 && cleared===1, and verifies a repeat activation leaves cleared at 1 — the old relative \"+1 from an uncontrolled baseline\" assumption is gone",
+      "test": "FIX 5 (ENV-B2-F1): Part 3 (Clear Observation) uses Clear Session as isolated setup to reach a KNOWN 0/1 baseline, verifies that baseline BEFORE the tested action, reaches Clear Observation via real Tab, activates with Space, verifies activeObservations===0 && cleared===1, and verifies a repeat activation leaves cleared at 1 — the old relative \"+1 from an uncontrolled baseline\" assumption is gone",
       "result": "PASS",
       "evidence": "usesClearSessionAsSetup=true, verifiesKnownBaseline=true, verifiesZeroToOneTransition=true, verifiesRepeatDoesNotIncrement=true, oldRelativeAssumptionGone=true"
     },

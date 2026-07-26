@@ -175,7 +175,8 @@ if (rerenderFnSrc) {
     // every other section above (only fires if
     // state.lastAnalysisBoxSummaryData already exists -- never forces
     // a premature render, never re-runs analysis).
-    'setAnalysisBox', '_buildAnalysisBoxOkHtml',
+    'setAnalysisBox', '_buildAnalysisBoxOkHtml', 'renderAnalysisPanel',
+    '_rerenderPersistentAnnouncementsForLocale', 't',
   ]);
   const unexpectedCalls = [...new Set(calledFunctionNames)].filter((n) => !allowedFunctionNames.has(n) && n !== 'warn');
   record('Every function called inside rerenderCurrentUiForLocale() is one of the known pure re-render/lookup functions (no unexpected new call introduced)', unexpectedCalls.length === 0, { unexpectedCalls });

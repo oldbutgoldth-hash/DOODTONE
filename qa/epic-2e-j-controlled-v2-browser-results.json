@@ -1,25 +1,303 @@
 {
   "suite": "CONTROLLED V2 VISUAL TRANSLATION R1 — Phase K: Controlled V2 Browser suite",
-  "runId": "15f37df9-c889-496c-864b-89c82fe66405",
-  "startedAt": "2026-07-26T07:59:36.244Z",
-  "completedAt": "2026-07-26T07:59:36.244Z",
+  "runId": "d6a114cf-a8bd-4acf-a4b7-762302a417d2",
+  "startedAt": "2026-07-26T13:51:24.364Z",
+  "completedAt": "2026-07-26T13:51:43.696Z",
   "completed": true,
-  "sourceHash": null,
-  "browserExecutablePath": null,
-  "browserVersion": null,
-  "generatedAt": "2026-07-26T07:59:36.244Z",
-  "summary": {
-    "total": 1,
-    "pass": 0,
-    "fail": 0,
-    "notTested": 1
-  },
+  "sourceHash": "66cd89b882029535548f863bbe0dcfbec0eeda41ae4fccabbc94f931b21b48f2",
   "results": [
     {
-      "test": "Browser environment availability",
-      "result": "NOT_TESTED",
-      "evidence": "[{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
+      "test": "[portrait-photo-like-ready] Upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.747,\"safetyScore\":0.804,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[portrait-photo-like-ready] All 4 system-verified review items auto-pass with ZERO manual clicks",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"visualRequired\":6,\"visualPassed\":0,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":false}"
+    },
+    {
+      "test": "[portrait-photo-like-ready] All 6 visual review items are completable and readyToBuildV2 becomes true",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, systemButtonsClicked=0, guidance={\"exists\":true,\"visualRequired\":6,\"visualPassed\":6,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":true}"
+    },
+    {
+      "test": "[portrait-photo-like-ready] \"Build Controlled V2 Preview\" button is clickable and produces a new generation",
+      "result": "PASS",
+      "evidence": "{\"clicked\":true,\"completed\":true}"
+    },
+    {
+      "test": "[portrait-photo-like-ready] translationMode is honestly one of the two valid non-blocked values",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"mode\":\"legacy-derived-safety-restraint\",\"meaningful\":true,\"identityFallback\":false,\"visualizedAdjustmentCount\":2,\"supportedAdjustments\":[\"exposure\",\"contrast\",\"highlights\",\"shadows\",\"whites\",\"blacks\",\"temperature\",\"tint\",\"saturation\",\"vibrance\",\"clarity\",\"dehaze\",\"toneCurve\",\"colorGrading\"],\"changedFields\":[{\"field\":\"contrast\",\"before\":0.04,\"after\":0.0312,\"delta\":-0.0088,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"},{\"field\":\"vibrance\",\"before\":1,\"after\":0.7797,\"delta\":-0.2203,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"}],\"confidence\":0.36}"
+    },
+    {
+      "test": "[portrait-photo-like-ready] V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable"
+    },
+    {
+      "test": "[portrait-photo-like-ready] Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[portrait-photo-like-ready] Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[portrait-photo-like-ready] Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true"
+    },
+    {
+      "test": "[portrait-photo-like-ready] Production Mapping remains Legacy",
+      "result": "PASS",
+      "evidence": "{\"src\":\"legacy\",\"write\":false,\"exp\":false}"
+    },
+    {
+      "test": "[portrait-photo-like-ready] Exported XMP is unchanged by Building the Controlled V2 Preview",
+      "result": "PASS",
+      "evidence": "beforeHash=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923, afterHash=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923"
+    },
+    {
+      "test": "[neutral-balanced] Upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.747,\"safetyScore\":0.804,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[neutral-balanced] All 4 system-verified review items auto-pass with ZERO manual clicks",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"visualRequired\":6,\"visualPassed\":0,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":false}"
+    },
+    {
+      "test": "[neutral-balanced] All 6 visual review items are completable and readyToBuildV2 becomes true",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, systemButtonsClicked=0, guidance={\"exists\":true,\"visualRequired\":6,\"visualPassed\":6,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":true}"
+    },
+    {
+      "test": "[neutral-balanced] \"Build Controlled V2 Preview\" button is clickable and produces a new generation",
+      "result": "PASS",
+      "evidence": "{\"clicked\":true,\"completed\":true}"
+    },
+    {
+      "test": "[neutral-balanced] translationMode is honestly one of the two valid non-blocked values",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"mode\":\"legacy-derived-safety-restraint\",\"meaningful\":true,\"identityFallback\":false,\"visualizedAdjustmentCount\":2,\"supportedAdjustments\":[\"exposure\",\"contrast\",\"highlights\",\"shadows\",\"whites\",\"blacks\",\"temperature\",\"tint\",\"saturation\",\"vibrance\",\"clarity\",\"dehaze\",\"toneCurve\",\"colorGrading\"],\"changedFields\":[{\"field\":\"contrast\",\"before\":0.04,\"after\":0.0312,\"delta\":-0.0088,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"},{\"field\":\"vibrance\",\"before\":1,\"after\":0.7797,\"delta\":-0.2203,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"}],\"confidence\":0.36}"
+    },
+    {
+      "test": "[neutral-balanced] V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable"
+    },
+    {
+      "test": "[neutral-balanced] Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[neutral-balanced] Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[neutral-balanced] Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true"
+    },
+    {
+      "test": "[neutral-balanced] Production Mapping remains Legacy",
+      "result": "PASS",
+      "evidence": "{\"src\":\"legacy\",\"write\":false,\"exp\":false}"
+    },
+    {
+      "test": "[neutral-balanced] Exported XMP is unchanged by Building the Controlled V2 Preview",
+      "result": "PASS",
+      "evidence": "beforeHash=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923, afterHash=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923"
+    },
+    {
+      "test": "[warm-skin-wb-risk] Upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.743,\"safetyScore\":0.83,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[warm-skin-wb-risk] All 4 system-verified review items auto-pass with ZERO manual clicks",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"visualRequired\":6,\"visualPassed\":0,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":false}"
+    },
+    {
+      "test": "[warm-skin-wb-risk] All 6 visual review items are completable and readyToBuildV2 becomes true",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, systemButtonsClicked=0, guidance={\"exists\":true,\"visualRequired\":6,\"visualPassed\":6,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":true}"
+    },
+    {
+      "test": "[warm-skin-wb-risk] \"Build Controlled V2 Preview\" button is clickable and produces a new generation",
+      "result": "PASS",
+      "evidence": "{\"clicked\":true,\"completed\":true}"
+    },
+    {
+      "test": "[warm-skin-wb-risk] translationMode is honestly one of the two valid non-blocked values",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"mode\":\"legacy-derived-safety-restraint\",\"meaningful\":true,\"identityFallback\":false,\"visualizedAdjustmentCount\":2,\"supportedAdjustments\":[\"exposure\",\"contrast\",\"highlights\",\"shadows\",\"whites\",\"blacks\",\"temperature\",\"tint\",\"saturation\",\"vibrance\",\"clarity\",\"dehaze\",\"toneCurve\",\"colorGrading\"],\"changedFields\":[{\"field\":\"contrast\",\"before\":0.2,\"after\":0.1689,\"delta\":-0.0311,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"},{\"field\":\"vibrance\",\"before\":0.3,\"after\":0.2534,\"delta\":-0.0466,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"}],\"confidence\":0.36}"
+    },
+    {
+      "test": "[warm-skin-wb-risk] V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable"
+    },
+    {
+      "test": "[warm-skin-wb-risk] Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[warm-skin-wb-risk] Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[warm-skin-wb-risk] Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true"
+    },
+    {
+      "test": "[warm-skin-wb-risk] Production Mapping remains Legacy",
+      "result": "PASS",
+      "evidence": "{\"src\":\"legacy\",\"write\":false,\"exp\":false}"
+    },
+    {
+      "test": "[warm-skin-wb-risk] Exported XMP is unchanged by Building the Controlled V2 Preview",
+      "result": "PASS",
+      "evidence": "beforeHash=1645e83bc43134cd9585acc3cce1e0c4aa9915b3944d8bcd8c22af80988f2278, afterHash=1645e83bc43134cd9585acc3cce1e0c4aa9915b3944d8bcd8c22af80988f2278"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] Upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.735,\"safetyScore\":0.793,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] All 4 system-verified review items auto-pass with ZERO manual clicks",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"visualRequired\":6,\"visualPassed\":0,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":false}"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] All 6 visual review items are completable and readyToBuildV2 becomes true",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, systemButtonsClicked=0, guidance={\"exists\":true,\"visualRequired\":6,\"visualPassed\":6,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":true}"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] \"Build Controlled V2 Preview\" button is clickable and produces a new generation",
+      "result": "PASS",
+      "evidence": "{\"clicked\":true,\"completed\":true}"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] translationMode is honestly one of the two valid non-blocked values",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"mode\":\"legacy-derived-safety-restraint\",\"meaningful\":true,\"identityFallback\":false,\"visualizedAdjustmentCount\":2,\"supportedAdjustments\":[\"exposure\",\"contrast\",\"highlights\",\"shadows\",\"whites\",\"blacks\",\"temperature\",\"tint\",\"saturation\",\"vibrance\",\"clarity\",\"dehaze\",\"toneCurve\",\"colorGrading\"],\"changedFields\":[{\"field\":\"contrast\",\"before\":0.2,\"after\":0.1559,\"delta\":-0.0441,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"},{\"field\":\"vibrance\",\"before\":0.3333,\"after\":0.2599,\"delta\":-0.0734,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"}],\"confidence\":0.36}"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] Production Mapping remains Legacy",
+      "result": "PASS",
+      "evidence": "{\"src\":\"legacy\",\"write\":false,\"exp\":false}"
+    },
+    {
+      "test": "[cool-shadow-wb-risk] Exported XMP is unchanged by Building the Controlled V2 Preview",
+      "result": "PASS",
+      "evidence": "beforeHash=2139d63242c00a8394f7efad2eb3e67dd975f8b2850d0883fbd297cfc4166161, afterHash=2139d63242c00a8394f7efad2eb3e67dd975f8b2850d0883fbd297cfc4166161"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] Upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.743,\"safetyScore\":0.788,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] All 4 system-verified review items auto-pass with ZERO manual clicks",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"visualRequired\":6,\"visualPassed\":0,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":false}"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] All 6 visual review items are completable and readyToBuildV2 becomes true",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, systemButtonsClicked=0, guidance={\"exists\":true,\"visualRequired\":6,\"visualPassed\":6,\"systemRequired\":4,\"systemVerified\":4,\"readyToBuildV2\":true}"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] \"Build Controlled V2 Preview\" button is clickable and produces a new generation",
+      "result": "PASS",
+      "evidence": "{\"clicked\":true,\"completed\":true}"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] translationMode is honestly one of the two valid non-blocked values",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"mode\":\"legacy-derived-safety-restraint\",\"meaningful\":true,\"identityFallback\":false,\"visualizedAdjustmentCount\":2,\"supportedAdjustments\":[\"exposure\",\"contrast\",\"highlights\",\"shadows\",\"whites\",\"blacks\",\"temperature\",\"tint\",\"saturation\",\"vibrance\",\"clarity\",\"dehaze\",\"toneCurve\",\"colorGrading\"],\"changedFields\":[{\"field\":\"contrast\",\"before\":-0.16,\"after\":-0.1248,\"delta\":0.0352,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"},{\"field\":\"vibrance\",\"before\":1,\"after\":0.7797,\"delta\":-0.2203,\"action\":\"C1-skin-protection\",\"reason\":\"Skin-tone protection: global, conservative restraint (60% of the normal protect-channel reduction) — not a local skin mask.\"}],\"confidence\":0.36}"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] Production Mapping remains Legacy",
+      "result": "PASS",
+      "evidence": "{\"src\":\"legacy\",\"write\":false,\"exp\":false}"
+    },
+    {
+      "test": "[highlight-shadow-detail-risk] Exported XMP is unchanged by Building the Controlled V2 Preview",
+      "result": "PASS",
+      "evidence": "beforeHash=da4654b369cbf3ccfa9991c5ec6699db210fdf718ebbd4f4c7b4442caadacb44, afterHash=da4654b369cbf3ccfa9991c5ec6699db210fdf718ebbd4f4c7b4442caadacb44"
+    },
+    {
+      "test": "0 unexpected page errors across all 5 fixtures",
+      "result": "PASS",
+      "evidence": "[]"
+    },
+    {
+      "test": "0 unexpected console errors across all 5 fixtures",
+      "result": "PASS",
+      "evidence": "[]"
+    },
+    {
+      "test": "At least 2 of 5 fixtures produced a genuinely meaningful (non-Identity) Controlled V2 translation",
+      "result": "PASS",
+      "evidence": "meaningfulCount=5"
     }
   ],
-  "decision": "BROWSER_BINARY_UNAVAILABLE"
+  "decision": "PASS",
+  "reasons": [],
+  "meaningfulCount": 5
 }

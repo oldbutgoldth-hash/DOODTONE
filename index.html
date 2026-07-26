@@ -267,16 +267,16 @@
   <!-- ═══════════ LANGUAGE MODAL ═══════════ -->
   <div id="langModal" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:rgba(10,7,4,.65);backdrop-filter:blur(8px)">
     <div style="animation:lumixa-modal-in .3s cubic-bezier(.2,.8,.2,1);background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:28px;max-width:420px;width:90%;box-shadow:0 24px 70px rgba(0,0,0,.5)">
-      <div style="font-family:var(--font-display);font-size:20px;font-weight:600;margin-bottom:20px;color:var(--text)">เลือกภาษา / Select Language</div>
+      <div data-i18n-key="appShell.languageModalTitle" style="font-family:var(--font-display);font-size:20px;font-weight:600;margin-bottom:20px;color:var(--text)">Select language</div>
       <div style="display:grid;gap:10px">
         <div class="lang-opt" data-lang="th" onclick="setLang('th')" style="border:1px solid var(--accent);border-radius:3px;padding:15px 17px;cursor:pointer;background:var(--accent-soft)">
-          <div style="font-size:22px;margin-bottom:5px">&#127481;&#127469;</div><div style="font-weight:600;font-size:14px;margin-bottom:2px;color:var(--text)">&#3652;&#3607;&#3618;</div><div style="font-size:11.5px;color:var(--text-dim)">&#3629;&#3636;&#3609;&#3648;&#3605;&#3629;&#3619;&#3660;&#3648;&#3599;&#3595;&#3616;&#3634;&#3625;&#3634;&#3652;&#3607;&#3618;</div>
+          <div style="font-size:22px;margin-bottom:5px">&#127481;&#127469;</div><div data-i18n-key="appShell.thaiLanguageName" style="font-weight:600;font-size:14px;margin-bottom:2px;color:var(--text)">Thai</div><div data-i18n-key="appShell.thaiLanguageDescription" style="font-size:11.5px;color:var(--text-dim)">Thai interface</div>
         </div>
         <div class="lang-opt" data-lang="en" onclick="setLang('en')" style="border:1px solid var(--border);border-radius:3px;padding:15px 17px;cursor:pointer;background:transparent">
-          <div style="font-size:22px;margin-bottom:5px">&#127482;&#127480;</div><div style="font-weight:600;font-size:14px;margin-bottom:2px;color:var(--text)">English</div><div style="font-size:11.5px;color:var(--text-dim)" data-i18n-key="appShell.fullEnglishInterface">Full English interface</div>
+          <div style="font-size:22px;margin-bottom:5px">&#127482;&#127480;</div><div data-i18n-key="appShell.englishLanguageName" style="font-weight:600;font-size:14px;margin-bottom:2px;color:var(--text)">English</div><div style="font-size:11.5px;color:var(--text-dim)" data-i18n-key="appShell.fullEnglishInterface">Full English interface</div>
         </div>
       </div>
-      <button onclick="closeLang()" style="display:block;width:100%;margin-top:16px;padding:12px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text)">Done</button>
+      <button onclick="closeLang()" style="display:block;width:100%;margin-top:16px;padding:12px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text)"> <span data-i18n-key="appShell.languageDone">Done</span></button>
     </div>
   </div>
 
@@ -284,18 +284,18 @@
   <div id="ppModal" onclick="if(event.target===this)closeModal('ppModal')" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:rgba(10,7,4,.65);backdrop-filter:blur(8px)">
     <div style="animation:lumixa-modal-in .3s cubic-bezier(.2,.8,.2,1);background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:28px;max-width:340px;width:90%;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.5)">
       <div style="font-family:var(--font-display);font-size:19px;font-weight:600;margin-bottom:14px;color:var(--text)">PromptPay</div>
-      <p style="font-size:12px;color:var(--text-dim);margin:0 0 14px">&#3650;&#3629;&#3609;&#3652;&#3611;&#3618;&#3633;&#3591;&#3614;&#3619;&#3657;&#3629;&#3617;&#3648;&#3614;&#3618;&#3660;&#3627;&#3617;&#3634;&#3618;&#3648;&#3621;&#3586;</p>
+      <p data-i18n-key="appShell.promptPayInstruction" style="font-size:12px;color:var(--text-dim);margin:0 0 14px">Transfer to the following PromptPay number</p>
       <p style="font-family:var(--font-mono);font-size:16px;font-weight:700;margin:0 0 6px;color:var(--accent)">XXX-XXX-1066</p>
-      <p style="font-size:13px;font-weight:600;margin:0 0 20px;color:var(--text)">นาย ศักดิ์กฤษณ์ ไพเมือง</p>
-      <button onclick="closeModal('ppModal')" style="display:block;width:100%;padding:12px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text)">&#3611;&#3636;&#3604;</button>
+      <p data-i18n-key="appShell.payeeName" style="font-size:13px;font-weight:600;margin:0 0 20px;color:var(--text)">Sakkrit Paimuang</p>
+      <button onclick="closeModal('ppModal')" style="display:block;width:100%;padding:12px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text)"><span data-i18n-key="appShell.closeButton">Close</span></button>
     </div>
   </div>
 
   <div id="usdtModal" onclick="if(event.target===this)closeModal('usdtModal')" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:rgba(10,7,4,.65);backdrop-filter:blur(8px)">
     <div style="animation:lumixa-modal-in .3s cubic-bezier(.2,.8,.2,1);background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:28px;max-width:340px;width:90%;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.5)">
       <div style="font-family:var(--font-display);font-size:19px;font-weight:600;margin-bottom:14px;color:var(--text)">USDT (TRC-20)</div>
-      <p style="font-size:12px;color:var(--text-dim);margin:0 0 18px">&#3626;&#3656;&#3591;&#3648;&#3615;&#3614;&#3634;&#3632; USDT &#3652;&#3611;&#3618;&#3633;&#3591; Address &#3607;&#3637;&#3656;&#3600;&#3634;&#3585;&#3609;&#3637;&#3657;</p>
-      <button onclick="closeModal('usdtModal')" style="display:block;width:100%;padding:12px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text)">&#3611;&#3636;&#3604;</button>
+      <p data-i18n-key="appShell.usdtInstruction" style="font-size:12px;color:var(--text-dim);margin:0 0 18px">Send only USDT to the following address</p>
+      <button onclick="closeModal('usdtModal')" style="display:block;width:100%;padding:12px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text)"><span data-i18n-key="appShell.closeButton">Close</span></button>
     </div>
   </div>
 
@@ -387,8 +387,8 @@
               </div>
               <h3 style="font-family:var(--font-display);font-size:22px;font-weight:600;margin:0 0 8px;color:var(--text)" data-i18n-key="appShell.choosePhoto">Choose Photo</h3>
               <p style="font-size:12.5px;color:var(--text-dim);margin:0 0 22px;font-family:var(--font-mono)" data-i18n-key="appShell.uploadHint">JPG, PNG, WEBP &#183; stay private</p>
-              <button id="btnChooseFile" onclick="document.getElementById('fileIn2').click();event.stopPropagation()" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--accent);color:var(--on-accent);border:none;border-radius:2px;font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;position:relative;z-index:3;margin-bottom:14px">&#3648;&#3621;&#3639;&#3629;&#3585;&#3652;&#3615;&#3621;&#3660;&#3619;&#3641;&#3611;&#3616;&#3634;&#3614;</button>
-              <div style="font-size:11.5px;color:var(--text-faint);font-family:var(--font-mono)">&#3627;&#3619;&#3639;&#3629; &#3621;&#3634;&#3585;&#3649;&#3621;&#3632;&#3623;&#3634;&#3591;&#3652;&#3615;&#3621;&#3660;&#3607;&#3637;&#3656;&#3609;&#3637;&#3656;</div>
+              <button id="btnChooseFile" onclick="document.getElementById('fileIn2').click();event.stopPropagation()" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--accent);color:var(--on-accent);border:none;border-radius:2px;font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;position:relative;z-index:3;margin-bottom:14px"><span data-i18n-key="appShell.chooseFileButton">Choose image file</span></button>
+              <div data-i18n-key="appShell.dropInstruction" style="font-size:11.5px;color:var(--text-faint);font-family:var(--font-mono)">or drag and drop a file here</div>
             </div>
           </div>
 
@@ -400,8 +400,7 @@
                 <span id="viewerImgInfo" style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">&#3648;&#3621;&#3639;&#3629;&#3609;&#3616;&#3634;&#3614;&#3649;&#3621;&#3657;&#3623;</span>
               </div>
               <button id="btnChangeFile" onclick="document.getElementById('fileIn2').click()" style="flex-shrink:0;display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:var(--surface-2);color:var(--text)">
-                <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px">refresh</span> &#3648;&#3611;&#3621;&#3637;&#3656;&#3618;&#3609;&#3619;&#3641;&#3611;
-              </button>
+                <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px">refresh</span> <span data-i18n-key="appShell.changePhoto">Change photo</span></button>
               <input type="file" id="fileIn2" accept="image/*" style="display:none">
             </div>
             <div id="viewerViewport" class="lx-viewer-viewport">
@@ -417,19 +416,19 @@
             <div style="display:flex;gap:6px;margin-bottom:16px;background:var(--surface-1);border:1px solid var(--border);border-radius:3px;padding:5px;position:sticky;top:8px;z-index:20;flex-wrap:wrap">
               <button class="atab" data-group="overview" style="flex:1;min-width:100px;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 12px;border:none;border-radius:2px;background:var(--accent);color:var(--on-accent);font-family:var(--font-sans);font-size:12.5px;font-weight:600;cursor:pointer">
                 <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:17px">insights</span>
-                <span>&#3616;&#3634;&#3614;&#3619;&#3623;&#3617;</span>
+                <span data-i18n-key="appShell.tabOverview">Overview</span>
               </button>
               <button class="atab" data-group="tone" style="flex:1;min-width:100px;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 12px;border:none;border-radius:2px;background:transparent;color:var(--text-dim);font-family:var(--font-sans);font-size:12.5px;font-weight:600;cursor:pointer">
                 <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:17px">tune</span>
-                <span>&#3650;&#3607;&#3609; &amp; &#3649;&#3626;&#3591;</span>
+                <span data-i18n-key="appShell.tabToneLight">Tone & Light</span>
               </button>
               <button class="atab" data-group="colour" style="flex:1;min-width:100px;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 12px;border:none;border-radius:2px;background:transparent;color:var(--text-dim);font-family:var(--font-sans);font-size:12.5px;font-weight:600;cursor:pointer">
                 <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:17px">palette</span>
-                <span>&#3626;&#3637;</span>
+                <span data-i18n-key="appShell.tabColour">Colour</span>
               </button>
               <button class="atab" data-group="detail" style="flex:1;min-width:100px;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 12px;border:none;border-radius:2px;background:transparent;color:var(--text-dim);font-family:var(--font-sans);font-size:12.5px;font-weight:600;cursor:pointer">
                 <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:17px">face</span>
-                <span>&#3619;&#3634;&#3618;&#3621;&#3632;&#3648;&#3629;&#3637;&#3618;&#3604;</span>
+                <span data-i18n-key="appShell.tabDetail">Detail</span>
               </button>
             </div>
 
@@ -500,7 +499,7 @@
                  detail) is active — it is not part of the .agroup
                  tab-switching system. -->
             <div id="reviewConsoleSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px;margin-top:16px">
-              <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;display:flex;align-items:center;gap:8px"><span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px;color:var(--accent)">rate_review</span><span data-i18n-key="appShell.reviewConsoleTitle">Controlled Preview Review Console</span> <span style="color:var(--text-faint);font-weight:400;text-transform:none;letter-spacing:normal">&#183; shadow-only, does not affect exported preset</span></div>
+              <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;display:flex;align-items:center;gap:8px"><span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px;color:var(--accent)">rate_review</span><span data-i18n-key="appShell.reviewConsoleTitle">Controlled Preview Review Console</span> <span data-i18n-key="appShell.reviewQualifier" style="color:var(--text-faint);font-weight:400;text-transform:none;letter-spacing:normal">· shadow-only; does not affect the exported preset</span></div>
               <div id="reviewConsoleInner"></div>
 
               <!-- CONTROLLED V2 VISUAL TRANSLATION R1 — Phase H: a
@@ -617,7 +616,7 @@
           <!-- ── Sliders panel ── -->
           <div id="sliders" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:22px;margin-top:16px">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
-              <label style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);min-width:auto">&#3594;&#3639;&#3656;&#3629;&#3614;&#3619;&#3637;&#3648;&#3595;&#3655;&#3605;</label>
+              <label style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);min-width:auto"><span data-i18n-key="appShell.presetNameLabel">Preset name</span></label>
               <input type="text" id="presetName" placeholder="LUMIXA AI Preset — Professional" data-i18n-placeholder-key="appShell.presetNamePlaceholder" style="flex:1;padding:10px 13px;border:1px solid var(--border);border-radius:2px;background:var(--surface-2);color:var(--text);font-size:13px;outline:none;font-family:var(--font-sans)">
             </div>
 
@@ -667,8 +666,8 @@
                   <canvas id="toneCurveCanvas" style="display:block;cursor:crosshair;touch-action:none;border-radius:3px"></canvas>
                 </div>
                 <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-                  <button id="btnCurveReset" style="display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:var(--surface-1);color:var(--text)">&#8634; Reset Channel</button>
-                  <button id="btnCurveResetAll" style="display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:var(--surface-1);color:var(--text)">&#8634; Reset All</button>
+                  <button data-i18n-key="appShell.resetChannel" id="btnCurveReset" style="display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:var(--surface-1);color:var(--text)">↺ Reset Channel</button>
+                  <button data-i18n-key="appShell.resetAll" id="btnCurveResetAll" style="display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:var(--surface-1);color:var(--text)">↺ Reset All</button>
                 </div>
                 <div style="font-size:10.5px;color:var(--text-dim);margin-top:12px;line-height:1.7;display:flex;gap:18px;flex-wrap:wrap;font-family:var(--font-mono)">
                   <span data-i18n-key="appShell.clickToAddPoint">Click to add point</span>
@@ -688,11 +687,11 @@
             <div id="p-detail" style="display:none">
               <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:18px">
                 <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:16px;display:flex;align-items:center;gap:8px"><span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:16px;color:var(--accent)">blur_on</span><span data-i18n-key="appShell.sharpeningNoise">Sharpening &amp; Noise</span></div>
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><label style="font-size:12px;min-width:104px;color:var(--text);font-family:var(--font-sans)">Sharpening</label><input type="range" id="sharp" min="0" max="150" value="40" style="flex:1;cursor:pointer;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;background:linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct,50%), var(--surface-3) var(--pct,50%), var(--surface-3) 100%)"><span class="slider-val" id="sharpV" style="font-family:var(--font-mono);font-size:11px;font-weight:700;min-width:44px;text-align:right;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:3px">40</span></div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><label data-i18n-key="appShell.sharpening" style="font-size:12px;min-width:104px;color:var(--text);font-family:var(--font-sans)">Sharpening</label><input type="range" id="sharp" min="0" max="150" value="40" style="flex:1;cursor:pointer;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;background:linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct,50%), var(--surface-3) var(--pct,50%), var(--surface-3) 100%)"><span class="slider-val" id="sharpV" style="font-family:var(--font-mono);font-size:11px;font-weight:700;min-width:44px;text-align:right;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:3px">40</span></div>
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><label style="font-size:12px;min-width:104px;color:var(--text);font-family:var(--font-sans)" data-i18n-key="appShell.noiseReduction">Noise Reduction</label><input type="range" id="noise" min="0" max="100" value="20" style="flex:1;cursor:pointer;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;background:linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct,50%), var(--surface-3) var(--pct,50%), var(--surface-3) 100%)"><span class="slider-val" id="noiseV" style="font-family:var(--font-mono);font-size:11px;font-weight:700;min-width:44px;text-align:right;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:3px">20</span></div>
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><label style="font-size:12px;min-width:104px;color:var(--text);font-family:var(--font-sans)">Clarity</label><input type="range" id="clarity" min="-100" max="100" value="0" style="flex:1;cursor:pointer;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;background:linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct,50%), var(--surface-3) var(--pct,50%), var(--surface-3) 100%)"><span class="slider-val" id="clarityV" style="font-family:var(--font-mono);font-size:11px;font-weight:700;min-width:44px;text-align:right;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:3px">0</span></div>
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><label style="font-size:12px;min-width:104px;color:var(--text);font-family:var(--font-sans)">Dehaze</label><input type="range" id="dehaze" min="-100" max="100" value="0" style="flex:1;cursor:pointer;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;background:linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct,50%), var(--surface-3) var(--pct,50%), var(--surface-3) 100%)"><span class="slider-val" id="dehazeV" style="font-family:var(--font-mono);font-size:11px;font-weight:700;min-width:44px;text-align:right;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:3px">0</span></div>
-                <div style="display:flex;align-items:center;gap:10px"><label style="font-size:12px;min-width:104px;color:var(--text);font-family:var(--font-sans)">Texture</label><input type="range" id="texture" min="-100" max="100" value="0" style="flex:1;cursor:pointer;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;background:linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct,50%), var(--surface-3) var(--pct,50%), var(--surface-3) 100%)"><span class="slider-val" id="textureV" style="font-family:var(--font-mono);font-size:11px;font-weight:700;min-width:44px;text-align:right;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:3px">0</span></div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><label data-i18n-key="appShell.clarity" style="font-size:12px;min-width:104px;color:var(--text);font-family:var(--font-sans)">Clarity</label><input type="range" id="clarity" min="-100" max="100" value="0" style="flex:1;cursor:pointer;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;background:linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct,50%), var(--surface-3) var(--pct,50%), var(--surface-3) 100%)"><span class="slider-val" id="clarityV" style="font-family:var(--font-mono);font-size:11px;font-weight:700;min-width:44px;text-align:right;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:3px">0</span></div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><label data-i18n-key="appShell.dehaze" style="font-size:12px;min-width:104px;color:var(--text);font-family:var(--font-sans)">Dehaze</label><input type="range" id="dehaze" min="-100" max="100" value="0" style="flex:1;cursor:pointer;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;background:linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct,50%), var(--surface-3) var(--pct,50%), var(--surface-3) 100%)"><span class="slider-val" id="dehazeV" style="font-family:var(--font-mono);font-size:11px;font-weight:700;min-width:44px;text-align:right;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:3px">0</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><label data-i18n-key="appShell.texture" style="font-size:12px;min-width:104px;color:var(--text);font-family:var(--font-sans)">Texture</label><input type="range" id="texture" min="-100" max="100" value="0" style="flex:1;cursor:pointer;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;background:linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct,50%), var(--surface-3) var(--pct,50%), var(--surface-3) 100%)"><span class="slider-val" id="textureV" style="font-family:var(--font-mono);font-size:11px;font-weight:700;min-width:44px;text-align:right;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:3px">0</span></div>
               </div>
             </div>
 
@@ -700,23 +699,21 @@
 
             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:24px;padding-top:20px;border-top:1px solid var(--border)">
               <button id="btnDownload" style="display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent)">
-                <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px">download</span> &#3604;&#3634;&#3623;&#3609;&#3660;&#3650;&#3627;&#3621;&#3604; .xmp
-              </button>
+                <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px">download</span> <span data-i18n-key="appShell.downloadButton">Download .xmp</span></button>
               <button id="btnReanalyze" style="display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:var(--surface-2);color:var(--text)">
                 <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px">refresh</span> <span data-i18n-key="appShell.reanalyze">Re-analyze</span>
               </button>
               <button id="btnReset" style="display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:var(--surface-2);color:var(--text)">
-                <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px">close</span> &#3619;&#3637;&#3648;&#3595;&#3655;&#3605;
-              </button>
+                <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px">close</span> <span data-i18n-key="appShell.resetButton">Reset</span></button>
             </div>
-            <div id="successMsg" style="display:none;margin-top:14px;padding:12px 16px;background:var(--accent-soft);color:var(--success);border-radius:2px;font-size:12.5px;font-weight:600;border:1px solid var(--border)">&#9989; &#3604;&#3634;&#3623;&#3609;&#3660;&#3650;&#3627;&#3621;&#3604;&#3649;&#3621;&#3657;&#3623;!</div>
+            <div id="successMsg" style="display:none;margin-top:14px;padding:12px 16px;background:var(--accent-soft);color:var(--success);border-radius:2px;font-size:12.5px;font-weight:600;border:1px solid var(--border)"><span data-i18n-key="appShell.downloadSuccess">Download complete!</span></div>
           </div>
 
         </div>
 
         <!-- ═══ DIVIDER ═══ -->
         <div style="display:flex;align-items:center;gap:14px;margin:8px 0">
-          <span style="font-family:var(--font-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);white-space:nowrap">&#3626;&#3609;&#3633;&#3610;&#3626;&#3609;&#3640;&#3609;&#3650;&#3588;&#3619;&#3591;&#3585;&#3634;&#3619;</span>
+          <span style="font-family:var(--font-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);white-space:nowrap"><span data-i18n-key="appShell.supportDivider">Support the project</span></span>
           <div style="flex:1;height:1px;background:var(--border)"></div>
         </div>
 
@@ -724,38 +721,38 @@
         <div id="supSec" data-screen-label="Support">
           <div class="lx-2col-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
             <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:22px">
-              <h3 style="font-family:var(--font-display);font-size:19px;font-weight:600;margin:0 0 10px;color:var(--text)">&#3626;&#3609;&#3633;&#3610;&#3626;&#3609;&#3640;&#3609;&#3650;&#3588;&#3619;&#3591;&#3585;&#3634;&#3619;&#3609;&#3637;&#3657;</h3>
-              <p style="font-size:12.5px;color:var(--text-dim);line-height:1.75;margin:0 0 16px">&#3650;&#3611;&#3619;&#3649;&#3585;&#3619;&#3617;&#3609;&#3637;&#3657;&#3606;&#3641;&#3585;&#3614;&#3633;&#3600;&#3609;&#3634;&#3586;&#3638;&#3657;&#3609;&#3648;&#3614;&#3639;&#3656;&#3629;&#3594;&#3656;&#3623;&#3618;&#3623;&#3636;&#3648;&#3588;&#3619;&#3634;&#3632;&#3627;&#3660;&#3649;&#3621;&#3632;&#3588;&#3635;&#3609;&#3623;&#3603;&#3588;&#3656;&#3634;&#3649;&#3626;&#3591; &#3626;&#3637; &#3650;&#3607;&#3609; &#3649;&#3621;&#3632;&#3621;&#3633;&#3585;&#3625;&#3603;&#3632;&#3585;&#3634;&#3619;&#3649;&#3605;&#3656;&#3591;&#3616;&#3634;&#3614;&#3592;&#3634;&#3585;&#3619;&#3641;&#3611;&#3605;&#3633;&#3623;&#3629;&#3618;&#3656;&#3634;&#3591; &#3650;&#3604;&#3618;&#3651;&#3594;&#3657;&#3619;&#3632;&#3610;&#3610; AI &#3649;&#3621;&#3632;&#3585;&#3634;&#3619;&#3611;&#3619;&#3632;&#3617;&#3623;&#3621;&#3612;&#3621;&#3629;&#3633;&#3605;&#3650;&#3609;&#3617;&#3633;&#3605;&#3636; &#3648;&#3614;&#3639;&#3656;&#3629;&#3626;&#3619;&#3657;&#3634;&#3591;&#3652;&#3615;&#3621;&#3660; Lightroom Preset (.XMP)</p>
+              <h3 style="font-family:var(--font-display);font-size:19px;font-weight:600;margin:0 0 10px;color:var(--text)"><span data-i18n-key="appShell.supportTitle">Support this project</span></h3>
+              <p style="font-size:12.5px;color:var(--text-dim);line-height:1.75;margin:0 0 16px"><span data-i18n-key="appShell.supportIntro">LUMIXA AI analyzes light, colour, tone, and editing characteristics from a reference image and creates a Lightroom preset (.XMP) locally.</span></p>
               <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:16px 18px">
                 <div style="font-size:12.5px;font-weight:700;color:var(--accent);margin-bottom:10px;font-family:var(--font-sans)" data-i18n-key="appShell.continuousDevelopment">Continuous Development</div>
-                <p style="font-size:11.5px;color:var(--text-dim);margin:0 0 10px">&#3648;&#3619;&#3634;&#3605;&#3633;&#3657;&#3591;&#3651;&#3592;&#3614;&#3633;&#3600;&#3609;&#3634;&#3649;&#3621;&#3632;&#3629;&#3633;&#3611;&#3648;&#3585;&#3619;&#3604;&#3619;&#3632;&#3610;&#3610;&#3629;&#3618;&#3656;&#3634;&#3591;&#3605;&#3656;&#3629;&#3648;&#3609;&#3639;&#3656;&#3629;&#3591; &#3648;&#3614;&#3639;&#3656;&#3629;&#3651;&#3627;&#3657;&#3626;&#3634;&#3617;&#3634;&#3619;&#3606;</p>
+                <p style="font-size:11.5px;color:var(--text-dim);margin:0 0 10px"><span data-i18n-key="appShell.supportDevelopmentIntro">We continuously improve the system so it can:</span></p>
                 <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;margin:0;padding:0">
-                  <li style="font-size:12px;color:var(--text-dim);display:flex;gap:9px;line-height:1.5"><span style="width:5px;height:5px;border-radius:50%;background:var(--success);flex-shrink:0;margin-top:7px"></span>&#3623;&#3636;&#3648;&#3588;&#3619;&#3634;&#3632;&#3627;&#3660;&#3650;&#3607;&#3609;&#3626;&#3637;&#3652;&#3604;&#3657;&#3649;&#3617;&#3656;&#3609;&#3618;&#3635;&#3618;&#3636;&#3656;&#3591;&#3586;&#3638;&#3657;&#3609;</li>
-                  <li style="font-size:12px;color:var(--text-dim);display:flex;gap:9px;line-height:1.5"><span style="width:5px;height:5px;border-radius:50%;background:var(--success);flex-shrink:0;margin-top:7px"></span>&#3619;&#3629;&#3591;&#3619;&#3633;&#3610;&#3585;&#3621;&#3657;&#3629;&#3591;&#3649;&#3621;&#3632;&#3648;&#3621;&#3609;&#3626;&#3660;&#3652;&#3604;&#3657;&#3627;&#3621;&#3634;&#3585;&#3627;&#3621;&#3634;&#3618;&#3586;&#3638;&#3657;&#3609;</li>
-                  <li style="font-size:12px;color:var(--text-dim);display:flex;gap:9px;line-height:1.5"><span style="width:5px;height:5px;border-radius:50%;background:var(--success);flex-shrink:0;margin-top:7px"></span>&#3611;&#3619;&#3633;&#3610;&#3611;&#3619;&#3640;&#3591;&#3588;&#3640;&#3603;&#3616;&#3634;&#3614;&#3652;&#3615;&#3621;&#3660; XMP &#3607;&#3637;&#3656;&#3626;&#3619;&#3657;&#3634;&#3591;&#3586;&#3638;&#3657;&#3609;</li>
-                  <li style="font-size:12px;color:var(--text-dim);display:flex;gap:9px;line-height:1.5"><span style="width:5px;height:5px;border-radius:50%;background:var(--success);flex-shrink:0;margin-top:7px"></span>&#3648;&#3614;&#3636;&#3656;&#3617;&#3588;&#3623;&#3634;&#3617;&#3626;&#3634;&#3617;&#3634;&#3619;&#3606; Copy Tone &amp; Match Color</li>
-                  <li style="font-size:12px;color:var(--text-dim);display:flex;gap:9px;line-height:1.5"><span style="width:5px;height:5px;border-radius:50%;background:var(--success);flex-shrink:0;margin-top:7px"></span>&#3614;&#3633;&#3600;&#3609;&#3634; AI &#3619;&#3640;&#3656;&#3609;&#3651;&#3627;&#3617;&#3656;&#3648;&#3614;&#3639;&#3656;&#3629;&#3619;&#3629;&#3591;&#3619;&#3633;&#3610;&#3591;&#3634;&#3609;&#3619;&#3632;&#3604;&#3633;&#3610;&#3617;&#3639;&#3629;&#3629;&#3634;&#3594;&#3637;&#3614;</li>
+                  <li style="font-size:12px;color:var(--text-dim);display:flex;gap:9px;line-height:1.5"><span style="width:5px;height:5px;border-radius:50%;background:var(--success);flex-shrink:0;margin-top:7px"></span><span data-i18n-key="appShell.supportFeatureTone">Analyze colour tones more accurately</span></li>
+                  <li style="font-size:12px;color:var(--text-dim);display:flex;gap:9px;line-height:1.5"><span style="width:5px;height:5px;border-radius:50%;background:var(--success);flex-shrink:0;margin-top:7px"></span><span data-i18n-key="appShell.supportFeatureCameras">Support more cameras and lenses</span></li>
+                  <li style="font-size:12px;color:var(--text-dim);display:flex;gap:9px;line-height:1.5"><span style="width:5px;height:5px;border-radius:50%;background:var(--success);flex-shrink:0;margin-top:7px"></span><span data-i18n-key="appShell.supportFeatureXmp">Improve generated XMP quality</span></li>
+                  <li style="font-size:12px;color:var(--text-dim);display:flex;gap:9px;line-height:1.5"><span style="width:5px;height:5px;border-radius:50%;background:var(--success);flex-shrink:0;margin-top:7px"></span><span data-i18n-key="appShell.supportFeatureCopyTone">Add Copy Tone and Match Color</span></li>
+                  <li style="font-size:12px;color:var(--text-dim);display:flex;gap:9px;line-height:1.5"><span style="width:5px;height:5px;border-radius:50%;background:var(--success);flex-shrink:0;margin-top:7px"></span><span data-i18n-key="appShell.supportFeatureModels">Improve AI models for professional workflows</span></li>
                 </ul>
               </div>
             </div>
             <div style="display:flex;flex-direction:column;gap:14px">
               <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px">
-                <h4 style="font-family:var(--font-display);font-size:16px;font-weight:600;margin:0 0 6px;color:var(--text)">&#3607;&#3635;&#3652;&#3617;&#3605;&#3657;&#3629;&#3591;&#3626;&#3609;&#3633;&#3610;&#3626;&#3609;&#3640;&#3609;?</h4>
-                <p style="font-size:12px;color:var(--text-dim);margin:0 0 14px">&#3585;&#3634;&#3619;&#3626;&#3609;&#3633;&#3610;&#3626;&#3609;&#3640;&#3609;&#3592;&#3634;&#3585;&#3588;&#3640;&#3603; &#3594;&#3656;&#3623;&#3618;&#3651;&#3627;&#3657;&#3648;&#3619;&#3634;&#3626;&#3634;&#3617;&#3634;&#3619;&#3606;&#3614;&#3633;&#3600;&#3609;&#3634;&#3605;&#3656;&#3629;&#3652;&#3611;&#3652;&#3604;&#3657;&#3629;&#3618;&#3656;&#3634;&#3591;&#3605;&#3656;&#3629;&#3648;&#3609;&#3639;&#3656;&#3629;&#3591;</p>
+                <h4 style="font-family:var(--font-display);font-size:16px;font-weight:600;margin:0 0 6px;color:var(--text)"><span data-i18n-key="appShell.supportWhyTitle">Why support us?</span></h4>
+                <p style="font-size:12px;color:var(--text-dim);margin:0 0 14px"><span data-i18n-key="appShell.supportWhyBody">Your support helps us continue developing and maintaining LUMIXA AI.</span></p>
                 <ul style="list-style:none;display:flex;flex-direction:column;gap:10px;margin:0 0 16px;padding:0">
-                  <li style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim)"><span style="font-size:15px;width:24px;text-align:center">&#128274;</span>&#3588;&#3656;&#3634;&#3648;&#3595;&#3636;&#3619;&#3660;&#3585;&#3648;&#3623;&#3629;&#3619;&#3660;&#3649;&#3621;&#3632;&#3619;&#3632;&#3610;&#3610;</li>
-                  <li style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim)"><span style="font-size:15px;width:24px;text-align:center">&#129302;</span>&#3588;&#3656;&#3634; API &#3649;&#3621;&#3632; AI Models</li>
-                  <li style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim)"><span style="font-size:15px;width:24px;text-align:center">&#128736;</span>&#3588;&#3656;&#3634;&#3614;&#3633;&#3600;&#3609;&#3634;&#3649;&#3621;&#3632;&#3611;&#3619;&#3633;&#3610;&#3611;&#3619;&#3640;&#3591;&#3619;&#3632;&#3610;&#3610;</li>
-                  <li style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim)"><span style="font-size:15px;width:24px;text-align:center">&#127760;</span>&#3588;&#3656;&#3634;&#3604;&#3641;&#3649;&#3621;&#3648;&#3623;&#3655;&#3610;&#3652;&#3595;&#3605;&#3660;&#3649;&#3621;&#3632;&#3600;&#3634;&#3609;&#3586;&#3657;&#3629;&#3617;&#3641;&#3621;</li>
+                  <li style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim)"><span style="font-size:15px;width:24px;text-align:center">&#128274;</span><span data-i18n-key="appShell.supportCostServer">Server and infrastructure costs</span></li>
+                  <li style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim)"><span style="font-size:15px;width:24px;text-align:center">&#129302;</span><span data-i18n-key="appShell.supportCostApi">API and AI model costs</span></li>
+                  <li style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim)"><span style="font-size:15px;width:24px;text-align:center">&#128736;</span><span data-i18n-key="appShell.supportCostDevelopment">Development and system improvement</span></li>
+                  <li style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim)"><span style="font-size:15px;width:24px;text-align:center">&#127760;</span><span data-i18n-key="appShell.supportCostWebsite">Website and data maintenance</span></li>
                 </ul>
-                <button onclick="openModal('ppModal')" style="width:100%;padding:12px;border-radius:2px;border:1px solid var(--success);background:var(--accent-soft);color:var(--success);font-family:var(--font-mono);font-size:11px;font-weight:700;text-transform:uppercase;cursor:pointer">&#3619;&#3656;&#3623;&#3617;&#3626;&#3609;&#3633;&#3610;&#3626;&#3609;&#3640;&#3609;&#3648;&#3619;&#3634;</button>
+                <button onclick="openModal('ppModal')" style="width:100%;padding:12px;border-radius:2px;border:1px solid var(--success);background:var(--accent-soft);color:var(--success);font-family:var(--font-mono);font-size:11px;font-weight:700;text-transform:uppercase;cursor:pointer"><span data-i18n-key="appShell.supportDonate">Support us</span></button>
               </div>
               <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:20px">
                 <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;display:flex;align-items:center;gap:8px"><span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:16px;color:var(--accent)">confirmation_number</span><span data-i18n-key="appShell.supporterCode">Supporter Code</span></div>
-                <p style="font-size:12px;color:var(--text-dim);margin:0 0 6px">&#3617;&#3637;&#3650;&#3588;&#3657;&#3604; supporter &#3627;&#3619;&#3639;&#3629;&#3652;&#3617;&#3656;?</p>
+                <p style="font-size:12px;color:var(--text-dim);margin:0 0 6px"><span data-i18n-key="appShell.supportCodeQuestion">Have a supporter code?</span></p>
                 <div style="display:flex;gap:8px;margin-top:8px">
                   <input type="text" id="codeIn" placeholder="Enter code" data-i18n-placeholder-key="appShell.enterCodePlaceholder" maxlength="50" style="flex:1;padding:10px 13px;border:1px solid var(--border);border-radius:2px;background:var(--surface-2);color:var(--text);font-family:var(--font-mono);font-size:12.5px;outline:none">
-                  <button id="btnRedeem" style="padding:10px 20px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent)">Redeem</button>
+                  <button id="btnRedeem" style="padding:10px 20px;border-radius:2px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent)"><span data-i18n-key="appShell.redeem">Redeem</span></button>
                 </div>
                 <div id="redeemMsg"></div>
               </div>
@@ -765,12 +762,12 @@
             <div onclick="openModal('ppModal')" style="background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:18px 16px;display:flex;align-items:center;gap:13px;cursor:pointer">
               <div style="width:42px;height:42px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:20px;background:var(--surface-2)">&#128179;</div>
               <div style="flex:1"><div style="font-size:13.5px;font-weight:700;color:var(--text)">PromptPay</div><div style="font-size:11px;color:var(--text-dim)" data-i18n-key="appShell.thaiMobileBanking">Thai mobile banking</div></div>
-              <div style="font-size:11px;color:var(--accent);font-weight:700;white-space:nowrap">&#3626;&#3649;&#3585;&#3609;&#3648;&#3614;&#3639;&#3656;&#3629;&#3604;&#3641; QR &#8594;</div>
+              <div style="font-size:11px;color:var(--accent);font-weight:700;white-space:nowrap"><span data-i18n-key="appShell.scanQr">Scan to view QR →</span></div>
             </div>
             <div onclick="openModal('usdtModal')" style="background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:18px 16px;display:flex;align-items:center;gap:13px;cursor:pointer">
               <div style="width:42px;height:42px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:20px;background:var(--surface-2)">&#128142;</div>
               <div style="flex:1"><div style="font-size:13.5px;font-weight:700;color:var(--text)">USDT (TRC-20)</div><div style="font-size:11px;color:var(--text-dim)" data-i18n-key="appShell.cryptoTrc20">Crypto / TRC-20</div></div>
-              <div style="font-size:11px;color:var(--accent);font-weight:700;white-space:nowrap">&#3626;&#3649;&#3585;&#3609;&#3648;&#3614;&#3639;&#3656;&#3629;&#3604;&#3641; QR &#8594;</div>
+              <div style="font-size:11px;color:var(--accent);font-weight:700;white-space:nowrap"><span data-i18n-key="appShell.scanQr">Scan to view QR →</span></div>
             </div>
           </div>
         </div>
@@ -797,7 +794,7 @@
               <div style="display:grid;grid-template-columns:1fr;gap:8px;flex:1">
                 <div><div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">Before</div><canvas id="rcmBeforeCanvas" style="width:100%;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);display:block"></canvas></div>
                 <div>
-                  <div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">After <span id="rcmAfterUpdating" style="color:var(--accent);text-transform:none;font-weight:400;opacity:0;transition:opacity .15s">— กำลังอัปเดต…</span></div>
+                  <div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">After <span id="rcmAfterUpdating" style="color:var(--accent);text-transform:none;font-weight:400;opacity:0;transition:opacity .15s"><span data-i18n-key="appShell.updating">— updating…</span></span></div>
                   <canvas id="rcmAfterCanvas" style="width:100%;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);display:block"></canvas>
                   <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin:8px 0 3px"><span>Intensity</span><span id="rcmAfterIntensityValue">60</span></div>
                   <input type="range" id="rcmAfterIntensitySlider" min="0" max="100" value="60" style="width:100%;margin-bottom:6px">
@@ -860,9 +857,9 @@
 
       <div style="font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text-faint);margin-bottom:12px" data-i18n-key="appShell.quickTips">Quick Tips</div>
       <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:16px;font-size:12px;color:var(--text-dim);line-height:1.8">
-        <p style="margin:0 0 10px">&#128247; &#3629;&#3633;&#3611;&#3650;&#3627;&#3621;&#3604;&#3619;&#3641;&#3611;&#3648;&#3614;&#3639;&#3656;&#3629;&#3648;&#3619;&#3636;&#3656;&#3617;&#3623;&#3636;&#3648;&#3588;&#3619;&#3634;&#3632;&#3627;&#3660;&#3629;&#3633;&#3605;&#3650;&#3609;&#3617;&#3633;&#3605;&#3636;</p>
-        <p style="margin:0 0 10px">&#127918;&#65039; &#3611;&#3619;&#3633;&#3610; slider &#3652;&#3604;&#3657;&#3629;&#3636;&#3626;&#3619;&#3632;&#3627;&#3621;&#3633;&#3591; AI &#3623;&#3636;&#3648;&#3588;&#3619;&#3634;&#3632;&#3627;&#3660;&#3648;&#3626;&#3619;&#3655;&#3592;</p>
-        <p style="margin:0">&#11015;&#65039; &#3604;&#3634;&#3623;&#3609;&#3660;&#3650;&#3627;&#3621;&#3604; .xmp &#3609;&#3635;&#3648;&#3586;&#3657;&#3634; Lightroom &#3652;&#3604;&#3657;&#3607;&#3633;&#3609;&#3607;&#3637;</p>
+        <p style="margin:0 0 10px"><span data-i18n-key="appShell.quickTipUpload">📷 Upload a photo to start automatic analysis.</span></p>
+        <p style="margin:0 0 10px"><span data-i18n-key="appShell.quickTipTune">🎛️ Adjust sliders freely after AI analysis.</span></p>
+        <p style="margin:0"><span data-i18n-key="appShell.quickTipDownload">⬇️ Download the .xmp and import it into Lightroom.</span></p>
       </div>
     </aside>
 
@@ -870,7 +867,7 @@
 
   <!-- ═══════════ FOOTER ═══════════ -->
   <footer style="padding:14px 20px;background:var(--surface-1);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-    <span style="font-family:var(--font-mono);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint)">&#169; 2026 LUMIXA AI &#183; Professional Grade Analysis</span>
+    <span data-i18n-key="appShell.footerText" style="font-family:var(--font-mono);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint)">© 2026 LUMIXA AI · Professional-grade analysis</span>
     <details id="aiWorkflowBadge" style="font-family:var(--font-mono);font-size:9.5px;color:var(--text-faint);position:relative">
       <summary style="cursor:pointer;display:flex;align-items:center;gap:6px;color:var(--text-dim);padding:4px 10px;border:1px solid var(--border);border-radius:20px;background:var(--surface-2)">
         <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0"></span>

@@ -302,8 +302,8 @@ function _mergeMessages(...lists) {
 // boundary -- the locked file's contract (its exact string outputs)
 // is never altered, read, or depended upon beyond string equality.
 // An unrecognized sentence (a genuinely new Core message not yet
-// classified here) safely falls through to the raw English text,
-// same fail-open-toward-visibility convention used throughout R3.
+// classified here) is represented by a bounded localized generic in
+// the main UI; raw diagnostics remain available only in Developer Details.
 const _COMPARISON_BLOCKER_CLASSIFIERS = [
   [/^Both Legacy and V2 preview data are unavailable\.$/, 'BOTH_PREVIEWS_DATA_UNAVAILABLE', null],
   [/^V2 preview is unavailable — nothing to compare against Legacy yet\.$/, 'V2_DATA_UNAVAILABLE', null],
@@ -354,6 +354,7 @@ _COMPARISON_SUMMARY_CLASSIFIERS.push(
 );
 
 const _COMPARISON_STRENGTH_CLASSIFIERS = [
+  [/^Derived from Overlay Simulation V2: Skin tones are always simulated as protected first\.$/, 'DERIVED_SKIN_PROTECTED', null],
   [/^Legacy Mapping is the current, proven production path — every exported preset today comes from it\.$/, 'LEGACY_IS_PRODUCTION_PATH', null],
   [/^Skin tones are always previewed as protected first\.$/, 'SKIN_ALWAYS_PROTECTED_FIRST', null],
   [/^No specific risky areas beyond default skin protection — preview recommends keeping legacy mapping as-is\.$/, 'NO_RISKY_AREAS_KEEP_LEGACY', null],
@@ -363,7 +364,7 @@ const _COMPARISON_STRENGTH_CLASSIFIERS = [
   // drawn from a separate engine) is preserved as a parameter rather
   // than force-translated, since its own enumerable set was not part
   // of this round's confirmed leak list.
-  [/^Derived from Overlay Simulation V2: (.+)$/, 'DERIVED_FROM_OVERLAY_SIMULATION', (m) => ({ detail: m[1] })],
+  [/^Derived from Overlay Simulation V2: (.+)$/, 'DERIVED_FROM_OVERLAY_SIMULATION', null],
 ];
 const _COMPARISON_RISK_CLASSIFIERS = [
   [/^Legacy mapping summary itself reports a "high" abstract risk level for this input\.$/, 'LEGACY_SUMMARY_HIGH_RISK', null],
@@ -386,7 +387,7 @@ const _COMPARISON_DIMENSION_REASON_CLASSIFIERS = [
   [/^Legacy mapping has no safety-confidence score of its own — only V2 Safety Clamp computes one\.$/, 'NO_SAFETY_CONFIDENCE_SCORE', null],
 ];
 
-/** Classifies+translates a list of raw English sentences via the given classifier table + presenter. Falls back to the raw sentence when no classifier matches. */
+/** Classifies+translates raw Core prose. Unknown values use a bounded localized generic; they are never rendered verbatim in the main UI. */
 function _translateViaClassifier(rawList, table, presenter, lang) {
   const seen = new Set();
   const out = [];
@@ -399,7 +400,7 @@ function _translateViaClassifier(rawList, table, presenter, lang) {
       const m = text.match(re);
       if (m) { matched = presenter(code, paramsFn ? paramsFn(m) : null, lang); break; }
     }
-    out.push(matched || text);
+    out.push(matched || presenter('UNKNOWN', null, lang));
   }
   return out;
 }
@@ -414,7 +415,7 @@ function _translateSingleViaClassifier(rawText, table, presenter, lang) {
       if (translated) return translated;
     }
   }
-  return text;
+  return presenter('UNKNOWN', lang, '');
 }
 
 // ── Legacy/V2 summary cards ─────────────────────────────────────────────────
@@ -853,6 +854,23 @@ function _renderBody(container, comparison, visualPreviewInfo, locale) {
     container.appendChild(list);
   }
 
+  const presentRollbackStep = (step, index) => {
+    const raw = _safeText(step, '');
+    const exact = {
+      'Discard the side-by-side comparison object.': 'discardComparison',
+      'Discard the isolated V2 preview object.': 'discardIsolatedPreview',
+      'Keep Legacy Lightroom Mapping as the selected production source.': 'keepLegacySource',
+      'Keep the existing XMP export path unchanged.': 'keepXmpPath',
+    }[raw];
+    const code = exact || ['discardComparison','discardIsolatedPreview','keepLegacySource','keepXmpPath'][index];
+    return code ? t(`comparison.rollbackStepCode.${code}`, null, locale) : t('comparison.fallbackReasonCode.generic', null, locale);
+  };
+  const presentFallbackReason = (rawReason) => {
+    const raw = _safeText(rawReason, '');
+    if (/EPIC 2E-G Phase A produces a comparison data model only/i.test(raw)) return t('comparison.fallbackReasonCode.dataModelOnly', null, locale);
+    return raw ? t('comparison.fallbackReasonCode.generic', null, locale) : '';
+  };
+
   // ── Rollback / Fallback ─────────────────────────────────────────────────
   const rollback = _isRecord(cmp.rollbackPlan) ? cmp.rollbackPlan : null;
   const fallback = _isRecord(cmp.fallbackStrategy) ? cmp.fallbackStrategy : null;
@@ -865,7 +883,7 @@ function _renderBody(container, comparison, visualPreviewInfo, locale) {
       const steps = _safeArray(rollback.steps);
       if (steps.length) {
         const stepsList = el('ol', { style: 'margin:6px 0 0;padding-left:18px;font-size:11px;color:var(--text-dim);line-height:1.7' });
-        for (const step of steps) stepsList.appendChild(el('li', { text: _safeText(step, '(unrepresentable step)') }));
+        for (const [index, step] of steps.entries()) stepsList.appendChild(el('li', { text: presentRollbackStep(step, index) }));
         container.appendChild(stepsList);
       }
     } else {
@@ -874,7 +892,7 @@ function _renderBody(container, comparison, visualPreviewInfo, locale) {
     if (fallback) {
       container.appendChild(listRow(t('comparison.field.fallbackUsesLegacyMapping', null, locale), _yesNoUnknown(fallback.useLegacyMapping, locale)));
       container.appendChild(listRow(t('comparison.field.safeMode', null, locale), _yesNoUnknown(fallback.safeMode, locale)));
-      const reasonText = _safeText(fallback.reason, '');
+      const reasonText = presentFallbackReason(fallback.reason);
       if (reasonText) container.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:4px;overflow-wrap:anywhere', text: reasonText }));
     }
   }

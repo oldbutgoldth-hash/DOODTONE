@@ -99,10 +99,14 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
   // still covered, just sourced from one place instead of duplicated
   // English/Thai literals in app.js itself.
   const coversSafetyRestraint = /translationMode === 'legacy-derived-safety-restraint'/.test(appSrc)
-    && /t\('review\.outcome\.safetyRestraint', null, state\.lang\)/.test(appSrc);
+    && /code: 'SAFETY_RESTRAINT'/.test(appSrc)
+    && /presentation\.code === 'SAFETY_RESTRAINT'/.test(appSrc)
+    && /t\('review\.outcome\.safetyRestraint', null, lang\)/.test(appSrc);
   const coversIdentityFallback = /translationMode === 'identity-fallback'/.test(appSrc)
-    && /t\('review\.outcome\.identityFallback', null, state\.lang\)/.test(appSrc);
-  const hasHonestElseBranch = /t\('review\.outcome\.unavailable', null, state\.lang\)/.test(appSrc);
+    && /code: 'IDENTITY_FALLBACK'/.test(appSrc)
+    && /presentation\.code === 'IDENTITY_FALLBACK'/.test(appSrc)
+    && /t\('review\.outcome\.identityFallback', null, lang\)/.test(appSrc);
+  const hasHonestElseBranch = /code: 'UNAVAILABLE'/.test(appSrc) && /presentation\.code === 'UNAVAILABLE'/.test(appSrc) && /t\('review\.outcome\.unavailable', null, lang\)/.test(appSrc);
   record('The outcome announcement distinguishes Safety-restraint, Identity-fallback, and an honest else/unavailable case', coversSafetyRestraint && coversIdentityFallback && hasHonestElseBranch, { coversSafetyRestraint, coversIdentityFallback, hasHonestElseBranch });
 
   const readsFromControllerState = /visualPreviewComparisonController\.getState\(\)/.test(appSrc) && /vprState\?\.metadata\?\.controlledV2Translation\?\.mode/.test(appSrc);

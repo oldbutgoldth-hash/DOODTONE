@@ -1,25 +1,389 @@
 {
   "suite": "I18N RUNTIME CLOSURE + QA INTEGRITY R3 — Phase I: full-system EN/TH Browser suite",
-  "runId": "7fd7cf30-5332-4f97-986a-870cdad8e777",
-  "startedAt": "2026-07-26T07:59:36.763Z",
-  "completedAt": "2026-07-26T07:59:36.763Z",
+  "decision": "PASS",
+  "runId": "19ff3c29-ddc6-449c-9464-de56dd76ceb9",
+  "startedAt": "2026-07-26T13:51:43.736Z",
+  "completedAt": "2026-07-26T13:51:59.045Z",
   "completed": true,
-  "sourceHash": null,
-  "browserExecutablePath": null,
+  "sourceHash": "b2e6e611f64c6aedb033fd72d82f76f685440a76aafb5a3f646f761f60a0fe1c",
+  "browserExecutablePath": "/usr/bin/chromium",
   "browserVersion": null,
-  "generatedAt": "2026-07-26T07:59:36.763Z",
-  "summary": {
-    "total": 1,
-    "pass": 0,
-    "fail": 0,
-    "notTested": 1
-  },
   "results": [
     {
-      "test": "Browser environment availability",
-      "result": "NOT_TESTED",
-      "evidence": "[{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
+      "test": "Step 1: app starts in Thai (state.lang persisted as \"th\")",
+      "result": "PASS",
+      "evidence": "lang=th"
+    },
+    {
+      "test": "Step 2: safety-eligible photo uploaded and Analysis completed",
+      "result": "PASS",
+      "evidence": "{\"completed\":true,\"analysisGeneration\":2}"
+    },
+    {
+      "test": "Step 3: the six manual visual Review items are complete",
+      "result": "PASS",
+      "evidence": "{\"visualPassed\":6,\"visualRequired\":6}"
+    },
+    {
+      "test": "Step 4: the four system Review items are auto-verified with zero manual clicks",
+      "result": "PASS",
+      "evidence": "{\"systemVerified\":4,\"systemRequired\":4,\"manualVisualButtonsClicked\":6,\"systemButtonsClicked\":0,\"totalReviewItems\":10}"
+    },
+    {
+      "test": "Step 4b: system-verified items were never clicked (systemButtonsClicked === 0) -- they carry no Pass button in the DOM",
+      "result": "PASS",
+      "evidence": "{\"totalReviewItems\":10,\"manualVisualButtonsClicked\":6,\"systemButtonsClicked\":0,\"itemsWithNoButtonFound\":4}"
+    },
+    {
+      "test": "Step 4c: exactly the 6 manual visual items received a real click (manualVisualButtonsClicked === 6)",
+      "result": "PASS",
+      "evidence": "{\"totalReviewItems\":10,\"manualVisualButtonsClicked\":6,\"systemButtonsClicked\":0,\"itemsWithNoButtonFound\":4}"
+    },
+    {
+      "test": "Step 5a: #btnBuildControlledV2 exists exactly once",
+      "result": "PASS",
+      "evidence": "{\"count\":1,\"visible\":true,\"disabled\":false,\"ariaDisabled\":\"false\"}"
+    },
+    {
+      "test": "Step 5b: #btnBuildControlledV2 is visible",
+      "result": "PASS",
+      "evidence": "{\"count\":1,\"visible\":true,\"disabled\":false,\"ariaDisabled\":\"false\"}"
+    },
+    {
+      "test": "Step 5c: #btnBuildControlledV2 disabled === false before click",
+      "result": "PASS",
+      "evidence": "{\"count\":1,\"visible\":true,\"disabled\":false,\"ariaDisabled\":\"false\"}"
+    },
+    {
+      "test": "Step 5d: #btnBuildControlledV2 aria-disabled === \"false\" before click",
+      "result": "PASS",
+      "evidence": "{\"count\":1,\"visible\":true,\"disabled\":false,\"ariaDisabled\":\"false\"}"
+    },
+    {
+      "test": "Step 5e: reviewGuidance.readyToBuildV2 === true before click",
+      "result": "PASS",
+      "evidence": "readyToBuildV2=true"
+    },
+    {
+      "test": "Step 5f: clicking #btnBuildControlledV2 immediately enters a busy state (disabled and/or aria-busy)",
+      "result": "PASS",
+      "evidence": "{\"clicked\":true,\"disabledRightAfterClick\":true,\"ariaBusyRightAfterClick\":true}"
+    },
+    {
+      "test": "Step 5g: analysis generation increments exactly once after the guided Build",
+      "result": "PASS",
+      "evidence": "{\"generationBeforeBuild\":2,\"generationAfterBuild\":3}"
+    },
+    {
+      "test": "Step 5h: #btnBuildControlledV2 returns from busy state after processing completes",
+      "result": "PASS",
+      "evidence": "{\"disabled\":false,\"ariaBusy\":null}"
+    },
+    {
+      "test": "Step 5i: Controlled V2 built with a meaningful translation mode (Safety-restraint or honest Identity fallback)",
+      "result": "PASS",
+      "evidence": "translationMode=legacy-derived-safety-restraint"
+    },
+    {
+      "test": "Step 5j: buildControlledV2LiveRegion contains a non-empty localized outcome announcement",
+      "result": "PASS",
+      "evidence": "{\"liveRegionText\":\"สร้างตัวอย่าง Controlled V2 สำเร็จ — เป็นตัวอย่างแบบสงวนความปลอดภัยที่มีการปรับเปลี่ยนจริง ดูผลเปรียบเทียบด้านล่าง\"}"
+    },
+    {
+      "test": "Step 5k: Visual Preview Comparison section receives focus as the designed post-build scroll target",
+      "result": "PASS",
+      "evidence": "{\"sectionExists\":true,\"visible\":true,\"isActiveElement\":true}"
+    },
+    {
+      "test": "Step 6a: Legacy preview actually rendered (visualPreviewControllerState.legacyRendered === true)",
+      "result": "PASS",
+      "evidence": "legacyRendered=true"
+    },
+    {
+      "test": "Step 6b: Controlled V2 preview actually rendered (visualPreviewControllerState.v2Rendered === true)",
+      "result": "PASS",
+      "evidence": "v2Rendered=true"
+    },
+    {
+      "test": "Step 6c: Exact dimensions alignment achieved (interactive.alignmentStatus === \"Exact dimensions\")",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "Step 6d: Interactive Before/After state is ready",
+      "result": "PASS",
+      "evidence": "interactiveState=ready"
+    },
+    {
+      "test": "Step 6e: Observation radio controls are enabled (not disabled) in the DOM",
+      "result": "PASS",
+      "evidence": "enabledObservationRadioCount=4"
+    },
+    {
+      "test": "Step 6f: both rendered Preview results belong to the current analysis generation",
+      "result": "PASS",
+      "evidence": "{\"controllerGen\":3,\"currentGen\":3}"
+    },
+    {
+      "test": "Step 7a: a specific Observation option (\"prefer-v2\") was selected through the real radio control",
+      "result": "PASS",
+      "evidence": "selectedValue=prefer-v2"
+    },
+    {
+      "test": "Step 7b: two Reason tags were selected through real checkbox controls and the Reason codes changed accordingly",
+      "result": "PASS",
+      "evidence": "{\"reasonsAfter\":[\"contrast\",\"skin-tone\"]}"
+    },
+    {
+      "test": "Step 7c: Session summary totalObserved increments exactly once for this generation (one record per generation, regardless of how many Reason toggles followed)",
+      "result": "PASS",
+      "evidence": "{\"sessionBefore\":0,\"sessionAfter\":1}"
+    },
+    {
+      "test": "Step 8a: the Before/After range input.value === \"73\" after real input/change events",
+      "result": "PASS",
+      "evidence": "sliderDomValue=73"
+    },
+    {
+      "test": "Step 8b: the controller-driven split readout reflects the same 73 split",
+      "result": "PASS",
+      "evidence": "{\"sliderReadoutAfter\":\"73% — Legacy ซ้าย · Controlled V2 ขวา\"}"
+    },
+    {
+      "test": "Step 9: Thai audit -- appHeader has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":8,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- primaryNavigation has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":12,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- rightSidebar has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":6,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- appFooter has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":4,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- languageControl has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":8,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- uploadArea has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":2,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- analysisSummary has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":2,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- analysisTabsAndControls has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":568,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- supportPanel has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":31,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- promptPayModal has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":4,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- usdtModal has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":3,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- reviewConsole has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":190,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- dataComparison has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":257,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- visualPreview has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":48,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- beforeAfter has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":18,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- observation has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":35,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- sessionSummary has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":12,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: Thai audit -- bodyAggregate has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":708,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 9: fail-closed decision across all 18 required Thai sections is PASS (no FAIL rows, no unpermitted NOT_TESTED rows)",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"PASS\",\"totalLeaks\":0,\"failedKeys\":[],\"notTestedKeys\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- appHeader has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":8,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- primaryNavigation has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":12,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- rightSidebar has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":6,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- appFooter has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":4,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- languageControl has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":8,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- uploadArea has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":2,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- analysisSummary has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":2,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- analysisTabsAndControls has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":568,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- supportPanel has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":31,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- promptPayModal has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":4,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- usdtModal has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":3,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- reviewConsole has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":190,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- dataComparison has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":257,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- visualPreview has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":48,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- beforeAfter has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":18,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- observation has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":35,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- sessionSummary has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":12,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: English audit -- bodyAggregate has zero visible Thai fragments / unresolved template tokens",
+      "result": "PASS",
+      "evidence": "{\"visibleNodeCount\":707,\"leaks\":0,\"unresolvedTemplateLeaks\":0,\"sample\":[]}"
+    },
+    {
+      "test": "Step 10: fail-closed decision across all 18 required English sections is PASS (no FAIL rows, no unpermitted NOT_TESTED rows)",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"PASS\",\"totalLeaks\":0,\"failedKeys\":[],\"notTestedKeys\":[]}"
+    },
+    {
+      "test": "Step 11: switching back to Thai renders Thai again with zero English leaks (fail-closed across all 18 sections)",
+      "result": "PASS",
+      "evidence": "{\"decision\":\"PASS\",\"totalLeaks\":0,\"failedKeys\":[],\"notTestedKeys\":[]}"
+    },
+    {
+      "test": "Step 12: TH→EN→TH changed NO bounded state invariant (generation, Review, V2 mode, render state, alignment, slider+readout, Observation, Reasons, Session, Production source)",
+      "result": "PASS",
+      "evidence": "{\"changedFields\":[],\"before\":{\"analysisGeneration\":3,\"reviewGuidance\":\"{\\\"exists\\\":true,\\\"visualRequired\\\":6,\\\"visualPassed\\\":6,\\\"systemRequired\\\":4,\\\"systemVerified\\\":4,\\\"readyToBuildV2\\\":true}\",\"translationMode\":\"legacy-derived-safety-restraint\",\"visualizedAdjustmentCount\":2,\"legacyRendered\":true,\"v2Rendered\":true,\"interactiveState\":\"ready\",\"alignmentStatus\":\"Exact dimensions\",\"sliderValue\":\"73\",\"sliderReadout\":\"73% — Legacy ซ้าย · Controlled V2 ขวา\",\"observationSelectedValue\":\"prefer-v2\",\"observationReasons\":\"[\\\"contrast\\\",\\\"skin-tone\\\"]\",\"sessionSummary\":\"{\\\"totalObserved\\\":1,\\\"activeObservations\\\":1,\\\"preferLegacy\\\":0,\\\"preferV2\\\":1,\\\"noVisibleDifference\\\":0,\\\"unsure\\\":0,\\\"cleared\\\":0,\\\"invalidated\\\":0,\\\"reasonCounts\\\":{\\\"skinTone\\\":1,\\\"whiteBalance\\\":0,\\\"highlightDetail\\\":0,\\\"shadowDetail\\\":0,\\\"contrast\\\":1,\\\"colorBalance\\\":0,\\\"saturation\\\":0,\\\"naturalLook\\\":0,\\\"clarityDetail\\\":0,\\\"noSpecificReason\\\":0},\\\"topReasons\\\":[{\\\"reason\\\":\\\"skin-tone\\\",\\\"count\\\":1},{\\\"reason\\\":\\\"contrast\\\",\\\"count\\\":1}],\\\"lastObservation\\\":{\\\"generationId\\\":3,\\\"observation\\\":\\\"prefer-v2\\\",\\\"reasons\\\":[\\\"skin-tone\\\",\\\"contrast\\\"]}}\",\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false},\"after\":{\"analysisGeneration\":3,\"reviewGuidance\":\"{\\\"exists\\\":true,\\\"visualRequired\\\":6,\\\"visualPassed\\\":6,\\\"systemRequired\\\":4,\\\"systemVerified\\\":4,\\\"readyToBuildV2\\\":true}\",\"translationMode\":\"legacy-derived-safety-restraint\",\"visualizedAdjustmentCount\":2,\"legacyRendered\":true,\"v2Rendered\":true,\"interactiveState\":\"ready\",\"alignmentStatus\":\"Exact dimensions\",\"sliderValue\":\"73\",\"sliderReadout\":\"73% — Legacy ซ้าย · Controlled V2 ขวา\",\"observationSelectedValue\":\"prefer-v2\",\"observationReasons\":\"[\\\"contrast\\\",\\\"skin-tone\\\"]\",\"sessionSummary\":\"{\\\"totalObserved\\\":1,\\\"activeObservations\\\":1,\\\"preferLegacy\\\":0,\\\"preferV2\\\":1,\\\"noVisibleDifference\\\":0,\\\"unsure\\\":0,\\\"cleared\\\":0,\\\"invalidated\\\":0,\\\"reasonCounts\\\":{\\\"skinTone\\\":1,\\\"whiteBalance\\\":0,\\\"highlightDetail\\\":0,\\\"shadowDetail\\\":0,\\\"contrast\\\":1,\\\"colorBalance\\\":0,\\\"saturation\\\":0,\\\"naturalLook\\\":0,\\\"clarityDetail\\\":0,\\\"noSpecificReason\\\":0},\\\"topReasons\\\":[{\\\"reason\\\":\\\"skin-tone\\\",\\\"count\\\":1},{\\\"reason\\\":\\\"contrast\\\",\\\"count\\\":1}],\\\"lastObservation\\\":{\\\"generationId\\\":3,\\\"observation\\\":\\\"prefer-v2\\\",\\\"reasons\\\":[\\\"skin-tone\\\",\\\"contrast\\\"]}}\",\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false}}"
+    },
+    {
+      "test": "Step 13: zero page errors and zero console errors across the entire workflow",
+      "result": "PASS",
+      "evidence": "{\"pageErrors\":0,\"consoleErrors\":0,\"samples\":[]}"
+    },
+    {
+      "test": "Production source remained Legacy for the whole run (previewSandbox.selectedOutputSource)",
+      "result": "PASS",
+      "evidence": "selectedOutputSource=legacy"
+    },
+    {
+      "test": "Production write remained disabled for the whole run (previewSandbox.canWriteProduction === false)",
+      "result": "PASS",
+      "evidence": "canWriteProduction=false"
+    },
+    {
+      "test": "XMP exact locale invariant: identical text before vs. after TH->EN->TH",
+      "result": "PASS",
+      "evidence": "beforeLength=2962, afterLength=2962"
+    },
+    {
+      "test": "XMP exact locale invariant: identical length before vs. after TH->EN->TH",
+      "result": "PASS",
+      "evidence": "before=2962, after=2962"
+    },
+    {
+      "test": "XMP exact locale invariant: identical SHA-256 hash before vs. after TH->EN->TH",
+      "result": "PASS",
+      "evidence": "before=e233c999fb009133..., after=e233c999fb009133..."
     }
   ],
-  "decision": "BROWSER_BINARY_UNAVAILABLE"
+  "summary": {
+    "total": 74,
+    "pass": 74,
+    "fail": 0,
+    "notTested": 0
+  }
 }

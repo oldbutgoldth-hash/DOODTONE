@@ -1,25 +1,75 @@
 {
   "suite": "COMBINED CLOSEOUT R3 — Phase A FIX A4: Cookie compatibility real-Browser self-test",
-  "runId": "a14f0ec7-56c9-45fb-8763-fdcb7a0b44a7",
-  "startedAt": "2026-07-25T16:22:54.904Z",
-  "completedAt": "2026-07-25T16:22:54.904Z",
+  "runId": "2cff211e-47a0-48b5-9821-3053203dddd3",
+  "startedAt": "2026-07-26T13:40:31.648Z",
+  "completedAt": "2026-07-26T13:40:32.265Z",
   "completed": true,
-  "sourceHash": null,
-  "browserExecutablePath": null,
-  "browserVersion": null,
-  "generatedAt": "2026-07-25T16:22:54.904Z",
+  "sourceHash": "effcbdc8c695e02039d8162b296ae038ad4521ac26faf667928606a34aaa778e",
+  "browserExecutablePath": "/usr/bin/chromium",
+  "browserVersion": "144.0.7559.96",
+  "generatedAt": "2026-07-26T13:40:32.265Z",
   "summary": {
-    "total": 1,
-    "pass": 0,
+    "total": 11,
+    "pass": 11,
     "fail": 0,
-    "notTested": 1
+    "notTested": 0
   },
   "results": [
     {
-      "test": "Browser environment availability",
-      "result": "NOT_TESTED",
-      "evidence": "[{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
+      "test": "1. Native document.cookie access throws SecurityError on the opaque about:blank origin",
+      "result": "PASS",
+      "evidence": "{\"cookieAccessible\":false,\"errorName\":\"SecurityError\"}"
+    },
+    {
+      "test": "2. Compatibility installs (OPAQUE_ORIGIN_MEMORY_COOKIE_INSTALLED)",
+      "result": "PASS",
+      "evidence": "{\"status\":\"OPAQUE_ORIGIN_MEMORY_COOKIE_INSTALLED\",\"cookieAccessibleBefore\":false,\"cookieErrorNameBefore\":\"SecurityError\",\"alreadyInstalled\":false}"
+    },
+    {
+      "test": "3. Getter/setter round-trip works",
+      "result": "PASS",
+      "evidence": "{\"roundTrips\":true,\"updates\":true}"
+    },
+    {
+      "test": "4. Setter wrapper counts exactly once per assignment",
+      "result": "PASS",
+      "evidence": "setterCallsAfterOneWrite=1"
+    },
+    {
+      "test": "4b. Patch detection: getter preserved, setter changed, both Functions, flags preserved",
+      "result": "PASS",
+      "evidence": "{\"getterPreserved\":true,\"setterChanged\":true,\"bothFunctions\":true,\"descriptorFlagsPreserved\":true,\"setterPatched\":true}"
+    },
+    {
+      "test": "5. Compatibility descriptor restores by exact Function reference (Stage 1)",
+      "result": "PASS",
+      "evidence": "{\"instrumentationRestoredExactly\":true,\"hasOwnAfter\":true}"
+    },
+    {
+      "test": "6. Helper removes the compatibility descriptor (Stage 2)",
+      "result": "PASS",
+      "evidence": "{\"markerRemoved\":true,\"compatibilityDescriptorRemoved\":true,\"originalShapeRestored\":true}"
+    },
+    {
+      "test": "7. No own cookie property remains after cleanup",
+      "result": "PASS",
+      "evidence": "{\"markerRemoved\":true,\"compatibilityDescriptorRemoved\":true,\"originalShapeRestored\":true}"
+    },
+    {
+      "test": "8. The __opaqueOriginCookieInstalled marker is removed",
+      "result": "PASS",
+      "evidence": "{\"markerRemoved\":true,\"compatibilityDescriptorRemoved\":true,\"originalShapeRestored\":true}"
+    },
+    {
+      "test": "9. A second, independent Page begins clean (native SecurityError again, no cross-Page leakage)",
+      "result": "PASS",
+      "evidence": "{\"cookieAccessible\":false,\"errorName\":\"SecurityError\"}"
+    },
+    {
+      "test": "10. No Cookie value is written into this self-test's own Result rows",
+      "result": "PASS",
+      "evidence": "checked 10 rows"
     }
   ],
-  "decision": "BROWSER_BINARY_UNAVAILABLE"
+  "decision": "PASS"
 }

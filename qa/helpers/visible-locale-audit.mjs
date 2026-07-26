@@ -65,7 +65,7 @@ function collectVisibleLocaleLeaks(args) {
   const approvedTerms = (args && args.approvedTerms) || [];
 
   const root = document.querySelector(selector);
-  if (!root) return { found: false, leaks: [], unresolvedTemplateLeaks: [] };
+  if (!root) return { found: false, visibleNodeCount: 0, leaks: [], unresolvedTemplateLeaks: [] };
 
   const thaiRe = /[฀-๿]/g;
   const placeholderRe = /\{\{\s*\w+\s*\}\}/g;
@@ -78,6 +78,7 @@ function collectVisibleLocaleLeaks(args) {
 
   const leaks = [];
   const unresolvedTemplateLeaks = [];
+  let visibleNodeCount = 0;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let n;
   while ((n = walker.nextNode())) {
@@ -89,10 +90,18 @@ function collectVisibleLocaleLeaks(args) {
     if (el.closest('details:not([open])')) continue;
     const cs = window.getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    // Fail-closed visibility: a text node under a hidden ancestor has no
+    // rendered client rect even when the text node's own parent reports
+    // display:block. This prevents hidden modals/details from consuming
+    // audit coverage unless the workflow explicitly opens them.
+    if (el.getClientRects().length === 0) continue;
     if (el.classList && el.classList.contains('material-symbols-outlined')) continue;
     const raw = (n.nodeValue || '').trim();
     if (!raw) continue;
     if (/^[a-z0-9_]+$/.test(raw)) continue; // material icon ligature, e.g. "info"
+    if (/^(?:X{2,}[X0-9-]*|[+()0-9][+()0-9 .-]{4,})$/i.test(raw)) continue; // masked phone/account identifiers
+    if (/^(?:https?:\/\/|www\.)\S+$/i.test(raw) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) continue; // URL/email values
+    visibleNodeCount += 1;
 
     // An unresolved {{param}} interpolation token is a leak in EITHER
     // language mode -- checked before the language-specific branch so
@@ -120,7 +129,7 @@ function collectVisibleLocaleLeaks(args) {
       if (thaiRe.test(raw)) leaks.push(raw.slice(0, 160));
     }
   }
-  return { found: true, leaks: leaks, unresolvedTemplateLeaks: unresolvedTemplateLeaks };
+  return { found: true, visibleNodeCount: visibleNodeCount, leaks: leaks, unresolvedTemplateLeaks: unresolvedTemplateLeaks };
 }
 
 /**
@@ -146,10 +155,10 @@ export async function auditVisibleLocaleSection(page, options) {
   const approvedTerms = (options && options.approvedTerms) || [];
 
   if (typeof selector !== 'string' || !selector.trim()) {
-    return { status: 'FAIL', reason: 'invalid-selector', selector: selector ?? null, leaks: [], unresolvedTemplateLeaks: [], error: 'selector must be a non-empty string' };
+    return { status: 'FAIL', reason: 'invalid-selector', selector: selector ?? null, visibleNodeCount: 0, leaks: [], unresolvedTemplateLeaks: [], error: 'selector must be a non-empty string' };
   }
   if (mode !== 'th' && mode !== 'en') {
-    return { status: 'FAIL', reason: 'invalid-mode', selector, leaks: [], unresolvedTemplateLeaks: [], error: `mode must be 'th' or 'en', got ${JSON.stringify(mode)}` };
+    return { status: 'FAIL', reason: 'invalid-mode', selector, visibleNodeCount: 0, leaks: [], unresolvedTemplateLeaks: [], error: `mode must be 'th' or 'en', got ${JSON.stringify(mode)}` };
   }
 
   let result;
@@ -159,17 +168,21 @@ export async function auditVisibleLocaleSection(page, options) {
     // never multiple positional arguments (the previous defect).
     result = await page.evaluate(collectVisibleLocaleLeaks, { selector, mode, approvedTerms });
   } catch (err) {
-    return { status: 'FAIL', reason: 'audit-threw', selector, leaks: [], unresolvedTemplateLeaks: [], error: err?.message ?? String(err) };
+    return { status: 'FAIL', reason: 'audit-threw', selector, visibleNodeCount: 0, leaks: [], unresolvedTemplateLeaks: [], error: err?.message ?? String(err) };
   }
 
   if (!result || result.found !== true) {
-    return { status: 'NOT_TESTED', reason: 'selector-not-found', selector, leaks: [], unresolvedTemplateLeaks: [], error: null };
+    return { status: 'NOT_TESTED', reason: 'selector-not-found', selector, visibleNodeCount: 0, leaks: [], unresolvedTemplateLeaks: [], error: null };
   }
 
+  const visibleNodeCount = Number.isFinite(result.visibleNodeCount) ? result.visibleNodeCount : 0;
   const leaks = Array.isArray(result.leaks) ? result.leaks : [];
   const unresolvedTemplateLeaks = Array.isArray(result.unresolvedTemplateLeaks) ? result.unresolvedTemplateLeaks : [];
+  if (visibleNodeCount <= 0) {
+    return { status: 'FAIL', reason: 'zero-visible-nodes', selector, visibleNodeCount, leaks, unresolvedTemplateLeaks, error: 'required section produced zero visible text nodes' };
+  }
   const anyLeak = leaks.length > 0 || unresolvedTemplateLeaks.length > 0;
-  return { status: anyLeak ? 'FAIL' : 'PASS', reason: null, selector, leaks, unresolvedTemplateLeaks, error: null };
+  return { status: anyLeak ? 'FAIL' : 'PASS', reason: null, selector, visibleNodeCount, leaks, unresolvedTemplateLeaks, error: null };
 }
 
 /**

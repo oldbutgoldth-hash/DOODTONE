@@ -265,8 +265,8 @@ function noClickBetween(a, b) {
   record('Part 4 / FIX 3 (ENV-B2-F1): Clear Session is reached via real Tab navigation within a DYNAMIC bound derived from the real focusable order (never a hard-coded 20) and activated with Enter, with no .click() between reaching and activating, and no hard-coded click on this button anywhere', hasBothAnchors && usesDynamicBound && noClick.ok && noHardcodedClick, `hasBothAnchors=${hasBothAnchors}, usesDynamicBound=${usesDynamicBound}, noClickBetween=${JSON.stringify(noClick.ok)}, noHardcodedClick=${noHardcodedClick}, reason=${noClick.reason}`);
 }
 {
-  const hasReRecordVerification = testSrc.includes('Part 4.5: the current Observation is immediately re-recorded (totalObserved=1, preferLegacy=1)') && testSrc.includes('p4ParsedAfter.totalObserved === 1 && p4ParsedAfter.preferLegacy === 1');
-  const hasActiveObservationsCheck = testSrc.includes('Part 4.6: activeObservations = 1 after Clear Session') && testSrc.includes('p4ParsedAfter.activeObservationsDerived === 1');
+  const hasReRecordVerification = testSrc.includes('Part 4.5: the current Observation is immediately re-recorded (totalObserved=1, preferLegacy=1)') && testSrc.includes('p4SemanticAfter?.totalObserved === 1 && p4SemanticAfter?.preferLegacy === 1');
+  const hasActiveObservationsCheck = testSrc.includes('Part 4.6: activeObservations = 1 after Clear Session') && testSrc.includes('p4SemanticAfter?.activeObservations === 1');
   const hasHistoricalResetCheck = testSrc.includes('Part 4.2: historical Cleared/Invalidated counts reset after Clear Session');
   const hasCurrentStatePreservedChecks = testSrc.includes('Part 4.3: current valid Observation (Prefer Legacy) remains checked after Clear Session') && testSrc.includes('Part 4.4: current Reasons (skin-tone, contrast) remain checked after Clear Session');
   const hasGenerationUnchangedCheck = testSrc.includes('Part 4.8: Analysis generation does not change during Clear Session keyboard activation');
@@ -485,8 +485,8 @@ function noClickBetween(a, b) {
 {
   // FIX 9: Clear Reasons Session Reason-count checks (not merely the
   // ordinary Selected Reasons text being empty).
-  const sessionReasonCountsChecked = testSrc.includes("p2ParsedSession.activeObservationsDerived === 1") && testSrc.includes("p2Session.topReasonsText === ''");
-  record('FIX 9: Clear Reasons additionally requires activeObservationsDerived === 1 and empty Session Top Reasons/Reason counts, checked directly rather than relying only on the Selected Reasons text being empty', sessionReasonCountsChecked, `present=${sessionReasonCountsChecked}`);
+  const sessionReasonCountsChecked = testSrc.includes("p2SemanticSession?.activeObservations === 1") && testSrc.includes("p2SemanticSession.topReasons.length === 0") && testSrc.includes("Object.values(p2SemanticSession?.reasonCounts || {}).every");
+  record('FIX 9: Clear Reasons additionally requires semantic activeObservations === 1 and empty canonical Session Reason counts, checked directly rather than relying only on the Selected Reasons text being empty', sessionReasonCountsChecked, `present=${sessionReasonCountsChecked}`);
 }
 
 // ══════════════════════════════════════════════════════════════════

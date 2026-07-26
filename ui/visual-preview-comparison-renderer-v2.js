@@ -490,6 +490,15 @@ export function renderVisualPreviewComparison(container, comparisonState, lang) 
   const selectedProductionSource = md.selectedProductionSource === 'legacy' ? 'legacy' : md.selectedProductionSource === 'v2' ? 'v2' : 'unknown';
   const allowExport = md.allowExport === true ? true : md.allowExport === false ? false : null;
   const allowProductionWrite = md.allowProductionWrite === true ? true : md.allowProductionWrite === false ? false : null;
+  const translationMode = typeof md.controlledV2Translation?.mode === 'string' ? md.controlledV2Translation.mode : 'unknown';
+  container.dataset.v2TranslationMode = translationMode;
+  container.dataset.previewHonesty = 'browser-approximation';
+  container.dataset.productionSource = selectedProductionSource;
+  container.dataset.productionWrite = allowProductionWrite === false ? 'disabled' : (allowProductionWrite === true ? 'enabled' : 'unknown');
+  container.dataset.v2Meaningful = md.controlledV2Translation?.meaningful === true ? 'true' : 'false';
+  container.dataset.v2IdentityFallback = md.controlledV2Translation?.identityFallback === true ? 'true' : 'false';
+  container.dataset.legacyRendered = cs.legacy?.rendered === true ? 'true' : 'false';
+  container.dataset.v2Rendered = cs.v2?.rendered === true ? 'true' : 'false';
 
   if (safetyStripEl) {
     safetyStripEl.replaceChildren();

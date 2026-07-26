@@ -139,6 +139,21 @@ async function main() {
     finalDecision: null,
   };
 
+  const buildResultDocument = ({ completed = true } = {}) => {
+    const pass = results.filter((row) => row?.result === 'PASS').length;
+    const fail = results.filter((row) => row?.result === 'FAIL').length;
+    const notTested = results.filter((row) => row?.result === 'NOT_TESTED').length;
+    return {
+      suite: 'EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test',
+      generatedAt: new Date().toISOString(),
+      completed,
+      decision: output.finalDecision,
+      summary: { total: results.length, pass, fail, notTested },
+      results,
+      ...output,
+    };
+  };
+
   // ── PART 1 ──
   const pkg = await detectPlaywrightPackage();
   output.playwrightPackageStatus = pkg.status;
@@ -147,7 +162,7 @@ async function main() {
   if (pkg.status !== 'PLAYWRIGHT_PACKAGE_AVAILABLE') {
     output.finalDecision = 'PLAYWRIGHT_PACKAGE_UNAVAILABLE';
     record('Honest status: Playwright package unavailable — no Browser launch fabricated', 'NOT_TESTED', 'The reusable helper (qa/helpers/playwright-in-memory-app.mjs) was still built and is statically verified separately (qa/playwright-in-memory-app-static-test.mjs); no Browser launch is attempted or claimed.');
-    await writeFile(path.join(PROJECT_ROOT, 'qa', 'playwright-in-memory-app-smoke-results.json'), JSON.stringify({ suite: 'EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test', generatedAt: new Date().toISOString(), results, ...output }, null, 2));
+    await writeFile(path.join(PROJECT_ROOT, 'qa', 'playwright-in-memory-app-smoke-results.json'), JSON.stringify(buildResultDocument(), null, 2));
     console.log(`\nFinal decision: ${output.finalDecision}`);
     process.exit(0);
   }
@@ -162,7 +177,7 @@ async function main() {
 
   if (!browserDetect.found) {
     output.finalDecision = 'BROWSER_BINARY_UNAVAILABLE';
-    await writeFile(path.join(PROJECT_ROOT, 'qa', 'playwright-in-memory-app-smoke-results.json'), JSON.stringify({ suite: 'EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test', generatedAt: new Date().toISOString(), results, ...output }, null, 2));
+    await writeFile(path.join(PROJECT_ROOT, 'qa', 'playwright-in-memory-app-smoke-results.json'), JSON.stringify(buildResultDocument(), null, 2));
     console.log(`\nFinal decision: ${output.finalDecision}`);
     process.exit(0);
   }
@@ -199,7 +214,7 @@ async function main() {
   } catch (buildErr) {
     output.finalDecision = 'FAIL_IN_MEMORY_HARNESS';
     record('PART 3/4/5/6: in-memory app graph build', 'FAIL', String((buildErr && buildErr.stack) || buildErr));
-    await writeFile(path.join(PROJECT_ROOT, 'qa', 'playwright-in-memory-app-smoke-results.json'), JSON.stringify({ suite: 'EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test', generatedAt: new Date().toISOString(), results, ...output }, null, 2));
+    await writeFile(path.join(PROJECT_ROOT, 'qa', 'playwright-in-memory-app-smoke-results.json'), JSON.stringify(buildResultDocument(), null, 2));
     console.log(`\nFinal decision: ${output.finalDecision}`);
     process.exit(1);
   }
@@ -430,7 +445,7 @@ async function main() {
     if (browser) await browser.close();
   }
 
-  await writeFile(path.join(PROJECT_ROOT, 'qa', 'playwright-in-memory-app-smoke-results.json'), JSON.stringify({ suite: 'EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test', generatedAt: new Date().toISOString(), results, ...output }, null, 2));
+  await writeFile(path.join(PROJECT_ROOT, 'qa', 'playwright-in-memory-app-smoke-results.json'), JSON.stringify(buildResultDocument(), null, 2));
   console.log(`\nFinal decision: ${output.finalDecision}`);
   process.exit(output.finalDecision === 'PASS_IN_MEMORY_HARNESS_READY' ? 0 : 1);
 }
@@ -442,6 +457,9 @@ main().catch(async (err) => {
     await writeFile(path.join(PROJECT_ROOT, 'qa', 'playwright-in-memory-app-smoke-results.json'), JSON.stringify({
       suite: 'EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test',
       generatedAt: new Date().toISOString(),
+      completed: false,
+      decision: 'TOOL_ENVIRONMENT_UNAVAILABLE',
+      summary: { total: results.length + 1, pass: results.filter((row) => row?.result === 'PASS').length, fail: results.filter((row) => row?.result === 'FAIL').length + 1, notTested: results.filter((row) => row?.result === 'NOT_TESTED').length },
       results,
       playwrightPackageStatus: 'UNKNOWN',
       browserExecutablePath: null,

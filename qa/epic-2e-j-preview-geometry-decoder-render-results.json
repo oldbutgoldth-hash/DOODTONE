@@ -1,25 +1,222 @@
 {
   "suite": "LOCAL-FIRST GEOMETRY R3 -- Phase C1: Decoder/Render Geometry suite (decoder-only, NOT production-safety-eligible)",
-  "runId": "86ead290-3d30-4bf3-b998-d445e4772ae4",
-  "startedAt": "2026-07-26T07:59:35.089Z",
-  "completedAt": "2026-07-26T07:59:35.089Z",
+  "scopeNote": "This suite proves decoder/render/geometry correctness ONLY. It does not run, and never claims, full Production safety approval, full-app canGeneratePreview, or Observation availability -- see qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs (Phase C2) for that coverage on photo-like fixtures.",
+  "runId": "8e898266-bcd4-4e2d-9afc-77a6aefa30c1",
+  "startedAt": "2026-07-26T13:50:51.713Z",
+  "completedAt": "2026-07-26T13:50:52.947Z",
   "completed": true,
-  "sourceHash": null,
-  "browserExecutablePath": null,
-  "browserVersion": null,
-  "generatedAt": "2026-07-26T07:59:35.089Z",
+  "sourceHash": "69236eb25dc0c4aab6b673cecbe8ddd8abc22b9f2e2b15cb8a5ae1ca67178c03",
+  "browserExecutablePath": "/usr/bin/chromium",
+  "browserVersion": "144.0.7559.96",
+  "generatedAt": "2026-07-26T13:50:52.947Z",
   "summary": {
-    "total": 1,
-    "pass": 0,
+    "total": 40,
+    "pass": 39,
     "fail": 0,
     "notTested": 1
   },
   "results": [
     {
-      "test": "Browser environment availability",
-      "result": "NOT_TESTED",
-      "evidence": "[{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
+      "test": "[landscape-orientation-1.jpg] canonical decode completes",
+      "result": "PASS",
+      "evidence": "{\"generationId\":1,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[landscape-orientation-1.jpg] EXIF/orientation applied by decoder (browser-native, never manually rotated)",
+      "result": "PASS",
+      "evidence": "decodePath=createImageBitmap"
+    },
+    {
+      "test": "[landscape-orientation-1.jpg] backing dimensions match expected decoded dimensions (orientation 1)",
+      "result": "PASS",
+      "evidence": "{\"decoded\":{\"w\":800,\"h\":600},\"expected\":{\"w\":800,\"h\":600}}"
+    },
+    {
+      "test": "[landscape-orientation-1.jpg] marker orientation: top-left patch classifies as expected color (dominance-based)",
+      "result": "PASS",
+      "evidence": "{\"sample\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600},\"expected\":\"red\"}"
+    },
+    {
+      "test": "[landscape-orientation-1.jpg] Legacy/V2 same-source renderer parity (Identity Render Plan, bounded QA-only)",
+      "result": "PASS",
+      "evidence": "{\"legacy\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600},\"v2\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600}}"
+    },
+    {
+      "test": "[landscape-orientation-1.jpg] no prior fixture's geometry remains",
+      "result": "NOT_APPLICABLE",
+      "evidence": "first fixture in sequence — no prior fixture to compare against"
+    },
+    {
+      "test": "[portrait-orientation-1.jpg] canonical decode completes",
+      "result": "PASS",
+      "evidence": "{\"generationId\":2,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":600,\"canonicalHeight\":800,\"sourceAspectRatio\":0.75,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[portrait-orientation-1.jpg] EXIF/orientation applied by decoder (browser-native, never manually rotated)",
+      "result": "PASS",
+      "evidence": "decodePath=createImageBitmap"
+    },
+    {
+      "test": "[portrait-orientation-1.jpg] backing dimensions match expected decoded dimensions (orientation 1)",
+      "result": "PASS",
+      "evidence": "{\"decoded\":{\"w\":600,\"h\":800},\"expected\":{\"w\":600,\"h\":800}}"
+    },
+    {
+      "test": "[portrait-orientation-1.jpg] marker orientation: top-left patch classifies as expected color (dominance-based)",
+      "result": "PASS",
+      "evidence": "{\"sample\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":600,\"canvasHeight\":800},\"expected\":\"red\"}"
+    },
+    {
+      "test": "[portrait-orientation-1.jpg] Legacy/V2 same-source renderer parity (Identity Render Plan, bounded QA-only)",
+      "result": "PASS",
+      "evidence": "{\"legacy\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":600,\"canvasHeight\":800},\"v2\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":600,\"canvasHeight\":800}}"
+    },
+    {
+      "test": "[portrait-orientation-1.jpg] no prior fixture's geometry remains (vs previous: landscape-orientation-1.jpg)",
+      "result": "PASS",
+      "evidence": "{\"current\":{\"w\":600,\"h\":800},\"previous\":{\"w\":800,\"h\":600}}"
+    },
+    {
+      "test": "[landscape-orientation-3.jpg] canonical decode completes",
+      "result": "PASS",
+      "evidence": "{\"generationId\":3,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[landscape-orientation-3.jpg] EXIF/orientation applied by decoder (browser-native, never manually rotated)",
+      "result": "PASS",
+      "evidence": "decodePath=createImageBitmap"
+    },
+    {
+      "test": "[landscape-orientation-3.jpg] backing dimensions match expected decoded dimensions (orientation 3)",
+      "result": "PASS",
+      "evidence": "{\"decoded\":{\"w\":800,\"h\":600},\"expected\":{\"w\":800,\"h\":600}}"
+    },
+    {
+      "test": "[landscape-orientation-3.jpg] marker orientation: top-left patch classifies as expected color (dominance-based)",
+      "result": "PASS",
+      "evidence": "{\"sample\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600},\"expected\":\"red\"}"
+    },
+    {
+      "test": "[landscape-orientation-3.jpg] Legacy/V2 same-source renderer parity (Identity Render Plan, bounded QA-only)",
+      "result": "PASS",
+      "evidence": "{\"legacy\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600},\"v2\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600}}"
+    },
+    {
+      "test": "[landscape-orientation-3.jpg] no prior fixture's geometry remains (vs previous: portrait-orientation-1.jpg)",
+      "result": "PASS",
+      "evidence": "{\"current\":{\"w\":800,\"h\":600},\"previous\":{\"w\":600,\"h\":800}}"
+    },
+    {
+      "test": "[landscape-matrix-orientation-6.jpg] canonical decode completes",
+      "result": "PASS",
+      "evidence": "{\"generationId\":4,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[landscape-matrix-orientation-6.jpg] EXIF/orientation applied by decoder (browser-native, never manually rotated)",
+      "result": "PASS",
+      "evidence": "decodePath=createImageBitmap"
+    },
+    {
+      "test": "[landscape-matrix-orientation-6.jpg] backing dimensions match expected decoded dimensions (orientation 6)",
+      "result": "PASS",
+      "evidence": "{\"decoded\":{\"w\":800,\"h\":600},\"expected\":{\"w\":800,\"h\":600}}"
+    },
+    {
+      "test": "[landscape-matrix-orientation-6.jpg] marker orientation: top-left patch classifies as expected color (dominance-based)",
+      "result": "PASS",
+      "evidence": "{\"sample\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600},\"expected\":\"red\"}"
+    },
+    {
+      "test": "[landscape-matrix-orientation-6.jpg] Legacy/V2 same-source renderer parity (Identity Render Plan, bounded QA-only)",
+      "result": "PASS",
+      "evidence": "{\"legacy\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600},\"v2\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600}}"
+    },
+    {
+      "test": "[landscape-matrix-orientation-6.jpg] no prior fixture's geometry remains (vs previous: landscape-orientation-3.jpg)",
+      "result": "PASS",
+      "evidence": "{\"current\":{\"w\":800,\"h\":600},\"previous\":{\"w\":800,\"h\":600}}"
+    },
+    {
+      "test": "[portrait-matrix-orientation-8.jpg] canonical decode completes",
+      "result": "PASS",
+      "evidence": "{\"generationId\":5,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":600,\"canonicalHeight\":800,\"sourceAspectRatio\":0.75,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[portrait-matrix-orientation-8.jpg] EXIF/orientation applied by decoder (browser-native, never manually rotated)",
+      "result": "PASS",
+      "evidence": "decodePath=createImageBitmap"
+    },
+    {
+      "test": "[portrait-matrix-orientation-8.jpg] backing dimensions match expected decoded dimensions (orientation 8)",
+      "result": "PASS",
+      "evidence": "{\"decoded\":{\"w\":600,\"h\":800},\"expected\":{\"w\":600,\"h\":800}}"
+    },
+    {
+      "test": "[portrait-matrix-orientation-8.jpg] marker orientation: top-left patch classifies as expected color (dominance-based)",
+      "result": "PASS",
+      "evidence": "{\"sample\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":600,\"canvasHeight\":800},\"expected\":\"red\"}"
+    },
+    {
+      "test": "[portrait-matrix-orientation-8.jpg] Legacy/V2 same-source renderer parity (Identity Render Plan, bounded QA-only)",
+      "result": "PASS",
+      "evidence": "{\"legacy\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":600,\"canvasHeight\":800},\"v2\":{\"r\":254,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":600,\"canvasHeight\":800}}"
+    },
+    {
+      "test": "[portrait-matrix-orientation-8.jpg] no prior fixture's geometry remains (vs previous: landscape-matrix-orientation-6.jpg)",
+      "result": "PASS",
+      "evidence": "{\"current\":{\"w\":600,\"h\":800},\"previous\":{\"w\":800,\"h\":600}}"
+    },
+    {
+      "test": "[landscape-no-exif.png] canonical decode completes",
+      "result": "PASS",
+      "evidence": "{\"generationId\":6,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[landscape-no-exif.png] EXIF/orientation applied by decoder (browser-native, never manually rotated)",
+      "result": "PASS",
+      "evidence": "decodePath=createImageBitmap"
+    },
+    {
+      "test": "[landscape-no-exif.png] backing dimensions match expected decoded dimensions (orientation none)",
+      "result": "PASS",
+      "evidence": "{\"decoded\":{\"w\":800,\"h\":600},\"expected\":{\"w\":800,\"h\":600}}"
+    },
+    {
+      "test": "[landscape-no-exif.png] marker orientation: top-left patch classifies as expected color (dominance-based)",
+      "result": "PASS",
+      "evidence": "{\"sample\":{\"r\":255,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600},\"expected\":\"red\"}"
+    },
+    {
+      "test": "[landscape-no-exif.png] Legacy/V2 same-source renderer parity (Identity Render Plan, bounded QA-only)",
+      "result": "PASS",
+      "evidence": "{\"legacy\":{\"r\":255,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600},\"v2\":{\"r\":255,\"g\":0,\"b\":0,\"a\":255,\"canvasWidth\":800,\"canvasHeight\":600}}"
+    },
+    {
+      "test": "[landscape-no-exif.png] no prior fixture's geometry remains (vs previous: portrait-matrix-orientation-8.jpg)",
+      "result": "PASS",
+      "evidence": "{\"current\":{\"w\":800,\"h\":600},\"previous\":{\"w\":600,\"h\":800}}"
+    },
+    {
+      "test": "Real-Browser stale-generation isolation: superseded decode discards, newer decode wins",
+      "result": "PASS",
+      "evidence": "{\"genA\":{\"generationId\":\"gen-A\",\"decodePath\":\"stale-discarded\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":false,\"canonicalWidth\":null,\"canonicalHeight\":null,\"sourceAspectRatio\":null,\"decodeComplete\":false},\"genB\":{\"generationId\":\"gen-B\",\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true}}"
+    },
+    {
+      "test": "No Production writes: decoder/render-only pass never touched Production/Mapping/Controlled-Test state",
+      "result": "PASS",
+      "evidence": "{\"before\":{\"previewSandbox\":{\"exists\":false,\"selectedOutputSource\":null,\"canWriteProduction\":null,\"canExportPreview\":null},\"controlledTest\":{\"canEnterControlledTest\":null}},\"after\":{\"previewSandbox\":{\"exists\":false,\"selectedOutputSource\":null,\"canWriteProduction\":null,\"canExportPreview\":null},\"controlledTest\":{\"canEnterControlledTest\":null}}}"
+    },
+    {
+      "test": "Zero page errors across the decoder/render suite",
+      "result": "PASS",
+      "evidence": "(none)"
+    },
+    {
+      "test": "Zero non-allowed Network requests (data:/about: only)",
+      "result": "PASS",
+      "evidence": "[]"
     }
   ],
-  "decision": "BROWSER_BINARY_UNAVAILABLE"
+  "decision": "PASS",
+  "decisionReasons": []
 }

@@ -124,6 +124,8 @@ const state = {
   // rerenderAppShellForLocale()'s declarative sweep and needs its own
   // explicit re-render hook.
   lastAnalysisBoxSummaryData: null,
+  lastReviewAnnouncement: null,
+  lastBuildAnnouncement: null,
   lastProcessingLog: null,
   curveEditor: null,
   // DEPLOY GEOMETRY R1 — Phase B1: the currently-selected File, retained
@@ -646,9 +648,9 @@ waitForRoot(() => {
   const hslCard  = document.getElementById('hslCard');
   const gradCard = document.getElementById('gradCard');
   const calCard  = document.getElementById('calCard');
-  if (hslCard)  renderHSLPanel(hslCard);
-  if (gradCard) renderGradingPanel(gradCard);
-  if (calCard)  renderCalibrationPanel(calCard);
+  if (hslCard)  renderHSLPanel(hslCard, state.lang);
+  if (gradCard) renderGradingPanel(gradCard, state.lang);
+  if (calCard)  renderCalibrationPanel(calCard, state.lang);
 
   bindSliders(document.body);
   window.switchTab = switchTab;
@@ -815,16 +817,25 @@ function closeLangModal() { const m = document.getElementById('langModal');  if 
  */
 function _buildAnalysisBoxOkHtml(data, lang) {
   if (!data || typeof data !== 'object') return '';
-  const { category, portraitSafe, wbTempFinal, wbTempRaw, wbTintFinal, wbTintRaw, wbConfidence, wbNeutralPixelCount, skinPct, skinSource, fingerprintMatchPct, benchmarkText, clampsApplied, violations, benchmarkWarnings } = data;
-  const prefix = `<strong>${t('analysisBox.analysisComplete', null, lang)} — ${category}${portraitSafe ? ' · Portrait Safe ✓' : ''}</strong><br><small>`;
-  const body = `WB Temp: ${wbTempFinal} (raw ${wbTempRaw}) · Tint: ${wbTintFinal} (raw ${wbTintRaw}) · ` +
-    `Confidence: ${wbConfidence}% · Neutral px: ${wbNeutralPixelCount} · ` +
-    `Skin: ${skinPct}% (${skinSource}) · ` +
-    `Style Fingerprint match: ${fingerprintMatchPct}%` +
-    `${benchmarkText ? ` · ${benchmarkText}` : ''}` +
-    `${clampsApplied?.length ? '<br><span style="color:var(--warn)">Clamps: ' + clampsApplied.join(' | ') + '</span>' : ''}` +
-    `${violations?.length ? '<br><span style="color:var(--warn)">Pre-XMP corrections: ' + violations.join(', ') + '</span>' : ''}` +
-    `${benchmarkWarnings?.length ? '<br><span style="color:var(--warn)">Benchmark warnings: ' + benchmarkWarnings.slice(0, 2).join(' | ') + '</span>' : ''}`;
+  const { category, portraitSafe, wbTempFinal, wbTempRaw, wbTintFinal, wbTintRaw, wbConfidence, wbNeutralPixelCount, skinPct, skinSource, fingerprintMatchPct, styleSimilarityPct, safetyPct, clampsApplied, violations, benchmarkWarnings } = data;
+  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[ch]));
+  const prefix = `<strong>${esc(t('analysisBox.analysisComplete', null, lang))} — ${esc(category)}${portraitSafe ? ` · ${esc(t('appShell.analysisPortraitSafe', null, lang))} ✓` : ''}</strong><br><small>`;
+  const rows = [
+    `${t('appShell.analysisWbTemp', null, lang)}: ${esc(wbTempFinal)} (${t('appShell.analysisRaw', null, lang)} ${esc(wbTempRaw)})`,
+    `${t('appShell.analysisTint', null, lang)}: ${esc(wbTintFinal)} (${t('appShell.analysisRaw', null, lang)} ${esc(wbTintRaw)})`,
+    `${t('appShell.analysisConfidence', null, lang)}: ${esc(wbConfidence)}%`,
+    `${t('appShell.analysisNeutralPixels', null, lang)}: ${esc(wbNeutralPixelCount)}`,
+    `${t('appShell.analysisSkin', null, lang)}: ${esc(skinPct)}% (${esc(skinSource)})`,
+    `${t('appShell.analysisStyleFingerprint', null, lang)}: ${esc(fingerprintMatchPct)}%`,
+  ];
+  if (Number.isFinite(styleSimilarityPct)) rows.push(`${t('appShell.analysisStyleSimilarity', null, lang)}: ${styleSimilarityPct}%`);
+  if (Number.isFinite(safetyPct)) rows.push(`${t('appShell.analysisSafety', null, lang)}: ${safetyPct}%`);
+  let body = rows.join(' · ');
+  const technical = [];
+  if (Array.isArray(clampsApplied) && clampsApplied.length) technical.push(`${t('appShell.analysisClamps', null, lang)}: ${clampsApplied.map(esc).join(' | ')}`);
+  if (Array.isArray(violations) && violations.length) technical.push(`${t('appShell.analysisCorrections', null, lang)}: ${violations.map(esc).join(', ')}`);
+  if (Array.isArray(benchmarkWarnings) && benchmarkWarnings.length) technical.push(`${t('appShell.analysisWarnings', null, lang)}: ${benchmarkWarnings.slice(0, 2).map(esc).join(' | ')}`);
+  if (technical.length) body += `<details style="margin-top:6px"><summary>${esc(t('appShell.analysisDeveloperDetails', null, lang))}</summary><span style="color:var(--warn)">${technical.join('<br>')}</span></details>`;
   return `${prefix}${body}</small>`;
 }
 
@@ -856,9 +867,48 @@ function rerenderAppShellForLocale(lang) {
   return { textApplied, placeholderApplied };
 }
 
+function _presentReviewAnnouncement(presentation, lang) {
+  if (!presentation || typeof presentation.code !== 'string') return '';
+  const key = `review.announcement.${presentation.code}`;
+  const text = t(key, presentation.params || null, lang);
+  return text === key ? '' : text;
+}
+
+function _presentBuildAnnouncement(presentation, lang) {
+  if (!presentation || typeof presentation.code !== 'string') return '';
+  if (presentation.code === 'SAFETY_RESTRAINT') return t('review.outcome.safetyRestraint', null, lang);
+  if (presentation.code === 'IDENTITY_FALLBACK') return t('review.outcome.identityFallback', null, lang);
+  if (presentation.code === 'BLOCKED') {
+    const reason = presentBlockerCode(presentation.params?.blockerCode, lang);
+    return t('review.outcome.blocked', { reason }, lang);
+  }
+  if (presentation.code === 'UNAVAILABLE') return t('review.outcome.unavailable', null, lang);
+  return '';
+}
+
+function _setLiveRegionWithoutLocaleAnnouncement(id, text) {
+  const node = document.getElementById(id);
+  if (!node) return;
+  const previous = node.getAttribute('aria-live');
+  node.setAttribute('aria-live', 'off');
+  node.textContent = text || '';
+  queueMicrotask(() => {
+    if (!node.isConnected) return;
+    if (previous == null) node.removeAttribute('aria-live'); else node.setAttribute('aria-live', previous);
+  });
+}
+
+function _rerenderPersistentAnnouncementsForLocale() {
+  _setLiveRegionWithoutLocaleAnnouncement('reviewConsoleLiveRegion', _presentReviewAnnouncement(state.lastReviewAnnouncement, state.lang));
+  _setLiveRegionWithoutLocaleAnnouncement('buildControlledV2LiveRegion', _presentBuildAnnouncement(state.lastBuildAnnouncement, state.lang));
+}
+
 function rerenderCurrentUiForLocale() {
   // App shell first: nav, buttons, section titles, upload area, tips.
   try { rerenderAppShellForLocale(state.lang); } catch (err) { console.warn('Locale re-render: app shell failed (other sections unaffected):', err); }
+  try { _rerenderPersistentAnnouncementsForLocale(); } catch (err) { console.warn('Locale re-render: live announcements failed:', err); }
+  try { const panel = document.getElementById('analysisInner'); if (panel?.__lumixaAnalysisStats) renderAnalysisPanel(panel, panel.__lumixaAnalysisStats, state.lang); } catch (err) { console.warn('Locale re-render: Analysis panel labels failed:', err); }
+  try { const success = document.getElementById('successMsg'); if (success && success.style.display !== 'none') success.textContent = t('appShell.downloadSuccess', null, state.lang); } catch (err) { console.warn('Locale re-render: download status failed:', err); }
 
   // R4 Phase C: the persistent "AI Box" analysis-complete summary is
   // innerHTML-injected (not a data-i18n-key element), so it falls
@@ -925,7 +975,7 @@ function rerenderCurrentUiForLocale() {
 
 function setLang(lang) {
   const normalizedLang = lang === 'th' ? 'th' : 'en';
-  state.lang = normalizedLang; localStorage.setItem('lang', normalizedLang);
+  state.lang = normalizedLang; localStorage.setItem('lang', normalizedLang); document.documentElement.lang = normalizedLang;
   document.querySelectorAll('.lang-opt').forEach(o => {
     const active = o.dataset.lang === normalizedLang;
     o.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
@@ -1374,31 +1424,31 @@ async function handleBuildControlledV2Preview() {
   const translationMode = vprBelongsToThisGeneration ? (vprState?.metadata?.controlledV2Translation?.mode ?? null) : null;
   const overallState = vprBelongsToThisGeneration ? (vprState?.state ?? null) : null;
 
-  let outcomeText;
+  let outcomePresentation;
   if (overallState === 'cancelled') {
     // Cancellation means a newer render superseded this one -- treat
     // exactly like a stale generation: no announcement.
     return;
   } else if (overallState === 'rendered' && translationMode === 'legacy-derived-safety-restraint') {
-    outcomeText = t('review.outcome.safetyRestraint', null, state.lang);
+    outcomePresentation = { code: 'SAFETY_RESTRAINT', params: {}, category: 'build-controlled-v2', generationId: _announceGeneration };
   } else if (overallState === 'rendered' && translationMode === 'identity-fallback') {
-    outcomeText = t('review.outcome.identityFallback', null, state.lang);
+    outcomePresentation = { code: 'IDENTITY_FALLBACK', params: {}, category: 'build-controlled-v2', generationId: _announceGeneration };
   } else if (vprBelongsToThisGeneration && Array.isArray(vprState?.blockerCodes) && vprState.blockerCodes.length > 0) {
     // Blocked/failed/partial/unavailable with a known, exact blocker
     // reason -- announce the SPECIFIC reason rather than a generic
     // "not ready" sentence, per R4 Phase G/H.
-    const reasonText = presentBlockerCode(vprState.blockerCodes[0], state.lang);
-    outcomeText = t('review.outcome.blocked', { reason: reasonText }, state.lang);
+    outcomePresentation = { code: 'BLOCKED', params: { blockerCode: vprState.blockerCodes[0] }, category: 'build-controlled-v2', generationId: _announceGeneration };
   } else {
     // Genuinely no evidence at all (no controller, no state, or a
     // resolved-but-blocker-code-less state) -- the only case where the
     // generic "analysis complete but preview not ready" message is
     // honest.
-    outcomeText = t('review.outcome.unavailable', null, state.lang);
+    outcomePresentation = { code: 'UNAVAILABLE', params: {}, category: 'build-controlled-v2', generationId: _announceGeneration };
   }
 
+  state.lastBuildAnnouncement = outcomePresentation;
   const liveRegion = document.getElementById('buildControlledV2LiveRegion');
-  if (liveRegion) liveRegion.textContent = outcomeText;
+  if (liveRegion) liveRegion.textContent = _presentBuildAnnouncement(outcomePresentation, state.lang);
 
   const vprSec = document.getElementById('visualPreviewComparisonSection');
   if (vprSec && vprSec.style.display !== 'none' && typeof vprSec.scrollIntoView === 'function') {
@@ -1444,8 +1494,10 @@ function ensureReviewConsoleController() {
     // boundary before ever reaching the live region -- the raw
     // English is the fallback only for an unrecognized message.
     announce: (message) => {
+      const code = _REVIEW_CONTROLLER_ANNOUNCEMENT_CODES[message] || null;
+      state.lastReviewAnnouncement = code ? { code, params: {}, category: 'review-action', generationId: analysisGenerationId } : null;
       const liveRegion = document.getElementById('reviewConsoleLiveRegion');
-      if (liveRegion) liveRegion.textContent = _translateReviewControllerAnnouncement(message, state.lang);
+      if (liveRegion) liveRegion.textContent = code ? _presentReviewAnnouncement(state.lastReviewAnnouncement, state.lang) : _translateReviewControllerAnnouncement(message, state.lang);
     },
   });
 }
@@ -2488,7 +2540,7 @@ async function runAnalysis() {
     if (calibration){ showSection('calibrationSection');requestAnimationFrame(() => { const c=document.getElementById('calibrationCanvas'); if(c) renderCalibration(c, calibration, {dark:state.darkMode}); }); }
 
     const analysisContainer = document.getElementById('analysisInner');
-    if (analysisContainer) renderAnalysisPanel(analysisContainer, buildAnalysisDisplay(stats, finalPreset));
+    if (analysisContainer) renderAnalysisPanel(analysisContainer, buildAnalysisDisplay(stats, finalPreset), state.lang);
 
     const dec = finalPreset._decision;
     const val = finalPreset._validation;
@@ -2509,7 +2561,8 @@ async function runAnalysis() {
       wbNeutralPixelCount: wb_d.neutralPixelCount,
       skinPct: dec.skinPct, skinSource: dec.skinSource,
       fingerprintMatchPct: Math.round((val?.fingerprintMatchScore ?? 1) * 100),
-      benchmarkText: bench ? `Style Similarity: ${Math.round(bench.overallStyleSimilarity*100)}% (safety ${Math.round(bench.safetyScore*100)}%)` : null,
+      styleSimilarityPct: bench ? Math.round(bench.overallStyleSimilarity * 100) : null,
+      safetyPct: bench ? Math.round(bench.safetyScore * 100) : null,
       clampsApplied: dec.clampsApplied ?? [],
       violations: val?.violations ?? [],
       benchmarkWarnings: bench?.warnings ?? [],
@@ -2871,10 +2924,10 @@ function handleDownload() {
   if (safety.adjustments.length) {
     console.debug('[Pre-XMP Validation · Export]', safety.adjustments);
     const msgEl = document.getElementById('successMsg');
-    if (msgEl) msgEl.innerHTML = `✅ ดาวน์โหลดแล้ว! <span style="opacity:.85">(ปรับ ${safety.adjustments.length} ค่าเพื่อความปลอดภัยของสไตล์)</span>`;
+    if (msgEl) msgEl.textContent = t('appShell.downloadSafetyAdjustments', { count: safety.adjustments.length }, state.lang);
   } else {
     const msgEl = document.getElementById('successMsg');
-    if (msgEl) msgEl.innerHTML = '✅ ดาวน์โหลดแล้ว!';
+    if (msgEl) msgEl.textContent = t('appShell.downloadSuccess', null, state.lang);
   }
 
   const xmp    = serializeXMP(preset);

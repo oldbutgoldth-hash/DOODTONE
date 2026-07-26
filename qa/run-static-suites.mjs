@@ -85,6 +85,8 @@ const STATIC_SUITES = [
   // own regression guard against the R4 defect classes (A, B, C, D, F,
   // G, L) ever silently recurring.
   'qa/epic-2e-j-r4-locale-runtime-truth-static-test.mjs',
+  // FINAL LOCALE CLOSURE + SEMANTIC QA R5.
+  'qa/epic-2e-j-r5-semantic-presentation-static-test.mjs',
 ];
 
 let anyFailed = false;

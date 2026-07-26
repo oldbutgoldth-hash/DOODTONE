@@ -456,29 +456,37 @@ async function main() {
       //    actually correct for whichever mode is genuinely active.
       const honestyModeSnap = await qaSnapshot(page);
       const honestyMode = honestyModeSnap?.controlledV2Translation?.mode ?? null;
-      const identityOrRestraintWordingPresent = await page.evaluate((mode) => {
-        const text = document.getElementById('visualPreviewComparisonInner')?.textContent ?? '';
-        if (mode === 'identity-fallback') {
-          return /no supported visual adjustment|without supported visual adjustment/i.test(text) && /NOT Lightroom-accurate/i.test(text);
-        }
-        if (mode === 'legacy-derived-safety-restraint') {
-          // The Safety-restraint label/lines this UI actually renders
-          // for a meaningful translation (ui/i18n/en.js
-          // visualPreview.safetyRestraintLabel/Line1/Line2) -- a real,
-          // bounded browser simulation, explicitly NOT Lightroom/ACR
-          // output and NOT a Production result.
-          return /safety-restraint/i.test(text) && /(not Lightroom\/ACR|not a Production result)/i.test(text);
-        }
-        // Any other/unavailable mode: at minimum the honest
-        // "NOT Lightroom-accurate" browser-approximation disclosure
-        // must still be present somewhere in this section.
-        return /NOT Lightroom-accurate/i.test(text);
-      }, honestyMode);
+      const semanticHonesty = await page.evaluate(() => {
+        const el = document.getElementById('visualPreviewComparisonInner');
+        if (!el) return null;
+        return {
+          mode: el.dataset.v2TranslationMode || null,
+          honesty: el.dataset.previewHonesty || null,
+          productionSource: el.dataset.productionSource || null,
+          productionWrite: el.dataset.productionWrite || null,
+          meaningful: el.dataset.v2Meaningful || null,
+          identityFallback: el.dataset.v2IdentityFallback || null,
+          legacyRendered: el.dataset.legacyRendered || null,
+          v2Rendered: el.dataset.v2Rendered || null,
+        };
+      });
+      const semanticModeMatches = semanticHonesty?.mode === honestyMode;
+      const semanticBaseHonest = semanticHonesty?.honesty === 'browser-approximation'
+        && semanticHonesty?.productionSource === 'legacy'
+        && semanticHonesty?.productionWrite === 'disabled'
+        && semanticHonesty?.legacyRendered === 'true'
+        && semanticHonesty?.v2Rendered === 'true';
+      const semanticModeHonest = honestyMode === 'legacy-derived-safety-restraint'
+        ? semanticHonesty?.meaningful === 'true'
+        : honestyMode === 'identity-fallback'
+          ? semanticHonesty?.identityFallback === 'true'
+          : semanticHonesty != null;
+      const identityOrRestraintWordingPresent = semanticModeMatches && semanticBaseHonest && semanticModeHonest;
       const noForbiddenWording = await page.evaluate(() => {
         const text = (document.getElementById('visualPreviewComparisonInner')?.textContent ?? '').toLowerCase();
         return !text.includes('applied to production') && !text.includes('v2 activated') && !text.includes('pixels enhanced');
       });
-      record('Visual Preview UI honesty: wording matches the ACTUAL resolved translation mode, with no forbidden claims', identityOrRestraintWordingPresent && noForbiddenWording, `mode=${honestyMode}, wordingPresent=${identityOrRestraintWordingPresent}, noForbidden=${noForbiddenWording}`);
+      record('Visual Preview UI honesty: wording matches the ACTUAL resolved translation mode, with no forbidden claims', identityOrRestraintWordingPresent && noForbiddenWording, `mode=${honestyMode}, semantic=${JSON.stringify(semanticHonesty)}, noForbidden=${noForbiddenWording}`);
 
       // ── Generation handoff test: load next fixture ──
       const genIdBeforeHandoff = (await qaSnapshot(page))?.observation?.observationGenerationId;

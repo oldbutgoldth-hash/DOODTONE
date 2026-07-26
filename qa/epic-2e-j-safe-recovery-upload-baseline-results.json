@@ -1,25 +1,108 @@
 {
   "suite": "SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 1B: Baseline Upload Contract",
-  "runId": "c620873d-d7d5-4416-aabe-4affc14c28fb",
-  "startedAt": "2026-07-26T07:59:32.490Z",
-  "completedAt": "2026-07-26T07:59:32.490Z",
+  "runId": "c2ed5006-5f79-4795-a727-bf414b69accd",
+  "startedAt": "2026-07-26T13:47:35.495Z",
+  "completedAt": "2026-07-26T13:47:40.882Z",
   "completed": true,
-  "sourceHash": null,
+  "sourceHash": "39cef6e0ad877ec5060847b6f31a83a700733d556d0fd4aa389d6951b3089abd",
   "browserExecutablePath": null,
-  "browserVersion": null,
-  "generatedAt": "2026-07-26T07:59:32.490Z",
-  "summary": {
-    "total": 1,
-    "pass": 0,
-    "fail": 0,
-    "notTested": 1
-  },
   "results": [
     {
-      "test": "Browser environment availability",
-      "result": "NOT_TESTED",
-      "evidence": "No usable Browser executable found among 6 candidates."
+      "test": "1. Application reachable (about:blank?qa=1, in-memory harness)",
+      "result": "PASS",
+      "evidence": "page loaded"
+    },
+    {
+      "test": "2. Upload area (#uploadWrap) visible before any upload",
+      "result": "PASS",
+      "evidence": "visible=true"
+    },
+    {
+      "test": "3. setInputFiles() called on real #fileIn (fixture A)",
+      "result": "PASS",
+      "evidence": "/mnt/data/lumixa_r5_work/qa/fixtures/epic-2e-j/neutral-balanced.png"
+    },
+    {
+      "test": "4. #uploadWrap hides after upload",
+      "result": "PASS",
+      "evidence": "hidden=true"
+    },
+    {
+      "test": "5. #previewWrap shows after upload",
+      "result": "PASS",
+      "evidence": "shown=true"
+    },
+    {
+      "test": "6. #previewImg.src is non-empty",
+      "result": "PASS",
+      "evidence": "nonEmpty=true"
+    },
+    {
+      "test": "7. #previewImg load/decode completes (naturalWidth/Height > 0)",
+      "result": "PASS",
+      "evidence": "complete=true"
+    },
+    {
+      "test": "8. state.imageLoaded === true via public ?qa=1 hook",
+      "result": "PASS",
+      "evidence": "imageLoaded=true"
+    },
+    {
+      "test": "9. runAnalysis begins (analysisGeneration increments)",
+      "result": "PASS",
+      "evidence": "generation 0 -> 1"
+    },
+    {
+      "test": "10. Analysis reaches a completed visible state (previewSandbox exists)",
+      "result": "PASS",
+      "evidence": "previewSandbox.exists=true"
+    },
+    {
+      "test": "11. #sliders and #analysisGroups visible after analysis",
+      "result": "PASS",
+      "evidence": "visible=true"
+    },
+    {
+      "test": "15. Re-analyze produces a new completed generation",
+      "result": "PASS",
+      "evidence": "generation 1 -> 2"
+    },
+    {
+      "test": "13. Selecting a second image (fixture B) also completes analysis",
+      "result": "PASS",
+      "evidence": "generation 2 -> 3"
+    },
+    {
+      "test": "16. Rapid upload A-then-B settles on ONE final completed generation (no stale mix)",
+      "result": "PASS",
+      "evidence": "generation 3 -> 4"
+    },
+    {
+      "test": "14. Reset returns to upload state",
+      "result": "PASS",
+      "evidence": "uploadVisible=true"
+    },
+    {
+      "test": "17. Reset works a second time (not a one-shot fix)",
+      "result": "PASS",
+      "evidence": "uploadVisible=true"
+    },
+    {
+      "test": "12. Page errors === 0",
+      "result": "PASS",
+      "evidence": "(none)"
+    },
+    {
+      "test": "12. Console errors === 0",
+      "result": "PASS",
+      "evidence": "(none)"
     }
   ],
-  "decision": "BROWSER_BINARY_UNAVAILABLE"
+  "summary": {
+    "total": 18,
+    "pass": 18,
+    "fail": 0,
+    "notTested": 0
+  },
+  "decision": "PASS_UPLOAD_BASELINE"
 }

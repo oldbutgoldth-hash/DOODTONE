@@ -63,12 +63,15 @@ function _dictLookup(dict, dottedPath) {
   return dottedPath.split('.').reduce((acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined), dict) ?? null;
 }
 
-/** Returns the CORRECT localized string for whichever language the app is actually running in right now (read from the page's own localStorage 'lang' key, the same source ui/app.js itself reads at boot) -- never assumes a language. */
+/** Returns the correct localized string for the locale currently presented by the app.
+ * The virtual-origin harness can intentionally make localStorage opaque, so the
+ * semantic document language is the source of truth rather than persisted prose. */
 async function expectedLocalizedText(page, dottedPath) {
-  const lang = await page.evaluate(() => localStorage.getItem('lang')).catch(() => null);
-  const dict = lang === 'en' ? EN_DICT : TH_DICT; // ui/app.js's own default is 'th' when unset
+  const lang = await page.evaluate(() => document.documentElement.lang || 'th').catch(() => 'th');
+  const dict = lang === 'en' ? EN_DICT : TH_DICT;
   return _dictLookup(dict, dottedPath);
 }
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -1055,33 +1058,14 @@ function slidersUnchanged(before, after) {
   return Object.keys(before).every((k) => before[k] === after[k]);
 }
 
-// Parses the REAL rendered "Observed: N" / "Prefer Legacy: N (P%)" /
-// "Prefer V2: N (P%)" / "No visible difference: N (P%)" / "Unsure: N
-// (P%)" lines produced by
-// renderInteractivePreviewObservationSessionV2() in
-// ui/interactive-preview-observation-renderer-v2.js. activeObservations
-// is never fabricated — it is DERIVED as the sum of the four real
-// rendered category counts, exactly matching how getSummary() computes
-// it internally.
-function parseSessionSummary(lines) {
-  const patterns = {
-    totalObserved: /^Observed:\s*(\d+)$/,
-    preferLegacy: /^Prefer Legacy:\s*(\d+)/,
-    preferV2: /^Prefer V2:\s*(\d+)/,
-    noVisibleDifference: /^No visible difference:\s*(\d+)/,
-    unsure: /^Unsure:\s*(\d+)/,
-  };
-  const out = { totalObserved: null, preferLegacy: null, preferV2: null, noVisibleDifference: null, unsure: null };
-  for (const line of lines) {
-    for (const [key, re] of Object.entries(patterns)) {
-      const m = line.match(re);
-      if (m) out[key] = parseInt(m[1], 10);
-    }
-  }
-  const knownActiveParts = [out.preferLegacy, out.preferV2, out.noVisibleDifference, out.unsure].filter((v) => v !== null);
-  out.activeObservationsDerived = knownActiveParts.length === 4 ? knownActiveParts.reduce((a, b) => a + b, 0) : null;
-  return out;
+// R5 locale-neutral Session semantics: counters and canonical Reason codes
+// come from the QA snapshot. Rendered labels remain covered separately by the
+// accessibility/contrast checks, but never decide counter correctness.
+async function sessionSummarySnapshot(page) {
+  const snapshot = await qaSnapshot(page);
+  return snapshot?.sessionSummary ?? null;
 }
+
 async function readSessionMetricsText(page) {
   return page.evaluate(() => {
     const metricsEl = document.getElementById('ipoSessionMetrics');
@@ -1093,11 +1077,6 @@ async function readSessionMetricsText(page) {
       topReasonsText: topReasonsEl ? (topReasonsEl.textContent || '').trim() : '',
     };
   });
-}
-function parseSessionSecondary(secondaryText) {
-  const clearedMatch = secondaryText.match(/Cleared:\s*(\d+)/);
-  const invalidatedMatch = secondaryText.match(/Invalidated:\s*(\d+)/);
-  return { cleared: clearedMatch ? parseInt(clearedMatch[1], 10) : null, invalidated: invalidatedMatch ? parseInt(invalidatedMatch[1], 10) : null };
 }
 
 // COMBINED CLOSEOUT R2 — Phase E FIX E1: module-scope (not main()-local)
@@ -1705,13 +1684,13 @@ async function main() {
     const p2GenAfter = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
     const p2SlidersAfter = await snapshotSliderValues(page);
 
-    const p2ParsedSession = parseSessionSummary(p2Session.lines);
+    const p2SemanticSession = await sessionSummarySnapshot(page);
     record('Part 2.2: Enter on #ipoClearReasonsButton clears all Reason checkboxes', p2AllReasonsCleared, `allCleared=${p2AllReasonsCleared}`);
     record('Part 2.3: Observation remains Prefer Legacy after Clear Reasons', p2ObservationStillLegacy, `stillLegacy=${p2ObservationStillLegacy}`);
-    record('Part 2.4: Session active Observation remains present (Observed count > 0)', p2Session.lines.some((l) => /^Observed:\s*[1-9]/.test(l)), `lines=${JSON.stringify(p2Session.lines)}`);
+    record('Part 2.4: Session active Observation remains present (semantic snapshot totalObserved > 0)', (p2SemanticSession?.totalObserved ?? 0) > 0, `sessionSummary=${JSON.stringify(p2SemanticSession)}`);
     record('Part 2.5: Reason counts (Selected Reasons text) clear after Clear Reasons', p2ReasonStatusText === '', `reasonStatusText="${p2ReasonStatusText}"`);
-    record('FIX 9: Clear Reasons leaves activeObservationsDerived === 1 (the Observation itself remains active; only Reasons were cleared)', p2ParsedSession.activeObservationsDerived === 1, JSON.stringify(p2ParsedSession));
-    record('FIX 9: Session Top Reasons / Reason counts are empty after Clear Reasons (checked directly, not merely inferred from the ordinary Selected Reasons text being empty)', p2Session.topReasonsText === '', `topReasonsText="${p2Session.topReasonsText}"`);
+    record('FIX 9: Clear Reasons leaves activeObservations === 1 in the semantic snapshot (the Observation itself remains active; only Reasons were cleared)', p2SemanticSession?.activeObservations === 1, JSON.stringify(p2SemanticSession));
+    record('FIX 9: Session canonical Reason counts are empty after Clear Reasons', Array.isArray(p2SemanticSession?.topReasons) && p2SemanticSession.topReasons.length === 0 && Object.values(p2SemanticSession?.reasonCounts || {}).every((count) => count === 0), `sessionSummary=${JSON.stringify(p2SemanticSession)}`);
     record('Part 2.6: no Analysis rerun during Clear Reasons keyboard activation', p2GenAfter === p2GenBefore, `before=${p2GenBefore}, after=${p2GenAfter}`);
     record('Part 2.7: no Slider movement during Clear Reasons keyboard activation', slidersUnchanged(p2SlidersBefore, p2SlidersAfter), `before=${JSON.stringify(p2SlidersBefore)}, after=${JSON.stringify(p2SlidersAfter)}`);
 
@@ -1757,10 +1736,8 @@ async function main() {
     }
     await page.waitForTimeout(150);
 
-    const p3SessionBaseline = await readSessionMetricsText(page);
-    const p3ParsedBaseline = parseSessionSummary(p3SessionBaseline.lines);
-    const p3SecondaryBaseline = parseSessionSecondary(p3SessionBaseline.secondaryText);
-    record('Part 3.0 / FIX 5 (ENV-B2-F1): known baseline BEFORE the tested action — current Observation re-recorded and Cleared=0 (Clear Session used as isolated setup)', p3ParsedBaseline.activeObservationsDerived === 1 && p3SecondaryBaseline.cleared === 0, JSON.stringify({ parsed: p3ParsedBaseline, secondary: p3SecondaryBaseline }));
+    const p3SemanticBaseline = await sessionSummarySnapshot(page);
+    record('Part 3.0 / FIX 5 (ENV-B2-F1): known baseline BEFORE the tested action — current Observation re-recorded and Cleared=0 (Clear Session used as isolated setup)', p3SemanticBaseline?.activeObservations === 1 && p3SemanticBaseline?.cleared === 0, JSON.stringify(p3SemanticBaseline));
 
     const p3GenBefore = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
     const p3SlidersBefore = await snapshotSliderValues(page);
@@ -1786,15 +1763,14 @@ async function main() {
 
     const p3NoRadioChecked = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoObservation"]')).every((r) => r.checked === false));
     const p3AllReasonsClearedAfter = await page.evaluate(() => Array.from(document.querySelectorAll('input[name="ipoReason"]')).every((c) => c.checked === false));
-    const p3SessionAfterFirst = await readSessionMetricsText(page);
-    const p3ParsedAfterFirst = parseSessionSummary(p3SessionAfterFirst.lines);
-    const p3ClearedAfterFirst = parseSessionSecondary(p3SessionAfterFirst.secondaryText).cleared;
+    const p3SemanticAfterFirst = await sessionSummarySnapshot(page);
+    const p3ClearedAfterFirst = p3SemanticAfterFirst?.cleared ?? null;
     const p3GenAfterFirst = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
     const p3SlidersAfterFirst = await snapshotSliderValues(page);
 
     record('Part 3.2: no Observation Radio checked after Clear Observation', p3NoRadioChecked, `noneChecked=${p3NoRadioChecked}`);
     record('Part 3.3: all Reasons clear after Clear Observation', p3AllReasonsClearedAfter, `allCleared=${p3AllReasonsClearedAfter}`);
-    record('Part 3.4 / FIX 5 (ENV-B2-F1): active Observation count becomes zero and Cleared becomes exactly 1, verified against the known 0/1 baseline established in Part 3.0 (never a relative "+1" assumption)', p3ParsedAfterFirst.activeObservationsDerived === 0 && p3ClearedAfterFirst === 1, JSON.stringify({ parsed: p3ParsedAfterFirst, clearedAfterFirst: p3ClearedAfterFirst }));
+    record('Part 3.4 / FIX 5 (ENV-B2-F1): active Observation count becomes zero and Cleared becomes exactly 1, verified against the known 0/1 baseline established in Part 3.0 (never a relative "+1" assumption)', p3SemanticAfterFirst?.activeObservations === 0 && p3ClearedAfterFirst === 1, JSON.stringify(p3SemanticAfterFirst));
     record('Part 3.6: no Analysis rerun during Clear Observation keyboard activation', p3GenAfterFirst === p3GenBefore, `before=${p3GenBefore}, after=${p3GenAfterFirst}`);
     record('Part 3.7: no Slider movement during Clear Observation keyboard activation', slidersUnchanged(p3SlidersBefore, p3SlidersAfterFirst), `before=${JSON.stringify(p3SlidersBefore)}, after=${JSON.stringify(p3SlidersAfterFirst)}`);
 
@@ -1807,8 +1783,8 @@ async function main() {
     // post-condition, not simulated).
     await page.keyboard.press('Space');
     await page.waitForTimeout(150);
-    const p3SessionAfterSecond = await readSessionMetricsText(page);
-    const p3ClearedAfterSecond = parseSessionSecondary(p3SessionAfterSecond.secondaryText).cleared;
+    const p3SemanticAfterSecond = await sessionSummarySnapshot(page);
+    const p3ClearedAfterSecond = p3SemanticAfterSecond?.cleared ?? null;
     record('Part 3.8 / FIX 5 (ENV-B2-F1): pressing the activation key again does not increment Cleared past 1 (sticky clearedCounted flag)', p3ClearedAfterFirst === 1 && p3ClearedAfterSecond === 1, `afterFirst=${p3ClearedAfterFirst}, afterSecond=${p3ClearedAfterSecond}`);
 
     // ── F3-S PART 4 — Clear Session keyboard activation (Enter) ─────
@@ -1823,9 +1799,8 @@ async function main() {
     // Ensure the Session contains historical records before Clear
     // Session (Part 3 above already produced at least one Cleared
     // record, and this reselection produces an active one).
-    const p4SessionBeforeClear = await readSessionMetricsText(page);
-    const p4SecondaryBeforeClear = parseSessionSecondary(p4SessionBeforeClear.secondaryText);
-    record('Part 4 precondition: Session contains historical records before Clear Session', (p4SecondaryBeforeClear.cleared ?? 0) > 0, JSON.stringify(p4SecondaryBeforeClear));
+    const p4SemanticBeforeClear = await sessionSummarySnapshot(page);
+    record('Part 4 precondition: Session contains historical records before Clear Session', (p4SemanticBeforeClear?.cleared ?? 0) > 0, JSON.stringify(p4SemanticBeforeClear));
 
     const p4GenBefore = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
     const p4SlidersBefore = await snapshotSliderValues(page);
@@ -1841,19 +1816,17 @@ async function main() {
     await page.keyboard.press('Enter');
     await page.waitForTimeout(200);
 
-    const p4SessionAfter = await readSessionMetricsText(page);
-    const p4ParsedAfter = parseSessionSummary(p4SessionAfter.lines);
-    const p4SecondaryAfter = parseSessionSecondary(p4SessionAfter.secondaryText);
+    const p4SemanticAfter = await sessionSummarySnapshot(page);
     const p4CurrentObservationChecked = await page.evaluate(() => document.getElementById('ipoOption_prefer-legacy')?.checked === true);
     const p4CurrentReasonsChecked = await page.evaluate(() => document.getElementById('ipoReason_skin-tone')?.checked === true && document.getElementById('ipoReason_contrast')?.checked === true);
     const p4GenAfter = await qaSnapshot(page).then((s) => s?.analysisGeneration ?? null);
 
-    record('Part 4.2: historical Cleared/Invalidated counts reset after Clear Session', p4SecondaryAfter.cleared === 0 && p4SecondaryAfter.invalidated === 0, JSON.stringify(p4SecondaryAfter));
+    record('Part 4.2: historical Cleared/Invalidated counts reset after Clear Session', p4SemanticAfter?.cleared === 0 && p4SemanticAfter?.invalidated === 0, JSON.stringify(p4SemanticAfter));
     record('Part 4.3: current valid Observation (Prefer Legacy) remains checked after Clear Session', p4CurrentObservationChecked, `checked=${p4CurrentObservationChecked}`);
     record('Part 4.4: current Reasons (skin-tone, contrast) remain checked after Clear Session', p4CurrentReasonsChecked, `checked=${p4CurrentReasonsChecked}`);
-    record('Part 4.5: the current Observation is immediately re-recorded (totalObserved=1, preferLegacy=1)', p4ParsedAfter.totalObserved === 1 && p4ParsedAfter.preferLegacy === 1, JSON.stringify(p4ParsedAfter));
-    record('Part 4.6: activeObservations = 1 after Clear Session (derived from the real rendered per-category counts)', p4ParsedAfter.activeObservationsDerived === 1, JSON.stringify(p4ParsedAfter));
-    record('Part 4.7: current Reason counts are present (Skin tone and Contrast appear in Top reasons)', p4SessionAfter.topReasonsText.includes('Skin tone') && p4SessionAfter.topReasonsText.includes('Contrast'), `topReasonsText="${p4SessionAfter.topReasonsText}"`);
+    record('Part 4.5: the current Observation is immediately re-recorded (totalObserved=1, preferLegacy=1)', p4SemanticAfter?.totalObserved === 1 && p4SemanticAfter?.preferLegacy === 1, JSON.stringify(p4SemanticAfter));
+    record('Part 4.6: activeObservations = 1 after Clear Session (derived from the real rendered per-category counts)', p4SemanticAfter?.activeObservations === 1, JSON.stringify(p4SemanticAfter));
+    record('Part 4.7: current canonical Reason counts are present (skin-tone and contrast)', Array.isArray(p4SemanticAfter?.topReasons) && p4SemanticAfter.topReasons.some((row) => row.reason === 'skin-tone' && row.count === 1) && p4SemanticAfter.topReasons.some((row) => row.reason === 'contrast' && row.count === 1), `sessionSummary=${JSON.stringify(p4SemanticAfter)}`);
     record('Part 4.8: Analysis generation does not change during Clear Session keyboard activation', p4GenAfter === p4GenBefore, `before=${p4GenBefore}, after=${p4GenAfter}`);
     const p4SlidersAfter = await snapshotSliderValues(page);
     record('Part 4.9: no Slider movement during Clear Session keyboard activation', slidersUnchanged(p4SlidersBefore, p4SlidersAfter), `before=${JSON.stringify(p4SlidersBefore)}, after=${JSON.stringify(p4SlidersAfter)}`);

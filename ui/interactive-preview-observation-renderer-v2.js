@@ -368,20 +368,29 @@ export function renderInteractivePreviewObservationV2(container, state, lang) {
     const candidates = _safeArray(rawWarnings).map((w) => _safeText(w)).filter(Boolean);
     const cancelledMessage = _unavailableReasonMessage('cancelled', lang);
     const providerUnconfirmedText = _providerUnconfirmedWarning(lang);
-    const isStaleWarning = (w) => w === cancelledMessage;
-    const isProviderUnconfirmed = (w) => w === providerUnconfirmedText;
+    // R5: controller warnings are durable semantic codes. Legacy exact prose
+    // remains accepted only as an input-compatibility bridge and is immediately
+    // projected into the current locale before it reaches the DOM.
+    const isStaleWarning = (w) => w === 'stale-generation'
+      || w === cancelledMessage
+      || w === 'The previous observation was cleared because a newer analysis is active.';
+    const isProviderUnconfirmed = (w) => w === 'provider-unconfirmed'
+      || w === providerUnconfirmedText
+      || w === 'Current generation could not be independently confirmed.';
 
-    let primaryWarning = candidates.find(isStaleWarning) ?? null;
+    const staleCandidate = candidates.find(isStaleWarning) ?? null;
+    let primaryWarning = staleCandidate ? cancelledMessage : null;
     let warningTone = 'danger';
     if (!primaryWarning && normalizedState === 'blocked') {
       primaryWarning = null;
     }
     if (!primaryWarning) {
       const providerNotice = candidates.find(isProviderUnconfirmed);
-      if (providerNotice) { primaryWarning = providerNotice; warningTone = 'neutral'; }
+      if (providerNotice) { primaryWarning = providerUnconfirmedText; warningTone = 'neutral'; }
     }
     if (!primaryWarning) {
-      primaryWarning = candidates.find((w) => w !== message) ?? null;
+      const unknownWarning = candidates.find((w) => w !== message);
+      primaryWarning = unknownWarning ? t('observation.genericDiagnosticNotice', null, lang) : null;
       warningTone = 'neutral';
     }
 

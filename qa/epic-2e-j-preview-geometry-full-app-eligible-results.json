@@ -1,25 +1,517 @@
 {
   "suite": "LOCAL-FIRST GEOMETRY R3 -- Phase C2: Full-App Safety-Eligible Geometry suite",
-  "runId": "6bb4e483-b9bf-41a2-8043-92c52b225bb9",
-  "startedAt": "2026-07-26T07:59:35.683Z",
-  "completedAt": "2026-07-26T07:59:35.683Z",
+  "scopeNote": "This suite proves full-app safety-eligible geometry behavior on photo-like fixtures. See qa/epic-2e-j-preview-geometry-decoder-render-test.mjs (Phase C1) for decoder/render-only coverage on synthetic marker fixtures.",
+  "runId": "180319b4-6dd1-44c7-b02f-a1b4f2c5027f",
+  "startedAt": "2026-07-26T13:50:52.987Z",
+  "completedAt": "2026-07-26T13:51:24.324Z",
   "completed": true,
-  "sourceHash": null,
-  "browserExecutablePath": null,
-  "browserVersion": null,
-  "generatedAt": "2026-07-26T07:59:35.683Z",
+  "sourceHash": "a194a2bdcd4ba54c430b95ce68d8a18ba3b418b8db3c0ad057b495ee7a049d86",
+  "browserExecutablePath": "/usr/bin/chromium",
+  "browserVersion": "144.0.7559.96",
+  "generatedAt": "2026-07-26T13:51:24.324Z",
   "summary": {
-    "total": 1,
-    "pass": 0,
+    "total": 99,
+    "pass": 98,
     "fail": 0,
     "notTested": 1
   },
   "results": [
     {
-      "test": "Browser environment availability",
-      "result": "NOT_TESTED",
-      "evidence": "[{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
+      "test": "[ready-landscape-orientation-1.jpg] Step 1-2: upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.747,\"safetyScore\":0.804,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 3: Human Review completed + Re-analyze reaches a new generation",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, generation=2"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 4: current-generation Visual Preview settled",
+      "result": "PASS",
+      "evidence": "{\"interactive\":{\"state\":\"ready\",\"alignmentStatus\":\"Exact dimensions\"},\"visualPreview\":{\"legacyState\":\"renderable\",\"controlledV2State\":\"renderable\"}}"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 5: canGeneratePreview=true (real Safety eligibility, never weakened)",
+      "result": "PASS",
+      "evidence": "canGeneratePreview=true, blockerCode=null"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 5: no hard stop",
+      "result": "PASS",
+      "evidence": "hardStopCount=0"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 5: V2 Render Plan exists",
+      "result": "PASS",
+      "evidence": "{\"generationId\":2,\"sandboxExists\":true,\"humanReviewComplete\":true,\"canGeneratePreview\":true,\"simulatedPreviewPresetAvailable\":true,\"contradictoryEvidence\":false,\"hardStopCount\":0,\"renderPlanExists\":true,\"v2PlanExists\":true,\"v2Available\":true,\"v2Renderable\":true,\"identityFallbackEligible\":false,\"blockerCode\":null}"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 6: Legacy rendered",
+      "result": "PASS",
+      "evidence": "legacyState=renderable"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 7: V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable, v2Renderable=true"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 8: Alignment reports Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 9: Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 10: Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true, state=ready"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 11: Observation selected via real keyboard (focus + Space)",
+      "result": "PASS",
+      "evidence": "keyboardSelectOk=true"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 12: Production remains Legacy; Mapping/Controlled-Test unchanged after Observation",
+      "result": "PASS",
+      "evidence": "{\"before\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false},\"after\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false}}"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 12b: exported XMP text is byte-for-byte unchanged after Observation",
+      "result": "PASS",
+      "evidence": "before=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923, after=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 13: re-analyze produces a fresh, current-generation canonical geometry (no stale commit)",
+      "result": "PASS",
+      "evidence": "{\"generationId\":3,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[ready-landscape-orientation-1.jpg] Step 14: no prior fixture's geometry remains",
+      "result": "NOT_APPLICABLE",
+      "evidence": "first fixture in sequence — no prior fixture to compare against"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 1-2: upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.747,\"safetyScore\":0.804,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 3: Human Review completed + Re-analyze reaches a new generation",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, generation=5"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 4: current-generation Visual Preview settled",
+      "result": "PASS",
+      "evidence": "{\"interactive\":{\"state\":\"ready\",\"alignmentStatus\":\"Exact dimensions\"},\"visualPreview\":{\"legacyState\":\"renderable\",\"controlledV2State\":\"renderable\"}}"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 5: canGeneratePreview=true (real Safety eligibility, never weakened)",
+      "result": "PASS",
+      "evidence": "canGeneratePreview=true, blockerCode=null"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 5: no hard stop",
+      "result": "PASS",
+      "evidence": "hardStopCount=0"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 5: V2 Render Plan exists",
+      "result": "PASS",
+      "evidence": "{\"generationId\":5,\"sandboxExists\":true,\"humanReviewComplete\":true,\"canGeneratePreview\":true,\"simulatedPreviewPresetAvailable\":true,\"contradictoryEvidence\":false,\"hardStopCount\":0,\"renderPlanExists\":true,\"v2PlanExists\":true,\"v2Available\":true,\"v2Renderable\":true,\"identityFallbackEligible\":false,\"blockerCode\":null}"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 6: Legacy rendered",
+      "result": "PASS",
+      "evidence": "legacyState=renderable"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 7: V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable, v2Renderable=true"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 8: Alignment reports Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 9: Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 10: Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true, state=ready"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 11: Observation selected via real keyboard (focus + Space)",
+      "result": "PASS",
+      "evidence": "keyboardSelectOk=true"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 12: Production remains Legacy; Mapping/Controlled-Test unchanged after Observation",
+      "result": "PASS",
+      "evidence": "{\"before\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false},\"after\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false}}"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 12b: exported XMP text is byte-for-byte unchanged after Observation",
+      "result": "PASS",
+      "evidence": "before=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923, after=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 13: re-analyze produces a fresh, current-generation canonical geometry (no stale commit)",
+      "result": "PASS",
+      "evidence": "{\"generationId\":6,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":600,\"canonicalHeight\":800,\"sourceAspectRatio\":0.75,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[ready-portrait-orientation-1.jpg] Step 14: no prior fixture's geometry remains (vs previous: ready-landscape-orientation-1.jpg)",
+      "result": "PASS",
+      "evidence": "{\"current\":{\"generationId\":6,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":600,\"canonicalHeight\":800,\"sourceAspectRatio\":0.75,\"decodeComplete\":true},\"expected\":{\"w\":600,\"h\":800},\"previous\":{\"w\":800,\"h\":600}}"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 1-2: upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.747,\"safetyScore\":0.804,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 3: Human Review completed + Re-analyze reaches a new generation",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, generation=8"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 4: current-generation Visual Preview settled",
+      "result": "PASS",
+      "evidence": "{\"interactive\":{\"state\":\"ready\",\"alignmentStatus\":\"Exact dimensions\"},\"visualPreview\":{\"legacyState\":\"renderable\",\"controlledV2State\":\"renderable\"}}"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 5: canGeneratePreview=true (real Safety eligibility, never weakened)",
+      "result": "PASS",
+      "evidence": "canGeneratePreview=true, blockerCode=null"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 5: no hard stop",
+      "result": "PASS",
+      "evidence": "hardStopCount=0"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 5: V2 Render Plan exists",
+      "result": "PASS",
+      "evidence": "{\"generationId\":8,\"sandboxExists\":true,\"humanReviewComplete\":true,\"canGeneratePreview\":true,\"simulatedPreviewPresetAvailable\":true,\"contradictoryEvidence\":false,\"hardStopCount\":0,\"renderPlanExists\":true,\"v2PlanExists\":true,\"v2Available\":true,\"v2Renderable\":true,\"identityFallbackEligible\":false,\"blockerCode\":null}"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 6: Legacy rendered",
+      "result": "PASS",
+      "evidence": "legacyState=renderable"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 7: V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable, v2Renderable=true"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 8: Alignment reports Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 9: Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 10: Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true, state=ready"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 11: Observation selected via real keyboard (focus + Space)",
+      "result": "PASS",
+      "evidence": "keyboardSelectOk=true"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 12: Production remains Legacy; Mapping/Controlled-Test unchanged after Observation",
+      "result": "PASS",
+      "evidence": "{\"before\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false},\"after\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false}}"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 12b: exported XMP text is byte-for-byte unchanged after Observation",
+      "result": "PASS",
+      "evidence": "before=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923, after=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 13: re-analyze produces a fresh, current-generation canonical geometry (no stale commit)",
+      "result": "PASS",
+      "evidence": "{\"generationId\":9,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[ready-landscape-orientation-3.jpg] Step 14: no prior fixture's geometry remains (vs previous: ready-portrait-orientation-1.jpg)",
+      "result": "PASS",
+      "evidence": "{\"current\":{\"generationId\":9,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true},\"expected\":{\"w\":800,\"h\":600},\"previous\":{\"w\":600,\"h\":800}}"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 1-2: upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.747,\"safetyScore\":0.804,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 3: Human Review completed + Re-analyze reaches a new generation",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, generation=11"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 4: current-generation Visual Preview settled",
+      "result": "PASS",
+      "evidence": "{\"interactive\":{\"state\":\"ready\",\"alignmentStatus\":\"Exact dimensions\"},\"visualPreview\":{\"legacyState\":\"renderable\",\"controlledV2State\":\"renderable\"}}"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 5: canGeneratePreview=true (real Safety eligibility, never weakened)",
+      "result": "PASS",
+      "evidence": "canGeneratePreview=true, blockerCode=null"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 5: no hard stop",
+      "result": "PASS",
+      "evidence": "hardStopCount=0"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 5: V2 Render Plan exists",
+      "result": "PASS",
+      "evidence": "{\"generationId\":11,\"sandboxExists\":true,\"humanReviewComplete\":true,\"canGeneratePreview\":true,\"simulatedPreviewPresetAvailable\":true,\"contradictoryEvidence\":false,\"hardStopCount\":0,\"renderPlanExists\":true,\"v2PlanExists\":true,\"v2Available\":true,\"v2Renderable\":true,\"identityFallbackEligible\":false,\"blockerCode\":null}"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 6: Legacy rendered",
+      "result": "PASS",
+      "evidence": "legacyState=renderable"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 7: V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable, v2Renderable=true"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 8: Alignment reports Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 9: Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 10: Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true, state=ready"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 11: Observation selected via real keyboard (focus + Space)",
+      "result": "PASS",
+      "evidence": "keyboardSelectOk=true"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 12: Production remains Legacy; Mapping/Controlled-Test unchanged after Observation",
+      "result": "PASS",
+      "evidence": "{\"before\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false},\"after\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false}}"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 12b: exported XMP text is byte-for-byte unchanged after Observation",
+      "result": "PASS",
+      "evidence": "before=f451e929cfb3b44bfbada24cc9612a73b666283385db7444e546fc6cc665f42e, after=f451e929cfb3b44bfbada24cc9612a73b666283385db7444e546fc6cc665f42e"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 13: re-analyze produces a fresh, current-generation canonical geometry (no stale commit)",
+      "result": "PASS",
+      "evidence": "{\"generationId\":12,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[ready-landscape-matrix-orientation-6.jpg] Step 14: no prior fixture's geometry remains (vs previous: ready-landscape-orientation-3.jpg)",
+      "result": "PASS",
+      "evidence": "{\"current\":{\"generationId\":12,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true},\"expected\":{\"w\":800,\"h\":600},\"previous\":{\"w\":800,\"h\":600}}"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 1-2: upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.747,\"safetyScore\":0.804,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 3: Human Review completed + Re-analyze reaches a new generation",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, generation=14"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 4: current-generation Visual Preview settled",
+      "result": "PASS",
+      "evidence": "{\"interactive\":{\"state\":\"ready\",\"alignmentStatus\":\"Exact dimensions\"},\"visualPreview\":{\"legacyState\":\"renderable\",\"controlledV2State\":\"renderable\"}}"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 5: canGeneratePreview=true (real Safety eligibility, never weakened)",
+      "result": "PASS",
+      "evidence": "canGeneratePreview=true, blockerCode=null"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 5: no hard stop",
+      "result": "PASS",
+      "evidence": "hardStopCount=0"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 5: V2 Render Plan exists",
+      "result": "PASS",
+      "evidence": "{\"generationId\":14,\"sandboxExists\":true,\"humanReviewComplete\":true,\"canGeneratePreview\":true,\"simulatedPreviewPresetAvailable\":true,\"contradictoryEvidence\":false,\"hardStopCount\":0,\"renderPlanExists\":true,\"v2PlanExists\":true,\"v2Available\":true,\"v2Renderable\":true,\"identityFallbackEligible\":false,\"blockerCode\":null}"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 6: Legacy rendered",
+      "result": "PASS",
+      "evidence": "legacyState=renderable"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 7: V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable, v2Renderable=true"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 8: Alignment reports Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 9: Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 10: Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true, state=ready"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 11: Observation selected via real keyboard (focus + Space)",
+      "result": "PASS",
+      "evidence": "keyboardSelectOk=true"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 12: Production remains Legacy; Mapping/Controlled-Test unchanged after Observation",
+      "result": "PASS",
+      "evidence": "{\"before\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false},\"after\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false}}"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 12b: exported XMP text is byte-for-byte unchanged after Observation",
+      "result": "PASS",
+      "evidence": "before=f451e929cfb3b44bfbada24cc9612a73b666283385db7444e546fc6cc665f42e, after=f451e929cfb3b44bfbada24cc9612a73b666283385db7444e546fc6cc665f42e"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 13: re-analyze produces a fresh, current-generation canonical geometry (no stale commit)",
+      "result": "PASS",
+      "evidence": "{\"generationId\":15,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":600,\"canonicalHeight\":800,\"sourceAspectRatio\":0.75,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[ready-portrait-matrix-orientation-8.jpg] Step 14: no prior fixture's geometry remains (vs previous: ready-landscape-matrix-orientation-6.jpg)",
+      "result": "PASS",
+      "evidence": "{\"current\":{\"generationId\":15,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":600,\"canonicalHeight\":800,\"sourceAspectRatio\":0.75,\"decodeComplete\":true},\"expected\":{\"w\":600,\"h\":800},\"previous\":{\"w\":800,\"h\":600}}"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 1-2: upload + initial Analysis completes",
+      "result": "PASS",
+      "evidence": "{\"exists\":true,\"previewState\":\"awaiting-human-review\",\"confidence\":0.747,\"safetyScore\":0.804,\"canGeneratePreview\":false,\"missingRequirements\":[\"6 required review item(s) still pending.\"],\"failedGateIds\":[\"human-review-complete\"],\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"legacyContextAvailability\":true,\"legacyContextSourceType\":null}"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 3: Human Review completed + Re-analyze reaches a new generation",
+      "result": "PASS",
+      "evidence": "manualVisualButtonsClicked=6, generation=17"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 4: current-generation Visual Preview settled",
+      "result": "PASS",
+      "evidence": "{\"interactive\":{\"state\":\"ready\",\"alignmentStatus\":\"Exact dimensions\"},\"visualPreview\":{\"legacyState\":\"renderable\",\"controlledV2State\":\"renderable\"}}"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 5: canGeneratePreview=true (real Safety eligibility, never weakened)",
+      "result": "PASS",
+      "evidence": "canGeneratePreview=true, blockerCode=null"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 5: no hard stop",
+      "result": "PASS",
+      "evidence": "hardStopCount=0"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 5: V2 Render Plan exists",
+      "result": "PASS",
+      "evidence": "{\"generationId\":17,\"sandboxExists\":true,\"humanReviewComplete\":true,\"canGeneratePreview\":true,\"simulatedPreviewPresetAvailable\":true,\"contradictoryEvidence\":false,\"hardStopCount\":0,\"renderPlanExists\":true,\"v2PlanExists\":true,\"v2Available\":true,\"v2Renderable\":true,\"identityFallbackEligible\":false,\"blockerCode\":null}"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 6: Legacy rendered",
+      "result": "PASS",
+      "evidence": "legacyState=renderable"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 7: V2 rendered (or truthful Identity)",
+      "result": "PASS",
+      "evidence": "controlledV2State=renderable, v2Renderable=true"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 8: Alignment reports Exact dimensions",
+      "result": "PASS",
+      "evidence": "alignmentStatus=Exact dimensions"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 9: Interactive Before/After reaches ready",
+      "result": "PASS",
+      "evidence": "state=ready"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 10: Observation controls enabled",
+      "result": "PASS",
+      "evidence": "enabled=true, state=ready"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 11: Observation selected via real keyboard (focus + Space)",
+      "result": "PASS",
+      "evidence": "keyboardSelectOk=true"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 12: Production remains Legacy; Mapping/Controlled-Test unchanged after Observation",
+      "result": "PASS",
+      "evidence": "{\"before\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false},\"after\":{\"selectedOutputSource\":\"legacy\",\"canWriteProduction\":false,\"canExportPreview\":false,\"canEnterControlledTest\":false}}"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 12b: exported XMP text is byte-for-byte unchanged after Observation",
+      "result": "PASS",
+      "evidence": "before=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923, after=e233c999fb009133d8ee3e4d627e2f97c79e3ddd32144f42038a019004222923"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 13: re-analyze produces a fresh, current-generation canonical geometry (no stale commit)",
+      "result": "PASS",
+      "evidence": "{\"generationId\":18,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true}"
+    },
+    {
+      "test": "[ready-landscape-no-exif.png] Step 14: no prior fixture's geometry remains (vs previous: ready-portrait-matrix-orientation-8.jpg)",
+      "result": "PASS",
+      "evidence": "{\"current\":{\"generationId\":18,\"decodePath\":\"createImageBitmap\",\"encodedOrientation\":null,\"orientationAppliedByDecoder\":true,\"canonicalWidth\":800,\"canonicalHeight\":600,\"sourceAspectRatio\":1.3333333333333333,\"decodeComplete\":true},\"expected\":{\"w\":800,\"h\":600},\"previous\":{\"w\":600,\"h\":800}}"
+    },
+    {
+      "test": "Zero page errors across the entire full-app-eligible suite",
+      "result": "PASS",
+      "evidence": "(none)"
+    },
+    {
+      "test": "Zero console errors across the entire full-app-eligible suite",
+      "result": "PASS",
+      "evidence": "(none)"
+    },
+    {
+      "test": "Zero non-allowed Network requests (data:/about: only)",
+      "result": "PASS",
+      "evidence": "[]"
     }
   ],
-  "decision": "BROWSER_BINARY_UNAVAILABLE"
+  "decision": "PASS",
+  "decisionReasons": []
 }
