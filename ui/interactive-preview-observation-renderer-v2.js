@@ -9,74 +9,74 @@
  * evaluates strings.
  */
 
+import { t } from './i18n/index.js';
+
+// EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase B/J:
+// `value` codes below are internal/stable identifiers (matched against
+// controller state, never displayed) -- only `labelKey` is resolved
+// through the centralized i18n module at render time via `_trOption()`.
 const OBSERVATION_OPTIONS = [
-  { value: 'prefer-legacy', label: 'Prefer Legacy' },
-  { value: 'prefer-v2', label: 'Prefer Controlled V2' },
-  { value: 'no-visible-difference', label: 'No visible difference' },
-  { value: 'unsure', label: 'Unsure' },
+  { value: 'prefer-legacy', labelKey: 'preferLegacy' },
+  { value: 'prefer-v2', labelKey: 'preferV2' },
+  { value: 'no-visible-difference', labelKey: 'noVisibleDifference' },
+  { value: 'unsure', labelKey: 'unsure' },
 ];
 
 // EPIC 2E-J Phase B: reason tags — descriptive UI feedback only.
 const REASON_OPTIONS = [
-  { value: 'skin-tone', label: 'Skin tone' },
-  { value: 'white-balance', label: 'White balance' },
-  { value: 'highlight-detail', label: 'Highlight detail' },
-  { value: 'shadow-detail', label: 'Shadow detail' },
-  { value: 'contrast', label: 'Contrast' },
-  { value: 'color-balance', label: 'Color balance' },
-  { value: 'saturation', label: 'Saturation' },
-  { value: 'natural-look', label: 'Natural look' },
-  { value: 'clarity-detail', label: 'Clarity / detail' },
-  { value: 'no-specific-reason', label: 'No specific reason' },
+  { value: 'skin-tone', labelKey: 'skinTone' },
+  { value: 'white-balance', labelKey: 'whiteBalance' },
+  { value: 'highlight-detail', labelKey: 'highlightDetail' },
+  { value: 'shadow-detail', labelKey: 'shadowDetail' },
+  { value: 'contrast', labelKey: 'contrast' },
+  { value: 'color-balance', labelKey: 'colorBalance' },
+  { value: 'saturation', labelKey: 'saturation' },
+  { value: 'natural-look', labelKey: 'naturalLook' },
+  { value: 'clarity-detail', labelKey: 'clarityDetail' },
+  { value: 'no-specific-reason', labelKey: 'noSpecificReason' },
 ];
-const REASON_LABEL_BY_VALUE = Object.fromEntries(REASON_OPTIONS.map((o) => [o.value, o.label]));
+const REASON_KEY_BY_VALUE = Object.fromEntries(REASON_OPTIONS.map((o) => [o.value, o.labelKey]));
 
-const SELECTED_MESSAGE = {
-  'prefer-legacy': 'Observation recorded: Legacy preview preferred.',
-  'prefer-v2': 'Observation recorded: Controlled V2 preview preferred.',
-  'no-visible-difference': 'Observation recorded: no meaningful visual difference noticed.',
-  unsure: 'Observation recorded: undecided.',
-};
-
-const STATE_MESSAGE = {
-  ready: 'Choose an observation for this comparison.',
-  cleared: 'Observation cleared. Production output was not changed.',
-  disposed: 'Observation is unavailable.',
-};
-
+function _trOptionLabel(value, lang) {
+  const opt = OBSERVATION_OPTIONS.find((o) => o.value === value);
+  return opt ? t(`observation.option.${opt.labelKey}`, null, lang) : '';
+}
+function _trReasonLabel(value, lang) {
+  const key = REASON_KEY_BY_VALUE[value];
+  return key ? t(`observation.reason.${key}`, null, lang) : (typeof value === 'string' ? value : '');
+}
+function _selectedMessage(value, lang) {
+  const known = ['prefer-legacy', 'prefer-v2', 'no-visible-difference', 'unsure'];
+  if (!known.includes(value)) return null;
+  const key = value === 'prefer-legacy' ? 'preferLegacy' : value === 'prefer-v2' ? 'preferV2' : value === 'no-visible-difference' ? 'noVisibleDifference' : 'unsure';
+  return t(`observation.selectedMessage.${key}`, null, lang);
+}
+function _stateMessage(normalizedState, lang) {
+  const known = ['ready', 'cleared', 'disposed'];
+  if (!known.includes(normalizedState)) return null;
+  return t(`observation.stateMessage.${normalizedState}`, null, lang);
+}
 // One honest message per real cause — never a single generic
 // "unavailable" message regardless of the actual reason.
-const UNAVAILABLE_REASON_MESSAGE = {
-  preparing: 'Observation will be available when both previews finish rendering.',
-  partial: 'Observation is unavailable because only one preview rendered.',
-  failed: 'Observation is unavailable because the comparison could not be prepared.',
-  cancelled: 'The previous observation was cleared because a newer analysis is active.',
-  alignment: 'Observation is unavailable because the previews cannot be aligned safely.',
-  'preview-state': 'Observation is unavailable because one preview did not pass its render requirements.',
-  source: 'Observation is unavailable because the preview sources are incomplete.',
-  'missing-generation': 'Observation is unavailable because the current analysis generation is unknown.',
-  'not-ready': 'Observation is available after both previews are ready.',
+const UNAVAILABLE_REASON_KEY = {
+  preparing: 'preparing', partial: 'partial', failed: 'failed', cancelled: 'cancelled',
+  alignment: 'alignment', 'preview-state': 'previewState', source: 'source',
+  'missing-generation': 'missingGeneration', 'not-ready': 'notReady',
   // DEPLOY GEOMETRY R1 — Phase D: must match the controller's own
   // UNAVAILABLE_REASON_MESSAGE['pixel-mismatch'] exactly (same
   // rationale documented there).
-  'pixel-mismatch': 'Observation is unavailable because exact pixel dimensions between the two previews have not been proven.',
+  'pixel-mismatch': 'pixelMismatch',
 };
-const SAFETY_BLOCKED_MESSAGE = 'Observation is unavailable while the comparison is blocked by a safety anomaly.';
+function _unavailableReasonMessage(reasonCode, lang) {
+  const key = UNAVAILABLE_REASON_KEY[reasonCode];
+  return key ? t(`observation.unavailableReason.${key}`, null, lang) : null;
+}
 // Must match the controller's own PROVIDER_UNCONFIRMED_WARNING text
-// exactly, for priority matching.
-const PROVIDER_UNCONFIRMED_WARNING = 'Current generation could not be independently confirmed.';
-
-const SAFETY_NOTE = 'Observation only \u00B7 Legacy remains production \u00B7 XMP unchanged';
-const V2_REMINDER = 'Controlled V2 remains non-production.';
-const REASON_DETAILS_NOTE = 'Observation details stay in this page session only and do not change production output.';
-const REASON_LIMIT_MESSAGE = 'You can select up to five reasons.';
-// Step 7B-B-F3-P1 FIX 4 — the exact bounded accessible message shown
-// when Reasons are genuinely cleared while the current Observation
-// remains selected. Reuses the existing #ipoReasonLimit polite live
-// region — no fourth live region is added.
-const REASONS_CLEARED_MESSAGE = 'Reasons cleared. Observation remains selected. Production output was not changed.';
-const SESSION_NOTE = 'This summary resets when the page reloads and does not affect Mapping, XMP, or production.';
-const SESSION_EMPTY_MESSAGE = 'No observations have been recorded in this page session.';
+// exactly (in the CURRENT locale), for priority matching -- both this
+// renderer and the controller read the same i18n key.
+function _providerUnconfirmedWarning(lang) {
+  return t('observation.providerUnconfirmedWarning', null, lang);
+}
 
 // Safe single-read property access for the renderer boundary.
 function _safeGetR(object, key, fallback = undefined) {
@@ -133,10 +133,10 @@ function el(tag, { style, cls, text, attrs } = {}) {
 // A friendly, non-raw display of a generation ID. Only primitives are
 // shown directly; anything else (including a hostile/non-primitive
 // value) safely degrades to "Available" rather than being serialized.
-function _friendlyGenerationLabel(generationId) {
-  if (generationId === null || generationId === undefined) return 'None yet';
+function _friendlyGenerationLabel(generationId, lang) {
+  if (generationId === null || generationId === undefined) return t('observation.context.noneYet', null, lang);
   if (typeof generationId === 'string' || typeof generationId === 'number') return String(generationId);
-  return 'Available';
+  return t('observation.context.available', null, lang);
 }
 
 /**
@@ -159,8 +159,12 @@ export function ensureInteractivePreviewObservationLayout(container) {
   });
   root.appendChild(styleTag);
 
-  root.appendChild(el('h4', { style: 'margin:0;font-size:13px;font-weight:600;color:var(--text)', text: 'Preview Observation' }));
-  root.appendChild(el('p', { style: 'margin:0;font-size:11px;color:var(--text-dim)', text: 'Record what you notice in the approximate browser comparison' }));
+  const titleEl = el('h4', { style: 'margin:0;font-size:13px;font-weight:600;color:var(--text)' });
+  titleEl.id = 'ipoTitle';
+  root.appendChild(titleEl);
+  const subtitleEl = el('p', { style: 'margin:0;font-size:11px;color:var(--text-dim)' });
+  subtitleEl.id = 'ipoSubtitle';
+  root.appendChild(subtitleEl);
 
   // EPIC 2E-J Phase B: compact context summary.
   const contextEl = el('div', { style: 'font-size:10px;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:10px;padding:8px;border:1px solid var(--border);border-radius:3px' });
@@ -169,25 +173,27 @@ export function ensureInteractivePreviewObservationLayout(container) {
 
   const fieldset = el('fieldset', { style: 'border:1px solid var(--border);border-radius:3px;padding:12px;margin:0;display:flex;flex-direction:column;gap:8px' });
   fieldset.id = 'ipoFieldset';
-  const legend = el('legend', { style: 'font-size:10.5px;color:var(--text-dim);padding:0 6px', text: 'Observation options' });
+  const legend = el('legend', { style: 'font-size:10.5px;color:var(--text-dim);padding:0 6px' });
+  legend.id = 'ipoOptionsLegend';
   fieldset.appendChild(legend);
 
   const optionsWrap = el('div', { style: 'display:flex;flex-wrap:wrap;gap:8px' });
-  OBSERVATION_OPTIONS.forEach(({ value, label }) => {
+  OBSERVATION_OPTIONS.forEach(({ value }) => {
     const optionLabel = el('label', {
       style: 'display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--text);min-height:44px;flex:1 1 140px',
     });
     const input = el('input', { attrs: { type: 'radio', name: 'ipoObservation', value, id: `ipoOption_${value}` } });
     input.style.cursor = 'pointer';
     optionLabel.appendChild(input);
-    optionLabel.appendChild(el('span', { text: label }));
+    const labelSpan = el('span', {});
+    labelSpan.id = `ipoOptionLabel_${value}`;
+    optionLabel.appendChild(labelSpan);
     optionsWrap.appendChild(optionLabel);
   });
   fieldset.appendChild(optionsWrap);
 
   const clearButton = el('button', {
     style: 'align-self:flex-start;padding:6px 14px;min-height:44px;display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
-    text: 'Clear observation',
     attrs: { type: 'button' },
   });
   clearButton.id = 'ipoClearButton';
@@ -206,17 +212,21 @@ export function ensureInteractivePreviewObservationLayout(container) {
   // EPIC 2E-J Phase B: reason tags fieldset ("Why?").
   const reasonFieldset = el('fieldset', { style: 'border:1px solid var(--border);border-radius:3px;padding:12px;margin:0;display:flex;flex-direction:column;gap:8px' });
   reasonFieldset.id = 'ipoReasonFieldset';
-  reasonFieldset.appendChild(el('legend', { style: 'font-size:10.5px;color:var(--text-dim);padding:0 6px', text: 'Why?' }));
+  const reasonLegend = el('legend', { style: 'font-size:10.5px;color:var(--text-dim);padding:0 6px' });
+  reasonLegend.id = 'ipoReasonLegend';
+  reasonFieldset.appendChild(reasonLegend);
 
   const reasonsWrap = el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px' });
-  REASON_OPTIONS.forEach(({ value, label }) => {
+  REASON_OPTIONS.forEach(({ value }) => {
     const reasonLabel = el('label', {
       style: 'display:flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--text);min-height:44px',
     });
     const input = el('input', { attrs: { type: 'checkbox', name: 'ipoReason', value, id: `ipoReason_${value}` } });
     input.style.cursor = 'pointer';
     reasonLabel.appendChild(input);
-    reasonLabel.appendChild(el('span', { text: label }));
+    const reasonSpan = el('span', {});
+    reasonSpan.id = `ipoReasonLabel_${value}`;
+    reasonLabel.appendChild(reasonSpan);
     reasonsWrap.appendChild(reasonLabel);
   });
   reasonFieldset.appendChild(reasonsWrap);
@@ -227,7 +237,6 @@ export function ensureInteractivePreviewObservationLayout(container) {
 
   const clearReasonsButton = el('button', {
     style: 'align-self:flex-start;padding:6px 14px;min-height:44px;display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
-    text: 'Clear reasons',
     attrs: { type: 'button' },
   });
   clearReasonsButton.id = 'ipoClearReasonsButton';
@@ -239,16 +248,39 @@ export function ensureInteractivePreviewObservationLayout(container) {
 
   root.appendChild(reasonFieldset);
 
-  const detailsNoteEl = el('div', { style: 'font-size:10px;color:var(--text-dim)', text: REASON_DETAILS_NOTE });
+  const detailsNoteEl = el('div', { style: 'font-size:10px;color:var(--text-dim)' });
+  detailsNoteEl.id = 'ipoDetailsNote';
   root.appendChild(detailsNoteEl);
 
-  const safetyNoteEl = el('div', { style: 'font-size:10px;color:var(--text-dim)', text: SAFETY_NOTE });
+  const safetyNoteEl = el('div', { style: 'font-size:10px;color:var(--text-dim)' });
   safetyNoteEl.id = 'ipoSafetyNote';
   root.appendChild(safetyNoteEl);
 
   container.replaceChildren(root);
   container.dataset.ipoLayoutBuilt = '1';
   return getInteractivePreviewObservationElements(container);
+}
+
+// EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase C/J:
+// re-applies this section's static skeleton text on every render call
+// (skeleton itself is only ever built once) -- lets a setLang() locale
+// switch update this section's labels/legends/buttons without losing
+// the user's current radio/checkbox selections (those live in
+// controller state, untouched by this function).
+function _applyStaticSkeletonTranslations(container, lang) {
+  if (!container) return;
+  const set = (id, text) => { const e = container.querySelector(`#${id}`); if (e) e.textContent = text; };
+  set('ipoTitle', t('observation.title', null, lang));
+  set('ipoSubtitle', t('observation.subtitle', null, lang));
+  set('ipoOptionsLegend', t('observation.optionsLabel', null, lang));
+  OBSERVATION_OPTIONS.forEach(({ value }) => set(`ipoOptionLabel_${value}`, _trOptionLabel(value, lang)));
+  set('ipoClearButton', t('observation.clearObservation', null, lang));
+  set('ipoReasonLegend', t('observation.why', null, lang));
+  REASON_OPTIONS.forEach(({ value }) => set(`ipoReasonLabel_${value}`, _trReasonLabel(value, lang)));
+  set('ipoClearReasonsButton', t('observation.clearReasons', null, lang));
+  set('ipoDetailsNote', t('observation.detailsNote', null, lang));
+  // ipoSafetyNote intentionally NOT set here -- renderInteractivePreviewObservationV2()
+  // computes its exact (possibly V2-reminder-appended) text every call.
 }
 
 /** Returns references to the section's key elements. Safe to call repeatedly; returns null fields if the layout hasn't been built or elements are missing. */
@@ -268,9 +300,10 @@ export function getInteractivePreviewObservationElements(container) {
  * Every projected field read exactly once via `_safeGetR`, stored, then
  * reused — never a second direct access.
  */
-export function renderInteractivePreviewObservationV2(container, state) {
+export function renderInteractivePreviewObservationV2(container, state, lang) {
   if (!container) return;
   ensureInteractivePreviewObservationLayout(container);
+  _applyStaticSkeletonTranslations(container, lang);
 
   const s = (state && typeof state === 'object') ? state : {};
   const rawState = _safeGetR(s, 'state');
@@ -310,16 +343,18 @@ export function renderInteractivePreviewObservationV2(container, state) {
   if (clearButton) clearButton.disabled = !enabled || rawObservation === null || rawObservation === undefined;
 
   let message;
-  if (normalizedState === 'selected' && typeof rawObservation === 'string' && SELECTED_MESSAGE[rawObservation]) {
-    message = SELECTED_MESSAGE[rawObservation];
-  } else if (STATE_MESSAGE[normalizedState]) {
-    message = STATE_MESSAGE[normalizedState];
+  const selectedMsg = normalizedState === 'selected' && typeof rawObservation === 'string' ? _selectedMessage(rawObservation, lang) : null;
+  const stateMsg = _stateMessage(normalizedState, lang);
+  if (selectedMsg) {
+    message = selectedMsg;
+  } else if (stateMsg) {
+    message = stateMsg;
   } else if (normalizedState === 'blocked') {
-    message = SAFETY_BLOCKED_MESSAGE;
-  } else if (typeof rawUnavailableReason === 'string' && UNAVAILABLE_REASON_MESSAGE[rawUnavailableReason]) {
-    message = UNAVAILABLE_REASON_MESSAGE[rawUnavailableReason];
+    message = t('observation.safetyBlocked', null, lang);
+  } else if (typeof rawUnavailableReason === 'string' && _unavailableReasonMessage(rawUnavailableReason, lang)) {
+    message = _unavailableReasonMessage(rawUnavailableReason, lang);
   } else {
-    message = UNAVAILABLE_REASON_MESSAGE['not-ready'];
+    message = _unavailableReasonMessage('not-ready', lang);
   }
   if (statusEl) statusEl.textContent = message;
 
@@ -331,8 +366,10 @@ export function renderInteractivePreviewObservationV2(container, state) {
   // styling — never as an error/danger, and never labeled "stale".
   if (warningEl) {
     const candidates = _safeArray(rawWarnings).map((w) => _safeText(w)).filter(Boolean);
-    const isStaleWarning = (w) => w === UNAVAILABLE_REASON_MESSAGE.cancelled;
-    const isProviderUnconfirmed = (w) => w === PROVIDER_UNCONFIRMED_WARNING;
+    const cancelledMessage = _unavailableReasonMessage('cancelled', lang);
+    const providerUnconfirmedText = _providerUnconfirmedWarning(lang);
+    const isStaleWarning = (w) => w === cancelledMessage;
+    const isProviderUnconfirmed = (w) => w === providerUnconfirmedText;
 
     let primaryWarning = candidates.find(isStaleWarning) ?? null;
     let warningTone = 'danger';
@@ -353,9 +390,9 @@ export function renderInteractivePreviewObservationV2(container, state) {
   }
 
   if (safetyNoteEl) {
-    let note = SAFETY_NOTE;
+    let note = t('observation.safetyNote', null, lang);
     if (normalizedState === 'selected' && rawObservation === 'prefer-v2') {
-      note = `${SAFETY_NOTE} \u00B7 ${V2_REMINDER}`;
+      note = `${note} \u00B7 ${t('observation.v2Reminder', null, lang)}`;
     }
     safetyNoteEl.textContent = note;
   }
@@ -424,23 +461,23 @@ export function renderInteractivePreviewObservationV2(container, state) {
   // concatenated or interpolated with untrusted data.
   let reasonLimitMessage = '';
   if (reasonsEnabled && reasonAnnouncementActive) {
-    reasonLimitMessage = REASONS_CLEARED_MESSAGE;
+    reasonLimitMessage = t('observation.reasonsCleared', null, lang);
   } else if (reasonsEnabled && reasonLimitReached) {
-    reasonLimitMessage = REASON_LIMIT_MESSAGE;
+    reasonLimitMessage = t('observation.reasonLimit', null, lang);
   }
   if (reasonLimitEl) reasonLimitEl.textContent = reasonLimitMessage;
   if (clearReasonsButton) clearReasonsButton.disabled = !reasonsEnabled || reasonsList.length === 0;
   if (reasonStatusEl) {
     reasonStatusEl.textContent = reasonsEnabled && reasonsList.length > 0
-      ? `Selected: ${reasonsList.map((r) => REASON_LABEL_BY_VALUE[r] ?? r).join(', ')}`
+      ? t('observation.selected', { reasons: reasonsList.map((r) => _trReasonLabel(r, lang)).join(', ') }, lang)
       : '';
   }
 }
 
 /** Resets the section's display to the unavailable/empty state without destroying the skeleton. */
-export function clearInteractivePreviewObservationDisplay(container) {
+export function clearInteractivePreviewObservationDisplay(container, lang) {
   if (!container || container.dataset.ipoLayoutBuilt !== '1') return;
-  renderInteractivePreviewObservationV2(container, { state: 'unavailable', observation: null, warnings: [], metadata: { blockers: [], unavailableReason: 'not-ready' }, reasons: [], reasonLimitReached: false });
+  renderInteractivePreviewObservationV2(container, { state: 'unavailable', observation: null, warnings: [], metadata: { blockers: [], unavailableReason: 'not-ready' }, reasons: [], reasonLimitReached: false }, lang);
 }
 
 /**
@@ -449,25 +486,26 @@ export function clearInteractivePreviewObservationDisplay(container) {
  * projection — never exposes a raw generation object or full timestamp.
  * @param {{ generationId: any, legacyStatus: string, v2Status: string, alignmentStatus: string, generationConfirmed: (boolean|null) }} contextInfo
  */
-export function renderInteractivePreviewObservationContextV2(container, contextInfo) {
+export function renderInteractivePreviewObservationContextV2(container, contextInfo, lang) {
   const contextEl = container ? container.querySelector('#ipoContext') : null;
   if (!contextEl) return;
   const c = (contextInfo && typeof contextInfo === 'object') ? contextInfo : {};
   const generationId = _safeGetR(c, 'generationId');
-  const legacyStatus = _safeText(_safeGetR(c, 'legacyStatus')) ?? 'Unknown';
-  const v2Status = _safeText(_safeGetR(c, 'v2Status')) ?? 'Unknown';
-  const alignmentStatus = _safeText(_safeGetR(c, 'alignmentStatus')) ?? 'Unknown';
+  const unknownLabel = t('observation.context.unknown', null, lang);
+  const legacyStatus = _safeText(_safeGetR(c, 'legacyStatus')) ?? unknownLabel;
+  const v2Status = _safeText(_safeGetR(c, 'v2Status')) ?? unknownLabel;
+  const alignmentStatus = _safeText(_safeGetR(c, 'alignmentStatus')) ?? unknownLabel;
   const rawConfirmed = _safeGetR(c, 'generationConfirmed');
-  const confirmedLabel = rawConfirmed === true ? 'Confirmed' : rawConfirmed === false ? 'Context fallback' : 'Unavailable';
+  const confirmedLabel = rawConfirmed === true ? t('observation.context.confirmed', null, lang) : rawConfirmed === false ? t('observation.context.contextFallback', null, lang) : t('observation.context.unavailable', null, lang);
 
   contextEl.replaceChildren();
   const rows = [
-    ['Comparison generation', _friendlyGenerationLabel(generationId)],
-    ['Legacy preview', legacyStatus],
-    ['Controlled V2 preview', v2Status],
-    ['Alignment', alignmentStatus],
-    ['Generation confirmation', confirmedLabel],
-    ['Observation session', 'In-memory only'],
+    [t('observation.context.generationLabel', null, lang), _friendlyGenerationLabel(generationId, lang)],
+    [t('observation.context.legacyLabel', null, lang), legacyStatus],
+    [t('observation.context.v2Label', null, lang), v2Status],
+    [t('observation.context.alignmentLabel', null, lang), alignmentStatus],
+    [t('observation.context.confirmationLabel', null, lang), confirmedLabel],
+    [t('session.observationSession', null, lang), t('session.inMemoryOnly', null, lang)],
   ];
   rows.forEach(([label, value]) => {
     const item = el('span', {});
@@ -479,12 +517,6 @@ export function renderInteractivePreviewObservationContextV2(container, contextI
 
 // ── Session Observation Summary ──────────────────────────────────────
 
-const REASON_FIELD_LABEL = {
-  skinTone: 'Skin tone', whiteBalance: 'White balance', highlightDetail: 'Highlight detail',
-  shadowDetail: 'Shadow detail', contrast: 'Contrast', colorBalance: 'Color balance',
-  saturation: 'Saturation', naturalLook: 'Natural look', clarityDetail: 'Clarity / detail', noSpecificReason: 'No specific reason',
-};
-
 /** Builds the Session Observation Summary section skeleton once. Idempotent. */
 export function ensureInteractivePreviewObservationSessionLayout(container) {
   if (!container) return null;
@@ -493,9 +525,15 @@ export function ensureInteractivePreviewObservationSessionLayout(container) {
   }
 
   const root = el('div', { style: 'display:flex;flex-direction:column;gap:8px' });
-  root.appendChild(el('h4', { style: 'margin:0;font-size:12.5px;font-weight:600;color:var(--text)', text: 'Session Observation Summary' }));
-  root.appendChild(el('p', { style: 'margin:0;font-size:10.5px;color:var(--text-dim)', text: 'Current page session only' }));
-  root.appendChild(el('div', { style: 'font-size:10px;color:var(--text-dim)', text: SESSION_NOTE }));
+  const titleEl = el('h4', { style: 'margin:0;font-size:12.5px;font-weight:600;color:var(--text)' });
+  titleEl.id = 'ipoSessionTitle';
+  root.appendChild(titleEl);
+  const subtitleEl = el('p', { style: 'margin:0;font-size:10.5px;color:var(--text-dim)' });
+  subtitleEl.id = 'ipoSessionSubtitle';
+  root.appendChild(subtitleEl);
+  const noteEl = el('div', { style: 'font-size:10px;color:var(--text-dim)' });
+  noteEl.id = 'ipoSessionNote';
+  root.appendChild(noteEl);
 
   const metricsEl = el('div', { style: 'display:flex;flex-wrap:wrap;gap:10px;font-size:10.5px' });
   metricsEl.id = 'ipoSessionMetrics';
@@ -511,7 +549,6 @@ export function ensureInteractivePreviewObservationSessionLayout(container) {
 
   const clearSessionButton = el('button', {
     style: 'align-self:flex-start;padding:6px 14px;min-height:44px;display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;cursor:pointer',
-    text: 'Clear session summary',
     attrs: { type: 'button' },
   });
   clearSessionButton.id = 'ipoClearSessionButton';
@@ -520,6 +557,19 @@ export function ensureInteractivePreviewObservationSessionLayout(container) {
   container.replaceChildren(root);
   container.dataset.ipoSessionLayoutBuilt = '1';
   return getInteractivePreviewObservationSessionElements(container);
+}
+
+// EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase C/J:
+// re-applies the Session Observation Summary skeleton's static text on
+// every render call -- the summary DATA itself (counts, reasons) is
+// unaffected by a locale switch, only these labels are refreshed.
+function _applySessionStaticSkeletonTranslations(container, lang) {
+  if (!container) return;
+  const set = (id, text) => { const e = container.querySelector(`#${id}`); if (e) e.textContent = text; };
+  set('ipoSessionTitle', t('session.title', null, lang));
+  set('ipoSessionSubtitle', t('session.subtitle', null, lang));
+  set('ipoSessionNote', t('observation.sessionNote', null, lang));
+  set('ipoClearSessionButton', t('session.clearSessionSummary', null, lang));
 }
 
 export function getInteractivePreviewObservationSessionElements(container) {
@@ -575,9 +625,10 @@ function _safeBoundedArrayR(input, maxLen = 8) {
   return out;
 }
 
-export function renderInteractivePreviewObservationSessionV2(container, summary) {
+export function renderInteractivePreviewObservationSessionV2(container, summary, lang) {
   if (!container) return;
   ensureInteractivePreviewObservationSessionLayout(container);
+  _applySessionStaticSkeletonTranslations(container, lang);
   const s = (summary && typeof summary === 'object') ? summary : {};
   const metricsEl = container.querySelector('#ipoSessionMetrics');
   const secondaryEl = container.querySelector('#ipoSessionSecondary');
@@ -599,7 +650,7 @@ export function renderInteractivePreviewObservationSessionV2(container, summary)
   if (metricsEl) {
     metricsEl.replaceChildren();
     if (totalObserved === 0) {
-      metricsEl.appendChild(el('div', { style: 'color:var(--text-dim)', text: SESSION_EMPTY_MESSAGE }));
+      metricsEl.appendChild(el('div', { style: 'color:var(--text-dim)', text: t('session.emptyMessage', null, lang) }));
     } else {
       const pct = (n) => (activeObservations > 0 ? `${Math.round((n / activeObservations) * 100)}%` : '');
       const metric = (label, value, percentLabel) => {
@@ -608,18 +659,18 @@ export function renderInteractivePreviewObservationSessionV2(container, summary)
         box.textContent = text;
         metricsEl.appendChild(box);
       };
-      metric('Observed', totalObserved, null);
-      metric('Prefer Legacy', preferLegacy, pct(preferLegacy));
-      metric('Prefer V2', preferV2, pct(preferV2));
-      metric('No visible difference', noVisibleDifference, pct(noVisibleDifference));
-      metric('Unsure', unsure, pct(unsure));
+      metric(t('session.metric.observed', null, lang), totalObserved, null);
+      metric(t('session.metric.preferLegacy', null, lang), preferLegacy, pct(preferLegacy));
+      metric(t('session.metric.preferV2', null, lang), preferV2, pct(preferV2));
+      metric(t('session.metric.noVisibleDifference', null, lang), noVisibleDifference, pct(noVisibleDifference));
+      metric(t('session.metric.unsure', null, lang), unsure, pct(unsure));
     }
   }
 
   if (secondaryEl) {
     secondaryEl.replaceChildren();
-    secondaryEl.appendChild(el('span', { text: `Cleared: ${cleared}` }));
-    secondaryEl.appendChild(el('span', { text: `Invalidated: ${invalidated}` }));
+    secondaryEl.appendChild(el('span', { text: `${t('session.metric.cleared', null, lang)}: ${cleared}` }));
+    secondaryEl.appendChild(el('span', { text: `${t('session.metric.invalidated', null, lang)}: ${invalidated}` }));
   }
 
   if (topReasonsEl) {
@@ -632,12 +683,12 @@ export function renderInteractivePreviewObservationSessionV2(container, summary)
       const reason = _safeGetR(entry, 'reason');
       const rawCount = _safeGetR(entry, 'count');
       const field = typeof reason === 'string' ? REASON_VALUE_TO_FIELD[reason] : undefined;
-      const label = field ? REASON_FIELD_LABEL[field] : null;
+      const label = field ? t(`observation.reason.${field}`, null, lang) : null;
       const count = _normalizeNonNegativeCount(rawCount);
       if (label && count > 0) validEntries.push(`${label} (${count})`);
     }
     if (validEntries.length > 0) {
-      topReasonsEl.appendChild(el('div', { text: `Top reasons: ${validEntries.join(', ')}` }));
+      topReasonsEl.appendChild(el('div', { text: t('session.topReasons', { list: validEntries.join(', ') }, lang) }));
     }
   }
 }

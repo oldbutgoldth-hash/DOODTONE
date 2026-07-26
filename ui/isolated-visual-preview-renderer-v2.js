@@ -454,14 +454,14 @@ async function _runPixelPipelineAsyncV2(imageData, model, appliedAdjustments, sk
  */
 export function applyPreviewPixelTransformV2(imageDataLike, adjustmentModel) {
   if (!_isRecord(imageDataLike)) {
-    return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: ['imageDataLike must be an object with data/width/height.'] };
+    return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: ['imageDataLike must be an object with data/width/height.'], reasonCodes: ['INVALID_IMAGE_DATA'] };
   }
   const { data, width, height } = imageDataLike;
   if (!(data instanceof Uint8ClampedArray)) {
-    return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: ['imageDataLike.data must be a Uint8ClampedArray.'] };
+    return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: ['imageDataLike.data must be a Uint8ClampedArray.'], reasonCodes: ['INVALID_IMAGE_DATA'] };
   }
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || !Number.isInteger(width) || !Number.isInteger(height)) {
-    return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: ['imageDataLike.width/height must be finite positive integers.'] };
+    return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: ['imageDataLike.width/height must be finite positive integers.'], reasonCodes: ['INVALID_IMAGE_DATA'] };
   }
   if (data.length < width * height * 4) {
     return { state: 'unavailable', transformed: false, appliedAdjustments: [], skippedAdjustments: [], warnings: [], reasons: [`imageDataLike.data.length (${data.length}) is smaller than required for ${width}x${height} RGBA pixels (${width * height * 4}).`] };
@@ -489,11 +489,30 @@ export function applyPreviewPixelTransformV2(imageDataLike, adjustmentModel) {
     state: 'rendered', transformed,
     appliedAdjustments: uniqueApplied, skippedAdjustments: uniqueSkipped,
     warnings: [...HONESTY_WARNINGS],
+    warningCodes: [...HONESTY_WARNING_CODES],
     reasons: transformed
       ? [`Applied ${uniqueApplied.length} adjustment(s), skipped ${uniqueSkipped.length} unsupported/unavailable adjustment(s). Note: the supplied data buffer was mutated in place.`]
       : ['No supported preview adjustments were applied; the pixel buffer remains unchanged.'],
+    // Phase G: stable codes + bounded params so the UI can render a
+    // fully localized sentence instead of this English one.
+    reasonCodes: transformed ? ['RENDERED_ADJUSTMENT_COUNTS'] : ['IDENTITY_NO_SUPPORTED_CHANGE'],
+    reasonParams: transformed ? { applied: uniqueApplied.length, skipped: uniqueSkipped.length } : null,
   };
 }
+
+// FULL-SYSTEM I18N COMPLETION R2 -- Phase G: every honesty warning and
+// failure reason this renderer emits now carries a STABLE CODE next to
+// its English sentence. The UI displays the TRANSLATED code; the raw
+// English remains available for Developer Details and for existing
+// consumers/tests that already read `warnings`/`reasons`. This is
+// deliberately ADDITIVE -- no existing field is removed or repurposed.
+const HONESTY_WARNING_CODES = [
+  'BROWSER_APPROXIMATION',
+  'RAW_NOT_SIMULATED',
+  'CAMERA_PROFILE_NOT_REPRODUCED',
+  'LOCAL_MASKS_NOT_REPRODUCED',
+  'ICC_NOT_REPRODUCED',
+];
 
 const HONESTY_WARNINGS = [
   'This browser preview is an approximation — it is NOT Lightroom-accurate.',
@@ -503,7 +522,7 @@ const HONESTY_WARNINGS = [
   'Color-management differences from Lightroom/ACR may remain.',
 ];
 
-function _baseResult({ side, generationId, state, rendered = false, warnings = [], reasons = [], processingTimeMs = 0, disposed = false }) {
+function _baseResult({ side, generationId, state, rendered = false, warnings = [], reasons = [], reasonCodes = [], processingTimeMs = 0, disposed = false }) {
   return {
     mode: 'isolated-browser-preview-render',
     state, side: side === 'v2' ? 'v2' : 'legacy',
@@ -513,7 +532,9 @@ function _baseResult({ side, generationId, state, rendered = false, warnings = [
     processingTimeMs: +processingTimeMs.toFixed(2),
     appliedAdjustments: [], skippedAdjustments: [],
     warnings: [...new Set([...warnings, ...HONESTY_WARNINGS])],
+    warningCodes: [...new Set([...HONESTY_WARNING_CODES])],
     reasons,
+    reasonCodes: Array.isArray(reasonCodes) ? [...reasonCodes] : [],
     sourceGenerationId: generationId ?? null,
     disposed,
     metadata: { pixelPipelineOrder: _PIXEL_PIPELINE_ORDER },
@@ -574,11 +595,11 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   const startTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const normalizedSide = side === 'v2' ? 'v2' : side === 'legacy' ? 'legacy' : null;
 
-  if (signal?.aborted) return _baseResult({ side: normalizedSide ?? 'legacy', generationId, state: 'cancelled', reasons: ['Render was already cancelled before starting.'], processingTimeMs: (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime });
+  if (signal?.aborted) return _baseResult({ side: normalizedSide ?? 'legacy', generationId, state: 'cancelled', reasons: ['Render was already cancelled before starting.'], reasonCodes: ['RENDER_CANCELLED_BEFORE_START'], processingTimeMs: (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime });
 
-  if (!normalizedSide) return _baseResult({ side: 'legacy', generationId, state: 'unavailable', reasons: ['Invalid or missing "side" — must be "legacy" or "v2".'] });
-  if (!canvas || typeof canvas.getContext !== 'function') return _baseResult({ side: normalizedSide, generationId, state: 'unavailable', reasons: ['Missing or invalid target canvas.'] });
-  if (!_isSupportedSource(source)) return _baseResult({ side: normalizedSide, generationId, state: 'unavailable', reasons: ['Missing or unsupported source (must be HTMLImageElement, ImageBitmap, HTMLCanvasElement, or OffscreenCanvas).'] });
+  if (!normalizedSide) return _baseResult({ side: 'legacy', generationId, state: 'unavailable', reasons: ['Invalid or missing "side" — must be "legacy" or "v2".'], reasonCodes: ['INVALID_SIDE'] });
+  if (!canvas || typeof canvas.getContext !== 'function') return _baseResult({ side: normalizedSide, generationId, state: 'unavailable', reasons: ['Missing or invalid target canvas.'], reasonCodes: ['MISSING_TARGET_CANVAS'] });
+  if (!_isSupportedSource(source)) return _baseResult({ side: normalizedSide, generationId, state: 'unavailable', reasons: ['Missing or unsupported source (must be HTMLImageElement, ImageBitmap, HTMLCanvasElement, or OffscreenCanvas).'], reasonCodes: ['UNSUPPORTED_SOURCE'] });
 
   const plan = _isRecord(renderPlan) ? (normalizedSide === 'v2' ? renderPlan.v2RenderPlan : renderPlan.legacyRenderPlan) : null;
   if (!plan || plan.renderable !== true) {
@@ -600,19 +621,19 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     } catch (e) {
       return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Source image failed to decode: ${e?.message ?? 'unknown decode error'}`] });
     }
-    if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after image decode, before dimension read.'] });
+    if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after image decode, before dimension read.'], reasonCodes: ['RENDER_CANCELLED'] });
     if (!Number.isFinite(source.naturalWidth) || !Number.isFinite(source.naturalHeight) || source.naturalWidth <= 0 || source.naturalHeight <= 0) {
-      return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Source image decoded but reports zero or invalid natural dimensions.'] });
+      return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Source image decoded but reports zero or invalid natural dimensions.'], reasonCodes: ['SOURCE_ZERO_DIMENSIONS'] });
     }
   }
 
   const sourceDims = _getSourceDimensions(source);
-  if (!sourceDims) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Source has zero or invalid dimensions.'] });
+  if (!sourceDims) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Source has zero or invalid dimensions.'], reasonCodes: ['SOURCE_ZERO_DIMENSIONS'] });
 
   const safeDims = _computeSafeDimensions(sourceDims.width, sourceDims.height, plan.renderConstraints ?? renderPlan?.sharedRenderConstraints);
-  if (!safeDims) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Could not compute safe preview dimensions.'] });
+  if (!safeDims) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Could not compute safe preview dimensions.'], reasonCodes: ['UNSAFE_DIMENSIONS'] });
 
-  if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled before pixel processing began.'] });
+  if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled before pixel processing began.'], reasonCodes: ['RENDER_CANCELLED'] });
 
   // FIX 3 (EPIC 2E-H-A-F): compute the REQUESTED DPR first, then
   // enforce maxPixelCount on the resulting backing dimensions — DPR
@@ -667,20 +688,20 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   let tempCanvas, tempCtx, imageData;
   try {
     tempCanvas = _createTempCanvas(backingWidth, backingHeight);
-    if (!tempCanvas) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['No canvas implementation is available in this environment.'] });
+    if (!tempCanvas) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['No canvas implementation is available in this environment.'], reasonCodes: ['NO_CANVAS_IMPLEMENTATION'] });
     tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-    if (!tempCtx) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Could not acquire a 2D rendering context.'] });
+    if (!tempCtx) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Could not acquire a 2D rendering context.'], reasonCodes: ['NO_2D_CONTEXT'] });
 
     tempCtx.setTransform(1, 0, 0, 1, 0, 0); // reset before drawing — never accumulate transforms across renders
     tempCtx.clearRect(0, 0, backingWidth, backingHeight);
     tempCtx.drawImage(source, 0, 0, backingWidth, backingHeight);
 
-    if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after draw, before pixel read.'] });
+    if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after draw, before pixel read.'], reasonCodes: ['RENDER_CANCELLED'] });
 
     try {
       imageData = tempCtx.getImageData(0, 0, backingWidth, backingHeight);
     } catch (e) {
-      return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Could not read pixel data — the source may be cross-origin/tainted.'] });
+      return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Could not read pixel data — the source may be cross-origin/tainted.'], reasonCodes: ['PIXEL_READ_FAILED_TAINTED'] });
     }
   } catch (e) {
     return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Rendering failed unexpectedly (production unaffected): ${e?.message ?? 'unknown error'}`] });
@@ -697,7 +718,7 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
     tempCtx = null;
   }
 
-  if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after pixel read, before processing.'] });
+  if (signal?.aborted) return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Cancelled after pixel read, before processing.'], reasonCodes: ['RENDER_CANCELLED'] });
 
   // FIX 2 + FIX 3 (EPIC 2E-H-A-F2): chunked, cancellable pixel
   // processing — checks `signal`/`shouldCommit` after every bounded
@@ -725,16 +746,16 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   // is even inspected). `shouldCommit` is optional — callers not using
   // the controller below may omit it and rely on `signal` alone.
   if (typeof shouldCommit === 'function' && shouldCommit() !== true) {
-    return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Commit authorization denied immediately before commit (stale generation, disposed renderer, or aborted signal) — target canvas left untouched.'] });
+    return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Commit authorization denied immediately before commit (stale generation, disposed renderer, or aborted signal) — target canvas left untouched.'], reasonCodes: ['COMMIT_AUTH_DENIED'] });
   }
   // Re-verify the target canvas is still a valid, usable canvas right
   // before commit — a caller could have discarded/replaced it during
   // the async work above.
   if (!canvas || typeof canvas.getContext !== 'function') {
-    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Target canvas became invalid before commit — nothing was written.'] });
+    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Target canvas became invalid before commit — nothing was written.'], reasonCodes: ['TARGET_CANVAS_INVALID_BEFORE_COMMIT'] });
   }
   if (!Number.isFinite(backingWidth) || !Number.isFinite(backingHeight) || backingWidth <= 0 || backingHeight <= 0 || backingWidth * backingHeight > maxPixelCount) {
-    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Computed backing dimensions are invalid or exceed the configured pixel budget — refusing to commit.'] });
+    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Computed backing dimensions are invalid or exceed the configured pixel budget — refusing to commit.'], reasonCodes: ['BACKING_DIMENSIONS_INVALID'] });
   }
 
   // FIX 4 (EPIC 2E-H-A-F2): staged, atomic commit. The fully-processed
@@ -748,9 +769,9 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   let stagingCanvas;
   try {
     stagingCanvas = _createTempCanvas(backingWidth, backingHeight);
-    if (!stagingCanvas) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['No canvas implementation is available in this environment for staging.'] });
+    if (!stagingCanvas) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['No canvas implementation is available in this environment for staging.'], reasonCodes: ['NO_CANVAS_IMPLEMENTATION'] });
     const stagingCtx = stagingCanvas.getContext('2d');
-    if (!stagingCtx) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Could not acquire a 2D context on the staging canvas.'] });
+    if (!stagingCtx) return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Could not acquire a 2D context on the staging canvas.'], reasonCodes: ['NO_2D_CONTEXT'] });
     stagingCtx.putImageData(imageData, 0, 0);
   } catch (e) {
     return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: [`Failed to build staged output: ${e?.message ?? 'unknown error'}`] });
@@ -762,11 +783,11 @@ export async function renderIsolatedVisualPreviewV2({ source, canvas, renderPlan
   // target is ever touched.
   if (typeof shouldCommit === 'function' && shouldCommit() !== true) {
     stagingCanvas = null;
-    return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Commit authorization denied immediately before final commit — target canvas left untouched.'] });
+    return _baseResult({ side: normalizedSide, generationId, state: 'cancelled', reasons: ['Commit authorization denied immediately before final commit — target canvas left untouched.'], reasonCodes: ['COMMIT_AUTH_DENIED'] });
   }
   if (!canvas || typeof canvas.getContext !== 'function') {
     stagingCanvas = null;
-    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Target canvas became invalid immediately before final commit — nothing was written.'] });
+    return _baseResult({ side: normalizedSide, generationId, state: 'failed', reasons: ['Target canvas became invalid immediately before final commit — nothing was written.'], reasonCodes: ['TARGET_CANVAS_INVALID_BEFORE_COMMIT'] });
   }
 
   // Capture previous target dimensions (cheap — two integers) for
@@ -927,7 +948,7 @@ export function createIsolatedVisualPreviewRendererV2(options = {}) {
 
   async function render(input = {}) {
     if (disposed) {
-      return { mode: 'isolated-browser-preview-render', state: 'unavailable', side: input.side === 'v2' ? 'v2' : 'legacy', rendered: false, previewAccuracy: 'approximate-browser-preview', cssWidth: 0, cssHeight: 0, backingWidth: 0, backingHeight: 0, devicePixelRatio: 0, processingTimeMs: 0, appliedAdjustments: [], skippedAdjustments: [], warnings: [...HONESTY_WARNINGS], reasons: ['Renderer has been disposed.'], sourceGenerationId: input.generationId ?? null, disposed: true, metadata: {} };
+      return { mode: 'isolated-browser-preview-render', state: 'unavailable', side: input.side === 'v2' ? 'v2' : 'legacy', rendered: false, previewAccuracy: 'approximate-browser-preview', cssWidth: 0, cssHeight: 0, backingWidth: 0, backingHeight: 0, devicePixelRatio: 0, processingTimeMs: 0, appliedAdjustments: [], skippedAdjustments: [], warnings: [...HONESTY_WARNINGS], warningCodes: [...HONESTY_WARNING_CODES], reasons: ['Renderer has been disposed.'], reasonCodes: ['RENDERER_DISPOSED'], sourceGenerationId: input.generationId ?? null, disposed: true, metadata: {} };
     }
     // FIX 5 (EPIC 2E-H-A-F2): the controller ALWAYS owns generation IDs
     // — render() always calls nextGeneration() itself, regardless of

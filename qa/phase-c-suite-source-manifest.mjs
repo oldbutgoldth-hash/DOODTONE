@@ -101,6 +101,20 @@ export const SUITE_SOURCE_FILES = {
     'qa/fixtures/epic-2e-j/ready/manifest.json',
   ],
   // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase K/L.
+  // FULL-SYSTEM I18N COMPLETION R2 — Phase M.
+  fullSystemI18nBrowser: [
+    'qa/epic-2e-j-full-system-i18n-browser-test.mjs',
+    'qa/helpers/playwright-lumixa-test-runtime.mjs',
+    'index.html',
+    'ui/app.js',
+    'ui/i18n/index.js',
+    'ui/i18n/en.js',
+    'ui/i18n/th.js',
+    'ui/i18n/domain-presenters.js',
+    'ui/review-console-renderer.js',
+    'ui/side-by-side-comparison-renderer.js',
+    'ui/visual-preview-comparison-renderer-v2.js',
+  ],
   controlledV2Browser: [
     'qa/epic-2e-j-controlled-v2-browser-test.mjs',
     'qa/helpers/playwright-lumixa-test-runtime.mjs',

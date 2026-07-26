@@ -41,6 +41,11 @@ function record(test, ok, evidence) {
 }
 
 const rendererSrc = await readFile(path.join(PROJECT_ROOT, 'ui/review-console-renderer.js'), 'utf8');
+// FULL-SYSTEM I18N COMPLETION R2: several checks below moved from
+// inline bilingual literals to centralized dictionary keys, so the
+// dictionaries are read here to verify the text still genuinely exists.
+const enI18nSrc = await readFile(path.join(PROJECT_ROOT, 'ui/i18n/en.js'), 'utf8');
+const thI18nSrc = await readFile(path.join(PROJECT_ROOT, 'ui/i18n/th.js'), 'utf8');
 const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
 
 // ── System-verified items never get interactive controls ──────────────────
@@ -51,11 +56,17 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
   // The action-buttons/note-field calls must be gated behind the
   // "else if (itemId)" branch, i.e. never unconditionally reachable
   // for a system-verified item.
-  const controlsGatedCorrectly = /if \(isSystemVerified\) \{[\s\S]*?\} else if \(itemId\) \{\s*const isFailConfirmPending[\s\S]*?renderActionButtons\(item, itemLabel, statusKey, decisionKey, isFailConfirmPending\)\);\s*wrap\.appendChild\(renderNoteField\(item, itemId, itemLabel\)\);\s*\}/.test(rendererSrc);
+  const controlsGatedCorrectly = /if \(isSystemVerified\) \{[\s\S]*?\} else if \(itemId\) \{\s*const isFailConfirmPending[\s\S]*?renderActionButtons\(item, itemLabel, statusKey, decisionKey, isFailConfirmPending, lang\)\);\s*wrap\.appendChild\(renderNoteField\(item, itemId, itemLabel, lang\)\);\s*\}/.test(rendererSrc);
   record('renderActionButtons/renderNoteField are only reachable in the else-if(itemId) branch, never for isSystemVerified', controlsGatedCorrectly, { controlsGatedCorrectly });
 
-  const readOnlyBadgeShown = /roWrap\.appendChild\(badge\(lang === 'th' \? '.+?' : 'System-verified — read-only', 'var\(--text-faint\)'\)\);/.test(rendererSrc);
-  record('A read-only "System-verified" badge (bilingual) is shown instead of controls', readOnlyBadgeShown, { readOnlyBadgeShown });
+  // FULL-SYSTEM I18N COMPLETION R2 — Phase E/J: the badge text moved
+  // from an inline `lang === 'th' ? ... : ...` branch to the
+  // centralized dictionary. Same invariant (a read-only System-verified
+  // badge is shown instead of controls), new sourcing.
+  const readOnlyBadgeShown = /roWrap\.appendChild\(badge\(t\('review\.console\.systemVerifiedReadOnly', null, lang\), 'var\(--text-faint\)'\)\);/.test(rendererSrc)
+    && enI18nSrc.includes("systemVerifiedReadOnly: 'System-verified — read-only',")
+    && thI18nSrc.includes('systemVerifiedReadOnly:');
+  record('A read-only "System-verified" badge (bilingual, via centralized i18n) is shown instead of controls', readOnlyBadgeShown, { readOnlyBadgeShown });
 }
 
 // ── Checklist grouping ──────────────────────────────────────────────────────
@@ -69,7 +80,7 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
   const groupsRenderItems = /for \(const groupKey of orderedKeys\) \{[\s\S]*?for \(const item of itemsInGroup\) \{\s*listWrap\.appendChild\(renderChecklistItem\(item, uiState, lang\)\);/.test(rendererSrc);
   record('_renderBody iterates orderedKeys and renders each group\'s items via renderChecklistItem(item, uiState, lang)', groupsRenderItems, { groupsRenderItems });
 
-  const ungroupedFallbackSafe = /const groupKey = _isRecord\(item\) && typeof item\.group === 'string' && GROUP_LABEL\[item\.group\] \? item\.group : '__ungrouped__';/.test(rendererSrc);
+  const ungroupedFallbackSafe = /const groupKey = _isRecord\(item\) && typeof item\.group === 'string' && GROUP_I18N_KEY\[item\.group\] \? item\.group : '__ungrouped__';/.test(rendererSrc);
   record('Malformed/missing item.group values fail closed into a safe "__ungrouped__" bucket rather than throwing', ungroupedFallbackSafe, { ungroupedFallbackSafe });
 }
 
@@ -81,7 +92,8 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
   const noLocalRecompute = !/visualItems\.filter|systemItems\.filter/.test(rendererSrc.split('reviewGuidance').slice(1).join(''));
   record('The renderer never locally re-filters reviewItems to recompute visual/system counts (trusts the engine\'s numbers)', noLocalRecompute, { noLocalRecompute });
 
-  const showsBothCounts = /Visual\} \$\{visualPass\}\/\$\{visualReq\}/.test(rendererSrc.replace(/`\$\{lang === 'th' \? '[^']+' : 'Visual'\}/, '`${Visual}')) || /'Visual'/.test(rendererSrc);
+  const showsBothCounts = /badge\(t\('review\.console\.visualProgress', \{ done: visualPass, total: visualReq \}, lang\)/.test(rendererSrc)
+    && enI18nSrc.includes("visualProgress: 'Visual {{done}}/{{total}}',");
   record('A Visual X/Y badge is rendered from guidance.visualPassed/visualRequired', showsBothCounts, { showsBothCounts });
 
   const showsPrimaryGuidance = /_safeText\(guidance\.primaryGuidance, ''\)/.test(rendererSrc);
@@ -102,7 +114,8 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
 
 // ── Help text rendering is bounded and XSS-safe (textContent-only, no innerHTML) ──
 {
-  const helpRenderedViaElText = /if \(_isRecord\(item\.help\)\) \{[\s\S]{0,900}?helpWrap\.appendChild\(el\('div', \{ text: whatText \}\)\);/.test(rendererSrc);
+  const helpRenderedViaElText = /const canonicalWhat = presentReviewItemField\(item\.id, 'whatThisChecks', lang\);[\s\S]{0,1400}?helpWrap\.appendChild\(el\('div', \{ text: whatText \}\)\);/.test(rendererSrc)
+    && !/helpWrap\.innerHTML/.test(rendererSrc);
   record('Help text (whatThisChecks/whatToLookFor/whyItMatters) is rendered via el({text:...}) — never innerHTML', helpRenderedViaElText, { helpRenderedViaElText });
 
   const noInnerHTMLAssignmentNearHelp = !/helpWrap\.innerHTML/.test(rendererSrc);

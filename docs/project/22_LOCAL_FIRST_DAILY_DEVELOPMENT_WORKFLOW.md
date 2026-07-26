@@ -4,6 +4,10 @@
 
 **Updated by CONTROLLED V2 VISUAL TRANSLATION R1 — Phase M** (added Step 12, the Controlled V2 Browser suite; see doc 23 for the feature itself).
 
+**Updated by FULL-SYSTEM I18N COMPLETION R2 — Phase P** (Step 3 also runs the visible-English audit, the runtime i18n coverage report and the XMP evidence invariant; new Step 13 runs the full EN/TH Browser suite. See doc 24.)
+
+**Updated by FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 — Phase M** (Step 3, Static suites, now also includes the centralized i18n module contract test and the state-preserving locale-switch regression guard; see doc 23B for that round, and the new manual check in §5 below).
+
 This document is the everyday, Windows-desktop workflow for developing
 LUMIXA AI locally, testing it locally, and deploying to Preview only
 once per day. It assumes no prior context beyond a working Windows PC
@@ -108,7 +112,11 @@ clear PASS/FAIL summary at the end:
     import smoke test of all 30 `core/*/index.js` analysis engines)
  3. Static suites (`qa/run-static-suites.mjs` — every no-Browser
     self-test in the project, including the Controlled V2 translator/
-    review/UI suites added in CONTROLLED V2 VISUAL TRANSLATION R1)
+    review/UI suites added in CONTROLLED V2 VISUAL TRANSLATION R1, and
+    the i18n module contract + locale-switch regression suites added in
+    FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 (doc 23B), plus the visible-English
+    audit, runtime i18n coverage report and XMP evidence invariant added
+    in FULL-SYSTEM I18N COMPLETION R2 — see doc 24)
  4. In-Memory startup (`qa/playwright-in-memory-app-smoke.mjs`)
  5. Upload baseline (`qa/epic-2e-j-safe-recovery-upload-baseline-test.mjs`)
  6. Live App (`qa/epic-2e-j-phase-c-live-app-test.mjs`)
@@ -122,11 +130,18 @@ clear PASS/FAIL summary at the end:
     Build Controlled V2 Preview workflow across 5 fixture flavors, with
     a required cross-fixture proof that at least 2 of the 5 produce a
     genuinely meaningful, non-Identity translation)
+13. Full-system EN/TH i18n Browser suite — FULL-SYSTEM I18N COMPLETION
+    R2 Phase M (`qa/epic-2e-j-full-system-i18n-browser-test.mjs` — the
+    real 13-step Thai workflow, per-section English-leak audit, and the
+    TH→EN→TH state-invariant proof)
 
 It exits **non-zero** (fails) if any of the following is true:
 - any required suite reports a FAIL
+- a visible English leak, a missing Thai key, an English fallback in the
+  tested Thai workflow, a language-switch state mutation, or an XMP
+  evidence contradiction is detected (FULL-SYSTEM I18N COMPLETION R2)
 - Chromium/Playwright is unavailable in the current environment (steps
-  4–12 need a real Browser; if none is resolvable, the gate fails
+  4–13 need a real Browser; if none is resolvable, the gate fails
   rather than silently skipping — this is a fail-closed design, not a
   bug, and it is exactly why step 3 above matters: install a real
   Chromium via `npx playwright install chromium`)
@@ -218,6 +233,21 @@ Preview URL), using a real photo (not a test fixture):
       announces an honest outcome (Safety-restraint / Identity
       fallback), and scrolls to the Visual Preview Comparison section.
       See doc 23 for the full feature explanation.
+
+- [ ] **Thai end-to-end** — switch to Thai and walk the whole workflow
+      (upload → Review → Build Controlled V2 → Before/After →
+      Observation). Confirm no English sentences remain on the main
+      surfaces. Approved technical terms (Legacy, Controlled V2, XMP,
+      Lightroom …) and the in-canvas analysis labels documented in
+      doc 24 §7 are the only expected English.
+- [ ] **Language switch** — with a photo loaded and Analysis run, open
+      each visible section (Review Console, Data Comparison, Visual
+      Preview Comparison, Interactive Before/After, Preview
+      Observation, Session Summary), switch the language pill, and
+      confirm every one of those sections re-renders into the new
+      language immediately — with no re-analysis, no flicker of stale
+      canvases, and all prior selections/progress still intact. See
+      doc 24 for the feature itself.
 
 Two further checks worth doing at least once per release, beyond the
 required list above:

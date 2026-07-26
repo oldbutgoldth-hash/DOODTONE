@@ -21,6 +21,9 @@
  * exact DOM nodes, so replacing them would silently break rendering.
  */
 
+import { t } from './i18n/index.js';
+import { presentLimitationCode, presentReasonCode, presentBlockerCode, presentCodeList } from './i18n/domain-presenters.js';
+
 const LEGACY_CANVAS_ID = 'legacyVisualPreviewCanvasV2';
 const V2_CANVAS_ID = 'controlledV2VisualPreviewCanvasV2';
 
@@ -50,30 +53,15 @@ function _safeArray(v) {
   return Array.isArray(v) ? v : [];
 }
 
-// CONTROLLED V2 VISUAL TRANSLATION R1 — Phase F: a small, bounded
-// bilingual (English/Thai) text dictionary for the NEW Controlled V2
-// honesty labels only — this module has no prior i18n mechanism, so
-// this is deliberately scoped to just the new strings rather than
-// retrofitting the whole file. `lang` is passed through by the caller
-// (ui/app.js's `state.lang`); any value other than 'th' resolves to
-// English.
-const V2_TEXT = {
-  safetyRestraintLabel: { en: 'Controlled V2 — Safety-restraint preview', th: 'Controlled V2 — ตัวอย่างที่ผ่านการจำกัดเพื่อความปลอดภัย' },
-  safetyRestraintLine1: { en: 'Browser visualization based on Legacy preview plus bounded V2 safety restraints.', th: 'ภาพจำลองในเบราว์เซอร์ที่อ้างอิงจากตัวอย่าง Legacy บวกกับการจำกัดความปลอดภัยของ V2 แบบมีขอบเขต' },
-  safetyRestraintLine2: { en: 'This is not Lightroom/ACR and is not a Production result.', th: 'นี่ไม่ใช่ผลลัพธ์จาก Lightroom/ACR และไม่ใช่ผลลัพธ์ Production' },
-  identityFallbackLabel: { en: 'Controlled V2 — Identity fallback', th: 'Controlled V2 — ตัวอย่างเหมือนต้นฉบับ (Identity fallback)' },
-  identityFallbackLine1: { en: 'No supported V2 safety restraint produced a meaningful browser-visible change.', th: 'ไม่มีการจำกัดความปลอดภัยของ V2 ที่รองรับซึ่งทำให้เกิดการเปลี่ยนแปลงที่มองเห็นได้อย่างมีนัยสำคัญ' },
-  identityFallbackLine2: { en: 'This is not the final V2 appearance.', th: 'นี่ไม่ใช่ลักษณะสุดท้ายของ V2' },
-  visualizedAdjustments: { en: 'Visualized adjustments', th: 'การปรับที่แสดงผล' },
-  translationMode: { en: 'Translation mode', th: 'โหมดการแปลง' },
-  confidence: { en: 'Confidence', th: 'ความเชื่อมั่น' },
-  topChanges: { en: 'Top preview changes', th: 'การเปลี่ยนแปลงหลักในตัวอย่าง' },
-  legacyPanelSubtitle: { en: 'Legacy Browser Preview', th: 'ตัวอย่าง Legacy ในเบราว์เซอร์' },
-};
+// EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase B/J:
+// this module now sources ALL its translatable text from the
+// centralized runtime i18n module (`ui/i18n/index.js`) rather than
+// its own local dictionary. `_t` is kept as a thin, drop-in-compatible
+// wrapper (same call shape as the prior local helper) so the rest of
+// this file's call sites did not need to change shape -- it now reads
+// from the `visualPreview.v2.*` namespace instead of a local object.
 function _t(key, lang) {
-  const entry = V2_TEXT[key];
-  if (!entry) return '';
-  return lang === 'th' ? (entry.th ?? entry.en) : entry.en;
+  return t(`visualPreview.v2.${key}`, null, lang);
 }
 
 /** Formats one changed-field entry as a compact, honest "Field: +before -> +after" line — normalized browser-preview units, never labeled as a Lightroom slider value. */
@@ -132,8 +120,12 @@ export function ensureVisualPreviewComparisonLayout(container) {
   // Header + subtitle
   const header = el('div', { style: 'display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;justify-content:space-between' });
   const titleWrap = el('div');
-  titleWrap.appendChild(el('h3', { style: 'margin:0;font-size:14px;font-weight:700;color:var(--text)', text: 'Visual Preview Comparison' }));
-  titleWrap.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-dim);margin-top:2px', text: 'Approximate browser preview · Not Lightroom-accurate' }));
+  const titleEl = el('h3', { style: 'margin:0;font-size:14px;font-weight:700;color:var(--text)' });
+  titleEl.id = 'vprTitle';
+  titleWrap.appendChild(titleEl);
+  const subtitleEl = el('div', { style: 'font-size:10.5px;color:var(--text-dim);margin-top:2px' });
+  subtitleEl.id = 'vprSubtitle';
+  titleWrap.appendChild(subtitleEl);
   header.appendChild(titleWrap);
   const overallStatusWrap = el('div', { attrs: { id: '', 'aria-live': 'polite' } });
   overallStatusWrap.id = 'vprOverallStatusBadge';
@@ -143,8 +135,8 @@ export function ensureVisualPreviewComparisonLayout(container) {
   // Top safety notice — always visible, exact required wording.
   const notice = el('div', {
     style: 'font-size:11px;color:var(--text-dim);background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:10px 12px;line-height:1.5',
-    text: 'These previews are browser approximations. They do not reproduce Lightroom, Adobe Camera Raw, RAW profiles, local masks or exact color management. Results may differ from Lightroom and Adobe Camera Raw.',
   });
+  notice.id = 'vprTopNotice';
   root.appendChild(notice);
 
   // UX Polish (EPIC 2E-H Phase D): a compact, ALWAYS-VISIBLE technical
@@ -152,15 +144,8 @@ export function ensureVisualPreviewComparisonLayout(container) {
   // `<details>` section, per this phase's explicit requirement.
   const limitationsNotice = el('div', { style: 'font-size:10px;color:var(--text-faint);line-height:1.6' });
   const limitationsList = el('ul', { style: 'margin:4px 0 0;padding-left:16px' });
-  [
-    'RAW development is not reproduced',
-    'Camera profiles are not reproduced',
-    'Local masks are not reproduced',
-    'Full ICC proofing is not reproduced',
-    'Sharpening and noise reduction are not guaranteed',
-    'Color Grading support is partial (shadow/highlight saturation only)',
-    'Midtone grading and Hue rendering remain unsupported',
-  ].forEach(t => limitationsList.appendChild(el('li', { text: t })));
+  limitationsList.id = 'vprLimitationsList';
+  for (let i = 0; i < 7; i++) limitationsList.appendChild(el('li', {}));
   limitationsNotice.appendChild(limitationsList);
   root.appendChild(limitationsNotice);
 
@@ -173,10 +158,12 @@ export function ensureVisualPreviewComparisonLayout(container) {
   // stack-on-mobile grid class.
   const grid = el('div', { cls: 'lx-2col-grid', style: 'display:grid;grid-template-columns:1fr 1fr;gap:16px' });
 
-  function buildPanel(side, canvasId, ariaLabel, titleText) {
+  function buildPanel(side, canvasId, ariaLabel) {
     const panel = el('div', { style: 'display:flex;flex-direction:column;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:12px' });
     const panelHeader = el('div', { style: 'display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px' });
-    panelHeader.appendChild(el('div', { style: 'font-size:12px;font-weight:700;color:var(--text)', text: titleText }));
+    const panelTitleEl = el('div', { style: 'font-size:12px;font-weight:700;color:var(--text)' });
+    panelTitleEl.id = `vpr${side}Title`;
+    panelHeader.appendChild(panelTitleEl);
     const panelBadges = el('div', { style: 'display:flex;gap:4px;flex-wrap:wrap' });
     panelBadges.id = `vpr${side}Badges`;
     panelHeader.appendChild(panelBadges);
@@ -191,7 +178,6 @@ export function ensureVisualPreviewComparisonLayout(container) {
     canvasWrap.appendChild(canvas);
     const placeholder = el('div', { style: 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;text-align:center;font-size:11px;color:var(--text-faint)' });
     placeholder.id = `vpr${side}Placeholder`;
-    placeholder.textContent = 'Waiting for analysis and Render Plan.';
     canvasWrap.appendChild(placeholder);
     panel.appendChild(canvasWrap);
 
@@ -205,21 +191,23 @@ export function ensureVisualPreviewComparisonLayout(container) {
     panel.appendChild(warningsWrap);
 
     const details = el('details', { style: 'font-size:10.5px;color:var(--text-dim)' });
-    const summary = el('summary', { style: 'cursor:pointer;color:var(--text-dim);font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em', text: 'Render details' });
+    const summary = el('summary', { style: 'cursor:pointer;color:var(--text-dim);font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em' });
+    summary.id = `vpr${side}DetailsSummary`;
     details.appendChild(summary);
     const detailsBody = el('div', { style: 'margin-top:6px;display:flex;flex-direction:column;gap:3px' });
     detailsBody.id = `vpr${side}Details`;
     details.appendChild(detailsBody);
     panel.appendChild(details);
 
-    const disclaimer = el('div', { style: 'font-size:9.5px;color:var(--text-faint);font-style:italic', text: 'Approximate browser preview.' });
+    const disclaimer = el('div', { style: 'font-size:9.5px;color:var(--text-faint);font-style:italic' });
+    disclaimer.id = `vpr${side}Disclaimer`;
     panel.appendChild(disclaimer);
 
     return panel;
   }
 
-  grid.appendChild(buildPanel('Legacy', LEGACY_CANVAS_ID, 'Approximate Legacy browser preview', 'Legacy Preview'));
-  grid.appendChild(buildPanel('V2', V2_CANVAS_ID, 'Approximate Controlled V2 browser preview', 'Controlled V2 Preview'));
+  grid.appendChild(buildPanel('Legacy', LEGACY_CANVAS_ID, 'Approximate Legacy browser preview'));
+  grid.appendChild(buildPanel('V2', V2_CANVAS_ID, 'Approximate Controlled V2 browser preview'));
   root.appendChild(grid);
 
   // Overall warnings/blockers
@@ -229,6 +217,37 @@ export function ensureVisualPreviewComparisonLayout(container) {
   root.appendChild(overallMessages);
 
   container.replaceChildren(root);
+}
+
+// EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase C/J:
+// the skeleton above is built EXACTLY ONCE per container (see the
+// SKELETON/METADATA SEPARATION note at the top of this file), so its
+// static translatable text must be re-applied on EVERY render call
+// (not just at skeleton-build time) for a language switch to actually
+// update it -- this is what makes this section state-preserving under
+// setLang(): the canvases/pixels are untouched, only these text nodes
+// are refreshed.
+function _applyStaticSkeletonTranslations(container, lang) {
+  if (!container) return;
+  const byId = (id) => document.getElementById(id);
+  const set = (id, text) => { const e = byId(id); if (e) e.textContent = text; };
+  set('vprTitle', t('visualPreview.title', null, lang));
+  set('vprSubtitle', t('visualPreview.subtitle', null, lang));
+  set('vprTopNotice', t('visualPreview.topNotice', null, lang));
+  const limitationsList = byId('vprLimitationsList');
+  if (limitationsList) {
+    const limitationKeys = ['limitation1', 'limitation2', 'limitation3', 'limitation4', 'limitation5', 'limitation6', 'limitation7'];
+    const items = limitationsList.querySelectorAll('li');
+    limitationKeys.forEach((key, i) => { if (items[i]) items[i].textContent = t(`visualPreview.${key}`, null, lang); });
+  }
+  set('vprLegacyTitle', t('visualPreview.legacyPanelTitle', null, lang));
+  set('vprV2Title', t('visualPreview.v2PanelTitle', null, lang));
+  set('vprLegacyPlaceholder', t('visualPreview.waitingPlaceholder', null, lang));
+  set('vprV2Placeholder', t('visualPreview.waitingPlaceholder', null, lang));
+  set('vprLegacyDetailsSummary', t('visualPreview.renderDetails', null, lang));
+  set('vprV2DetailsSummary', t('visualPreview.renderDetails', null, lang));
+  set('vprLegacyDisclaimer', t('visualPreview.disclaimer', null, lang));
+  set('vprV2Disclaimer', t('visualPreview.disclaimer', null, lang));
 }
 
 function _renderSidePanel(side, sideResult, selectedProductionSource, v2BlockerCode, controlledV2Translation, lang) {
@@ -243,17 +262,17 @@ function _renderSidePanel(side, sideResult, selectedProductionSource, v2BlockerC
   warningsEl.replaceChildren();
   detailsEl.replaceChildren();
 
-  const sourceLabel = side === 'Legacy' ? 'legacy' : 'controlled-v2-preview';
+  const sourceLabel = side === 'Legacy' ? t('visualPreview.badges.sourceLegacy', null, lang) : t('visualPreview.badges.sourceControlledV2', null, lang);
   badgesEl.appendChild(badge(sourceLabel, side === 'Legacy' ? 'var(--accent)' : 'var(--text-dim)'));
-  badgesEl.appendChild(badge('preview-only', 'var(--text-faint)'));
+  badgesEl.appendChild(badge(t('visualPreview.badges.previewOnly', null, lang), 'var(--text-faint)'));
   // FIX 8 (EPIC 2E-H-C-F): the Legacy panel's "production-source" badge
   // is shown ONLY when selectedProductionSource is explicitly
   // "legacy" — never unconditionally. If evidence reports "v2" (a
   // critical anomaly, surfaced separately by the safety strip) or is
   // missing/unknown, this panel shows no false confirmation badge.
   if (side === 'Legacy') {
-    if (selectedProductionSource === 'legacy') badgesEl.appendChild(badge('production-source', 'var(--success, green)'));
-    else if (selectedProductionSource !== 'v2') badgesEl.appendChild(badge('production source not confirmed', 'var(--text-faint)'));
+    if (selectedProductionSource === 'legacy') badgesEl.appendChild(badge(t('visualPreview.badges.productionSource', null, lang), 'var(--success, green)'));
+    else if (selectedProductionSource !== 'v2') badgesEl.appendChild(badge(t('visualPreview.badges.productionSourceNotConfirmed', null, lang), 'var(--text-faint)'));
     // selectedProductionSource === 'v2': no badge here at all — the
     // anomaly is already shown loudly at the top-level safety strip;
     // this panel never claims Legacy is the confirmed production
@@ -275,13 +294,13 @@ function _renderSidePanel(side, sideResult, selectedProductionSource, v2BlockerC
     const isReviewIncompleteV2 = side !== 'Legacy' && v2BlockerCode === 'REVIEW_INCOMPLETE';
     let msg;
     if (isReviewIncompleteV2 && (!sideResult || state === 'unavailable')) {
-      msg = 'Complete Human Review to prepare the Controlled V2 preview.';
+      msg = t('visualPreview.msg.reviewIncomplete', null, lang);
     }
-    else if (!sideResult) msg = side === 'Legacy' ? 'Legacy preview plan is unavailable.' : 'V2 preview plan is unavailable.';
-    else if (state === 'blocked') msg = 'Preview rendering is blocked by current safety evidence.';
-    else if (state === 'cancelled') msg = 'Preview render was cancelled because a newer analysis is available.';
-    else if (state === 'failed') msg = 'Preview rendering failed. The source image and production output were not changed.';
-    else if (state === 'unavailable') msg = side === 'Legacy' ? 'Legacy preview plan is unavailable.' : 'V2 preview plan is unavailable.';
+    else if (!sideResult) msg = side === 'Legacy' ? t('visualPreview.msg.legacyPlanUnavailable', null, lang) : t('visualPreview.msg.v2PlanUnavailable', null, lang);
+    else if (state === 'blocked') msg = t('visualPreview.msg.blocked', null, lang);
+    else if (state === 'cancelled') msg = t('visualPreview.msg.cancelled', null, lang);
+    else if (state === 'failed') msg = t('visualPreview.msg.failed', null, lang);
+    else if (state === 'unavailable') msg = side === 'Legacy' ? t('visualPreview.msg.legacyPlanUnavailable', null, lang) : t('visualPreview.msg.v2PlanUnavailable', null, lang);
     else if (state === 'preparing') {
       // FIX 3 (EPIC 2E-H-C-F2): two genuinely different "preparing"
       // contexts share the same state value — distinguished via a
@@ -291,15 +310,15 @@ function _renderSidePanel(side, sideResult, selectedProductionSource, v2BlockerC
       // sequential-render queue from EPIC 2E-H-C-F), V2 is simply
       // waiting its turn while Legacy renders first.
       msg = sideResult?.metadata?.analysisInProgress === true
-        ? 'Waiting for the latest analysis…'
-        : 'Waiting for the sequential render to begin…';
+        ? t('visualPreview.msg.waitingAnalysis', null, lang)
+        : t('visualPreview.msg.waitingSequential', null, lang);
     }
-    else if (state === 'rendering') msg = 'Rendering approximate browser preview…';
-    else msg = 'Waiting for analysis and Render Plan.';
+    else if (state === 'rendering') msg = t('visualPreview.msg.rendering', null, lang);
+    else msg = t('visualPreview.waitingPlaceholder', null, lang);
     placeholderEl.textContent = msg;
   }
 
-  statusLineEl.textContent = `Status: ${STATE_LABEL[state] ?? 'Unavailable'}`;
+  statusLineEl.textContent = t('visualPreview.msg.statusLine', { value: t(`visualPreview.stateLabel.${state}`, null, lang) || t('visualPreview.stateLabel.unavailable', null, lang) }, lang);
 
   const visualAdjustmentsApplied = sideResult?.metadata?.visualAdjustmentsApplied;
   if (side !== 'Legacy' && rendered) {
@@ -341,29 +360,52 @@ function _renderSidePanel(side, sideResult, selectedProductionSource, v2BlockerC
     // Legacy side — unchanged wording (this side is not affected by
     // the Controlled V2 translation, so its Identity messaging stays
     // exactly as before).
-    warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: 'Preview rendered from the source image, but no supported visual adjustments were applied.' }));
+    warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: t('visualPreview.v2.noAdjustments', null, lang) }));
   }
-  _safeArray(sideResult?.warnings).slice(0, 4).forEach(w => {
-    const t = _safeText(w);
-    if (t) warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: t }));
-  });
-  _safeArray(sideResult?.reasons).slice(0, 2).forEach(r => {
-    const t = _safeText(r);
-    if (t) warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-dim)', text: t }));
-  });
+  // FULL-SYSTEM I18N COMPLETION R2 -- Phase G: prefer the renderer's
+  // STABLE codes and render fully localized sentences. The raw English
+  // `warnings`/`reasons` arrays are only used when no code accompanies
+  // them (an older/!unknown producer), and even then they are shown as
+  // the honest last resort rather than silently dropped.
+  const warningCodes = _safeArray(sideResult?.warningCodes).slice(0, 5);
+  if (warningCodes.length) {
+    presentCodeList(warningCodes, presentLimitationCode, lang, 5).forEach(txt => {
+      warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: txt }));
+    });
+  } else {
+    _safeArray(sideResult?.warnings).slice(0, 4).forEach(w => {
+      const txt = _safeText(w);
+      if (txt) warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn, orange)', text: txt }));
+    });
+  }
 
+  const reasonCodes = _safeArray(sideResult?.reasonCodes).slice(0, 2);
+  if (reasonCodes.length) {
+    const reasonParams = sideResult?.reasonParams && typeof sideResult.reasonParams === 'object' ? sideResult.reasonParams : null;
+    reasonCodes.forEach(code => {
+      const txt = presentReasonCode(code, lang, reasonParams);
+      if (txt) warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-dim)', text: txt }));
+    });
+  } else {
+    _safeArray(sideResult?.reasons).slice(0, 2).forEach(r => {
+      const txt = _safeText(r);
+      if (txt) warningsEl.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-dim)', text: txt }));
+    });
+  }
+
+  const unknownLabel = t('visualPreview.rows.unknownLower', null, lang);
   const rows = [
-    ['Applied adjustments', _safeArray(sideResult?.appliedAdjustments).length],
-    ['Skipped adjustments', _safeArray(sideResult?.skippedAdjustments).length],
-    ['Processing time', Number.isFinite(sideResult?.processingTimeMs) ? `${sideResult.processingTimeMs.toFixed(1)} ms` : 'unknown'],
-    ['CSS size', (Number.isFinite(sideResult?.cssWidth) && Number.isFinite(sideResult?.cssHeight)) ? `${sideResult.cssWidth}×${sideResult.cssHeight}` : 'unknown'],
-    ['Backing size', (Number.isFinite(sideResult?.backingWidth) && Number.isFinite(sideResult?.backingHeight)) ? `${sideResult.backingWidth}×${sideResult.backingHeight}` : 'unknown'],
-    ['Requested DPR', Number.isFinite(sideResult?.metadata?.requestedDevicePixelRatio) ? sideResult.metadata.requestedDevicePixelRatio : 'unknown'],
-    ['Effective DPR', Number.isFinite(sideResult?.devicePixelRatio) ? sideResult.devicePixelRatio : 'unknown'],
-    ['Pixel count', Number.isFinite(sideResult?.metadata?.pixelCount) ? sideResult.metadata.pixelCount : 'unknown'],
-    ['Memory downscaled', sideResult?.metadata?.downscaledForMemorySafety === true ? 'Yes' : sideResult?.metadata?.downscaledForMemorySafety === false ? 'No' : 'unknown'],
-    ['Processing mode', _safeText(sideResult?.metadata?.processingMode) || 'unknown'],
-    ['Commit atomicity', _safeText(sideResult?.metadata?.commitAtomicity) || 'unknown'],
+    [t('visualPreview.rows.appliedAdjustments', null, lang), _safeArray(sideResult?.appliedAdjustments).length],
+    [t('visualPreview.rows.skippedAdjustments', null, lang), _safeArray(sideResult?.skippedAdjustments).length],
+    [t('visualPreview.rows.processingTime', null, lang), Number.isFinite(sideResult?.processingTimeMs) ? t('visualPreview.rows.msSuffix', { value: sideResult.processingTimeMs.toFixed(1) }, lang) : unknownLabel],
+    [t('visualPreview.rows.cssSize', null, lang), (Number.isFinite(sideResult?.cssWidth) && Number.isFinite(sideResult?.cssHeight)) ? `${sideResult.cssWidth}×${sideResult.cssHeight}` : unknownLabel],
+    [t('visualPreview.rows.backingSize', null, lang), (Number.isFinite(sideResult?.backingWidth) && Number.isFinite(sideResult?.backingHeight)) ? `${sideResult.backingWidth}×${sideResult.backingHeight}` : unknownLabel],
+    [t('visualPreview.rows.requestedDpr', null, lang), Number.isFinite(sideResult?.metadata?.requestedDevicePixelRatio) ? sideResult.metadata.requestedDevicePixelRatio : unknownLabel],
+    [t('visualPreview.rows.effectiveDpr', null, lang), Number.isFinite(sideResult?.devicePixelRatio) ? sideResult.devicePixelRatio : unknownLabel],
+    [t('visualPreview.rows.pixelCount', null, lang), Number.isFinite(sideResult?.metadata?.pixelCount) ? sideResult.metadata.pixelCount : unknownLabel],
+    [t('visualPreview.rows.memoryDownscaled', null, lang), sideResult?.metadata?.downscaledForMemorySafety === true ? t('visualPreview.rows.yesLower', null, lang) : sideResult?.metadata?.downscaledForMemorySafety === false ? t('visualPreview.rows.noLower', null, lang) : unknownLabel],
+    [t('visualPreview.rows.processingMode', null, lang), _safeText(sideResult?.metadata?.processingMode) || unknownLabel],
+    [t('visualPreview.rows.commitAtomicity', null, lang), _safeText(sideResult?.metadata?.commitAtomicity) || unknownLabel],
   ];
   rows.forEach(([label, value]) => {
     const row = el('div', { style: 'display:flex;justify-content:space-between;gap:8px' });
@@ -429,13 +471,18 @@ export function buildRenderingPlaceholderState() {
 export function renderVisualPreviewComparison(container, comparisonState, lang) {
   if (!container) return;
   ensureVisualPreviewComparisonLayout(container);
+  // EPIC 2E-J Phase C/J: re-apply skeleton translations on EVERY call
+  // (idempotent — a no-op in content terms if lang hasn't changed)
+  // so a setLang() re-render picks up the new locale even though the
+  // skeleton itself is only ever built once.
+  _applyStaticSkeletonTranslations(container, lang);
 
   const cs = (comparisonState && typeof comparisonState === 'object') ? comparisonState : {};
   const overallState = _normalizeState(cs.state);
 
   const overallBadgeEl = document.getElementById('vprOverallStatusBadge');
   if (overallBadgeEl) {
-    overallBadgeEl.replaceChildren(badge(STATE_LABEL[overallState], STATE_COLOR[overallState]));
+    overallBadgeEl.replaceChildren(badge(t(`visualPreview.stateLabel.${overallState}`, null, lang), STATE_COLOR[overallState]));
   }
 
   const safetyStripEl = document.getElementById('vprSafetyStrip');
@@ -451,25 +498,25 @@ export function renderVisualPreviewComparison(container, comparisonState, lang) 
     // distinct states, never a fixed "Legacy" claim regardless of
     // evidence.
     if (selectedProductionSource === 'legacy') {
-      safetyStripEl.appendChild(badge('Production Mapping: Legacy', 'var(--success, green)'));
+      safetyStripEl.appendChild(badge(t('visualPreview.badges.productionMappingLegacy', null, lang), 'var(--success, green)'));
     } else if (selectedProductionSource === 'v2') {
-      safetyStripEl.appendChild(badge('Critical anomaly: V2 reported as production source', 'var(--danger, red)'));
+      safetyStripEl.appendChild(badge(t('visualPreview.badges.productionMappingAnomaly', null, lang), 'var(--danger, red)'));
     } else {
-      safetyStripEl.appendChild(badge('Production Mapping: Not confirmed', 'var(--text-faint)'));
+      safetyStripEl.appendChild(badge(t('visualPreview.badges.productionMappingNotConfirmed', null, lang), 'var(--text-faint)'));
     }
 
     // FIX 7: Preview Export — confirmed-disabled / enabled-anomaly / unknown.
-    if (allowExport === false) safetyStripEl.appendChild(badge('Preview Export: Confirmed disabled', 'var(--success, green)'));
-    else if (allowExport === true) safetyStripEl.appendChild(badge('Preview Export: Enabled anomaly', 'var(--danger, red)'));
-    else safetyStripEl.appendChild(badge('Preview Export: Not confirmed', 'var(--text-faint)'));
+    if (allowExport === false) safetyStripEl.appendChild(badge(t('visualPreview.badges.previewExportDisabled', null, lang), 'var(--success, green)'));
+    else if (allowExport === true) safetyStripEl.appendChild(badge(t('visualPreview.badges.previewExportAnomaly', null, lang), 'var(--danger, red)'));
+    else safetyStripEl.appendChild(badge(t('visualPreview.badges.previewExportNotConfirmed', null, lang), 'var(--text-faint)'));
 
     // FIX 7: Production Write — same tri-state pattern.
-    if (allowProductionWrite === false) safetyStripEl.appendChild(badge('Production Write: Confirmed disabled', 'var(--success, green)'));
-    else if (allowProductionWrite === true) safetyStripEl.appendChild(badge('Production Write: Enabled anomaly', 'var(--danger, red)'));
-    else safetyStripEl.appendChild(badge('Production Write: Not confirmed', 'var(--text-faint)'));
+    if (allowProductionWrite === false) safetyStripEl.appendChild(badge(t('visualPreview.badges.productionWriteDisabled', null, lang), 'var(--success, green)'));
+    else if (allowProductionWrite === true) safetyStripEl.appendChild(badge(t('visualPreview.badges.productionWriteAnomaly', null, lang), 'var(--danger, red)'));
+    else safetyStripEl.appendChild(badge(t('visualPreview.badges.productionWriteNotConfirmed', null, lang), 'var(--text-faint)'));
 
     safetyStripEl.appendChild(badge(
-      cs.visualComparisonAvailable === true ? 'Actual visual comparison: Available' : 'Actual visual comparison: Not available',
+      cs.visualComparisonAvailable === true ? t('visualPreview.badges.visualComparisonAvailable', null, lang) : t('visualPreview.badges.visualComparisonNotAvailable', null, lang),
       cs.visualComparisonAvailable === true ? 'var(--success, green)' : 'var(--text-faint)',
     ));
   }
@@ -495,37 +542,46 @@ export function renderVisualPreviewComparison(container, comparisonState, lang) 
     // UX Polish (EPIC 2E-H Phase D): a clear overall-outcome sentence,
     // exact required wording — never implies accuracy, only completion.
     if (overallState === 'rendered') {
-      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--success, green)', text: 'Both approximate browser previews are available.' }));
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--success, green)', text: t('visualPreview.overall.bothRendered', null, lang) }));
     } else if (overallState === 'partial') {
-      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: 'Partial preview: only one side rendered successfully.' }));
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: t('visualPreview.overall.partial', null, lang) }));
     } else if (overallState === 'cancelled') {
-      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--text-dim)', text: 'Preview rendering was cancelled because a newer analysis is active.' }));
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--text-dim)', text: t('visualPreview.overall.cancelled', null, lang) }));
     } else if (overallState === 'failed') {
-      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--danger, red)', text: 'Visual Preview rendering failed. Analysis results and production output were not changed.' }));
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--danger, red)', text: t('visualPreview.overall.failed', null, lang) }));
     }
 
     if (legacyRendered && v2Rendered && (cs.legacy?.metadata?.visualAdjustmentsApplied === false || cs.v2?.metadata?.visualAdjustmentsApplied === false)) {
-      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: 'One preview contains no supported visual adjustment.' }));
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: t('visualPreview.overall.noAdjustment', null, lang) }));
     }
     // UX Polish: memory-downscale messaging, deduplicated across sides.
     if ((legacyRendered && cs.legacy?.metadata?.downscaledForMemorySafety === true) || (v2Rendered && cs.v2?.metadata?.downscaledForMemorySafety === true)) {
-      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--text-dim)', text: 'Preview resolution was reduced for memory safety.' }));
+      overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--text-dim)', text: t('visualPreview.overall.resolutionReduced', null, lang) }));
     }
-    const blockers = _safeArray(cs.blockers).slice(0, 4);
-    blockers.forEach(b => {
-      const t = _safeText(b);
-      if (t) overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--danger, red)', text: t }));
-    });
+    // Phase G: the controller now emits stable blocker CODES; translate
+    // those. Raw English blockers are the fallback for an unknown producer.
+    const blockerCodes = _safeArray(cs.blockerCodes).slice(0, 4);
+    if (blockerCodes.length) {
+      presentCodeList(blockerCodes, presentBlockerCode, lang, 4).forEach(txt => {
+        overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--danger, red)', text: txt }));
+      });
+    } else {
+      const blockers = _safeArray(cs.blockers).slice(0, 4);
+      blockers.forEach(b => {
+        const txt = _safeText(b);
+        if (txt) overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--danger, red)', text: txt }));
+      });
+    }
     const warnings = _safeArray(cs.warnings).slice(0, 4);
     warnings.forEach(w => {
-      const t = _safeText(w);
-      if (t) overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: t }));
+      const txt = _safeText(w);
+      if (txt) overallMessagesEl.appendChild(el('div', { style: 'font-size:11px;color:var(--warn, orange)', text: txt }));
     });
   }
 }
 
 /** Resets the section to its empty/waiting visual state without destroying the skeleton (canvases remain in the DOM, cleared separately by the controller). */
-export function clearVisualPreviewComparisonDisplay(container) {
+export function clearVisualPreviewComparisonDisplay(container, lang) {
   if (!container || container.dataset.vprLayoutBuilt !== '1') return;
-  renderVisualPreviewComparison(container, { state: 'unavailable', legacy: null, v2: null, bothRendered: false, visualComparisonAvailable: false, warnings: [], blockers: [] });
+  renderVisualPreviewComparison(container, { state: 'unavailable', legacy: null, v2: null, bothRendered: false, visualComparisonAvailable: false, warnings: [], blockers: [] }, lang);
 }

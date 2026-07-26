@@ -34,8 +34,15 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
 
 // ── controlledV2Translation ─────────────────────────────────────────────
 {
-  const readsFromRenderPlan = /const t = fsi\?\.visualPreviewRenderPlanV2\?\.controlledV2Translation \?\? null;/.test(appSrc);
-  record('controlledV2Translation is read directly from fsi.visualPreviewRenderPlanV2.controlledV2Translation (the already-computed render plan)', readsFromRenderPlan, { readsFromRenderPlan });
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase E:
+  // FIX for Defect 2C -- the real field lives at
+  // `visualPreviewRenderPlanV2.v2RenderPlan.controlledV2Translation`,
+  // never at the render plan's own root.
+  const readsFromRenderPlan = /const t = fsi\?\.visualPreviewRenderPlanV2\?\.v2RenderPlan\?\.controlledV2Translation \?\? null;/.test(appSrc);
+  record('controlledV2Translation is read directly from fsi.visualPreviewRenderPlanV2.v2RenderPlan.controlledV2Translation (the already-computed render plan, correctly nested)', readsFromRenderPlan, { readsFromRenderPlan });
+
+  const noRootReadRegression = !/fsi\?\.visualPreviewRenderPlanV2\?\.controlledV2Translation\b/.test(appSrc);
+  record('app.js never reads the non-existent root field fsi.visualPreviewRenderPlanV2.controlledV2Translation', noRootReadRegression, { noRootReadRegression });
 
   const hasAllRequiredFields = ['mode:', 'meaningful:', 'identityFallback:', 'visualizedAdjustmentCount:', 'supportedAdjustments:', 'changedFields:', 'confidence:']
     .every((f) => appSrc.includes(f));

@@ -577,7 +577,19 @@ function noClickBetween(a, b) {
   let rendererSrc = '';
   try { controllerSrc = await readFile(path.join(PROJECT_ROOT, 'ui', 'interactive-preview-observation-controller-v2.js'), 'utf8'); } catch { /* left empty on read failure — check fails closed below */ }
   try { rendererSrc = await readFile(path.join(PROJECT_ROOT, 'ui', 'interactive-preview-observation-renderer-v2.js'), 'utf8'); } catch { /* left empty on read failure — check fails closed below */ }
-  const productionFixGenuinelyExists = controllerSrc.includes("let reasonAnnouncement = null;") && controllerSrc.includes("reasonAnnouncement = 'reasons-cleared';") && rendererSrc.includes("const REASONS_CLEARED_MESSAGE = 'Reasons cleared. Observation remains selected. Production output was not changed.';");
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase B/J:
+  // the bounded Clear Reasons message is now sourced from the
+  // centralized i18n module (`observation.reasonsCleared`) instead of
+  // a local string constant -- the invariant being checked (a real,
+  // exact, bounded message is used, not an arbitrary/interpolated
+  // string) still holds; verify against both the renderer's lookup
+  // call AND the i18n dictionary's own EN string content (which must
+  // still be the exact historical wording).
+  let en18nSrc = '';
+  try { en18nSrc = await readFile(path.join(PROJECT_ROOT, 'ui', 'i18n', 'en.js'), 'utf8'); } catch { /* checks fail closed below */ }
+  const rendererUsesI18nLookup = rendererSrc.includes("reasonLimitMessage = t('observation.reasonsCleared', null, lang);");
+  const i18nHasExactMessage = en18nSrc.includes("reasonsCleared: 'Reasons cleared. Observation remains selected. Production output was not changed.',");
+  const productionFixGenuinelyExists = controllerSrc.includes("let reasonAnnouncement = null;") && controllerSrc.includes("reasonAnnouncement = 'reasons-cleared';") && rendererUsesI18nLookup && i18nHasExactMessage;
   record('FIX 8/9 (F3-P1): the Clear Reasons Product-gap marker is removed from the Browser test ONLY because the bounded Production fix (reasonAnnouncement token + Renderer priority mapping) genuinely exists in the allowed Production files', markerRemovedFromBrowserTest && productionFixGenuinelyExists, `markerRemovedFromBrowserTest=${markerRemovedFromBrowserTest}, productionFixGenuinelyExists=${productionFixGenuinelyExists}`);
 }
 {
@@ -627,8 +639,10 @@ function noClickBetween(a, b) {
   const setReasonsClears = controllerSrc2.includes("reasons = normalizeReasons(_safeBoundedArray(reasonsInput));\n    // COMBINED CLOSEOUT R1 — FIX D1: maintain reasons.length === 0 =>\n    // reasonsGenerationId === null. setReasons([]) (or any input that\n    // normalizes to empty, including hostile input) must never leave a\n    // stale non-null reasonsGenerationId behind.\n    reasonsGenerationId = reasons.length > 0 ? generationId : null;\n    // Step 7B-B-F3-P1 FIX 3 — setReasons() clears any prior\n    // Reasons-cleared announcement (a genuine Reason mutation).\n    reasonAnnouncement = null;");
   record('FIX 9 (F3-P1): ordinary Reason mutation (toggleReason success and setReasons() success) clears reasonAnnouncement to null', toggleClears && setReasonsClears, `toggleClears=${toggleClears}, setReasonsClears=${setReasonsClears}`);
 
-  // Renderer maps the token to the exact bounded message.
-  const rendererMapsToken = rendererSrc2.includes("const rawReasonAnnouncement = _safeGetR(s, 'reasonAnnouncement');") && rendererSrc2.includes("const reasonAnnouncementActive = rawReasonAnnouncement === 'reasons-cleared';") && rendererSrc2.includes('reasonLimitMessage = REASONS_CLEARED_MESSAGE;');
+  // Renderer maps the token to the exact bounded message (now sourced
+  // from the centralized i18n module rather than a local constant --
+  // see the EPIC 2E-J note above the productionFixGenuinelyExists check).
+  const rendererMapsToken = rendererSrc2.includes("const rawReasonAnnouncement = _safeGetR(s, 'reasonAnnouncement');") && rendererSrc2.includes("const reasonAnnouncementActive = rawReasonAnnouncement === 'reasons-cleared';") && rendererSrc2.includes("reasonLimitMessage = t('observation.reasonsCleared', null, lang);");
   record('FIX 9 (F3-P1): the Renderer maps the token to the exact bounded Clear Reasons message', rendererMapsToken, `present=${rendererMapsToken}`);
 
   // Existing #ipoReasonLimit live region is reused; no fourth live region added.

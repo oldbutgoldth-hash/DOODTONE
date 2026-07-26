@@ -25,6 +25,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { en } from '../ui/i18n/en.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -40,11 +41,12 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
 
 // ── Signature threading ─────────────────────────────────────────────────
 {
-  const exportedSignature = /export function renderSideBySideComparison\(container, comparison, visualPreviewInfo = null\) \{/.test(rendererSrc);
-  record('renderSideBySideComparison accepts an optional visualPreviewInfo parameter, defaulting to null', exportedSignature, { exportedSignature });
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase J: signature now also accepts an explicit `locale` parameter (defaulting to 'en'), threaded through to every translated string -- never captured stale.
+  const exportedSignature = /export function renderSideBySideComparison\(container, comparison, visualPreviewInfo = null, locale = 'en'\) \{/.test(rendererSrc);
+  record('renderSideBySideComparison accepts an optional visualPreviewInfo parameter (defaulting to null) and an explicit locale parameter (defaulting to en)', exportedSignature, { exportedSignature });
 
-  const bodyReceivesIt = /_renderBody\(container, comparison, visualPreviewInfo\);/.test(rendererSrc);
-  record('The visualPreviewInfo parameter is threaded into _renderBody', bodyReceivesIt, { bodyReceivesIt });
+  const bodyReceivesIt = /_renderBody\(container, comparison, visualPreviewInfo, locale\);/.test(rendererSrc);
+  record('The visualPreviewInfo parameter (and locale) is threaded into _renderBody', bodyReceivesIt, { bodyReceivesIt });
 }
 
 // ── The renderer never fetches/re-derives Visual Preview evidence itself ──
@@ -66,23 +68,38 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
 
 // ── Own Unknown/not-available values are never reinterpreted by the other layer ──
 {
-  const legacyDataAvailableUnchanged = /Legacy data available \(this layer\): \$\{_yesNoUnknown\(legacyPreview \? legacyDataAvailable : undefined\)\}/.test(rendererSrc);
-  const v2DataAvailableUnchanged = /V2 data available \(this layer\): \$\{_yesNoUnknown\(v2Preview \? v2DataAvailable : undefined\)\}/.test(rendererSrc);
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase B/J: the
+  // literal English strings are now sourced through t(), but the
+  // underlying computation (legacyPreview ? legacyDataAvailable : undefined)
+  // is unchanged -- verify the VALUE expression, not the English wording.
+  const legacyDataAvailableUnchanged = /t\('comparison\.legacyDataAvailable', \{ value: _yesNoUnknown\(legacyPreview \? legacyDataAvailable : undefined, locale\) \}, locale\)/.test(rendererSrc);
+  const v2DataAvailableUnchanged = /t\('comparison\.v2DataAvailable', \{ value: _yesNoUnknown\(v2Preview \? v2DataAvailable : undefined, locale\) \}, locale\)/.test(rendererSrc);
   record('legacyDataAvailable/v2DataAvailable (this Data Comparison layer\'s own values) are still computed purely from `comparison`, never influenced by visualPreviewInfo', legacyDataAvailableUnchanged && v2DataAvailableUnchanged, { legacyDataAvailableUnchanged, v2DataAvailableUnchanged });
 
-  const noteNeverClaimsUnknownResolved = /does NOT change any "Unknown" value shown above/.test(rendererSrc);
+  const noteNeverClaimsUnknownResolved = /does NOT change any "Unknown" value shown above/.test(en.comparison.visualLayerNote.safetyRestraint) && /does NOT change any "Unknown" value shown above/.test(en.comparison.visualLayerNote.identityFallback);
   record('The cross-reference note explicitly states it does NOT change any "Unknown" value from this layer', noteNeverClaimsUnknownResolved, { noteNeverClaimsUnknownResolved });
 }
 
 // ── Three honest branches for the Visual layer's own status ─────────────
 {
   const hasNoInfoBranch = /if \(!vpInfo\) \{/.test(rendererSrc);
-  const hasSafetyRestraintBranch = /vpTranslation\?\.mode === 'legacy-derived-safety-restraint'/.test(rendererSrc);
-  const hasIdentityFallbackBranch = /vpTranslation\?\.mode === 'identity-fallback'/.test(rendererSrc);
-  const hasElseNotAvailableBranch = /not currently available for this analysis/.test(rendererSrc);
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase F:
+  // the mode check now reads `effectiveTranslationMode` (which prefers
+  // the caller's resolved post-render state, falling back to
+  // vpTranslation?.mode) rather than vpTranslation?.mode directly --
+  // verify the effective-mode variable itself is correctly derived
+  // from vpTranslation as its fallback, and that both branches exist.
+  const derivesEffectiveModeFromTranslation = /const effectiveTranslationMode = resolvedVisual\?\.translationMode \?\? vpTranslation\?\.mode;/.test(rendererSrc);
+  const hasSafetyRestraintBranch = /effectiveTranslationMode === 'legacy-derived-safety-restraint'/.test(rendererSrc) && derivesEffectiveModeFromTranslation;
+  const hasIdentityFallbackBranch = /effectiveTranslationMode === 'identity-fallback'/.test(rendererSrc) && derivesEffectiveModeFromTranslation;
+  const hasElseNotAvailableBranch = /not currently available for this analysis/.test(en.comparison.visualLayerNote.notAvailable);
   record('The Visual-layer cross-reference note has 4 honest branches: no-info, safety-restraint, identity-fallback, and not-available', hasNoInfoBranch && hasSafetyRestraintBranch && hasIdentityFallbackBranch && hasElseNotAvailableBranch, { hasNoInfoBranch, hasSafetyRestraintBranch, hasIdentityFallbackBranch, hasElseNotAvailableBranch });
 
-  const gatedByRenderableFlag = /const vpRenderable = vpInfo\?\.renderable === true;/.test(rendererSrc);
+  // Now conditionally derived: prefers resolved post-render evidence
+  // (legacyRendered/v2Rendered) when present, else falls back to the
+  // plan-time vpInfo.renderable === true flag -- never assumed true
+  // from mode alone in either case.
+  const gatedByRenderableFlag = /const vpRenderable = resolvedVisual \? \(resolvedVisual\.legacyRendered === true \|\| resolvedVisual\.v2Rendered === true\) : vpInfo\?\.renderable === true;/.test(rendererSrc);
   record('The positive branches (safety-restraint/identity-fallback) require vpInfo.renderable === true, never assumed from mode alone', gatedByRenderableFlag, { gatedByRenderableFlag });
 }
 
@@ -91,11 +108,36 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
   const readsExistingRenderPlan = /const vprPlanForComparisonNote = finalPreset\._decision\?\.finalStyleIntent\?\.visualPreviewRenderPlanV2 \?\? null;/.test(appSrc);
   record('app.js reads visualPreviewRenderPlanV2 directly from the already-computed finalStyleIntent — no new engine call', readsExistingRenderPlan, { readsExistingRenderPlan });
 
-  const passesOnlyBoundedFields = /renderable: vprPlanForComparisonNote\.renderable === true, controlledV2Translation: _isRecordLike\(vprPlanForComparisonNote\.controlledV2Translation\) \? vprPlanForComparisonNote\.controlledV2Translation : null/.test(appSrc);
-  record('Only a small, bounded subset (renderable + controlledV2Translation) is passed through, not the entire render plan object', passesOnlyBoundedFields, { passesOnlyBoundedFields });
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase E:
+  // updated to match the FIXED field-path (Defect 2B/2C) -- the bounded
+  // hint now reads `renderable`/`controlledV2Translation` from the
+  // correctly-nested `v2RenderPlanForComparisonNote` (itself read from
+  // `vprPlanForComparisonNote.v2RenderPlan`), plus the two explicit
+  // `sharedRenderConstraints` booleans, never from non-existent root
+  // fields on `vprPlanForComparisonNote` itself.
+  const readsV2RenderPlanNested = /const v2RenderPlanForComparisonNote = _isRecordLike\(vprPlanForComparisonNote\?\.v2RenderPlan\)/.test(appSrc);
+  record('app.js reads the nested v2RenderPlan object (never a non-existent root field) before extracting renderable/controlledV2Translation', readsV2RenderPlanNested, { readsV2RenderPlanNested });
 
-  const passedToRenderCall = /renderSideBySideComparison\(comparisonInner, state\.lastSideBySideComparison, visualPreviewInfoForComparisonNote\);/.test(appSrc);
-  record('The bounded hint is passed as the 3rd argument to renderSideBySideComparison', passedToRenderCall, { passedToRenderCall });
+  const passesOnlyBoundedFields = /renderable: v2RenderPlanForComparisonNote\?\.renderable === true,\s*\n\s*controlledV2Translation: _isRecordLike\(v2RenderPlanForComparisonNote\?\.controlledV2Translation\) \? v2RenderPlanForComparisonNote\.controlledV2Translation : null,/.test(appSrc);
+  record('Only a small, bounded subset (renderable + controlledV2Translation + allowProductionWrite + allowExport) is passed through, not the entire render plan object', passesOnlyBoundedFields, { passesOnlyBoundedFields });
+
+  // Regression guard (Phase E requirement): forbid ever reading these
+  // two fields directly off the ROOT of visualPreviewRenderPlanV2 again
+  // anywhere in app.js -- this is the exact defect class from EPIC
+  // 2E-J-R1 Defect 2B/2C. Matches `visualPreviewRenderPlanV2.renderable`
+  // or `visualPreviewRenderPlanV2.controlledV2Translation` (optional-
+  // chained or not), but correctly allows `visualPreviewRenderPlanV2.v2RenderPlan`
+  // and `visualPreviewRenderPlanV2.sharedRenderConstraints`.
+  const forbiddenRootReadPattern = /visualPreviewRenderPlanV2\??\.(renderable|controlledV2Translation)\b/;
+  const hasForbiddenRootRead = forbiddenRootReadPattern.test(appSrc);
+  record('app.js never reads the non-existent root fields visualPreviewRenderPlanV2.renderable / .controlledV2Translation anywhere', !hasForbiddenRootRead, { hasForbiddenRootRead });
+
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase J:
+  // renderSideBySideComparison now also receives the current locale as
+  // its 4th argument (state.lang) so it can render every label in the
+  // active language without capturing a stale value.
+  const passedToRenderCall = /renderSideBySideComparison\(comparisonInner, state\.lastSideBySideComparison, visualPreviewInfoForComparisonNote, state\.lang\);/.test(appSrc);
+  record('The bounded hint and current locale are passed as the 3rd/4th arguments to renderSideBySideComparison', passedToRenderCall, { passedToRenderCall });
 }
 
 const total = results.length;

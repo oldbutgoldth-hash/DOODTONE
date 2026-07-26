@@ -61,6 +61,12 @@ const STEPS = [
   // translation -- see computeControlledV2BrowserDecision's own
   // MEANINGFUL_TRANSLATION_COUNT_BELOW_2 reason if that bar isn't met.
   { n: 12, label: 'Controlled V2 Browser suite (Phase K/L)', script: 'qa/epic-2e-j-controlled-v2-browser-test.mjs', resultFile: 'qa/epic-2e-j-controlled-v2-browser-results.json', manifestKey: 'controlledV2Browser' },
+  // FULL-SYSTEM I18N COMPLETION R2 — Phase M/O: the real EN/TH Browser
+  // suite. The gate fails closed on a visible English leak, a missing
+  // Thai key, an English fallback in the tested Thai workflow, or any
+  // state mutation caused by the language switch — every one of those
+  // is a FAIL row inside this suite's own results.
+  { n: 13, label: 'Full-system EN/TH i18n Browser suite (Phase M)', script: 'qa/epic-2e-j-full-system-i18n-browser-test.mjs', resultFile: 'qa/epic-2e-j-full-system-i18n-browser-results.json', manifestKey: 'fullSystemI18nBrowser' },
 ];
 
 const BROWSER_UNAVAILABLE_STATUSES = new Set(['BROWSER_BINARY_UNAVAILABLE', 'PLAYWRIGHT_PACKAGE_UNAVAILABLE']);
@@ -113,7 +119,7 @@ function evaluateStepResult(step, resultObj) {
 }
 
 async function runStep(step) {
-  console.log(`\n=== Step ${step.n}/12: ${step.label} (${step.script}) ===`);
+  console.log(`\n=== Step ${step.n}/${STEPS.length}: ${step.label} (${step.script}) ===`);
   const proc = spawnSync(process.execPath, [path.join(PROJECT_ROOT, step.script)], { stdio: 'inherit', cwd: PROJECT_ROOT });
   const exitCode = proc.status;
 

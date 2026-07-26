@@ -142,6 +142,8 @@ function _unavailableState(analysisGenerationId, extraBlockers = []) {
     analysisGenerationId: analysisGenerationId ?? null,
     warnings: [],
     blockers: extraBlockers,
+    blockerCodes: [],
+    warningCodes: [],
     metadata: { legacyEligible: false, v2Eligible: false, v2Contradictory: false },
   };
 }
@@ -156,6 +158,8 @@ function _cancelledState(analysisGenerationId) {
     analysisGenerationId: analysisGenerationId ?? null,
     warnings: [],
     blockers: [],
+    blockerCodes: [],
+    warningCodes: [],
     metadata: {},
   };
 }
@@ -254,18 +258,26 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
 
     const warnings = [];
     const blockers = [];
+    // FULL-SYSTEM I18N COMPLETION R2 -- Phase G: every blocker/warning
+    // this controller emits now carries a STABLE CODE alongside its
+    // English sentence, so the Visual Preview panel can render a fully
+    // localized message. ADDITIVE: `blockers`/`warnings` keep their
+    // existing English contents for Developer Details and for existing
+    // consumers/tests.
+    const blockerCodes = [];
+    const warningCodes = [];
 
     if (!rp) {
-      blockers.push('No Visual Preview Render Plan is available for this analysis.');
+      { blockers.push('No Visual Preview Render Plan is available for this analysis.'); blockerCodes.push('PREVIEW_PLAN_UNAVAILABLE'); }
     } else {
-      if (!legacyEligible) blockers.push('Legacy preview plan is unavailable or not renderable.');
+      if (!legacyEligible) { blockers.push('Legacy preview plan is unavailable or not renderable.'); blockerCodes.push('LEGACY_PLAN_UNAVAILABLE'); }
       if (v2Contradictory) {
-        blockers.push('V2 preview is blocked — contradictory safety evidence was reported upstream.');
-        warnings.push('V2 preview evidence contradicts the expected non-production guarantees — Legacy behavior is unaffected.');
+        blockers.push('V2 preview is blocked — contradictory safety evidence was reported upstream.'); blockerCodes.push('V2_BLOCKED_CONTRADICTORY_EVIDENCE');
+        warnings.push('V2 preview evidence contradicts the expected non-production guarantees — Legacy behavior is unaffected.'); warningCodes.push('V2_EVIDENCE_CONTRADICTS_NONPRODUCTION');
       } else if (_isRecord(v2Plan) && !v2Eligible) {
-        blockers.push('V2 preview plan is unavailable, not renderable, or not eligible under current safety constraints.');
+        { blockers.push('V2 preview plan is unavailable, not renderable, or not eligible under current safety constraints.'); blockerCodes.push('V2_PLAN_NOT_ELIGIBLE'); }
       } else if (!_isRecord(v2Plan)) {
-        blockers.push('V2 preview plan is unavailable.');
+        { blockers.push('V2 preview plan is unavailable.'); blockerCodes.push('V2_PLAN_UNAVAILABLE'); }
       }
     }
 
@@ -283,13 +295,13 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
     const hasV2Canvas = _validateCanvasTarget(v2Canvas);
 
     if ((legacyEligible || v2Eligible) && !hasSource) {
-      if (sourceInfo.reason === 'unsupported-type') blockers.push('Source image type is unsupported for visual preview rendering.');
-      else if (sourceInfo.reason === 'zero-or-invalid-dimensions') blockers.push('Source image has invalid or zero dimensions.');
-      else if (sourceInfo.reason === 'not-complete') blockers.push('Source image is not yet fully decoded.');
-      else blockers.push('Source image is unavailable for visual preview rendering.');
+      if (sourceInfo.reason === 'unsupported-type') { blockers.push('Source image type is unsupported for visual preview rendering.'); blockerCodes.push('SOURCE_TYPE_UNSUPPORTED'); }
+      else if (sourceInfo.reason === 'zero-or-invalid-dimensions') { blockers.push('Source image has invalid or zero dimensions.'); blockerCodes.push('SOURCE_INVALID_DIMENSIONS'); }
+      else if (sourceInfo.reason === 'not-complete') { blockers.push('Source image is not yet fully decoded.'); blockerCodes.push('SOURCE_NOT_DECODED'); }
+      else { blockers.push('Source image is unavailable for visual preview rendering.'); blockerCodes.push('SOURCE_UNAVAILABLE'); }
     }
-    if (legacyEligible && hasSource && !hasLegacyCanvas) blockers.push('Legacy preview target canvas is unavailable.');
-    if (v2Eligible && hasSource && !hasV2Canvas) blockers.push('V2 preview target canvas is unavailable.');
+    if (legacyEligible && hasSource && !hasLegacyCanvas) { blockers.push('Legacy preview target canvas is unavailable.'); blockerCodes.push('LEGACY_CANVAS_UNAVAILABLE'); }
+    if (v2Eligible && hasSource && !hasV2Canvas) { blockers.push('V2 preview target canvas is unavailable.'); blockerCodes.push('V2_CANVAS_UNAVAILABLE'); }
 
     // DEPLOY GEOMETRY R1 — Phase C4 (exact output dimensions): compute
     // the shared device-pixel-ratio ONCE here, before either sequential
@@ -355,6 +367,9 @@ export function createVisualPreviewComparisonControllerV2({ legacyCanvas, v2Canv
       analysisGenerationId: analysisGenerationId ?? null,
       warnings,
       blockers,
+      // Phase G: stable, localizable codes mirroring `blockers`/`warnings`.
+      blockerCodes,
+      warningCodes,
       metadata: {
         legacyEligible, v2Eligible, v2Contradictory,
         selectedProductionSource, allowExport, allowProductionWrite,

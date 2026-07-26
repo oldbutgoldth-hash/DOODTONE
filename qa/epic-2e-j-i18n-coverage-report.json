@@ -1,0 +1,30 @@
+{
+  "suite": "epic-2e-j-i18n-coverage-report",
+  "round": "FULL-SYSTEM I18N COMPLETION R2 — Phase N",
+  "generatedAt": "2026-07-26T03:11:10.211Z",
+  "requestedKeys": 583,
+  "resolvedThaiKeys": 583,
+  "englishFallbackKeys": 0,
+  "genuinelyMissingKeys": 0,
+  "unusedKeys": 151,
+  "developerIdentifierExemptions": [
+    {
+      "prefix": "comparison.developer.",
+      "reason": "Developer Details diagnostic field identifiers — intentionally the literal field names so they can be grepped against the source; never shown on the main photographer-facing surface."
+    },
+    {
+      "prefix": "appShell.presetNamePlaceholder",
+      "reason": "This is the DEFAULT PRESET NAME written verbatim into the exported .xmp file, not UI prose. Localising it would change real exported production output, which this round is explicitly forbidden from doing."
+    }
+  ],
+  "visibleEnglishLeakCount": 0,
+  "dictionaryKeyCounts": {
+    "en": 734,
+    "th": 734
+  },
+  "notes": [
+    "unusedKeys is informational only — many dictionary entries are reached through dynamic namespaces or rare states.",
+    "visibleEnglishLeakCount is produced by qa/epic-2e-j-i18n-visible-text-audit-static-test.mjs and mirrored here.",
+    "No user data of any kind is collected by this report."
+  ]
+}

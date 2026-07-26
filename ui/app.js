@@ -47,6 +47,7 @@ import { validateFinalPreset, quickSafetyClamp } from '../core/xmp-validator/ind
 import { benchmarkStylePreservation } from '../core/style-benchmark-engine/index.js';
 import { buildDecisionReport } from '../core/decision-report-engine/index.js';
 import { renderReviewConsole } from './review-console-renderer.js';
+import { t } from './i18n/index.js';
 import { createReviewConsoleController } from './review-console-controller.js';
 import { renderSideBySideComparison } from './side-by-side-comparison-renderer.js';
 import { createVisualPreviewComparisonControllerV2 } from './visual-preview-comparison-controller-v2.js';
@@ -527,7 +528,12 @@ function ensureQaSnapshotHook() {
       // 'unavailable'; `changedFields` is capped at 10 entries, each a
       // small {field, before, after, delta, action, reason} record.
       controlledV2Translation: (() => {
-        const t = fsi?.visualPreviewRenderPlanV2?.controlledV2Translation ?? null;
+        // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase E:
+        // FIX for Defect 2C -- same invalid-root-read bug as the
+        // Side-by-Side comparison note above: `controlledV2Translation`
+        // lives at `visualPreviewRenderPlanV2.v2RenderPlan.controlledV2Translation`,
+        // never at the root of `visualPreviewRenderPlanV2` itself.
+        const t = fsi?.visualPreviewRenderPlanV2?.v2RenderPlan?.controlledV2Translation ?? null;
         return {
           exists: !!t,
           mode: _qaSafeStr(t?.mode),
@@ -738,13 +744,138 @@ function updateStatusPills() {
 // ─── Language ─────────────────────────────────────────────────────────────────
 function openLangModal()  { const m = document.getElementById('langModal');  if (m) m.style.display = 'flex'; }
 function closeLangModal() { const m = document.getElementById('langModal');  if (m) m.style.display = 'none'; }
+// EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase C.
+// State-preserving language switch: re-renders every currently-visible
+// section from ALREADY-COMPUTED state -- never re-runs runAnalysis(),
+// never re-decodes the source image, never re-invokes the pixel
+// renderer or touches Mapping/XMP/production output, never mutates
+// Review/Observation progress. This is what makes setLang() a REAL
+// application-wide switch (Defect 1) rather than a no-op that only
+// updated state.lang/localStorage/pill styling. Each section is
+// wrapped in its own try/catch so one section's re-render failure can
+// never take down the others (or leave state.lang un-applied).
+/**
+ * FULL-SYSTEM I18N COMPLETION R2 -- Phase I: re-applies every static
+ * app-shell string in index.html from the centralized dictionary.
+ *
+ * Static markup carries `data-i18n-key` (text content) and
+ * `data-i18n-placeholder-key` (input placeholders). This function is a
+ * PURE presentation pass: it only writes `textContent` / the
+ * `placeholder` attribute on elements that already exist. It never
+ * reloads the page, never re-runs Analysis, never touches a canvas,
+ * and never mutates any analysis/review/observation state.
+ */
+function rerenderAppShellForLocale(lang) {
+  let textApplied = 0;
+  let placeholderApplied = 0;
+  try {
+    document.querySelectorAll('[data-i18n-key]').forEach((node) => {
+      try {
+        const key = node.getAttribute('data-i18n-key');
+        if (!key) return;
+        const text = t(key, null, lang);
+        // t() returns the literal key when missing -- never paint a raw
+        // dotted key path onto the shell; leave the existing text alone.
+        if (text && text !== key) { node.textContent = text; textApplied += 1; }
+      } catch { /* one bad node never blocks the rest of the shell */ }
+    });
+    document.querySelectorAll('[data-i18n-placeholder-key]').forEach((node) => {
+      try {
+        const key = node.getAttribute('data-i18n-placeholder-key');
+        if (!key) return;
+        const text = t(key, null, lang);
+        if (text && text !== key) { node.setAttribute('placeholder', text); placeholderApplied += 1; }
+      } catch { /* ignore a single bad node */ }
+    });
+  } catch (err) {
+    console.warn('App-shell locale re-render failed (other sections unaffected):', err);
+  }
+  return { textApplied, placeholderApplied };
+}
+
+function rerenderCurrentUiForLocale() {
+  // App shell first: nav, buttons, section titles, upload area, tips.
+  try { rerenderAppShellForLocale(state.lang); } catch (err) { console.warn('Locale re-render: app shell failed (other sections unaffected):', err); }
+
+  // Review Console (+ its own Build Controlled V2 Preview button
+  // label/hint) -- already a pure function of state.lastPreviewSandbox
+  // / state.lastPreviewReviewState / state.lang.
+  try { renderReviewConsoleFromState(); } catch (err) { console.warn('Locale re-render: Review Console failed (other sections unaffected):', err); }
+
+  // Data Comparison ("Side-by-Side Preview Comparison") -- already a
+  // pure function of state.lastSideBySideComparison merged with the
+  // stashed plan-time/resolved Visual Preview hint.
+  try { _rerenderDataComparisonWithResolvedVisualState(); } catch (err) { console.warn('Locale re-render: Data Comparison failed (other sections unaffected):', err); }
+
+  // Visual Preview Comparison -- re-renders from the last settled
+  // vprState (or an honest "preparing" placeholder if none has
+  // settled yet) -- never re-invokes the pixel renderer, never
+  // touches the canvases (see this renderer's own SKELETON/METADATA
+  // SEPARATION guarantee: only metadata/status text is updated here).
+  try {
+    const vprInner = document.getElementById('visualPreviewComparisonInner');
+    if (vprInner && vprInner.dataset.vprLayoutBuilt === '1') {
+      const vprStateForLocale = state.lastVisualPreviewComparisonState ?? buildPreparingAnalysisState();
+      renderVisualPreviewComparison(vprInner, vprStateForLocale, state.lang);
+    }
+  } catch (err) { console.warn('Locale re-render: Visual Preview Comparison failed (other sections unaffected):', err); }
+
+  // Interactive Before/After -- re-renders from the last state the
+  // controller itself emitted; never re-syncs sources, never re-reads
+  // the display canvases.
+  try {
+    const ibaInner = document.getElementById('interactiveBeforeAfterInner');
+    if (ibaInner && ibaInner.dataset.ibaLayoutBuilt === '1' && state.lastIbaState) {
+      renderInteractiveBeforeAfterStatus(ibaInner, state.lastIbaState, state.lang);
+    }
+  } catch (err) { console.warn('Locale re-render: Interactive Before/After failed (other sections unaffected):', err); }
+
+  // Preview Observation (+ Context summary + Session Observation
+  // Summary) -- re-renders from the last state the controller itself
+  // emitted and the last context info computed; the session summary's
+  // underlying counts are read fresh from the session module's own
+  // live getSummary() (that data is not itself language-dependent,
+  // only its labels are, and getSummary() is a read-only accessor that
+  // never mutates the in-memory session).
+  try {
+    const obsInner = document.getElementById('interactivePreviewObservationInner');
+    if (obsInner && obsInner.dataset.ipoLayoutBuilt === '1' && state.lastObservationState) {
+      renderInteractivePreviewObservationV2(obsInner, state.lastObservationState, state.lang);
+    }
+    if (obsInner && obsInner.dataset.ipoLayoutBuilt === '1' && state.lastObservationContextInfo) {
+      renderInteractivePreviewObservationContextV2(obsInner, state.lastObservationContextInfo, state.lang);
+    }
+    const sessionInner = document.getElementById('interactivePreviewObservationSessionInner');
+    if (sessionInner && sessionInner.dataset.ipoSessionLayoutBuilt === '1' && interactivePreviewObservationSession) {
+      renderInteractivePreviewObservationSessionV2(sessionInner, interactivePreviewObservationSession.getSummary(), state.lang);
+    }
+  } catch (err) { console.warn('Locale re-render: Preview Observation failed (other sections unaffected):', err); }
+}
+
 function setLang(lang) {
-  state.lang = lang; localStorage.setItem('lang', lang);
+  const normalizedLang = lang === 'th' ? 'th' : 'en';
+  state.lang = normalizedLang; localStorage.setItem('lang', normalizedLang);
   document.querySelectorAll('.lang-opt').forEach(o => {
-    const active = o.dataset.lang === lang;
+    const active = o.dataset.lang === normalizedLang;
     o.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
     o.style.background  = active ? 'var(--accent-soft)' : 'transparent';
   });
+  // EPIC 2E-J Phase C: a real, state-preserving, application-wide
+  // language switch -- re-renders every currently-visible section from
+  // already-computed state. Wrapped so a re-render failure can never
+  // leave state.lang/localStorage/pill styling un-applied (those three
+  // have already happened, unconditionally, above).
+  try { rerenderCurrentUiForLocale(); } catch (err) { console.warn('setLang: locale re-render failed (state.lang was still updated):', err); }
+  // Announce the switch (and its state-preservation guarantee) through
+  // a dedicated, persistent aria-live region -- never reused for any
+  // other announcement, so it can never race Review/Build-V2 feedback.
+  try {
+    const liveRegion = document.getElementById('langChangeLiveRegion');
+    if (liveRegion) {
+      const languageName = t(normalizedLang === 'th' ? 'app.languageNameTh' : 'app.languageNameEn', null, normalizedLang);
+      liveRegion.textContent = t('app.languageChanged', { language: languageName }, normalizedLang);
+    }
+  } catch (err) { console.warn('setLang: language-change announcement failed (language switch itself was still applied):', err); }
 }
 window.setLang   = setLang;
 window.closeLang = closeLangModal;
@@ -1204,6 +1335,66 @@ function _normalizeSideStateString(v) {
   return SIDE_STATE_STRINGS.includes(v) ? v : 'unknown';
 }
 
+/**
+ * EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase F.
+ *
+ * Builds the bounded, page-memory-only "resolved visual state" object
+ * from the ALREADY-RESOLVED vprState (produced once
+ * visualPreviewComparisonController.render() genuinely settles) plus
+ * the current Interactive Before/After alignment evidence. This is
+ * the ONE place that reconciles "what the render plan intended"
+ * (plan-time, in visualPreviewInfoForComparisonNote) with "what
+ * actually rendered" (this object) for the Data Comparison layer's
+ * cross-layer banner -- never re-derives/recomputes anything the
+ * controller/renderer already computed, never calls Analysis again,
+ * never mutates vprState.
+ */
+function _buildResolvedVisualState(vprState, generationId) {
+  const legacyR = _isRecordLike(vprState?.legacy) ? vprState.legacy : null;
+  const v2R = _isRecordLike(vprState?.v2) ? vprState.v2 : null;
+  const meta = _isRecordLike(vprState?.metadata) ? vprState.metadata : null;
+  const legacyRendered = legacyR?.rendered === true;
+  const v2Rendered = v2R?.rendered === true;
+  let alignmentExact = false;
+  try {
+    const ibaState = interactiveBeforeAfterController ? interactiveBeforeAfterController.getState() : null;
+    const qaAlignment = ibaState && typeof ibaState === 'object' ? (ibaState.alignment ?? null) : null;
+    alignmentExact = !!(qaAlignment && qaAlignment.exactSourcePixelMatch === true);
+  } catch { /* never let alignment introspection affect the resolved-state object */ }
+  return {
+    generationId,
+    renderState: typeof vprState?.state === 'string' ? vprState.state : 'unavailable',
+    legacyRendered,
+    v2Rendered,
+    bothRendered: vprState?.bothRendered === true,
+    visualComparisonAvailable: vprState?.visualComparisonAvailable === true,
+    alignmentExact,
+    translationMode: typeof meta?.controlledV2Translation?.mode === 'string' ? meta.controlledV2Translation.mode : null,
+    visualizedAdjustmentCount: Number.isFinite(meta?.controlledV2Translation?.visualizedAdjustmentCount) ? meta.controlledV2Translation.visualizedAdjustmentCount : 0,
+    allowProductionWrite: typeof meta?.allowProductionWrite === 'boolean' ? meta.allowProductionWrite : undefined,
+    allowExport: typeof meta?.allowExport === 'boolean' ? meta.allowExport : undefined,
+    appliedToProduction: typeof meta?.v2AppliedToProduction === 'boolean' ? meta.v2AppliedToProduction : undefined,
+  };
+}
+
+/**
+ * Re-renders the ALREADY-VISIBLE Data Comparison section using the
+ * current plan-time hint merged with the just-built resolved visual
+ * state -- never a new section, never a new engine call, never
+ * changes state.lastSideBySideComparison's own semantic Unknown
+ * values. A no-op if the Data Comparison section isn't currently
+ * mounted (e.g. this analysis had no comparison data at all).
+ */
+function _rerenderDataComparisonWithResolvedVisualState() {
+  if (!state.lastComparisonInnerEl || !state.lastSideBySideComparison) return;
+  const planTimeInfo = _isRecordLike(state.lastVisualPreviewInfoForComparisonNote) ? state.lastVisualPreviewInfoForComparisonNote : null;
+  const mergedInfo = {
+    ...(planTimeInfo ?? {}),
+    resolved: state.lastResolvedVisualState ?? null,
+  };
+  renderSideBySideComparison(state.lastComparisonInnerEl, state.lastSideBySideComparison, mergedInfo, state.lang);
+}
+
 function _syncInteractiveBeforeAfter(vprState, generationId) {
   const ibaSec = document.getElementById('interactiveBeforeAfterSection');
   const ibaInner = document.getElementById('interactiveBeforeAfterInner');
@@ -1240,7 +1431,7 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
         // prepareState() emit through this callback, so no separate
         // manual renderInteractiveBeforeAfterStatus() call is ever
         // needed after calling either of them below.
-        onStateChange: (state) => renderInteractiveBeforeAfterStatus(ibaInner, state),
+        onStateChange: (ibaState) => { state.lastIbaState = ibaState; renderInteractiveBeforeAfterStatus(ibaInner, ibaState, state.lang); },
       });
     }
 
@@ -1359,7 +1550,13 @@ function _syncInteractiveBeforeAfter(vprState, generationId) {
     // this function was called) remains fully visible and unaffected.
     console.warn('InteractiveBeforeAfter sync failed (Visual Preview Comparison unaffected):', ibaErr);
     if (interactiveBeforeAfterController) interactiveBeforeAfterController.clear();
-    try { renderInteractiveBeforeAfterStatus(ibaInner, { state: 'failed', interactive: false, warnings: [], blockers: ['Interactive comparison could not be prepared. Existing analysis and production output were not changed.'] }); } catch { /* last-resort no-op */ }
+    // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase C
+    // follow-up: this last-resort fallback blocker text now also comes
+    // from the centralized i18n dictionary (the exact same string
+    // beforeAfter.statusMessage.failed already used by the normal
+    // 'failed' status path), so a locale switch never leaves this rare
+    // catch-path message stranded in English.
+    try { renderInteractiveBeforeAfterStatus(ibaInner, { state: 'failed', interactive: false, warnings: [], blockers: [t('beforeAfter.statusMessage.failed', null, state.lang)] }, state.lang); } catch { /* last-resort no-op */ }
   }
 }
 
@@ -1494,7 +1691,7 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
           _syncObservationSession(currentObsState);
         }
         if (sessionInner) {
-          try { renderInteractivePreviewObservationSessionV2(sessionInner, interactivePreviewObservationSession.getSummary()); } catch { /* best-effort */ }
+          try { renderInteractivePreviewObservationSessionV2(sessionInner, interactivePreviewObservationSession.getSummary(), state.lang); } catch { /* best-effort */ }
         }
       });
     }
@@ -1507,10 +1704,11 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
         // duplicate generation counter.
         generationProvider: () => analysisRenderGeneration,
         onStateChange: (s) => {
-          renderInteractivePreviewObservationV2(obsInner, s);
+          state.lastObservationState = s;
+          renderInteractivePreviewObservationV2(obsInner, s, state.lang);
           _syncObservationSession(s);
           if (sessionInner) {
-            try { renderInteractivePreviewObservationSessionV2(sessionInner, interactivePreviewObservationSession.getSummary()); } catch { /* session render failure must not break Observation itself */ }
+            try { renderInteractivePreviewObservationSessionV2(sessionInner, interactivePreviewObservationSession.getSummary(), state.lang); } catch { /* session render failure must not break Observation itself */ }
           }
         },
       });
@@ -1625,13 +1823,15 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
     const cleanLegacyStatus = stripPrefix(legacyStatusText, 'Legacy: ');
     const cleanV2Status = stripPrefix(v2StatusText, 'Controlled V2: ');
 
-    renderInteractivePreviewObservationContextV2(obsInner, {
+    const observationContextInfo = {
       generationId,
       legacyStatus: typeof cleanLegacyStatus === 'string' ? cleanLegacyStatus : 'Unknown',
       v2Status: typeof cleanV2Status === 'string' ? cleanV2Status : 'Unknown',
       alignmentStatus: alignmentStatusText,
       generationConfirmed: generationConfirmedForContext,
-    });
+    };
+    state.lastObservationContextInfo = observationContextInfo;
+    renderInteractivePreviewObservationContextV2(obsInner, observationContextInfo, state.lang);
   } catch (obsErr) {
     console.warn('Preview Observation sync failed (Interactive Before/After unaffected):', obsErr);
     if (interactivePreviewObservationController) interactivePreviewObservationController.reset();
@@ -1705,7 +1905,7 @@ async function runAnalysis() {
   if (interactiveBeforeAfterController) {
     const newIbaState = interactiveBeforeAfterController.clear();
     const ibaInnerEarly = document.getElementById('interactiveBeforeAfterInner');
-    if (ibaInnerEarly) renderInteractiveBeforeAfterStatus(ibaInnerEarly, { ...newIbaState, state: 'preparing' });
+    if (ibaInnerEarly) renderInteractiveBeforeAfterStatus(ibaInnerEarly, { ...newIbaState, state: 'preparing' }, state.lang);
   }
 
   // EPIC 2E-J Phase A (COMBINED CLOSEOUT R1 — Phase B FIX B2): enter a
@@ -1744,7 +1944,7 @@ async function runAnalysis() {
       lastInvalidatedObservationGenerationId = priorGenerationId;
       const sessionInnerEarly = document.getElementById('interactivePreviewObservationSessionInner');
       if (sessionInnerEarly) {
-        try { renderInteractivePreviewObservationSessionV2(sessionInnerEarly, interactivePreviewObservationSession.getSummary()); } catch { /* session render failure must not break Analysis */ }
+        try { renderInteractivePreviewObservationSessionV2(sessionInnerEarly, interactivePreviewObservationSession.getSummary(), state.lang); } catch { /* session render failure must not break Analysis */ }
       }
     }
   }
@@ -2184,11 +2384,44 @@ async function runAnalysis() {
       // pipeline (built synchronously by decision-engine well before
       // this render call) — no new computation, no pixel rendering
       // triggered here.
+      // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase E:
+      // FIX for Defect 2B/2C -- `visualPreviewRenderPlanV2` has NO
+      // canonical root `renderable`/`controlledV2Translation` field;
+      // the real, authoritative values live nested under
+      // `.v2RenderPlan.renderable` / `.v2RenderPlan.controlledV2Translation`
+      // (see core/preview-rendering/visual-preview-render-plan-v2.js's
+      // `_buildV2RenderPlan()` return shape). Reading the root fields
+      // (as this call site previously did) always silently resolved to
+      // `undefined`, which is exactly why the Data Comparison banner
+      // below always fell through to its "not currently available"
+      // branch even after a real Controlled V2 render succeeded. Also
+      // threads through the root-level `sharedRenderConstraints`
+      // object's explicit `allowProductionWrite`/`allowExport` booleans
+      // (Phase G) -- never inferred from `appliedToProduction` alone.
       const vprPlanForComparisonNote = finalPreset._decision?.finalStyleIntent?.visualPreviewRenderPlanV2 ?? null;
+      const v2RenderPlanForComparisonNote = _isRecordLike(vprPlanForComparisonNote?.v2RenderPlan) ? vprPlanForComparisonNote.v2RenderPlan : null;
+      const sharedConstraintsForComparisonNote = _isRecordLike(vprPlanForComparisonNote?.sharedRenderConstraints) ? vprPlanForComparisonNote.sharedRenderConstraints : null;
       const visualPreviewInfoForComparisonNote = _isRecordLike(vprPlanForComparisonNote)
-        ? { renderable: vprPlanForComparisonNote.renderable === true, controlledV2Translation: _isRecordLike(vprPlanForComparisonNote.controlledV2Translation) ? vprPlanForComparisonNote.controlledV2Translation : null }
+        ? {
+            renderable: v2RenderPlanForComparisonNote?.renderable === true,
+            controlledV2Translation: _isRecordLike(v2RenderPlanForComparisonNote?.controlledV2Translation) ? v2RenderPlanForComparisonNote.controlledV2Translation : null,
+            allowProductionWrite: typeof sharedConstraintsForComparisonNote?.allowProductionWrite === 'boolean' ? sharedConstraintsForComparisonNote.allowProductionWrite : undefined,
+            allowExport: typeof sharedConstraintsForComparisonNote?.allowExport === 'boolean' ? sharedConstraintsForComparisonNote.allowExport : undefined,
+          }
         : null;
-      renderSideBySideComparison(comparisonInner, state.lastSideBySideComparison, visualPreviewInfoForComparisonNote);
+      // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase F:
+      // stash the plan-time bounded hint + container so the resolved
+      // visual-state hook (added below, once the Visual Preview
+      // Comparison render actually settles) can merge in the
+      // authoritative post-render evidence and safely re-render this
+      // SAME Data Comparison section again -- never a duplicate
+      // section, never a second engine call.
+      state.lastVisualPreviewInfoForComparisonNote = visualPreviewInfoForComparisonNote;
+      state.lastComparisonInnerEl = comparisonInner;
+      // A new generation starting must never show a PRIOR generation's
+      // resolved Rendered status -- mark it stale/preparing immediately.
+      state.lastResolvedVisualState = { generationId: renderGeneration, renderState: 'preparing' };
+      renderSideBySideComparison(comparisonInner, state.lastSideBySideComparison, visualPreviewInfoForComparisonNote, state.lang);
     } else if (comparisonSec) {
       comparisonSec.style.display = 'none';
     }
@@ -2311,12 +2544,21 @@ async function runAnalysis() {
             // already started by the time this resolves — never let a
             // stale preview render overwrite the current one's display.
             if (renderGeneration !== analysisRenderGeneration) return;
+            state.lastVisualPreviewComparisonState = vprState;
             renderVisualPreviewComparison(vprInner, vprState, state.lang);
             // EPIC 2E-I Phase A: sync the Interactive Before/After
             // viewer from the SAME resolved Visual Preview Comparison
             // result — never a separate/duplicate render, never
             // re-invoking the pixel renderer.
             _syncInteractiveBeforeAfter(vprState, renderGeneration);
+            // EPIC 2E-J Phase F: build the bounded resolved visual
+            // state from THIS settled vprState and re-render the
+            // already-visible Data Comparison section so its banner
+            // reflects what actually rendered, not just the plan-time
+            // hint computed before this promise resolved. Generation-
+            // checked above already (renderGeneration === analysisRenderGeneration).
+            state.lastResolvedVisualState = _buildResolvedVisualState(vprState, renderGeneration);
+            _rerenderDataComparisonWithResolvedVisualState();
           }).catch(err => {
             // Phase 3: mark settled on the failure path too — a thrown/
             // rejected render must release its pending-render claim
@@ -2352,7 +2594,8 @@ async function runAnalysis() {
               state: 'failed',
               legacy: null, v2: null, bothRendered: false, visualComparisonAvailable: false,
               warnings: [],
-              blockers: ['Visual Preview rendering failed. Analysis results and production output were not changed.'],
+              blockers: [t('previewCode.reason.PREVIEW_RENDER_FAILED', null, state.lang)],
+              blockerCodes: ['PREVIEW_RENDER_FAILED'],
               metadata: {},
             }, state.lang);
             // EPIC 2E-I Phase A: a failed Visual Preview render means
@@ -2360,6 +2603,25 @@ async function runAnalysis() {
             // clear it rather than leaving stale content/interaction
             // enabled.
             if (interactiveBeforeAfterController) interactiveBeforeAfterController.clear();
+            // EPIC 2E-J Phase F: a rejected render() must also update
+            // the resolved visual state -- otherwise the Data
+            // Comparison banner would keep showing stale plan-time
+            // info (or 'preparing') forever after a failure.
+            state.lastResolvedVisualState = {
+              generationId: renderGeneration,
+              renderState: 'failed',
+              legacyRendered: false,
+              v2Rendered: false,
+              bothRendered: false,
+              visualComparisonAvailable: false,
+              alignmentExact: false,
+              translationMode: null,
+              visualizedAdjustmentCount: 0,
+              allowProductionWrite: undefined,
+              allowExport: undefined,
+              appliedToProduction: undefined,
+            };
+            _rerenderDataComparisonWithResolvedVisualState();
           });
           }
         }
@@ -2506,7 +2768,7 @@ function handleReset() {
   const vprSec = document.getElementById('visualPreviewComparisonSection');
   if (vprSec) vprSec.style.display = 'none';
   const vprInner = document.getElementById('visualPreviewComparisonInner');
-  if (vprInner) clearVisualPreviewComparisonDisplay(vprInner);
+  if (vprInner) clearVisualPreviewComparisonDisplay(vprInner, state.lang);
   // EPIC 2E-I Phase A: same reset guarantee — clear (not dispose, so
   // the controller remains reusable for the next analysis), hide the
   // section, reset the status display.
@@ -2514,7 +2776,7 @@ function handleReset() {
   const ibaSec = document.getElementById('interactiveBeforeAfterSection');
   if (ibaSec) ibaSec.style.display = 'none';
   const ibaInner = document.getElementById('interactiveBeforeAfterInner');
-  if (ibaInner) clearInteractiveBeforeAfterDisplay(ibaInner);
+  if (ibaInner) clearInteractiveBeforeAfterDisplay(ibaInner, state.lang);
   // EPIC 2E-J Phase A: same reset guarantee for Preview Observation —
   // clear (not dispose), hide the section, reset the status display.
   if (interactivePreviewObservationController) {
@@ -2533,13 +2795,13 @@ function handleReset() {
   const obsSec = document.getElementById('interactivePreviewObservationSection');
   if (obsSec) obsSec.style.display = 'none';
   const obsInner = document.getElementById('interactivePreviewObservationInner');
-  if (obsInner) clearInteractivePreviewObservationDisplay(obsInner);
+  if (obsInner) clearInteractivePreviewObservationDisplay(obsInner, state.lang);
   // Session summary itself is intentionally NOT cleared/hidden here —
   // it persists across Reset (only the current generation's record was
   // invalidated above); re-render it with the updated summary.
   const sessionInnerReset = document.getElementById('interactivePreviewObservationSessionInner');
   if (sessionInnerReset && interactivePreviewObservationSession) {
-    try { renderInteractivePreviewObservationSessionV2(sessionInnerReset, interactivePreviewObservationSession.getSummary()); } catch { /* best-effort */ }
+    try { renderInteractivePreviewObservationSessionV2(sessionInnerReset, interactivePreviewObservationSession.getSummary(), state.lang); } catch { /* best-effort */ }
   }
   const reviewInner = document.getElementById('reviewConsoleInner');
   if (reviewInner) reviewInner.innerHTML = '';

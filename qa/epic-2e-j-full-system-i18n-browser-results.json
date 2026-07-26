@@ -1,0 +1,24 @@
+{
+  "suite": "FULL-SYSTEM I18N COMPLETION R2 — Phase M: full-system EN/TH Browser suite",
+  "runId": "edca28dd-5b9f-4c1b-bff1-3d831a6f3e66",
+  "startedAt": "2026-07-26T03:09:23.073Z",
+  "completedAt": "2026-07-26T03:09:23.073Z",
+  "completed": true,
+  "sourceHash": null,
+  "browserExecutablePath": null,
+  "browserVersion": null,
+  "generatedAt": "2026-07-26T03:09:23.073Z",
+  "summary": {
+    "total": 1,
+    "pass": 0,
+    "fail": 0,
+    "notTested": 1
+  },
+  "results": [
+    {
+      "test": "Browser environment availability",
+      "result": "NOT_TESTED"
+    }
+  ],
+  "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"
+}

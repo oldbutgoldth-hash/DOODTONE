@@ -60,9 +60,26 @@
  * content exists and shows a neutral, honest fallback message instead.
  */
 
+// EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase B/J:
+// user-facing text now sourced from the centralized ui/i18n module.
+// STATUS_LABEL/DECISION_LABEL below remain as the ENGLISH-only
+// canonical code->label maps (used for internal validity checks via
+// `ALLOWED_STATUSES`/`ALLOWED_DECISIONS` and as the safe English
+// fallback) -- actual on-screen text is looked up via `t()` using the
+// same status/decision code, translated at the render boundary.
+import { t } from './i18n/index.js';
+import {
+  presentReviewItemField, presentUnknownReviewItemNote, isCanonicalReviewItemId,
+  presentRiskLevel, presentReviewSummaryState,
+} from './i18n/domain-presenters.js';
+
 const STATUS_COLOR = { passed: 'var(--success)', failed: 'var(--danger)', pending: 'var(--text-faint)', unavailable: 'var(--text-faint)', 'not-required': 'var(--text-faint)' };
 const STATUS_LABEL = { passed: 'Passed', failed: 'Failed', pending: 'Pending', unavailable: 'Unavailable', 'not-required': 'Not required' };
 const ALLOWED_STATUSES = new Set(Object.keys(STATUS_LABEL));
+const STATUS_I18N_KEY = { passed: 'review.statusLabel.passed', failed: 'review.statusLabel.failed', pending: 'review.statusLabel.pending', unavailable: 'review.statusLabel.unavailable', 'not-required': 'review.statusLabel.notRequired' };
+const DECISION_I18N_KEY = { approve: 'review.decisionLabel.approve', reject: 'review.decisionLabel.reject', 'needs-adjustment': 'review.decisionLabel.needsAdjustment', undecided: 'review.decisionLabel.undecided' };
+function _trStatus(statusKey, lang) { return t(STATUS_I18N_KEY[statusKey] ?? 'review.statusLabel.unavailable', null, lang) || STATUS_LABEL[statusKey]; }
+function _trDecision(decisionKey, lang) { return t(DECISION_I18N_KEY[decisionKey] ?? 'review.decisionLabel.undecided', null, lang) || DECISION_LABEL[decisionKey]; }
 
 const DECISION_LABEL = { approve: 'Approve', reject: 'Reject', 'needs-adjustment': 'Needs adjustment', undecided: 'Undecided' };
 const DECISION_COLOR = { approve: 'var(--success)', reject: 'var(--danger)', 'needs-adjustment': 'var(--warn)', undecided: 'var(--text-faint)' };
@@ -79,12 +96,15 @@ const APPROVAL_COLOR = { approved: 'var(--success)', rejected: 'var(--danger)', 
 // SYSTEM_VERIFIED_IDS / _evaluateSystemVerifiedAutoStatus). The one
 // group genuinely requiring human judgment is 'visual-inspection'.
 const GROUP_ORDER = ['visual-inspection', 'system-integrity', 'safety-guarantees'];
-const GROUP_LABEL = {
-  'visual-inspection': { en: 'Visual inspection — your review needed', th: 'ตรวจสอบด้วยสายตา — ต้องมีการตรวจสอบจากคุณ' },
-  'system-integrity': { en: 'System integrity — verified automatically', th: 'ความสมบูรณ์ของระบบ — ตรวจสอบอัตโนมัติ' },
-  'safety-guarantees': { en: 'Safety guarantees — verified automatically', th: 'การรับประกันความปลอดภัย — ตรวจสอบอัตโนมัติ' },
+// FULL-SYSTEM I18N COMPLETION R2 -- Phase J: the previous local
+// { en, th } label maps have been removed. Group labels are now stable
+// CODES resolved through the centralized dictionary at render time.
+const GROUP_I18N_KEY = {
+  'visual-inspection': 'review.groupLabel.visualInspection',
+  'system-integrity': 'review.groupLabel.systemIntegrity',
+  'safety-guarantees': 'review.groupLabel.safetyGuarantees',
 };
-const GROUP_FALLBACK_LABEL = { en: 'Other checks', th: 'การตรวจสอบอื่น ๆ' };
+const GROUP_FALLBACK_I18N_KEY = 'review.groupLabel.other';
 
 /** Bilingual text lookup — `lang` other than 'th' always falls back to English (never a blank string). */
 function _t(dict, lang) {
@@ -103,6 +123,13 @@ const RISK_LABEL = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Crit
 const RISK_COLOR = { low: 'var(--success)', medium: 'var(--warn)', high: 'var(--danger)', critical: 'var(--danger)', unknown: 'var(--text-faint)' };
 
 /** True for plain, non-null, non-array objects — the only shape we treat as a "record" to read named fields from. */
+// FULL-SYSTEM I18N COMPLETION R2 -- Phase E: `_safeText` is a deep,
+// widely-called helper whose "(unrepresentable value)" fallback is
+// photographer-facing. The ACTIVE RENDER LOCALE is recorded here at the
+// start of each render pass and read back only for that fallback --
+// presentation state only, reset on every render, never business logic.
+let _unrepresentableLang = 'en';
+
 function _isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -123,7 +150,7 @@ function _safeText(value, fallback = '') {
     return typeof json === 'string' && json.length ? json : fallback;
   } catch {
     // Circular reference or other non-serializable value.
-    return '(unrepresentable value)';
+    return t('review.console.unrepresentableValue', null, _unrepresentableLang);
   }
 }
 
@@ -153,6 +180,94 @@ function _normalizeRiskLevel(value) {
  * paper over one bad one. Returns 'unknown' when no relevant field is
  * present/readable at all.
  */
+/**
+ * FULL-SYSTEM I18N COMPLETION R2 -- Phase D: the ONE canonical, bounded
+ * system-evidence projection used by every evidence line this console
+ * renders.
+ *
+ * The defect this fixes: the XMP line previously read a separate,
+ * frequently-absent `metadata.xmpExportUnchanged` hint, so the console
+ * could simultaneously show "Export path unchanged: Passed" (from the
+ * system-verified Review item) and "XMP Export: Unknown / Not
+ * confirmed." (from the missing hint) -- an internally contradictory
+ * screen.
+ *
+ * `xmpExportPathUnchanged` is now derived from THE SAME evidence as the
+ * canonical `export-path-unchanged` system Review item, so the two can
+ * never disagree. It is deliberately NOT inferred from
+ * `canExportPreview === false` or `appliedToProduction === false`:
+ * those are different guarantees, and treating them as XMP evidence
+ * would be exactly the kind of over-claiming this console forbids.
+ *
+ * Every field is strictly tri-state: true (explicitly verified),
+ * false (explicit anomaly), or null (no sufficient evidence -- never
+ * assumed safe).
+ */
+function _reviewItemStatusById(reviewRecord, itemId) {
+  // Every read below is individually guarded: `reviewItems` is an
+  // untrusted external boundary and may be a hostile Proxy, may expose
+  // throwing getters, or may not be a real array at all.
+  let items;
+  try { items = Array.isArray(reviewRecord?.reviewItems) ? reviewRecord.reviewItems : []; } catch { return null; }
+  let length;
+  try { length = items.length; } catch { return null; }
+  if (!Number.isFinite(length) || length <= 0) return null;
+  const bound = Math.min(Math.floor(length), 32);
+  for (let i = 0; i < bound; i++) {
+    let raw;
+    try { raw = items[i]; } catch { continue; }
+    if (!_isRecord(raw)) continue;
+    let id;
+    try { id = raw.id; } catch { continue; }
+    if (id !== itemId) continue;
+    try { return _normalizeStatus(raw.status); } catch { return null; }
+  }
+  return null;
+}
+
+function _triFromItemStatus(status) {
+  if (status === 'passed') return true;
+  if (status === 'failed') return false;
+  return null; // pending / unavailable / not-required / missing -> no claim
+}
+
+export function buildReviewSystemEvidence(sandboxRecord, reviewRecord) {
+  let sb = null;
+  try { sb = _isRecord(sandboxRecord) ? sandboxRecord : null; } catch { sb = null; }
+  // Safe single read of one sandbox flag -- a throwing getter degrades
+  // to "no evidence" (null), never to a false safety claim and never
+  // to an exception escaping into the render path.
+  const readFlag = (key) => { try { const v = sb ? sb[key] : undefined; return typeof v === 'boolean' ? v : null; } catch { return null; } };
+  const readStr = (key) => { try { const v = sb ? sb[key] : undefined; return typeof v === 'string' ? v : null; } catch { return null; } };
+
+  const exportPathItemStatus = _reviewItemStatusById(reviewRecord, 'export-path-unchanged');
+  const exportPathUnchanged = _triFromItemStatus(exportPathItemStatus);
+
+  return {
+    legacyOutputPreserved: _triFromItemStatus(_reviewItemStatusById(reviewRecord, 'legacy-output-preserved')),
+    rollbackAvailable: _triFromItemStatus(_reviewItemStatusById(reviewRecord, 'rollback-confirmed')),
+    previewNonProduction: _triFromItemStatus(_reviewItemStatusById(reviewRecord, 'preview-non-production-confirmed')),
+    exportPathUnchanged,
+    // Same evidence as the export-path-unchanged system item -- by
+    // construction these two can never contradict each other on screen.
+    xmpExportPathUnchanged: exportPathUnchanged,
+    productionWriteDisabled: (() => { const v = readFlag('canWriteProduction'); return v === null ? null : v === false; })(),
+    // Raw sandbox flags, kept separate so they are never mistaken for
+    // XMP evidence.
+    canExportPreview: readFlag('canExportPreview'),
+    selectedOutputSource: readStr('selectedOutputSource'),
+  };
+}
+
+/** Translates the sandbox's stable previewState code for display. */
+function _trPreviewState(code, lang) {
+  const safe = typeof code === 'string' && code.trim() ? code.trim() : null;
+  if (!safe) return t('common.unknown', null, lang);
+  const key = `visualPreview.stateLabel.${safe.replace(/-([a-z0-9])/g, (_m, c) => c.toUpperCase())}`;
+  const text = t(key, null, lang);
+  return text === key ? t('common.unknown', null, lang) : text;
+}
+
 function _evaluatePreviewNonProduction(sandboxRecord) {
   const preset = _isRecord(sandboxRecord?.simulatedPreviewPreset) ? sandboxRecord.simulatedPreviewPreset : null;
   if (!preset) return 'unknown';
@@ -182,12 +297,15 @@ function _evaluatePreviewNonProduction(sandboxRecord) {
  * (array/number/boolean/object/missing) without ever dumping a raw
  * object or throwing.
  */
-function _describeHardStops(value) {
-  if (Array.isArray(value)) return value.length === 0 ? { text: 'None', color: 'var(--success)' } : { text: `${value.length} active`, color: 'var(--danger)' };
-  if (typeof value === 'number') return Number.isFinite(value) ? (value <= 0 ? { text: 'None', color: 'var(--success)' } : { text: `${value} active`, color: 'var(--danger)' }) : { text: 'Unknown', color: 'var(--text-faint)' };
-  if (typeof value === 'boolean') return value ? { text: 'Present', color: 'var(--danger)' } : { text: 'None', color: 'var(--success)' };
-  if (_isRecord(value)) return { text: 'Present (details unavailable)', color: 'var(--warn)' };
-  return { text: 'Unknown', color: 'var(--text-faint)' };
+function _describeHardStops(value, lang) {
+  const none = () => ({ text: t('review.console.none', null, lang), color: 'var(--success)' });
+  const active = (n) => ({ text: t('review.console.activeCount', { count: n }, lang), color: 'var(--danger)' });
+  const unknown = () => ({ text: t('common.unknown', null, lang), color: 'var(--text-faint)' });
+  if (Array.isArray(value)) return value.length === 0 ? none() : active(value.length);
+  if (typeof value === 'number') return Number.isFinite(value) ? (value <= 0 ? none() : active(value)) : unknown();
+  if (typeof value === 'boolean') return value ? { text: t('review.console.present', null, lang), color: 'var(--danger)' } : none();
+  if (_isRecord(value)) return { text: t('review.console.presentDetailsUnavailable', null, lang), color: 'var(--warn)' };
+  return unknown();
 }
 
 /**
@@ -399,8 +517,9 @@ const ACTION_LABEL = { pass: 'Pass', fail: 'Fail', adjust: 'Needs Adjustment', p
  * item's CURRENT state — never relying on color alone (each button
  * also has a distinct, always-visible text label).
  */
-function renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending) {
+function renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending, lang) {
   const wrap = el('div', { style: 'display:flex;flex-wrap:wrap;gap:7px;margin-top:10px' });
+  const al = { pass: t('review.action.pass', null, lang) || ACTION_LABEL.pass, fail: t('review.action.fail', null, lang) || ACTION_LABEL.fail, adjust: t('review.action.adjust', null, lang) || ACTION_LABEL.adjust, pending: t('review.action.pending', null, lang) || ACTION_LABEL.pending };
   const makeBtn = ({ label, action, active, color, ariaLabel }) => el('button', {
     style: `min-height:44px;padding:9px 15px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid ${active ? color : 'var(--border)'};background:${active ? color + '20' : 'var(--surface-2)'};color:${active ? color : 'var(--text-dim)'};overflow-wrap:anywhere`,
     text: label,
@@ -413,19 +532,19 @@ function renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConf
   });
 
   if (isFailConfirmPending) {
-    wrap.appendChild(makeBtn({ label: 'Confirm Fail?', action: 'fail', active: true, color: 'var(--danger)', ariaLabel: `Confirm marking "${itemLabel}" as failed` }));
+    wrap.appendChild(makeBtn({ label: t('review.action.confirmFail', null, lang), action: 'fail', active: true, color: 'var(--danger)', ariaLabel: `Confirm marking "${itemLabel}" as failed` }));
     wrap.appendChild(el('button', {
       style: 'min-height:44px;padding:9px 15px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text-dim)',
-      text: 'Cancel',
+      text: t('review.action.cancel', null, lang),
       attrs: { type: 'button', 'data-review-action': 'cancel-confirm', 'aria-label': `Cancel failing "${itemLabel}"` },
     }));
     return wrap;
   }
 
-  wrap.appendChild(makeBtn({ label: ACTION_LABEL.pass, action: 'pass', active: statusKey === 'passed' && decisionKey === 'approve', color: 'var(--success)', ariaLabel: `${ACTION_LABEL.pass} — ${itemLabel}` }));
-  wrap.appendChild(makeBtn({ label: ACTION_LABEL.fail, action: 'fail', active: statusKey === 'failed', color: 'var(--danger)', ariaLabel: `${ACTION_LABEL.fail} — ${itemLabel}` }));
-  wrap.appendChild(makeBtn({ label: ACTION_LABEL.adjust, action: 'adjust', active: decisionKey === 'needs-adjustment', color: 'var(--warn)', ariaLabel: `${ACTION_LABEL.adjust} — ${itemLabel}` }));
-  wrap.appendChild(makeBtn({ label: ACTION_LABEL.pending, action: 'pending', active: statusKey === 'pending' && decisionKey === 'undecided', color: 'var(--text-dim)', ariaLabel: `Return "${itemLabel}" to ${ACTION_LABEL.pending.toLowerCase()}` }));
+  wrap.appendChild(makeBtn({ label: al.pass, action: 'pass', active: statusKey === 'passed' && decisionKey === 'approve', color: 'var(--success)', ariaLabel: `${al.pass} — ${itemLabel}` }));
+  wrap.appendChild(makeBtn({ label: al.fail, action: 'fail', active: statusKey === 'failed', color: 'var(--danger)', ariaLabel: `${al.fail} — ${itemLabel}` }));
+  wrap.appendChild(makeBtn({ label: al.adjust, action: 'adjust', active: decisionKey === 'needs-adjustment', color: 'var(--warn)', ariaLabel: `${al.adjust} — ${itemLabel}` }));
+  wrap.appendChild(makeBtn({ label: al.pending, action: 'pending', active: statusKey === 'pending' && decisionKey === 'undecided', color: 'var(--text-dim)', ariaLabel: `Return "${itemLabel}" to ${al.pending.toLowerCase()}` }));
   return wrap;
 }
 
@@ -440,12 +559,12 @@ function renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConf
  * delegated from the console container) — this function only builds
  * the field and wires no listeners itself.
  */
-function renderNoteField(item, itemId, itemLabel) {
+function renderNoteField(item, itemId, itemLabel, lang) {
   const wrap = el('div', { style: 'margin-top:10px' });
   const fieldId = `review-note-${itemId}`;
   wrap.appendChild(el('label', {
     style: 'display:block;font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;font-family:var(--font-mono);margin-bottom:4px',
-    text: 'Reviewer note',
+    text: t('review.reviewerNote', null, lang),
     attrs: { for: fieldId },
   }));
   const currentNote = _safeText(item.reviewerNote, '');
@@ -489,7 +608,7 @@ function renderChecklistItem(item, uiState, lang) {
   const wrap = el('div', { style: 'padding:12px 0;border-bottom:1px solid var(--border)' });
 
   if (!_isRecord(item)) {
-    wrap.appendChild(el('div', { style: 'font-size:12px;color:var(--text-faint);font-style:italic', text: 'Invalid review item data — skipped.' }));
+    wrap.appendChild(el('div', { style: 'font-size:12px;color:var(--text-faint);font-style:italic', text: t('review.invalidItem', null, lang) }));
     return wrap;
   }
 
@@ -498,7 +617,14 @@ function renderChecklistItem(item, uiState, lang) {
 
   const top = el('div', { style: 'display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px' });
   const labelCol = el('div', { style: 'flex:1;min-width:0' });
-  const itemLabel = _safeText(item.label, 'Untitled review item');
+  // FULL-SYSTEM I18N COMPLETION R2 -- Phase B: for the ten canonical
+  // review items the visible title comes from the STABLE ID, never from
+  // Core's English `label`. A non-canonical (developer-defined) item
+  // falls back to its own bounded source label AND is marked as such,
+  // so an unknown check can never masquerade as a standard one.
+  const canonicalTitle = presentReviewItemField(item.id, 'title', lang);
+  const itemLabel = canonicalTitle ?? _safeText(item.label, t('review.console.untitledItem', null, lang));
+  const isDeveloperDefinedItem = !isCanonicalReviewItemId(item.id);
   labelCol.appendChild(el('div', { style: 'font-size:13px;font-weight:600;color:var(--text);overflow-wrap:anywhere', text: itemLabel }));
   const descriptionText = _safeText(item.description, '');
   if (descriptionText) {
@@ -506,7 +632,7 @@ function renderChecklistItem(item, uiState, lang) {
   }
   top.appendChild(labelCol);
   const statusKey = _normalizeStatus(item.status); // unknown/malformed statuses normalize to "unavailable" — NEVER "passed"
-  top.appendChild(badge(STATUS_LABEL[statusKey], STATUS_COLOR[statusKey]));
+  top.appendChild(badge(_trStatus(statusKey, lang), STATUS_COLOR[statusKey]));
   wrap.appendChild(top);
 
   // ── Category / Required-Optional / Reviewer decision — always shown ──────
@@ -514,9 +640,9 @@ function renderChecklistItem(item, uiState, lang) {
   const categoryText = _safeText(item.category, '');
   if (categoryText) metaRow.appendChild(badge(categoryText.toUpperCase(), 'var(--text-faint)'));
   const isRequired = item.required !== false; // anything other than an explicit `false` is treated as required (never silently downgraded)
-  metaRow.appendChild(badge(isRequired ? 'Required' : 'Optional', isRequired ? 'var(--accent)' : 'var(--text-faint)'));
+  metaRow.appendChild(badge(isRequired ? t('review.console.required', null, lang) : t('review.console.optional', null, lang), isRequired ? 'var(--accent)' : 'var(--text-faint)'));
   const decisionKey = _normalizeDecision(item.reviewerDecision); // unknown/malformed decisions normalize to "undecided"
-  metaRow.appendChild(badge(DECISION_LABEL[decisionKey], DECISION_COLOR[decisionKey]));
+  metaRow.appendChild(badge(_trDecision(decisionKey, lang), DECISION_COLOR[decisionKey]));
   wrap.appendChild(metaRow);
 
   const reasonText = _safeText(item.reason, '');
@@ -529,8 +655,23 @@ function renderChecklistItem(item, uiState, lang) {
     evWrap.textContent = parts.join(' \u00B7 '); // evidence values (e.g. "skinRisk=low") — plain text only, never HTML
     wrap.appendChild(evWrap);
   }
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase H:
+  // FIX for Defect 3 -- a manual visual item's "no automatic evidence"
+  // note is EXPECTED (a human must look at the image), never a real
+  // problem, so it must never render as an alarming orange warning
+  // line. For manual items (item.manual !== false), replace the raw
+  // internal warning text with one bounded, neutral, bilingual
+  // reassurance line instead. System-verified items (manual === false)
+  // keep their real warnings exactly as before -- missing/malformed
+  // system evidence IS a genuine warning.
   const itemWarnings = Array.isArray(item.warnings) ? item.warnings : [];
-  if (itemWarnings.length) {
+  const isManualItem = item.manual !== false;
+  if (isManualItem && itemWarnings.length) {
+    wrap.appendChild(el('div', {
+      style: 'margin-top:6px;font-size:10.5px;color:var(--text-faint);font-style:italic;overflow-wrap:anywhere',
+      text: t('review.manualNoAutoEvidence', null, lang),
+    }));
+  } else if (itemWarnings.length) {
     const warnWrap = el('div', { style: 'margin-top:6px;display:flex;flex-direction:column;gap:3px' });
     for (const w of itemWarnings) {
       const text = typeof w === 'string' ? w : _safeText(w, '(unrepresentable warning)');
@@ -541,20 +682,31 @@ function renderChecklistItem(item, uiState, lang) {
   }
   const updatedText = _safeDateText(item.updatedAt); // '' for missing/invalid — never renders "Invalid Date"
   if (updatedText) {
-    wrap.appendChild(el('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;font-family:var(--font-mono)', text: `Updated ${updatedText}` }));
+    wrap.appendChild(el('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;font-family:var(--font-mono)', text: `${t('review.console.lastUpdated', null, lang)} ${updatedText}` }));
   }
 
-  // ── Bilingual help text — shown for every item (system-verified items
-  //    show "no manual look needed"; visual items show what/where/why) ──
-  if (_isRecord(item.help)) {
+  // ── Help text — FULL-SYSTEM I18N COMPLETION R2, Phase B ──────────────
+  //    For the ten CANONICAL items the what/where/why text is resolved
+  //    from the centralized dictionary by STABLE ITEM ID, so it always
+  //    matches the active locale. Core's own bilingual `item.help`
+  //    payload is used only as the fallback for a non-canonical,
+  //    developer-defined item (which is additionally badged as such).
+  const canonicalWhat = presentReviewItemField(item.id, 'whatThisChecks', lang);
+  const canonicalWhere = presentReviewItemField(item.id, 'whatToLookFor', lang);
+  const canonicalWhy = presentReviewItemField(item.id, 'whyItMatters', lang);
+  if (canonicalWhat || canonicalWhere || canonicalWhy || _isRecord(item.help)) {
     const helpWrap = el('div', { style: 'margin-top:8px;padding:8px 10px;background:var(--surface-2);border-radius:3px;font-size:11px;color:var(--text-dim);line-height:1.6;overflow-wrap:anywhere' });
-    const whatText = _t(item.help.en ? { en: item.help.en.whatThisChecks, th: item.help.th?.whatThisChecks } : null, lang);
-    const whereText = _t(item.help.en ? { en: item.help.en.whatToLookFor, th: item.help.th?.whatToLookFor } : null, lang);
-    const whyText = _t(item.help.en ? { en: item.help.en.whyItMatters, th: item.help.th?.whyItMatters } : null, lang);
+    const helpRecord = _isRecord(item.help) ? item.help : null;
+    const whatText = canonicalWhat ?? _t(helpRecord?.en ? { en: helpRecord.en.whatThisChecks, th: helpRecord.th?.whatThisChecks } : null, lang);
+    const whereText = canonicalWhere ?? _t(helpRecord?.en ? { en: helpRecord.en.whatToLookFor, th: helpRecord.th?.whatToLookFor } : null, lang);
+    const whyText = canonicalWhy ?? _t(helpRecord?.en ? { en: helpRecord.en.whyItMatters, th: helpRecord.th?.whyItMatters } : null, lang);
+    if (isDeveloperDefinedItem) {
+      helpWrap.appendChild(el('div', { style: 'margin-bottom:3px;color:var(--warn)', text: presentUnknownReviewItemNote(lang) }));
+    }
     if (whatText) helpWrap.appendChild(el('div', { text: whatText }));
     if (whereText) helpWrap.appendChild(el('div', { style: 'margin-top:3px;color:var(--text-faint)', text: whereText }));
     if (whyText) helpWrap.appendChild(el('div', { style: 'margin-top:3px;font-style:italic;color:var(--text-faint)', text: whyText }));
-    if (whatText || whereText || whyText) wrap.appendChild(helpWrap);
+    if (whatText || whereText || whyText || isDeveloperDefinedItem) wrap.appendChild(helpWrap);
   }
 
   // ── Controls — system-verified items are always read-only (a manual
@@ -564,12 +716,12 @@ function renderChecklistItem(item, uiState, lang) {
   const isSystemVerified = item.manual === false;
   if (isSystemVerified) {
     const roWrap = el('div', { style: 'margin-top:9px;display:flex;align-items:center;gap:7px' });
-    roWrap.appendChild(badge(lang === 'th' ? 'ตรวจสอบโดยระบบ — อ่านอย่างเดียว' : 'System-verified — read-only', 'var(--text-faint)'));
+    roWrap.appendChild(badge(t('review.console.systemVerifiedReadOnly', null, lang), 'var(--text-faint)'));
     wrap.appendChild(roWrap);
   } else if (itemId) {
     const isFailConfirmPending = uiState?.pendingConfirmItemIds instanceof Set && uiState.pendingConfirmItemIds.has(itemId);
-    wrap.appendChild(renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending));
-    wrap.appendChild(renderNoteField(item, itemId, itemLabel));
+    wrap.appendChild(renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending, lang));
+    wrap.appendChild(renderNoteField(item, itemId, itemLabel, lang));
   }
 
   return wrap;
@@ -583,28 +735,28 @@ function renderChecklistItem(item, uiState, lang) {
  * used for the per-item Fail confirmation, since this app has no
  * existing modal system to reuse.
  */
-function renderResetButton(uiState) {
+function renderResetButton(uiState, lang) {
   const wrap = el('div', { style: 'margin-top:18px;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:center;gap:9px' });
 
   if (uiState?.resetConfirmPending) {
-    wrap.appendChild(el('span', { style: 'font-size:12px;color:var(--text-dim);overflow-wrap:anywhere', text: 'Reset all review progress? This clears every status, decision, and note.' }));
+    wrap.appendChild(el('span', { style: 'font-size:12px;color:var(--text-dim);overflow-wrap:anywhere', text: t('review.resetConfirm', null, lang) }));
     wrap.appendChild(el('button', {
       style: 'min-height:44px;padding:9px 16px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--danger);background:var(--danger);color:var(--on-accent)',
-      text: 'Yes, Reset',
-      attrs: { type: 'button', 'data-review-action': 'reset-review', 'aria-label': 'Confirm reset of all review progress' },
+      text: t('review.yesReset', null, lang),
+      attrs: { type: 'button', 'data-review-action': 'reset-review', 'aria-label': t('review.aria.confirmReset', null, lang) },
     }));
     wrap.appendChild(el('button', {
       style: 'min-height:44px;padding:9px 16px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text-dim)',
-      text: 'Cancel',
-      attrs: { type: 'button', 'data-review-action': 'reset-cancel', 'aria-label': 'Cancel reset' },
+      text: t('review.cancel', null, lang),
+      attrs: { type: 'button', 'data-review-action': 'reset-cancel', 'aria-label': t('review.aria.cancelReset', null, lang) },
     }));
     return wrap;
   }
 
   wrap.appendChild(el('button', {
     style: 'min-height:44px;padding:9px 18px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text-dim)',
-    text: 'Reset Review',
-    attrs: { type: 'button', 'data-review-action': 'reset-review', 'aria-label': 'Reset all review progress' },
+    text: t('review.resetReview', null, lang),
+    attrs: { type: 'button', 'data-review-action': 'reset-review', 'aria-label': t('review.aria.resetAll', null, lang) },
   }));
   return wrap;
 }
@@ -617,30 +769,30 @@ function renderResetButton(uiState) {
  * hardStops is handled specially since it isn't itself a risk level
  * (it may be an array, number, boolean, object, or missing).
  */
-function renderPreviewRiskReview(container, riskReview) {
+function renderPreviewRiskReview(container, riskReview, lang) {
   if (!_isRecord(riskReview)) return;
-  container.appendChild(sectionHeading('Preview Risk Review', 'shield'));
+  container.appendChild(sectionHeading(t('review.console.previewRiskReview', null, lang), 'shield'));
   const grid = el('div', { style: 'display:flex;flex-wrap:wrap;gap:8px' });
 
   const overallLevel = _normalizeRiskLevel(riskReview.level);
-  grid.appendChild(riskCell('Overall Level', RISK_LABEL[overallLevel], RISK_COLOR[overallLevel]));
+  grid.appendChild(riskCell(t('review.risk.overallLevel', null, lang), presentRiskLevel(overallLevel, lang), RISK_COLOR[overallLevel]));
 
-  const hardStops = _describeHardStops(riskReview.hardStops);
-  grid.appendChild(riskCell('Hard Stops', hardStops.text, hardStops.color));
+  const hardStops = _describeHardStops(riskReview.hardStops, lang);
+  grid.appendChild(riskCell(t('review.risk.hardStops', null, lang), hardStops.text, hardStops.color));
 
   const rows = [
-    ['Over-stack Severity', riskReview.overStackSeverity],
-    ['Skin Risk', riskReview.skinRisk],
-    ['Highlight Risk', riskReview.highlightRisk],
-    ['Shadow Risk', riskReview.shadowRisk],
-    ['White Balance Risk', riskReview.whiteBalanceRisk],
-    ['Color Risk', riskReview.colorRisk],
-    ['Export Risk', riskReview.exportRisk],
-    ['Production Write Risk', riskReview.productionWriteRisk],
+    ['review.risk.overStackSeverity', riskReview.overStackSeverity],
+    ['review.risk.skinRisk', riskReview.skinRisk],
+    ['review.risk.highlightRisk', riskReview.highlightRisk],
+    ['review.risk.shadowRisk', riskReview.shadowRisk],
+    ['review.risk.whiteBalanceRisk', riskReview.whiteBalanceRisk],
+    ['review.risk.colorRisk', riskReview.colorRisk],
+    ['review.risk.exportRisk', riskReview.exportRisk],
+    ['review.risk.productionWriteRisk', riskReview.productionWriteRisk],
   ];
-  for (const [label, raw] of rows) {
+  for (const [labelKey, raw] of rows) {
     const level = _normalizeRiskLevel(raw);
-    grid.appendChild(riskCell(label, RISK_LABEL[level], RISK_COLOR[level]));
+    grid.appendChild(riskCell(t(labelKey, null, lang), presentRiskLevel(level, lang), RISK_COLOR[level]));
   }
 
   container.appendChild(grid);
@@ -657,74 +809,99 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
   const reviewRecord = _isRecord(reviewState) ? reviewState : null;
 
   if (!sandboxRecord && !reviewRecord) {
-    container.appendChild(el('div', { style: 'font-size:12.5px;color:var(--text-faint);padding:10px 0', text: 'No preview is available to review yet.' }));
+    container.appendChild(el('div', { style: 'font-size:12.5px;color:var(--text-faint);padding:10px 0', text: t('review.noPreview', null, lang) }));
     return;
   }
 
   // ── Top summary ──────────────────────────────────────────────────────────
   const summaryRow = el('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px' });
-  if (sandboxRecord) summaryRow.appendChild(badge(`Preview: ${_safeText(sandboxRecord.previewState, 'unknown')}`, sandboxRecord.canGeneratePreview === true ? 'var(--success)' : 'var(--text-faint)'));
-  if (reviewRecord) summaryRow.appendChild(badge(`Review: ${_safeText(reviewRecord.approvalState, 'unknown')}`, APPROVAL_COLOR[reviewRecord.approvalState] ?? 'var(--text-faint)'));
+  if (sandboxRecord) {
+    summaryRow.appendChild(badge(
+      `${t('visualPreview.badges.previewOnly', null, lang)}: ${_trPreviewState(sandboxRecord.previewState, lang)}`,
+      sandboxRecord.canGeneratePreview === true ? 'var(--success)' : 'var(--text-faint)',
+    ));
+  }
+  if (reviewRecord) {
+    summaryRow.appendChild(badge(
+      `${t('review.console.reviewProgress', null, lang)}: ${presentReviewSummaryState(reviewRecord.approvalState, lang)}`,
+      APPROVAL_COLOR[reviewRecord.approvalState] ?? 'var(--text-faint)',
+    ));
+  }
   container.appendChild(summaryRow);
 
-  const photographerLine = _safeText(reviewRecord?.reviewSummary?.photographerMessage, '') || _safeText(sandboxRecord?.photographerSummary, '') || 'Preparing preview review information.';
+  // FULL-SYSTEM I18N COMPLETION R2 -- Phase C: the photographer-facing
+  // summary is derived from the STABLE approval-state code, never from
+  // Core's English `photographerMessage`/`photographerSummary` prose.
+  // Those raw Core sentences are still shown, but only inside the
+  // collapsed Developer Details block at the bottom of this console.
+  const approvalStateCode = typeof reviewRecord?.approvalState === 'string'
+    ? reviewRecord.approvalState
+    : (reviewRecord?.reviewGuidance?.readyToBuildV2 === true ? 'ready-to-build-v2' : 'unavailable');
+  const photographerLine = presentReviewSummaryState(approvalStateCode, lang);
   container.appendChild(el('div', { style: 'font-size:13px;color:var(--text);line-height:1.6;margin-bottom:4px;overflow-wrap:anywhere', text: photographerLine }));
 
+  // Raw upstream Core prose -- developer-facing only, never the primary
+  // photographer message (see Phase C of the R2 spec).
+  const rawCoreSummary = _safeText(reviewRecord?.reviewSummary?.photographerMessage, '') || _safeText(sandboxRecord?.photographerSummary, '');
+
   // ── Tri-state confirmations — never claim more than the data supports ────
+  // FULL-SYSTEM I18N COMPLETION R2 -- Phase D: all evidence lines read
+  // from ONE canonical projection so they can never contradict each
+  // other, and every sentence comes from the centralized dictionary.
+  const systemEvidence = buildReviewSystemEvidence(sandboxRecord, reviewRecord);
   const confirmWrap = el('div', { style: 'display:flex;flex-direction:column;gap:5px;margin:14px 0;padding:12px 14px;background:var(--surface-2);border-radius:3px;border-left:2px solid var(--success)' });
 
-  const previewNonProductionStatus = _evaluatePreviewNonProduction(sandboxRecord);
+  const triStatus = (v) => (v === true ? 'confirmed' : v === false ? 'anomaly' : 'unknown');
+
   statusLine(confirmWrap, {
-    confirmedText: 'Preview: Confirmed Non-production.',
-    anomalyText: 'Preview reports an unexpected production state — treat with caution.',
-    unknownText: 'Preview: Unknown / Not confirmed.',
-    status: previewNonProductionStatus,
+    confirmedText: t('review.evidence.previewNonProductionConfirmed', null, lang),
+    anomalyText: t('review.evidence.previewNonProductionAnomaly', null, lang),
+    unknownText: t('review.evidence.previewNonProductionUnknown', null, lang),
+    status: _evaluatePreviewNonProduction(sandboxRecord),
   });
 
-  const canExportPreview = sandboxRecord ? sandboxRecord.canExportPreview : undefined;
+  const canExportPreview = systemEvidence.canExportPreview;
   statusLine(confirmWrap, {
-    confirmedText: 'Export remains disabled (canExportPreview=false).',
-    anomalyText: `Export flag reports an unexpected value (canExportPreview=${_safeText(canExportPreview, 'unknown')}) — this should never happen; treat with caution.`,
-    unknownText: 'Export status cannot be confirmed yet (preview sandbox not available).',
+    confirmedText: t('review.evidence.exportConfirmed', null, lang),
+    anomalyText: t('review.evidence.exportAnomaly', null, lang),
+    unknownText: t('review.evidence.exportUnknown', null, lang),
     status: typeof canExportPreview !== 'boolean' ? 'unknown' : (canExportPreview === false ? 'confirmed' : 'anomaly'),
   });
 
-  const canWriteProduction = sandboxRecord ? sandboxRecord.canWriteProduction : undefined;
   statusLine(confirmWrap, {
-    confirmedText: 'Production write remains disabled (canWriteProduction=false).',
-    anomalyText: `Production write flag reports an unexpected value (canWriteProduction=${_safeText(canWriteProduction, 'unknown')}) — this should never happen; treat with caution.`,
-    unknownText: 'Production write status cannot be confirmed yet (preview sandbox not available).',
-    status: typeof canWriteProduction !== 'boolean' ? 'unknown' : (canWriteProduction === false ? 'confirmed' : 'anomaly'),
+    confirmedText: t('review.evidence.productionWriteConfirmed', null, lang),
+    anomalyText: t('review.evidence.productionWriteAnomaly', null, lang),
+    unknownText: t('review.evidence.productionWriteUnknown', null, lang),
+    status: triStatus(systemEvidence.productionWriteDisabled),
   });
 
-  const selectedOutputSource = sandboxRecord ? sandboxRecord.selectedOutputSource : undefined;
+  const selectedOutputSource = systemEvidence.selectedOutputSource;
   statusLine(confirmWrap, {
-    confirmedText: 'Production Mapping remains legacy (selectedOutputSource="legacy").',
-    anomalyText: `Production Mapping reports an unexpected source (selectedOutputSource=${_safeText(selectedOutputSource, 'unknown')}) — this should never happen; treat with caution.`,
-    unknownText: 'Production Mapping status cannot be confirmed yet (preview sandbox not available).',
+    confirmedText: t('review.evidence.productionMappingConfirmed', null, lang),
+    anomalyText: t('review.evidence.productionMappingAnomaly', null, lang),
+    unknownText: t('review.evidence.productionMappingUnknown', null, lang),
     status: typeof selectedOutputSource !== 'string' ? 'unknown' : (selectedOutputSource === 'legacy' ? 'confirmed' : 'anomaly'),
   });
   container.appendChild(confirmWrap);
 
-  // ── XMP Export confirmation — only asserted when explicit evidence exists ─
-  const xmpUnchangedHint = reviewRecord?.metadata?.xmpExportUnchanged ?? sandboxRecord?.metadata?.xmpExportUnchanged;
+  // ── XMP export path — SAME evidence as the export-path-unchanged item ────
   const xmpStripWrap = el('div', { style: 'margin-bottom:14px' });
   statusLine(xmpStripWrap, {
-    confirmedText: 'XMP Export: Unchanged.',
-    anomalyText: 'XMP Export reports an unexpected state — this should never happen; treat with caution.',
-    unknownText: 'XMP Export: Unknown / Not confirmed.',
-    status: typeof xmpUnchangedHint !== 'boolean' ? 'unknown' : (xmpUnchangedHint === true ? 'confirmed' : 'anomaly'),
+    confirmedText: t('review.evidence.xmpConfirmed', null, lang),
+    anomalyText: t('review.evidence.xmpAnomaly', null, lang),
+    unknownText: t('review.evidence.xmpUnknown', null, lang),
+    status: triStatus(systemEvidence.xmpExportPathUnchanged),
   });
   container.appendChild(xmpStripWrap);
 
   // ── Preview Risk Review ──────────────────────────────────────────────────
-  renderPreviewRiskReview(container, sandboxRecord?.previewRiskReview);
+  renderPreviewRiskReview(container, sandboxRecord?.previewRiskReview, lang);
 
   // ── Review progress (with ARIA progressbar semantics) ────────────────────
   const progress = _isRecord(reviewRecord?.reviewProgress) ? reviewRecord.reviewProgress : null;
   const normalizedProgress = progress ? _normalizeProgress(progress) : null;
   if (normalizedProgress?.available) {
-    container.appendChild(sectionHeading('Review Progress', 'fact_check'));
+    container.appendChild(sectionHeading(t('review.console.reviewProgress', null, lang), 'fact_check'));
     const pct = Math.round(normalizedProgress.percentage);
     const completedText = normalizedProgress.completed !== null ? String(normalizedProgress.completed) : '\u2014';
     const requiredText = normalizedProgress.required !== null ? String(normalizedProgress.required) : '\u2014';
@@ -737,7 +914,7 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
         'aria-valuemin': '0',
         'aria-valuemax': '100',
         'aria-valuenow': String(pct),
-        'aria-label': `Review progress: ${completedText} of ${requiredText} required checks completed`,
+        'aria-label': t('review.aria.progressBar', { done: completedText, total: requiredText }, lang),
       },
     });
     const barInner = el('div', { style: `height:100%;width:${pct}%;background:var(--accent);border-radius:3px` });
@@ -751,7 +928,7 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
     const resolvedNext = _resolveNextRequiredItemLabel(reviewRecord?.reviewSummary?.nextRequiredItem, idLabelMap);
     container.appendChild(el('div', {
       style: 'font-size:11px;color:var(--text-faint);overflow-wrap:anywhere',
-      text: resolvedNext ? `Next: ${resolvedNext}` : 'All required review items completed',
+      text: resolvedNext ? t('review.console.nextItem', { label: resolvedNext }, lang) : t('review.console.allRequiredCompleted', null, lang),
     }));
 
     // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase G2/G4: a bounded
@@ -767,10 +944,10 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
       const sysReq = typeof guidance.systemRequired === 'number' ? guidance.systemRequired : null;
       const sysVerified = typeof guidance.systemVerified === 'number' ? guidance.systemVerified : null;
       if (visualReq !== null && visualPass !== null) {
-        guidanceWrap.appendChild(badge(`${lang === 'th' ? 'ตรวจสอบด้วยสายตา' : 'Visual'} ${visualPass}/${visualReq}`, visualPass >= visualReq ? 'var(--success)' : 'var(--text-dim)'));
+        guidanceWrap.appendChild(badge(t('review.console.visualProgress', { done: visualPass, total: visualReq }, lang), visualPass >= visualReq ? 'var(--success)' : 'var(--text-dim)'));
       }
       if (sysReq !== null && sysVerified !== null) {
-        guidanceWrap.appendChild(badge(`${lang === 'th' ? 'ระบบตรวจสอบ' : 'System'} ${sysVerified}/${sysReq}`, sysVerified >= sysReq ? 'var(--success)' : 'var(--text-faint)'));
+        guidanceWrap.appendChild(badge(t('review.console.systemProgress', { done: sysVerified, total: sysReq }, lang), sysVerified >= sysReq ? 'var(--success)' : 'var(--text-faint)'));
       }
       container.appendChild(guidanceWrap);
       const primaryGuidanceText = _safeText(guidance.primaryGuidance, '');
@@ -779,8 +956,8 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
       }
     }
   } else if (reviewRecord) {
-    container.appendChild(sectionHeading('Review Progress', 'fact_check'));
-    container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-faint)', text: 'Review progress unavailable.' }));
+    container.appendChild(sectionHeading(t('review.console.reviewProgress', null, lang), 'fact_check'));
+    container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-faint)', text: t('review.progressUnavailable', null, lang) }));
   }
 
   // ── Checklist (grouped: Visual inspection / System integrity / Safety
@@ -789,11 +966,11 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
   //    read-only, system-verified, and never manually overridable) ──
   const reviewItems = Array.isArray(reviewRecord?.reviewItems) ? reviewRecord.reviewItems : [];
   if (reviewItems.length) {
-    container.appendChild(sectionHeading('Human Review Checklist', 'checklist'));
+    container.appendChild(sectionHeading(t('review.console.humanReviewChecklist', null, lang), 'checklist'));
 
     const grouped = new Map();
     for (const item of reviewItems) {
-      const groupKey = _isRecord(item) && typeof item.group === 'string' && GROUP_LABEL[item.group] ? item.group : '__ungrouped__';
+      const groupKey = _isRecord(item) && typeof item.group === 'string' && GROUP_I18N_KEY[item.group] ? item.group : '__ungrouped__';
       if (!grouped.has(groupKey)) grouped.set(groupKey, []);
       grouped.get(groupKey).push(item);
     }
@@ -802,7 +979,7 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
     for (const groupKey of orderedKeys) {
       const itemsInGroup = grouped.get(groupKey) ?? [];
       if (!itemsInGroup.length) continue;
-      const groupLabelText = _t(GROUP_LABEL[groupKey] ?? GROUP_FALLBACK_LABEL, lang);
+      const groupLabelText = t(GROUP_I18N_KEY[groupKey] ?? GROUP_FALLBACK_I18N_KEY, null, lang);
       container.appendChild(el('div', {
         style: 'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);margin:14px 0 4px;font-family:var(--font-mono)',
         text: groupLabelText,
@@ -813,7 +990,7 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
       }
       container.appendChild(listWrap);
     }
-    container.appendChild(renderResetButton(uiState));
+    container.appendChild(renderResetButton(uiState, lang));
   }
 
   // ── Blockers — merged and deduplicated from BOTH sources ─────────────────
@@ -846,7 +1023,7 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
     container.appendChild(sectionHeading('Rollback', 'settings_backup_restore'));
     container.appendChild(listRow('Available', rollback.available === true ? 'Yes' : 'No'));
     const restoreSourceText = _safeText(rollback.restoreSource, '');
-    if (restoreSourceText) container.appendChild(listRow('Restore source', restoreSourceText));
+    if (restoreSourceText) container.appendChild(listRow(t('review.console.restoreSource', null, lang), restoreSourceText));
     if (Array.isArray(rollback.steps) && rollback.steps.length) {
       const stepsList = el('ol', { style: 'margin:6px 0 0;padding-left:18px;font-size:11.5px;color:var(--text-dim);line-height:1.7;overflow-wrap:anywhere' });
       for (const step of rollback.steps) {
@@ -856,7 +1033,7 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
     }
   } else {
     container.appendChild(sectionHeading('Rollback', 'settings_backup_restore'));
-    container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-faint)', text: 'Rollback information unavailable.' }));
+    container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-faint)', text: t('review.rollbackUnavailable', null, lang) }));
   }
 }
 
@@ -900,6 +1077,7 @@ export function renderReviewConsole(container, sandbox, reviewState, uiState = n
 
   try {
     _clearContainer(container); // clearing our OWN previously-rendered (trusted, DOM-API-built) content — not an XSS vector
+    _unrepresentableLang = lang === 'th' ? 'th' : 'en';
     _renderBody(container, sandbox, reviewState, uiState, lang === 'th' ? 'th' : 'en');
   } catch (err) {
     // Never let malformed upstream data crash the host page. Clear any
@@ -910,7 +1088,7 @@ export function renderReviewConsole(container, sandbox, reviewState, uiState = n
     try {
       container.appendChild(el('div', {
         style: 'font-size:12px;color:var(--warn);padding:10px 0',
-        text: 'Preview review data could not be displayed (unexpected format). This does not affect your exported preset.',
+        text: t('review.malformedFallback', null, lang) || 'Preview review data could not be displayed (unexpected format). This does not affect your exported preset.',
       }));
     } catch { /* even the fallback failed — give up silently rather than throwing */ }
   }

@@ -415,8 +415,23 @@ function _buildReviewState(input) {
   const warnings = [], reasons = [];
   if (!sandbox) warnings.push('No Controlled Overlay Preview Sandbox supplied — review state is being tracked ahead of an actual preview.');
   if (sandbox && sandbox.canGeneratePreview !== true) warnings.push('Preview sandbox exists but canGeneratePreview is not true — approval cannot occur even if all review items pass.');
-  const missingEvidenceCount = reviewItems.filter(i => i.warnings.length > 0).length;
-  if (missingEvidenceCount > 0) warnings.push(`${missingEvidenceCount} review item(s) have incomplete automatic evidence — never treated as passed by default.`);
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase H:
+  // FIX for Defect 3 -- this global warning previously counted EVERY
+  // review item with a non-empty `warnings` array, including the six
+  // manual visual items (source-image-reviewed, skin-tones-reviewed,
+  // highlights-reviewed, shadows-reviewed, white-balance-reviewed,
+  // color-stacking-reviewed), which are BY DESIGN never expected to
+  // have automatic evidence -- a human must look at the image. That
+  // made the global warning fire even after all six manual items
+  // passed and all four system items were verified (10/10 complete,
+  // readyToBuildV2=true), which is misleading: absence of automatic
+  // evidence on a manual item is expected guidance, not a system
+  // defect. Only items where `manual === false` (the system-verified
+  // items) can ever count toward this warning -- missing/malformed/
+  // unsafe SYSTEM evidence remains a genuine warning/blocker, exactly
+  // as before.
+  const missingSystemEvidenceCount = reviewItems.filter(i => i.manual === false && i.warnings.length > 0).length;
+  if (missingSystemEvidenceCount > 0) warnings.push(`${missingSystemEvidenceCount} system-verified review item(s) have incomplete automatic evidence — never treated as passed by default.`);
 
   reasons.push(`Approval state "${approval.approvalState}" — ${reviewProgress.completed}/${reviewProgress.required} required items passed, canApprovePreview=${approval.canApprovePreview}.`);
   if (VISUAL_REVIEW_IDS.size) reasons.push('Visual review items (source image, skin tones, highlights, shadows, white balance, colour stacking) are never auto-approved — they require explicit human input via updatePreviewReviewItemV2.');
@@ -620,7 +635,11 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
   const reviewSummary = _computeReviewSummary(newItems, reviewProgress, approval);
 
   const warnings = [...(state?.warnings ?? []).filter(w => !w.startsWith('Unknown review item id'))];
-  const missingEvidenceCount = newItems.filter(i => i.warnings.length > 0).length;
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase H:
+  // FIX for Defect 3 (consistency with _buildReviewState above) --
+  // never count manual visual items' expected evidence-absence toward
+  // this figure, only genuine system-verified evidence gaps.
+  const missingSystemEvidenceCount = newItems.filter(i => i.manual === false && i.warnings.length > 0).length;
   const dedupedWarnings = [...new Set(warnings)];
 
   const blockers = [];

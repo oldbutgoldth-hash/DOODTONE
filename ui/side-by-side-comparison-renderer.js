@@ -43,6 +43,38 @@
  * malformed data can throw an uncaught exception out of this module.
  */
 
+// EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase B/J:
+// all user-facing text in this module is now sourced from the
+// centralized ui/i18n module (`t()`), threaded through as an explicit
+// `locale` parameter on every render function -- never captured once
+// and reused stale. English remains the automatic fallback for any
+// key genuinely missing in Thai (see ui/i18n/index.js). This module
+// still computes NOTHING about business state -- `locale` only
+// changes which strings are shown, never which branch is taken.
+import { t } from './i18n/index.js';
+import { presentDimensionName } from './i18n/domain-presenters.js';
+
+/** Converts a hyphenated internal code ('legacy-stronger') to the camelCase leaf key used under each i18n namespace ('legacyStronger'). Pure text mapping only -- never used for business logic. */
+function _camelFromCode(code) {
+  return typeof code === 'string' ? code.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase()) : code;
+}
+
+/** Looks up a normalized internal code under an i18n namespace, e.g. _trCode('comparison.direction', 'legacy-stronger', locale). Never throws; falls back to the raw code if no translation exists (never blank). */
+function _trCode(namespace, code, locale) {
+  if (typeof code !== 'string' || !code) return t('common.unknown', null, locale);
+  const key = `${namespace}.${_camelFromCode(code)}`;
+  const text = t(key, null, locale);
+  // FULL-SYSTEM I18N COMPLETION R2 -- Phase F BUGFIX: `t()` returns the
+  // LITERAL KEY when a key is missing (it never returns '' or
+  // undefined), so the previous `t(key) || code` fallback could never
+  // fire -- an unmapped code rendered a raw dotted key path such as
+  // "comparison.evidenceLevel.moderate" straight onto a
+  // photographer-facing surface. Detect that passthrough explicitly and
+  // degrade to the honest localized "unknown" label instead.
+  if (text === key) return t('common.unknown', null, locale);
+  return text;
+}
+
 const RISK_LABEL = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical', unknown: 'Unknown' };
 const RISK_COLOR = { low: 'var(--success)', medium: 'var(--warn)', high: 'var(--danger)', critical: 'var(--danger)', unknown: 'var(--text-faint)' };
 const RISK_LEVELS = new Set(['low', 'medium', 'high', 'critical']);
@@ -111,6 +143,20 @@ function _truncate(text) {
  * directly to a photographer-facing surface. Long text is truncated
  * safely with an ellipsis.
  */
+// FULL-SYSTEM I18N COMPLETION R2 -- Phase F/J: `_safeText` is a deep,
+// widely-called generic helper whose neutral fallback string is
+// photographer-facing. Threading `locale` through every one of its ~40
+// call sites would be a large, risk-bearing refactor for no behavioural
+// gain, so the ACTIVE RENDER LOCALE is recorded here at the top of each
+// render pass and read back only for that one generic fallback. This is
+// presentation state only -- it never affects business logic, never
+// persists beyond the current synchronous render, and is reset on every
+// render call.
+let _renderLocale = 'en';
+function _genericInfoFallback() {
+  return t('comparison.additionalInfoAvailable', null, _renderLocale);
+}
+
 function _safeText(value, fallback = '') {
   if (value === null || value === undefined) return fallback;
   if (typeof value === 'string') return _truncate(value);
@@ -118,7 +164,7 @@ function _safeText(value, fallback = '') {
   if (typeof value === 'boolean') return String(value);
   if (Array.isArray(value)) {
     const parts = value.filter(v => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean').map(v => String(v)).slice(0, 10);
-    return parts.length ? _truncate(parts.join(', ')) : 'Additional comparison information is available.';
+    return parts.length ? _truncate(parts.join(', ')) : _genericInfoFallback();
   }
   if (typeof value === 'object') {
     for (const key of _KNOWN_TEXT_KEYS) {
@@ -128,7 +174,7 @@ function _safeText(value, fallback = '') {
     // Unknown object shape (including circular references, which never
     // even reach here since we never attempt JSON.stringify on them) —
     // a neutral, non-technical fallback rather than any raw dump.
-    return 'Additional comparison information is available.';
+    return _genericInfoFallback();
   }
   return fallback;
 }
@@ -161,10 +207,10 @@ function _formatPercent(v) {
   return `${pct}%`;
 }
 
-function _yesNoUnknown(v) {
-  if (v === true) return 'Yes';
-  if (v === false) return 'No';
-  return 'Unknown';
+function _yesNoUnknown(v, locale) {
+  if (v === true) return t('common.yes', null, locale);
+  if (v === false) return t('common.no', null, locale);
+  return t('common.unknown', null, locale);
 }
 
 /** Creates an element with optional class/style/text/attrs — text always via textContent. */
@@ -244,17 +290,27 @@ function _mergeMessages(...lists) {
 }
 
 // ── Legacy/V2 summary cards ─────────────────────────────────────────────────
-function _renderPreviewCard(title, preview, extraRows) {
+function _renderPreviewCard(title, preview, extraRows, locale) {
   const card = el('div', { style: 'flex:1;min-width:220px;background:var(--surface-2);border-radius:4px;padding:14px;display:flex;flex-direction:column;gap:8px' });
   card.appendChild(el('div', { style: 'font-size:12.5px;font-weight:700;color:var(--text)', text: title }));
 
   const p = _isRecord(preview) ? preview : {};
   const rows = el('div', { style: 'display:flex;flex-direction:column' });
-  rows.appendChild(listRow('Data available', _yesNoUnknown(p.dataAvailable ?? p.available)));
-  rows.appendChild(listRow('Visual preview', 'Not available'));
-  rows.appendChild(listRow('Source', _safeText(p.source, 'unknown')));
-  rows.appendChild(listRow('Production source', _yesNoUnknown(p.productionSource)));
-  rows.appendChild(listRow('Preview only', _yesNoUnknown(p.previewOnly)));
+  rows.appendChild(listRow(t('comparison.card.dataAvailable', null, locale), _yesNoUnknown(p.dataAvailable ?? p.available, locale)));
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase D:
+  // FIX for Defect 2A -- this row previously always said "Visual
+  // preview: Not available", which reads as "this app has no visual
+  // preview anywhere" even when the separate Visual Preview Comparison
+  // section below has genuinely rendered pixels. This row only ever
+  // means "this Data Comparison card does not render pixels itself" --
+  // worded that way explicitly now, never claiming unavailability of
+  // the whole app's visual preview capability.
+  rows.appendChild(listRow(t('comparison.pixelPreviewNotRenderedHere', null, locale), ''));
+  // Phase F: the raw source code ('controlled-v2-preview', 'legacy-preset', ...)
+  // is a stable internal code, translated here rather than shown raw.
+  rows.appendChild(listRow(t('comparison.card.source', null, locale), _trCode('comparison.sourceCode', _safeText(p.source, 'unknown'), locale)));
+  rows.appendChild(listRow(t('comparison.card.productionSource', null, locale), _yesNoUnknown(p.productionSource, locale)));
+  rows.appendChild(listRow(t('comparison.card.previewOnly', null, locale), _yesNoUnknown(p.previewOnly, locale)));
   if (extraRows) for (const [label, value] of extraRows) rows.appendChild(listRow(label, value));
   card.appendChild(rows);
 
@@ -283,32 +339,39 @@ function _renderPreviewCard(title, preview, extraRows) {
 }
 
 // ── Comparison dimension row ─────────────────────────────────────────────────
-function _renderDimensionRow(dim) {
+function _renderDimensionRow(dim, locale) {
   if (!_isRecord(dim)) {
-    return el('div', { style: 'padding:9px 0;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-faint);font-style:italic', text: 'Invalid comparison dimension — skipped.' });
+    return el('div', { style: 'padding:9px 0;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-faint);font-style:italic', text: t('comparison.dimension.invalid', null, locale) });
   }
   const wrap = el('div', { style: 'padding:10px 0;border-bottom:1px solid var(--border)' });
   const top = el('div', { style: 'display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px' });
-  top.appendChild(el('div', { style: 'font-size:12px;font-weight:600;color:var(--text)', text: _safeText(dim.label, _safeText(dim.id, 'Dimension')) }));
+  // FULL-SYSTEM I18N COMPLETION R2 -- Phase F: the dimension title is
+  // resolved from the STABLE dimension ID, never from Core's own
+  // English `label`. Core prose is available in Developer Details only.
+  const dimTitle = typeof dim.id === 'string' && dim.id
+    ? presentDimensionName(dim.id, locale)
+    : _safeText(dim.label, t('comparison.dimensionLabel', null, locale));
+  top.appendChild(el('div', { style: 'font-size:12px;font-weight:600;color:var(--text)', text: dimTitle }));
   const badges = el('div', { style: 'display:flex;flex-wrap:wrap;gap:5px' });
   const direction = _normalizeDirection(dim.direction);
-  badges.appendChild(badge(DIRECTION_LABEL[direction], DIRECTION_COLOR[direction]));
+  badges.appendChild(badge(_trCode('comparison.direction', direction, locale), DIRECTION_COLOR[direction]));
   const side = _normalizeSide(dim.preferredSide);
-  badges.appendChild(badge(SIDE_LABEL[side], SIDE_COLOR[side]));
+  badges.appendChild(badge(_trCode('comparison.side', side, locale), SIDE_COLOR[side]));
   const risk = _normalizeRiskLevel(dim.riskLevel);
-  badges.appendChild(badge(RISK_LABEL[risk], RISK_COLOR[risk]));
+  badges.appendChild(badge(_trCode('comparison.risk', risk, locale), RISK_COLOR[risk]));
   top.appendChild(badges);
   wrap.appendChild(top);
 
   if (dim.available !== true) {
-    wrap.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:4px', text: 'Not enough evidence to compare this dimension.' }));
+    wrap.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:4px', text: t('comparison.dimension.notEnoughEvidence', null, locale) }));
   }
 
+  const unknownText = t('common.unknown', null, locale);
   const valRow = el('div', { style: 'display:flex;flex-wrap:wrap;gap:14px;margin-top:5px;font-size:11px' });
-  valRow.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Legacy: ${_safeText(dim.legacy, 'unknown')}` }));
-  valRow.appendChild(el('span', { style: 'color:var(--text-dim)', text: `V2: ${_safeText(dim.v2, 'unknown')}` }));
-  valRow.appendChild(el('span', { style: 'color:var(--text-faint)', text: `Similarity: ${_formatPercent(dim.similarity)}` }));
-  valRow.appendChild(el('span', { style: 'color:var(--text-faint)', text: `Confidence: ${_formatPercent(dim.confidence)}` }));
+  valRow.appendChild(el('span', { style: 'color:var(--text-dim)', text: t('comparison.dimension.legacy', { value: _safeText(dim.legacy, unknownText) }, locale) }));
+  valRow.appendChild(el('span', { style: 'color:var(--text-dim)', text: t('comparison.dimension.v2', { value: _safeText(dim.v2, unknownText) }, locale) }));
+  valRow.appendChild(el('span', { style: 'color:var(--text-faint)', text: t('comparison.dimension.similarity', { value: _formatPercent(dim.similarity) }, locale) }));
+  valRow.appendChild(el('span', { style: 'color:var(--text-faint)', text: t('comparison.dimension.confidence', { value: _formatPercent(dim.confidence) }, locale) }));
   wrap.appendChild(valRow);
 
   const reasons = _safeArray(dim.reasons);
@@ -320,18 +383,17 @@ function _renderDimensionRow(dim) {
 }
 
 // ── Risk comparison row ──────────────────────────────────────────────────────
-const RISK_AREA_LABEL = { skin: 'Skin', highlights: 'Highlights', shadows: 'Shadows', 'white-balance': 'White Balance', color: 'Color', overstack: 'Over-stack', export: 'Export', 'production-write': 'Production Write' };
-
-function _renderRiskRow(risk) {
+function _renderRiskRow(risk, locale) {
   if (!_isRecord(risk)) return null;
   const row = el('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:11px' });
-  row.appendChild(el('span', { style: 'min-width:110px;color:var(--text)', text: RISK_AREA_LABEL[risk.area] ?? _safeText(risk.area, 'Unknown area') }));
+  const areaLabel = typeof risk.area === 'string' ? t(`comparison.riskArea.${_camelFromCode(risk.area)}`, null, locale) : t('common.unknown', null, locale);
+  row.appendChild(el('span', { style: 'min-width:110px;color:var(--text)', text: (areaLabel && areaLabel !== `comparison.riskArea.${_camelFromCode(risk.area)}`) ? areaLabel : _safeText(risk.area, t('common.unknown', null, locale)) }));
   const legacyLevel = _normalizeRiskLevel(risk.legacyLevel);
   const v2Level = _normalizeRiskLevel(risk.v2Level);
-  row.appendChild(badge(`Legacy: ${RISK_LABEL[legacyLevel]}`, RISK_COLOR[legacyLevel]));
-  row.appendChild(badge(`V2: ${RISK_LABEL[v2Level]}`, RISK_COLOR[v2Level]));
+  row.appendChild(badge(`${t('comparison.side.legacy', null, locale)}: ${_trCode('comparison.risk', legacyLevel, locale)}`, RISK_COLOR[legacyLevel]));
+  row.appendChild(badge(`${t('comparison.side.v2', null, locale)}: ${_trCode('comparison.risk', v2Level, locale)}`, RISK_COLOR[v2Level]));
   const side = _normalizeSide(risk.preferredSide);
-  row.appendChild(badge(SIDE_LABEL[side], SIDE_COLOR[side]));
+  row.appendChild(badge(_trCode('comparison.side', side, locale), SIDE_COLOR[side]));
   return row;
 }
 
@@ -341,11 +403,11 @@ function _renderRiskRow(risk) {
  * finalStyleIntent.sideBySidePreviewComparisonV2 object (or any
  * malformed/missing value — every access below is defensive).
  */
-function _renderBody(container, comparison, visualPreviewInfo) {
+function _renderBody(container, comparison, visualPreviewInfo, locale) {
   const cmp = _isRecord(comparison) ? comparison : null;
 
   if (!cmp) {
-    container.appendChild(el('div', { style: 'font-size:12.5px;color:var(--text-faint);padding:10px 0', text: 'Side-by-Side comparison data is unavailable for this analysis.' }));
+    container.appendChild(el('div', { style: 'font-size:12.5px;color:var(--text-faint);padding:10px 0', text: t('comparison.unavailable', null, locale) }));
     return;
   }
 
@@ -353,10 +415,10 @@ function _renderBody(container, comparison, visualPreviewInfo) {
 
   // ── Section header + status badge ───────────────────────────────────────
   const headerRow = el('div', { style: 'display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px' });
-  headerRow.appendChild(el('div', { style: 'font-size:13px;font-weight:700;color:var(--text)', text: 'Side-by-Side Preview Comparison' }));
-  headerRow.appendChild(badge(STATE_LABEL[state], STATE_COLOR[state]));
+  headerRow.appendChild(el('div', { style: 'font-size:13px;font-weight:700;color:var(--text)', text: t('comparison.title', null, locale) }));
+  headerRow.appendChild(badge(_trCode('comparison.stateLabel', state, locale), STATE_COLOR[state]));
   container.appendChild(headerRow);
-  container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-bottom:12px', text: 'Data comparison only \u00B7 a separate evidence layer from any rendered-pixel preview (see the note below)' }));
+  container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-bottom:12px', text: t('comparison.subtitle', null, locale) }));
 
   // Extracted early (before the empty-state framing below) so both
   // this section and the Visual Honesty Banner can use the same
@@ -371,49 +433,74 @@ function _renderBody(container, comparison, visualPreviewInfo) {
   const v2DataAvailable = v2Preview?.dataAvailable === true || v2Preview?.available === true;
 
   // Insufficient-evidence / blocked empty-state framing (still shows partial diagnostic data below, per spec).
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase D:
+  // FIX for Defect 2A -- the old "but visual preview images are not
+  // implemented yet" wording (legacyDataAvailable || v2DataAvailable
+  // branch below) read as a whole-app capability claim. Replaced with
+  // the spec's exact truthful wording: this layer compares
+  // semantic/planning data only; rendered pixels are a separate
+  // section below.
   if (state === 'insufficient-evidence') {
-    container.appendChild(el('div', { style: 'font-size:12px;color:var(--text-dim);padding:8px 0 4px', text: 'There is not enough evidence to compare Legacy and V2 reliably.' }));
+    container.appendChild(el('div', { style: 'font-size:12px;color:var(--text-dim);padding:8px 0 4px', text: t('comparison.insufficientEvidence', null, locale) }));
   } else if (state === 'blocked') {
-    container.appendChild(el('div', { style: 'font-size:12px;color:var(--danger);padding:8px 0 4px', text: 'The comparison is blocked by current safety requirements.' }));
+    container.appendChild(el('div', { style: 'font-size:12px;color:var(--danger);padding:8px 0 4px', text: t('comparison.blocked', null, locale) }));
   } else if (legacyDataAvailable || v2DataAvailable) {
-    container.appendChild(el('div', { style: 'font-size:12px;color:var(--text-dim);padding:8px 0 4px', text: 'Comparison data is available, but visual preview images are not implemented yet.' }));
+    container.appendChild(el('div', { style: 'font-size:12px;color:var(--text-dim);padding:8px 0 4px', text: t('comparison.dataOnlyNotice', null, locale) }));
   } else {
-    container.appendChild(el('div', { style: 'font-size:12px;color:var(--text-dim);padding:8px 0 4px', text: 'There is not enough Legacy or V2 data for comparison.' }));
+    container.appendChild(el('div', { style: 'font-size:12px;color:var(--text-dim);padding:8px 0 4px', text: t('comparison.noData', null, locale) }));
   }
 
   // ── Visual honesty banner ────────────────────────────────────────────────
-  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase I: this Data Comparison
-  // layer NEVER renders pixels itself and NEVER reinterprets its own
-  // "Unknown"/not-available evidence based on what the SEPARATE Visual
-  // Preview Comparison section can do — the two are genuinely
-  // different evidence layers (semantic/planning data here vs.
-  // approximate rendered pixels there), and this banner says so
-  // explicitly rather than letting the reader assume "not available"
-  // here means "not available anywhere in the app". `visualPreviewInfo`
-  // (when supplied) is read-only diagnostic passed in from
-  // finalStyleIntent.visualPreviewRenderPlanV2 by the caller — this
-  // module never fetches or re-derives it, and never lets it override
-  // any value already shown above (legacyDataAvailable/v2DataAvailable
-  // stay exactly as read from THIS comparison object, always).
+  // CONTROLLED V2 VISUAL TRANSLATION R1 — Phase I (retained) / EPIC
+  // 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 — Phase D/G/J: this
+  // Data Comparison layer NEVER renders pixels itself and NEVER
+  // reinterprets its own "Unknown"/not-available evidence based on
+  // what the SEPARATE Visual Preview Comparison section can do — the
+  // two are genuinely different evidence layers (semantic/planning
+  // data here vs. approximate rendered pixels there), and this banner
+  // says so explicitly. `visualPreviewInfo` (when supplied) is
+  // read-only diagnostic passed in from
+  // finalStyleIntent.visualPreviewRenderPlanV2 by the caller (now
+  // correctly read from the nested `.v2RenderPlan`/`.sharedRenderConstraints`
+  // fields — see ui/app.js Phase E) — this module never fetches or
+  // re-derives it, and never lets it override any value already shown
+  // above (legacyDataAvailable/v2DataAvailable stay exactly as read
+  // from THIS comparison object, always).
   const banner = el('div', { style: 'display:flex;flex-direction:column;gap:5px;margin:10px 0 14px;padding:12px 14px;background:var(--surface-2);border-radius:3px;border-left:2px solid var(--warn)' });
-  banner.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-dim);font-weight:600', text: 'This Data Comparison layer never renders Legacy/V2 preview images itself.' }));
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: `Legacy data available (this layer): ${_yesNoUnknown(legacyPreview ? legacyDataAvailable : undefined)}` }));
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: `V2 data available (this layer): ${_yesNoUnknown(v2Preview ? v2DataAvailable : undefined)}` }));
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: 'Legacy visual (pixel) preview: rendered separately below, not by this layer' }));
-  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: 'V2 visual (pixel) preview: rendered separately below, not by this layer' }));
+  banner.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-dim);font-weight:600', text: t('comparison.honestyBannerTitle', null, locale) }));
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: t('comparison.legacyDataAvailable', { value: _yesNoUnknown(legacyPreview ? legacyDataAvailable : undefined, locale) }, locale) }));
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: t('comparison.v2DataAvailable', { value: _yesNoUnknown(v2Preview ? v2DataAvailable : undefined, locale) }, locale) }));
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: t('comparison.pixelPreviewNotRenderedHere', null, locale) + ' (Legacy)' }));
+  banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint)', text: t('comparison.pixelPreviewNotRenderedHere', null, locale) + ' (V2)' }));
 
   const vpInfo = _isRecord(visualPreviewInfo) ? visualPreviewInfo : null;
   const vpTranslation = _isRecord(vpInfo?.controlledV2Translation) ? vpInfo.controlledV2Translation : null;
-  const vpRenderable = vpInfo?.renderable === true;
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase F:
+  // FIX for Defect 2D -- when the caller has already resolved the
+  // actual (post-render) Visual Preview state (`vpInfo.resolved`, built
+  // AFTER visualPreviewComparisonController.render() settles -- see
+  // ui/app.js), prefer that AUTHORITATIVE evidence over the earlier
+  // plan-time-only `renderable`/`controlledV2Translation.mode` hint,
+  // which only ever describes what the render plan INTENDED, not what
+  // actually rendered. Never overwrites this comparison object's own
+  // "Unknown" semantic fields either way -- purely a display choice
+  // between two honest, read-only hints from the SAME separate layer.
+  const resolvedVisual = _isRecord(vpInfo?.resolved) ? vpInfo.resolved : null;
+  const vpRenderable = resolvedVisual ? (resolvedVisual.legacyRendered === true || resolvedVisual.v2Rendered === true) : vpInfo?.renderable === true;
+  const effectiveTranslationMode = resolvedVisual?.translationMode ?? vpTranslation?.mode;
   let visualLayerNote;
-  if (!vpInfo) {
-    visualLayerNote = 'Visual Preview Comparison (separate, pixel-based layer): status unknown here — see that section directly.';
-  } else if (vpRenderable && vpTranslation?.mode === 'legacy-derived-safety-restraint') {
-    visualLayerNote = 'Visual Preview Comparison (separate, pixel-based layer): a real, bounded Controlled V2 rendering is available below — this does NOT change any "Unknown" value shown above, which reflects only this Data Comparison layer\u2019s own semantic evidence.';
-  } else if (vpRenderable && vpTranslation?.mode === 'identity-fallback') {
-    visualLayerNote = 'Visual Preview Comparison (separate, pixel-based layer): an honest Identity preview is shown below (no supported change was available) — this does NOT change any "Unknown" value shown above.';
+  if (resolvedVisual && resolvedVisual.bothRendered === true) {
+    visualLayerNote = t('visualPreview.resolved.meaningfulRendered', null, locale);
+  } else if (resolvedVisual && (resolvedVisual.legacyRendered === true || resolvedVisual.v2Rendered === true)) {
+    visualLayerNote = effectiveTranslationMode === 'identity-fallback' ? t('visualPreview.resolved.identityRendered', null, locale) : t('visualPreview.resolved.partial', null, locale);
+  } else if (!vpInfo) {
+    visualLayerNote = t('comparison.visualLayerNote.none', null, locale);
+  } else if (vpRenderable && effectiveTranslationMode === 'legacy-derived-safety-restraint') {
+    visualLayerNote = t('comparison.visualLayerNote.safetyRestraint', null, locale);
+  } else if (vpRenderable && effectiveTranslationMode === 'identity-fallback') {
+    visualLayerNote = t('comparison.visualLayerNote.identityFallback', null, locale);
   } else {
-    visualLayerNote = 'Visual Preview Comparison (separate, pixel-based layer): not currently available for this analysis — see that section for the exact reason.';
+    visualLayerNote = t('comparison.visualLayerNote.notAvailable', null, locale);
   }
   banner.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:2px;font-style:italic;overflow-wrap:anywhere', text: visualLayerNote }));
   // Production Mapping / Preview Export / Production Write — only ever
@@ -421,35 +508,39 @@ function _renderBody(container, comparison, visualPreviewInfo) {
   // (anomalous) explicit value is reported honestly, never hidden;
   // missing evidence is always UNKNOWN, never inferred as safe.
   statusLine(banner, {
-    confirmedText: 'Production Mapping: Legacy.',
-    anomalyText: `Production Mapping reports an unexpected source (selectedOutputSource=${_safeText(cmp.selectedProductionSource, 'unknown')}) — treat with caution.`,
-    unknownText: 'Production Mapping: not confirmed.',
+    confirmedText: t('comparison.productionMapping.confirmed', null, locale),
+    anomalyText: t('comparison.productionMapping.anomaly', { source: _safeText(cmp.selectedProductionSource, t('common.unknown', null, locale)) }, locale),
+    unknownText: t('comparison.productionMapping.unknown', null, locale),
     status: typeof cmp.selectedProductionSource !== 'string' ? 'unknown' : (cmp.selectedProductionSource === 'legacy' ? 'confirmed' : 'anomaly'),
   });
   const exportEligible = v2Preview ? v2Preview.exportEligible : undefined;
   const appliedToProduction = v2Preview ? v2Preview.appliedToProduction : undefined;
   statusLine(banner, {
-    confirmedText: 'Preview Export: Confirmed Disabled.',
-    anomalyText: 'Preview Export reports an unexpected enabled state — treat with caution.',
-    unknownText: 'Preview Export: Unknown / Not confirmed.',
+    confirmedText: t('comparison.previewExport.confirmed', null, locale),
+    anomalyText: t('comparison.previewExport.anomaly', null, locale),
+    unknownText: t('comparison.previewExport.unknown', null, locale),
     status: typeof exportEligible !== 'boolean' ? 'unknown' : (exportEligible === false ? 'confirmed' : 'anomaly'),
   });
-  // FIX 1 (EPIC 2E-G-C-F2): `appliedToProduction` and
-  // `canWriteProduction` are DIFFERENT concepts — `appliedToProduction:
-  // false` only means "not currently applied", not "writing is
-  // explicitly disabled". Prefer a canonical `canWriteProduction`
-  // boolean when present (checked at both the comparison root and on
-  // v2Preview, in case a future engine revision adds it at either
-  // level); this field does not exist anywhere in the current engine
-  // output, so this currently always falls through to "Unknown / Not
-  // confirmed" honestly, rather than being inferred from
-  // appliedToProduction.
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase G:
+  // FIX for Defect 4 -- `canWriteProduction` never exists anywhere in
+  // the current engine output, so this row previously always fell
+  // through to "Unknown / Not confirmed" even though the Visual
+  // Preview Render Plan's own `sharedRenderConstraints.allowProductionWrite`
+  // (an EXPLICIT `=== false`) was available the whole time. This now
+  // prefers that explicit, already-computed evidence (passed in via
+  // the bounded `visualPreviewInfo.allowProductionWrite` field -- see
+  // ui/app.js Phase E) over the never-populated `canWriteProduction`
+  // field, and only falls back to Unknown when NEITHER is available.
+  // Never inferred from `appliedToProduction` or
+  // `selectedProductionSource` alone.
+  const explicitAllowProductionWrite = typeof vpInfo?.allowProductionWrite === 'boolean' ? vpInfo.allowProductionWrite : undefined;
   const canWriteProduction = typeof cmp.canWriteProduction === 'boolean' ? cmp.canWriteProduction
-    : (v2Preview && typeof v2Preview.canWriteProduction === 'boolean' ? v2Preview.canWriteProduction : undefined);
+    : (v2Preview && typeof v2Preview.canWriteProduction === 'boolean' ? v2Preview.canWriteProduction
+    : explicitAllowProductionWrite);
   statusLine(banner, {
-    confirmedText: 'Production Write: Confirmed Disabled.',
-    anomalyText: 'Production Write reports an unexpected enabled state — treat with caution.',
-    unknownText: 'Production Write: Unknown / Not confirmed.',
+    confirmedText: t('comparison.productionWrite.confirmed', null, locale),
+    anomalyText: t('comparison.productionWrite.anomaly', null, locale),
+    unknownText: t('comparison.productionWrite.unknown', null, locale),
     status: typeof canWriteProduction !== 'boolean' ? 'unknown' : (canWriteProduction === false ? 'confirmed' : 'anomaly'),
   });
   // Only shown when canWriteProduction itself is unavailable but
@@ -457,115 +548,116 @@ function _renderBody(container, comparison, visualPreviewInfo) {
   // row that never claims "Write Disabled" from this weaker evidence.
   if (typeof canWriteProduction !== 'boolean' && typeof appliedToProduction === 'boolean') {
     statusLine(banner, {
-      confirmedText: 'Production Application: Confirmed Not Applied.',
-      anomalyText: 'Production Application reports an unexpected applied state.',
-      unknownText: 'Production Application: Unknown / Not confirmed.',
+      confirmedText: t('comparison.productionApplication.confirmed', null, locale),
+      anomalyText: t('comparison.productionApplication.anomaly', null, locale),
+      unknownText: t('comparison.productionApplication.unknown', null, locale),
       status: appliedToProduction === false ? 'confirmed' : 'anomaly',
     });
   }
   container.appendChild(banner);
 
   // ── Legacy / V2 summary cards ───────────────────────────────────────────
-  container.appendChild(sectionHeading('Legacy vs. V2 Data', 'compare_arrows'));
+  container.appendChild(sectionHeading(t('comparison.heading.legacyVsV2Data', null, locale), 'compare_arrows'));
   const cardsRow = el('div', { style: 'display:flex;flex-wrap:wrap;gap:12px' });
-  cardsRow.appendChild(_renderPreviewCard('Legacy', legacyPreview));
-  cardsRow.appendChild(_renderPreviewCard('Controlled V2 Preview', v2Preview, v2Preview ? [
-    ['Export eligible', _yesNoUnknown(v2Preview.exportEligible)],
-    ['Applied to production', _yesNoUnknown(v2Preview.appliedToProduction)],
-  ] : null));
+  cardsRow.appendChild(_renderPreviewCard(t('common.legacy', null, locale), legacyPreview, null, locale));
+  cardsRow.appendChild(_renderPreviewCard(t('common.controlledV2', null, locale) + ' Preview', v2Preview, v2Preview ? [
+    [t('comparison.exportEligible', null, locale), _yesNoUnknown(v2Preview.exportEligible, locale)],
+    [t('comparison.appliedToProduction', null, locale), _yesNoUnknown(v2Preview.appliedToProduction, locale)],
+  ] : null, locale));
   container.appendChild(cardsRow);
 
   // ── Comparison dimensions ───────────────────────────────────────────────
   const dims = _safeArray(cmp.comparisonMatrix ?? cmp.comparisonDimensions);
   if (dims.length) {
-    container.appendChild(sectionHeading('Comparison Dimensions', 'grid_view'));
+    container.appendChild(sectionHeading(t('comparison.heading.comparisonDimensions', null, locale), 'grid_view'));
     const dimsWrap = el('div');
-    for (const d of dims) dimsWrap.appendChild(_renderDimensionRow(d));
+    for (const d of dims) dimsWrap.appendChild(_renderDimensionRow(d, locale));
     container.appendChild(dimsWrap);
   }
 
   // ── Similarity summary ──────────────────────────────────────────────────
   const sim = _isRecord(cmp.similaritySummary) ? cmp.similaritySummary : null;
   if (sim) {
-    container.appendChild(sectionHeading('Similarity', 'join_inner'));
+    container.appendChild(sectionHeading(t('comparison.heading.similarity', null, locale), 'join_inner'));
     const row = el('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:10px' });
     row.appendChild(el('span', { style: 'font-size:16px;font-weight:700;color:var(--text)', text: _formatPercent(sim.overallSimilarity) }));
     const level = typeof sim.level === 'string' ? sim.level : 'unknown';
-    row.appendChild(badge(level.charAt(0).toUpperCase() + level.slice(1), 'var(--accent)'));
+    row.appendChild(badge(_trCode('comparison.scoreLevel', level, locale), 'var(--accent)'));
     container.appendChild(row);
     const strongest = _safeArray(sim.strongestMatches);
     const weakest = _safeArray(sim.weakestMatches);
-    if (strongest.length) container.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:4px', text: `Strongest matches: ${strongest.map(x => _safeText(x, '')).join(', ')}` }));
-    if (weakest.length) container.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:2px', text: `Weakest matches: ${weakest.map(x => _safeText(x, '')).join(', ')}` }));
+    if (strongest.length) container.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:4px', text: `${t('comparison.strongestMatches', null, locale)}: ${strongest.map(x => presentDimensionName(_safeText(x, ''), locale)).join(', ')}` }));
+    if (weakest.length) container.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:2px', text: `${t('comparison.weakestMatches', null, locale)}: ${weakest.map(x => presentDimensionName(_safeText(x, ''), locale)).join(', ')}` }));
   }
 
   // ── Divergence summary ──────────────────────────────────────────────────
   const div = _isRecord(cmp.divergenceSummary) ? cmp.divergenceSummary : null;
   if (div) {
-    container.appendChild(sectionHeading('Divergence', 'call_split'));
+    container.appendChild(sectionHeading(t('comparison.heading.divergence', null, locale), 'call_split'));
     const row = el('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:10px' });
     row.appendChild(el('span', { style: 'font-size:16px;font-weight:700;color:var(--text)', text: _formatPercent(div.overallDivergence) }));
     const level = typeof div.level === 'string' ? div.level : 'unknown';
-    row.appendChild(badge(level.charAt(0).toUpperCase() + level.slice(1), 'var(--warn)'));
+    row.appendChild(badge(_trCode('comparison.scoreLevel', level, locale), 'var(--warn)'));
     container.appendChild(row);
     const major = _safeArray(div.majorDifferences), minor = _safeArray(div.minorDifferences), unresolved = _safeArray(div.unresolvedDifferences);
-    if (major.length) container.appendChild(el('div', { style: 'font-size:11px;color:var(--danger);margin-top:4px', text: `Major differences: ${major.map(x => _safeText(x, '')).join(', ')}` }));
-    if (minor.length) container.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:2px', text: `Minor differences: ${minor.map(x => _safeText(x, '')).join(', ')}` }));
-    if (unresolved.length) container.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:2px', text: `Unresolved (insufficient evidence): ${unresolved.map(x => _safeText(x, '')).join(', ')}` }));
+    if (major.length) container.appendChild(el('div', { style: 'font-size:11px;color:var(--danger);margin-top:4px', text: `${t('comparison.majorDifferences', null, locale)}: ${major.map(x => presentDimensionName(_safeText(x, ''), locale)).join(', ')}` }));
+    if (minor.length) container.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:2px', text: `${t('comparison.minorDifferences', null, locale)}: ${minor.map(x => presentDimensionName(_safeText(x, ''), locale)).join(', ')}` }));
+    if (unresolved.length) container.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:2px', text: `${t('comparison.field.unresolvedInsufficientEvidence', null, locale)}: ${unresolved.map(x => presentDimensionName(_safeText(x, ''), locale)).join(', ')}` }));
   }
 
   // ── Safety comparison ───────────────────────────────────────────────────
   const safety = _isRecord(cmp.safetyComparison) ? cmp.safetyComparison : null;
   if (safety) {
-    container.appendChild(sectionHeading('Safety Comparison', 'shield'));
+    container.appendChild(sectionHeading(t('comparison.heading.safetyComparison', null, locale), 'shield'));
     const side = _normalizeSide(safety.saferSide === 'uncertain' ? 'unknown' : safety.saferSide);
     const saferBadgeColor = safety.saferSide === 'uncertain' ? 'var(--text-faint)' : SIDE_COLOR[side];
-    const saferBadgeLabel = safety.saferSide === 'uncertain' ? 'Uncertain' : SIDE_LABEL[side];
-    container.appendChild(badge(`Safer side: ${saferBadgeLabel}`, saferBadgeColor));
+    const saferBadgeLabel = safety.saferSide === 'uncertain' ? t('comparison.field.uncertain', null, locale) : _trCode('comparison.side', side, locale);
+    container.appendChild(badge(`${t('comparison.field.saferSide', null, locale)}: ${saferBadgeLabel}`, saferBadgeColor));
     const grid = el('div', { style: 'display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:11px' });
-    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Legacy score: ${Number.isFinite(safety.legacySafetyScore) ? safety.legacySafetyScore : 'Unknown'}` }));
-    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `V2 score: ${Number.isFinite(safety.v2SafetyScore) ? safety.v2SafetyScore : 'Unknown'}` }));
-    grid.appendChild(el('span', { style: 'color:var(--text-faint)', text: `Confidence: ${_formatPercent(safety.confidence)}` }));
-    const hardStopsText = Number.isFinite(safety.hardStops) && safety.hardStops >= 0 ? safety.hardStops : 'Unknown';
-    const criticalRisksText = Number.isFinite(safety.criticalRisks) && safety.criticalRisks >= 0 ? safety.criticalRisks : 'Unknown';
-    grid.appendChild(el('span', { style: 'color:var(--danger)', text: `Hard stops: ${hardStopsText}` }));
-    grid.appendChild(el('span', { style: 'color:var(--danger)', text: `Critical risks: ${criticalRisksText}` }));
+    const unknownText = t('common.unknown', null, locale);
+    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `${t('comparison.side.legacy', null, locale)} score: ${Number.isFinite(safety.legacySafetyScore) ? safety.legacySafetyScore : unknownText}` }));
+    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `${t('comparison.side.v2', null, locale)} score: ${Number.isFinite(safety.v2SafetyScore) ? safety.v2SafetyScore : unknownText}` }));
+    grid.appendChild(el('span', { style: 'color:var(--text-faint)', text: `${t('comparison.field.confidence', null, locale)}: ${_formatPercent(safety.confidence)}` }));
+    const hardStopsText = Number.isFinite(safety.hardStops) && safety.hardStops >= 0 ? safety.hardStops : unknownText;
+    const criticalRisksText = Number.isFinite(safety.criticalRisks) && safety.criticalRisks >= 0 ? safety.criticalRisks : unknownText;
+    grid.appendChild(el('span', { style: 'color:var(--danger)', text: `${t('comparison.field.hardStops', null, locale)}: ${hardStopsText}` }));
+    grid.appendChild(el('span', { style: 'color:var(--danger)', text: `${t('comparison.field.criticalRisks', null, locale)}: ${criticalRisksText}` }));
     container.appendChild(grid);
   }
 
   // ── Risk comparison ─────────────────────────────────────────────────────
   const risks = _safeArray(cmp.riskComparison);
   if (risks.length) {
-    container.appendChild(sectionHeading('Risk Comparison', 'warning'));
+    container.appendChild(sectionHeading(t('comparison.heading.riskComparison', null, locale), 'warning'));
     const risksWrap = el('div');
-    for (const r of risks) { const row = _renderRiskRow(r); if (row) risksWrap.appendChild(row); }
+    for (const r of risks) { const row = _renderRiskRow(r, locale); if (row) risksWrap.appendChild(row); }
     container.appendChild(risksWrap);
   }
 
   // ── Evidence quality ────────────────────────────────────────────────────
   const evidence = _isRecord(cmp.evidenceQuality) ? cmp.evidenceQuality : null;
   if (evidence) {
-    container.appendChild(sectionHeading('Evidence Quality', 'fact_check'));
+    container.appendChild(sectionHeading(t('comparison.heading.evidenceQuality', null, locale), 'fact_check'));
     const level = _normalizeEvidenceLevel(evidence.level);
-    container.appendChild(badge(EVIDENCE_LABEL[level], EVIDENCE_COLOR[level]));
+    container.appendChild(badge(_trCode('comparison.scoreLevel', level, locale), EVIDENCE_COLOR[level]));
     const grid = el('div', { style: 'display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:11px' });
-    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Legacy evidence: ${_yesNoUnknown(evidence.legacyEvidenceAvailable)}` }));
-    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `V2 evidence: ${_yesNoUnknown(evidence.v2EvidenceAvailable)}` }));
-    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Visual evidence: ${_yesNoUnknown(evidence.visualEvidenceAvailable)}` }));
-    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Review evidence: ${_yesNoUnknown(evidence.reviewEvidenceAvailable)}` }));
+    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `${t('comparison.side.legacy', null, locale)} ${t('comparison.field.evidence', null, locale)}: ${_yesNoUnknown(evidence.legacyEvidenceAvailable, locale)}` }));
+    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `${t('comparison.side.v2', null, locale)} ${t('comparison.field.evidence', null, locale)}: ${_yesNoUnknown(evidence.v2EvidenceAvailable, locale)}` }));
+    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `${t('comparison.field.visualEvidence', null, locale)}: ${_yesNoUnknown(evidence.visualEvidenceAvailable, locale)}` }));
+    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `${t('comparison.field.reviewEvidence', null, locale)}: ${_yesNoUnknown(evidence.reviewEvidenceAvailable, locale)}` }));
     container.appendChild(grid);
     const missing = _safeArray(evidence.missingEvidence);
-    if (missing.length) container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:5px', text: `Missing: ${missing.map(x => _safeText(x, '')).join(', ')}` }));
+    if (missing.length) container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:5px', text: `${t('comparison.field.missing', null, locale)}: ${missing.map(x => _safeText(x, '')).join(', ')}` }));
   }
 
   // ── Human Review status ─────────────────────────────────────────────────
   const review = _isRecord(cmp.humanReviewStatus) ? cmp.humanReviewStatus : null;
   if (review) {
-    container.appendChild(sectionHeading('Human Review Status', 'rate_review'));
+    container.appendChild(sectionHeading(t('comparison.heading.humanReviewStatus', null, locale), 'rate_review'));
     const approvalState = _normalizeApprovalState(review.approvalState);
-    container.appendChild(badge(APPROVAL_STATE_LABEL[approvalState], APPROVAL_STATE_COLOR[approvalState]));
+    container.appendChild(badge(_trCode('comparison.approvalState', approvalState, locale), APPROVAL_STATE_COLOR[approvalState]));
     const grid = el('div', { style: 'display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:11px' });
-    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Visual review complete: ${_yesNoUnknown(review.visualReviewComplete)}` }));
+    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `${t('comparison.field.visualReviewComplete', null, locale)}: ${_yesNoUnknown(review.visualReviewComplete, locale)}` }));
     const completedValid = Number.isFinite(review.completed) && review.completed >= 0;
     const requiredValid = Number.isFinite(review.required) && review.required >= 0;
     let progressText;
@@ -573,22 +665,22 @@ function _renderBody(container, comparison, visualPreviewInfo) {
       const clampedCompleted = Math.min(review.completed, review.required);
       progressText = `${clampedCompleted}/${review.required}`;
     } else {
-      progressText = 'Progress unavailable';
+      progressText = t('comparison.field.progressUnavailable', null, locale);
     }
     grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: progressText }));
-    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `Can approve preview: ${_yesNoUnknown(review.canApprovePreview)}` }));
+    grid.appendChild(el('span', { style: 'color:var(--text-dim)', text: `${t('comparison.field.canApprovePreview', null, locale)}: ${_yesNoUnknown(review.canApprovePreview, locale)}` }));
     container.appendChild(grid);
     const failed = _safeArray(review.failedItems), pending = _safeArray(review.pendingItems), adjust = _safeArray(review.needsAdjustment);
-    if (failed.length) container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--danger);margin-top:5px', text: `Failed items: ${failed.map(x => _safeText(x, '')).join(', ')}` }));
-    if (adjust.length) container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn);margin-top:3px', text: `Needs adjustment: ${adjust.map(x => _safeText(x, '')).join(', ')}` }));
-    if (pending.length) container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:3px', text: `Pending: ${pending.map(x => _safeText(x, '')).join(', ')}` }));
+    if (failed.length) container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--danger);margin-top:5px', text: `${t('comparison.field.failedItems', null, locale)}: ${failed.map(x => _safeText(x, '')).join(', ')}` }));
+    if (adjust.length) container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn);margin-top:3px', text: `${t('comparison.field.needsAdjustmentItems', null, locale)}: ${adjust.map(x => _safeText(x, '')).join(', ')}` }));
+    if (pending.length) container.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:3px', text: `${t('comparison.field.pendingItems', null, locale)}: ${pending.map(x => _safeText(x, '')).join(', ')}` }));
     // Concise, non-duplicating link to the existing Review Console — no controls here.
     const reviewSectionExists = !!document.getElementById('reviewConsoleSection');
     if (reviewSectionExists) {
       const link = el('button', {
         style: 'margin-top:8px;padding:8px 14px;min-height:36px;border-radius:3px;font-family:var(--font-sans);font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim)',
-        text: 'Go to Review Console',
-        attrs: { type: 'button', 'aria-label': 'Scroll to the Controlled Preview Review Console' },
+        text: t('common.goToReviewConsole', null, locale),
+        attrs: { type: 'button', 'aria-label': t('comparison.scrollToReviewConsole', null, locale) },
       });
       link.addEventListener('click', () => document.getElementById('reviewConsoleSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
       container.appendChild(link);
@@ -598,21 +690,21 @@ function _renderBody(container, comparison, visualPreviewInfo) {
   // ── Blockers / Warnings / Recommendations ───────────────────────────────
   const blockers = _mergeMessages(cmp.blockers);
   if (blockers.length) {
-    container.appendChild(sectionHeading('Blockers', 'block'));
+    container.appendChild(sectionHeading(t('comparison.heading.blockers', null, locale), 'block'));
     const wrap = el('div', { style: 'display:flex;flex-direction:column;gap:5px' });
     for (const text of blockers) wrap.appendChild(el('div', { style: 'font-size:11.5px;color:var(--danger);padding:6px 9px;background:var(--surface-2);border-radius:3px;border-left:2px solid var(--danger);overflow-wrap:anywhere', text }));
     container.appendChild(wrap);
   }
   const warningsList = _mergeMessages(cmp.warnings);
   if (warningsList.length) {
-    container.appendChild(sectionHeading('Warnings', 'warning'));
+    container.appendChild(sectionHeading(t('comparison.heading.warnings', null, locale), 'warning'));
     const wrap = el('div', { style: 'display:flex;flex-direction:column;gap:4px' });
     for (const text of warningsList) wrap.appendChild(el('div', { style: 'font-size:11px;color:var(--warn);overflow-wrap:anywhere', text: `\u26A0  ${text}` }));
     container.appendChild(wrap);
   }
   const recommendations = _mergeMessages(cmp.recommendations);
   if (recommendations.length) {
-    container.appendChild(sectionHeading('Recommendations', 'lightbulb'));
+    container.appendChild(sectionHeading(t('comparison.heading.recommendations', null, locale), 'lightbulb'));
     const list = el('ul', { style: 'margin:0;padding-left:18px;font-size:11.5px;color:var(--text-dim);line-height:1.7' });
     for (const text of recommendations) list.appendChild(el('li', { text }));
     container.appendChild(list);
@@ -622,11 +714,11 @@ function _renderBody(container, comparison, visualPreviewInfo) {
   const rollback = _isRecord(cmp.rollbackPlan) ? cmp.rollbackPlan : null;
   const fallback = _isRecord(cmp.fallbackStrategy) ? cmp.fallbackStrategy : null;
   if (rollback || fallback) {
-    container.appendChild(sectionHeading('Rollback & Fallback', 'settings_backup_restore'));
+    container.appendChild(sectionHeading(t('comparison.heading.rollbackFallback', null, locale), 'settings_backup_restore'));
     if (rollback) {
-      container.appendChild(listRow('Rollback available', _yesNoUnknown(rollback.available)));
-      container.appendChild(listRow('Restore source', _safeText(rollback.restoreSource, 'Unavailable')));
-      container.appendChild(listRow('Production mutation detected', _yesNoUnknown(rollback.productionMutationDetected)));
+      container.appendChild(listRow(t('comparison.field.rollbackAvailable', null, locale), _yesNoUnknown(rollback.available, locale)));
+      container.appendChild(listRow(t('comparison.field.restoreSource', null, locale), _safeText(rollback.restoreSource, t('common.notAvailable', null, locale))));
+      container.appendChild(listRow(t('comparison.field.productionMutationDetected', null, locale), _yesNoUnknown(rollback.productionMutationDetected, locale)));
       const steps = _safeArray(rollback.steps);
       if (steps.length) {
         const stepsList = el('ol', { style: 'margin:6px 0 0;padding-left:18px;font-size:11px;color:var(--text-dim);line-height:1.7' });
@@ -634,37 +726,58 @@ function _renderBody(container, comparison, visualPreviewInfo) {
         container.appendChild(stepsList);
       }
     } else {
-      container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-faint)', text: 'Rollback information unavailable.' }));
+      container.appendChild(el('div', { style: 'font-size:11.5px;color:var(--text-faint)', text: t('review.rollbackUnavailable', null, locale) }));
     }
     if (fallback) {
-      container.appendChild(listRow('Fallback uses Legacy Mapping', _yesNoUnknown(fallback.useLegacyMapping)));
-      container.appendChild(listRow('Safe mode', _yesNoUnknown(fallback.safeMode)));
+      container.appendChild(listRow(t('comparison.field.fallbackUsesLegacyMapping', null, locale), _yesNoUnknown(fallback.useLegacyMapping, locale)));
+      container.appendChild(listRow(t('comparison.field.safeMode', null, locale), _yesNoUnknown(fallback.safeMode, locale)));
       const reasonText = _safeText(fallback.reason, '');
       if (reasonText) container.appendChild(el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:4px;overflow-wrap:anywhere', text: reasonText }));
     }
   }
 
   // ── Photographer summary ────────────────────────────────────────────────
-  const photographerSummary = _safeText(cmp.photographerSummary, '') || 'Legacy remains the active production path. The comparison currently contains data-level analysis only.';
+  // EPIC 2E-J FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 -- Phase I:
+  // FIX -- split into two explicit lines (data evidence vs. rendered
+  // Visual Preview) so this never claims "no rendered preview exists"
+  // once a real Controlled V2 render has actually succeeded elsewhere
+  // on the page. Never rewrites this comparison object's own semantic
+  // Unknown values -- only adds a second, separate line describing the
+  // OTHER (resolved visual) layer's status, sourced from
+  // `visualPreviewInfo` alone.
+  const photographerSummary = _safeText(cmp.photographerSummary, '') || t('comparison.summarySplit.defaultDataEvidence', null, locale);
   container.appendChild(sectionHeading('Summary', 'summarize'));
-  container.appendChild(el('div', { style: 'font-size:12.5px;color:var(--text);line-height:1.6;overflow-wrap:anywhere', text: photographerSummary }));
+  container.appendChild(el('div', { style: 'font-size:12.5px;color:var(--text);line-height:1.6;overflow-wrap:anywhere', text: `${t('comparison.summarySplit.dataEvidenceLabel', null, locale)} ${photographerSummary}` }));
+  let renderedVisualSummary;
+  if (resolvedVisual && resolvedVisual.bothRendered === true) {
+    renderedVisualSummary = t('comparison.summarySplit.renderedMeaningful', null, locale);
+  } else if (resolvedVisual && (resolvedVisual.legacyRendered === true || resolvedVisual.v2Rendered === true) && effectiveTranslationMode === 'identity-fallback') {
+    renderedVisualSummary = t('comparison.summarySplit.renderedIdentity', null, locale);
+  } else if (vpRenderable && effectiveTranslationMode === 'legacy-derived-safety-restraint') {
+    renderedVisualSummary = t('comparison.summarySplit.renderedMeaningful', null, locale);
+  } else if (vpRenderable && effectiveTranslationMode === 'identity-fallback') {
+    renderedVisualSummary = t('comparison.summarySplit.renderedIdentity', null, locale);
+  } else {
+    renderedVisualSummary = t('comparison.summarySplit.renderedNotAvailable', null, locale);
+  }
+  container.appendChild(el('div', { style: 'font-size:12.5px;color:var(--text);line-height:1.6;overflow-wrap:anywhere;margin-top:4px', text: `${t('comparison.summarySplit.renderedVisualLabel', null, locale)} ${renderedVisualSummary}` }));
 
   // ── Developer details (collapsible) ─────────────────────────────────────
   const details = el('details', { style: 'margin-top:14px;border-top:1px solid var(--border);padding-top:10px' });
-  const summaryToggle = el('summary', { style: 'cursor:pointer;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);min-height:32px;display:flex;align-items:center', text: 'Developer Details' });
+  const summaryToggle = el('summary', { style: 'cursor:pointer;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);min-height:32px;display:flex;align-items:center', text: t('common.developerDetails', null, locale) });
   details.appendChild(summaryToggle);
   const devWrap = el('div', { style: 'display:flex;flex-direction:column;gap:2px;margin-top:8px' });
-  devWrap.appendChild(listRow('mode', _safeText(cmp.mode, 'unknown')));
-  devWrap.appendChild(listRow('comparisonState', state));
-  devWrap.appendChild(listRow('confidence', Number.isFinite(cmp.confidence) ? cmp.confidence : 'unknown'));
-  devWrap.appendChild(listRow('dimension coverage', `${dims.filter(d => _isRecord(d) && d.available).length}/${dims.length}`));
-  devWrap.appendChild(listRow('evidence score', Number.isFinite(evidence?.score) ? evidence.score : 'unknown'));
-  devWrap.appendChild(listRow('selectedProductionSource', typeof cmp.selectedProductionSource === 'string' ? cmp.selectedProductionSource : 'unknown'));
-  devWrap.appendChild(listRow('canRenderLegacyPreview', typeof cmp.canRenderLegacyPreview === 'boolean' ? String(cmp.canRenderLegacyPreview) : 'unknown'));
-  devWrap.appendChild(listRow('canRenderV2Preview', typeof cmp.canRenderV2Preview === 'boolean' ? String(cmp.canRenderV2Preview) : 'unknown'));
-  devWrap.appendChild(listRow('canCompareVisually', typeof cmp.canCompareVisually === 'boolean' ? String(cmp.canCompareVisually) : 'unknown'));
-  devWrap.appendChild(listRow('fallback.useLegacyMapping', _yesNoUnknown(fallback?.useLegacyMapping)));
-  devWrap.appendChild(listRow('rollback.available', _yesNoUnknown(rollback?.available)));
+  devWrap.appendChild(listRow(t('comparison.developer.mode', null, locale), _safeText(cmp.mode, t('common.unknown', null, locale))));
+  devWrap.appendChild(listRow(t('comparison.developer.comparisonState', null, locale), state));
+  devWrap.appendChild(listRow(t('comparison.developer.confidence', null, locale), Number.isFinite(cmp.confidence) ? cmp.confidence : t('common.unknown', null, locale)));
+  devWrap.appendChild(listRow(t('comparison.developer.dimensionCoverage', null, locale), `${dims.filter(d => _isRecord(d) && d.available).length}/${dims.length}`));
+  devWrap.appendChild(listRow(t('comparison.developer.evidenceScore', null, locale), Number.isFinite(evidence?.score) ? evidence.score : t('common.unknown', null, locale)));
+  devWrap.appendChild(listRow(t('comparison.developer.selectedProductionSource', null, locale), typeof cmp.selectedProductionSource === 'string' ? cmp.selectedProductionSource : t('common.unknown', null, locale)));
+  devWrap.appendChild(listRow(t('comparison.developer.canRenderLegacyPreview', null, locale), typeof cmp.canRenderLegacyPreview === 'boolean' ? String(cmp.canRenderLegacyPreview) : t('common.unknown', null, locale)));
+  devWrap.appendChild(listRow(t('comparison.developer.canRenderV2Preview', null, locale), typeof cmp.canRenderV2Preview === 'boolean' ? String(cmp.canRenderV2Preview) : t('common.unknown', null, locale)));
+  devWrap.appendChild(listRow(t('comparison.developer.canCompareVisually', null, locale), typeof cmp.canCompareVisually === 'boolean' ? String(cmp.canCompareVisually) : t('common.unknown', null, locale)));
+  devWrap.appendChild(listRow(t('comparison.developer.fallbackUseLegacyMapping', null, locale), _yesNoUnknown(fallback?.useLegacyMapping, locale)));
+  devWrap.appendChild(listRow(t('comparison.developer.rollbackAvailable', null, locale), _yesNoUnknown(rollback?.available, locale)));
   const developerSummaryText = _safeText(cmp.developerSummary, '');
   if (developerSummaryText) devWrap.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:6px;overflow-wrap:anywhere', text: developerSummaryText }));
   details.appendChild(devWrap);
@@ -678,13 +791,17 @@ function _renderBody(container, comparison, visualPreviewInfo) {
  * missing value — always safe). PURE READ-ONLY: no interactive
  * controls, no state mutation, no engine calls.
  */
-export function renderSideBySideComparison(container, comparison, visualPreviewInfo = null) {
+export function renderSideBySideComparison(container, comparison, visualPreviewInfo = null, locale = 'en') {
   if (!container || typeof container.appendChild !== 'function') return;
+  // Record the active locale for this render pass so the generic
+  // `_safeText` fallback can be localized without threading `locale`
+  // through every nested helper call site.
+  _renderLocale = locale === 'th' ? 'th' : 'en';
 
   try {
     if (typeof container.replaceChildren === 'function') container.replaceChildren();
     else container.innerHTML = '';
-    _renderBody(container, comparison, visualPreviewInfo);
+    _renderBody(container, comparison, visualPreviewInfo, locale);
   } catch (err) {
     try {
       if (typeof container.replaceChildren === 'function') container.replaceChildren();
@@ -693,7 +810,7 @@ export function renderSideBySideComparison(container, comparison, visualPreviewI
     try {
       container.appendChild(el('div', {
         style: 'font-size:12px;color:var(--warn);padding:10px 0',
-        text: 'Side-by-side comparison data could not be displayed (unexpected format). This does not affect your exported preset.',
+        text: t('comparison.malformedFallback', null, locale) || 'Side-by-side comparison data could not be displayed (unexpected format). This does not affect your exported preset.',
       }));
     } catch { /* even the fallback failed — give up silently rather than throwing */ }
   }

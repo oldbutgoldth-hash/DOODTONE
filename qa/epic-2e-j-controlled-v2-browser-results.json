@@ -1,13 +1,13 @@
 {
   "suite": "CONTROLLED V2 VISUAL TRANSLATION R1 — Phase K: Controlled V2 Browser suite",
-  "runId": "5bd3540d-3cc8-4793-8050-f3e3d9ed2218",
-  "startedAt": "2026-07-25T16:22:54.467Z",
-  "completedAt": "2026-07-25T16:22:54.467Z",
+  "runId": "3f3cba54-a3e0-4398-9f31-04e31244e2c6",
+  "startedAt": "2026-07-26T03:09:22.583Z",
+  "completedAt": "2026-07-26T03:09:22.583Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-25T16:22:54.467Z",
+  "generatedAt": "2026-07-26T03:09:22.583Z",
   "summary": {
     "total": 1,
     "pass": 0,

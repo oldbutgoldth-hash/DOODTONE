@@ -62,6 +62,18 @@ const STATIC_SUITES = [
   'qa/epic-2e-j-build-controlled-v2-button-static-test.mjs',
   'qa/epic-2e-j-comparison-honesty-note-static-test.mjs',
   'qa/epic-2e-j-qa-snapshot-controlled-v2-static-test.mjs',
+  // FULL-SYSTEM I18N + CROSS-LAYER HONESTY R1 — Phase K: centralized
+  // i18n module contract + EN/TH key-parity, and the Defect-1
+  // regression guard for the state-preserving locale switch.
+  'qa/epic-2e-j-i18n-module-static-test.mjs',
+  'qa/epic-2e-j-locale-switch-rerender-static-test.mjs',
+  // FULL-SYSTEM I18N COMPLETION R2 — Phase D/L: the cross-layer XMP
+  // evidence invariant (the "Export path unchanged: Passed" +
+  // "XMP Export: Unknown" contradiction can never render again) and the
+  // repository-wide hardcoded-visible-English audit.
+  'qa/epic-2e-j-xmp-evidence-invariant-static-test.mjs',
+  'qa/epic-2e-j-i18n-visible-text-audit-static-test.mjs',
+  'qa/epic-2e-j-i18n-coverage-report-static-test.mjs',
 ];
 
 let anyFailed = false;
