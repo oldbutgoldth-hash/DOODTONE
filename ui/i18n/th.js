@@ -5,6 +5,16 @@
  * Key structure MUST mirror en.js exactly (verified by a static test).
  */
 export const th = {
+  analysisBox: {
+    loadingImage: 'กำลังโหลดรูปภาพ…',
+    imageLoadFailed: 'ไม่สามารถโหลดรูปภาพได้',
+    imageNotReady: 'รูปภาพยังโหลดไม่เสร็จ',
+    analyzingHistogram: 'กำลังวิเคราะห์ histogram…',
+    analyzingSkinColor: 'AI กำลังวิเคราะห์ผิวและสี…',
+    analyzingColorLight: 'AI กำลังวิเคราะห์สีและแสง…',
+    analysisComplete: 'วิเคราะห์เสร็จแล้ว',
+    failed: 'ล้มเหลว',
+  },
   appShell: {
     brandTagline: 'LUMIXA AI — ปัญญาด้านสีอ้างอิง',
     headerSubtitle: 'Lightroom Mapping V2 — การเปรียบเทียบภาพก่อน/หลังแบบโต้ตอบ',
@@ -127,6 +137,16 @@ export const th = {
     languageNameTh: 'ไทย',
   },
   review: {
+    announcement: {
+      ITEM_MARKED_PASSED: 'ทำเครื่องหมายรายการตรวจสอบว่าผ่านแล้ว',
+      ITEM_MARKED_FAILED: 'ทำเครื่องหมายรายการตรวจสอบว่าไม่ผ่าน',
+      ADJUSTMENT_REQUESTED: 'ขอให้ปรับปรุงแล้ว',
+      ITEM_RETURNED_PENDING: 'ส่งรายการตรวจสอบกลับไปยังสถานะรอดำเนินการแล้ว',
+      ITEM_UPDATE_FAILED: 'ไม่สามารถอัปเดตรายการตรวจสอบนี้ได้ สถานะการตรวจสอบก่อนหน้ายังคงถูกเก็บไว้',
+      RESET_FAILED: 'ไม่สามารถรีเซ็ตสถานะการตรวจสอบได้ สถานะการตรวจสอบก่อนหน้ายังคงถูกเก็บไว้',
+      STATE_RESET: 'รีเซ็ตสถานะการตรวจสอบแล้ว',
+      NOTE_SAVE_FAILED: 'ไม่สามารถบันทึกบันทึกย่อนี้ได้ สถานะการตรวจสอบก่อนหน้ายังคงถูกเก็บไว้',
+    },
     console: {
       untitledItem: 'รายการตรวจสอบที่ไม่มีชื่อ',
       required: 'จำเป็น',
@@ -347,6 +367,11 @@ export const th = {
       safetyRestraint: 'สร้างตัวอย่าง Controlled V2 สำเร็จ — เป็นตัวอย่างแบบสงวนความปลอดภัยที่มีการปรับเปลี่ยนจริง ดูผลเปรียบเทียบด้านล่าง',
       identityFallback: 'สร้างตัวอย่าง Controlled V2 สำเร็จ — ไม่มีการปรับเปลี่ยนที่รองรับได้ จึงแสดงเป็น Identity Preview แทน',
       unavailable: 'การวิเคราะห์เสร็จสิ้น แต่ตัวอย่าง Controlled V2 ยังไม่พร้อม — ดูเหตุผลด้านล่าง',
+      // R4 Phase G: exact-blocker-reason variant used when the settled
+      // Visual Preview Comparison render outcome carries a known
+      // blockerCode -- replaces the generic 'unavailable' message
+      // whenever a specific reason is available.
+      blocked: 'การวิเคราะห์เสร็จสิ้น แต่ตัวอย่าง Controlled V2 ถูกระงับ — {{reason}}',
     },
   },
   comparison: {
@@ -384,6 +409,37 @@ export const th = {
       V2_UNRESOLVED_SAFETY_CONCERNS: 'ตัวอย่าง V2 ในขณะนี้มีข้อกังวลด้านความปลอดภัยที่ยังไม่ได้รับการแก้ไข จึงยังไม่สามารถเปรียบเทียบได้อย่างน่าเชื่อถือ Legacy ยังคงเป็นเส้นทาง Production ที่ใช้งานอยู่',
       SIMILAR_NEEDS_MANUAL_REVIEW: 'การเปรียบเทียบข้อมูลระหว่าง Legacy และ V2 มีความคล้ายคลึงกันในส่วนใหญ่ แต่บางส่วนยังต้องการการตรวจสอบด้วยมนุษย์ — ยังไม่มีตัวอย่างภาพที่เรนเดอร์แล้ว Legacy ยังคงเป็นเส้นทาง Production ที่ใช้งานอยู่',
       DIFFERS_NEEDS_MANUAL_REVIEW: 'การเปรียบเทียบข้อมูลระหว่าง Legacy และ V2 มีความแตกต่างกันในบางส่วน และยังต้องการการตรวจสอบด้วยมนุษย์ก่อนสรุปผลใด ๆ — ยังไม่มีตัวอย่างภาพที่เรนเดอร์แล้ว Legacy ยังคงเป็นเส้นทาง Production ที่ใช้งานอยู่',
+      LEGACY_DATA_UNAVAILABLE: 'ไม่มีข้อมูลตัวอย่าง Legacy สำหรับการเปรียบเทียบนี้',
+      LEGACY_DATA_AVAILABLE: 'มีข้อมูล Legacy Mapping สำหรับการเปรียบเทียบเชิงข้อมูล นี่เป็นหลักฐานระดับข้อมูลเท่านั้น ไม่ใช่ตัวอย่างภาพที่เรนเดอร์แล้ว',
+      V2_DATA_UNAVAILABLE_CARD: 'ไม่มีข้อมูลตัวอย่าง V2 สำหรับการเปรียบเทียบนี้',
+      V2_SANDBOX_NOT_ELIGIBLE: 'ยังไม่ได้สร้างตัวอย่าง Controlled V2 (Sandbox ยังไม่มีสิทธิ์ในขณะนี้) — ยังไม่มีสิ่งใดให้เปรียบเทียบกับ Legacy',
+      V2_DATA_AVAILABLE_CARD: 'มีข้อมูล Controlled V2 Preview สำหรับการเปรียบเทียบเชิงข้อมูล นี่เป็นหลักฐานระดับข้อมูลเท่านั้น ไม่ใช่ตัวอย่างภาพที่เรนเดอร์แล้ว — ไม่เกี่ยวข้องกับค่า Slider หรือฟิลด์ XMP จริงของ Lightroom',
+    },
+    strengthCode: {
+      unknown: 'จุดแข็งที่ไม่รู้จัก',
+      LEGACY_IS_PRODUCTION_PATH: 'Legacy Mapping เป็นเส้นทาง Production ที่พิสูจน์แล้วและใช้งานอยู่ในปัจจุบัน — พรีเซ็ตที่ส่งออกทั้งหมดในวันนี้มาจากเส้นทางนี้',
+      SKIN_ALWAYS_PROTECTED_FIRST: 'โทนสีผิวจะถูกแสดงตัวอย่างในสถานะได้รับการปกป้องก่อนเสมอ',
+      NO_RISKY_AREAS_KEEP_LEGACY: 'ไม่มีพื้นที่เสี่ยงเฉพาะนอกเหนือจากการปกป้องผิวเริ่มต้น — ตัวอย่างแนะนำให้คง Legacy Mapping ไว้ตามเดิม',
+      HARD_STOPS_RECOMMEND_REVIEW: 'มี Hard Stop ที่กำลังทำงานอยู่ {{count}} รายการ — ตัวอย่างแนะนำให้ตรวจสอบโดยมนุษย์ก่อนดำเนินการต่อ',
+      DERIVED_FROM_OVERLAY_SIMULATION: 'ที่มาจาก Overlay Simulation V2: {{detail}}',
+    },
+    riskCode: {
+      unknown: 'ข้อสังเกตความเสี่ยงที่ไม่รู้จัก',
+      LEGACY_SUMMARY_HIGH_RISK: 'สรุปผล Legacy mapping รายงานระดับความเสี่ยงเชิงนามธรรมว่า "สูง" สำหรับข้อมูลนี้',
+      V2_HARD_STOPS_ACTIVE: 'มี Hard Stop ที่กำลังทำงานอยู่ {{count}} รายการในตัวอย่าง V2',
+      V2_OVERSTACK_SEVERITY: 'ระดับความรุนแรงของการซ้อนทับคือ "{{severity}}"',
+    },
+    dimensionReasonCode: {
+      unknown: 'ข้อสังเกตมิติที่ไม่รู้จัก',
+      COMPARES_TONAL_MAGNITUDE: 'เปรียบเทียบการจัดประเภทขนาดของ Exposure/Highlight/Shadow โดยรวม',
+      NO_COLOR_SEPARATION_CONCEPT: 'Legacy mapping ไม่มีแนวคิดการแยกสีอย่างชัดเจนให้เปรียบเทียบ',
+      NO_SKIN_PROTECTION_CONCEPT: 'พรีเซ็ต Legacy ไม่มีแนวคิดการปกป้องโทนสีผิวอย่างชัดเจน — มีเพียง V2 เท่านั้นที่ประเมินโดยตรง',
+      NO_COMBINED_TOOL_STACKING: 'Legacy mapping ไม่ประเมินการซ้อนทับเครื่องมือหลายตัวพร้อมกันเลย — มีเพียง V2 เท่านั้นที่ทำ',
+      NO_OVERSTACK_CONCEPT: 'Legacy mapping ไม่มีแนวคิดการซ้อนทับเกินขอบเขต — มีเพียง V2 เท่านั้นที่ประเมินโดยตรง',
+      NO_CAPTURE_CAPABILITY_CONSULT: 'Legacy mapping ไม่พิจารณาข้อมูลความสามารถของการถ่ายภาพ — มีเพียงการวางแผนของ V2 เท่านั้นที่พิจารณา',
+      NO_STYLE_DNA_CONSULT: 'Legacy mapping ไม่พิจารณา Photographer Style/DNA — มีเพียงการวางแผนของ V2 เท่านั้นที่พิจารณา',
+      NO_INTENT_CONSULT: 'Legacy mapping ไม่พิจารณา Photographer Intent — มีเพียงการวางแผนของ V2 เท่านั้นที่พิจารณา',
+      NO_SAFETY_CONFIDENCE_SCORE: 'Legacy mapping ไม่มีคะแนนความเชื่อมั่นด้านความปลอดภัยของตัวเอง — มีเพียง V2 Safety Clamp เท่านั้นที่คำนวณ',
     },
     scoreLevel: { veryLow: 'ต่ำมาก', low: 'ต่ำ', moderate: 'ปานกลาง', high: 'สูง', veryHigh: 'สูงมาก', unknown: 'ไม่ทราบ' },
     field: {

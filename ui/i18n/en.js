@@ -4,6 +4,16 @@
  * Plain nested object of strings only -- no markup, no logic.
  */
 export const en = {
+  analysisBox: {
+    loadingImage: 'Loading image…',
+    imageLoadFailed: 'Could not load the image.',
+    imageNotReady: 'The image has not finished loading yet.',
+    analyzingHistogram: 'Analyzing histogram…',
+    analyzingSkinColor: 'AI is analyzing skin and color…',
+    analyzingColorLight: 'AI is analyzing color and light…',
+    analysisComplete: 'Analysis complete',
+    failed: 'Failed',
+  },
   appShell: {
     brandTagline: 'LUMIXA AI — Reference Colour Intelligence',
     headerSubtitle: 'Lightroom Mapping V2 — Interactive Before/After Visual Comparison',
@@ -126,6 +136,20 @@ export const en = {
     languageNameTh: 'Thai',
   },
   review: {
+    // LOCALE RUNTIME TRUTH + QA NEUTRALITY R4 -- Phase D: translations
+    // for ui/review-console-controller.js's (production-locked) fixed
+    // announcement strings, classified+translated in ui/app.js before
+    // reaching the live region.
+    announcement: {
+      ITEM_MARKED_PASSED: 'Review item marked as passed.',
+      ITEM_MARKED_FAILED: 'Review item marked as failed.',
+      ADJUSTMENT_REQUESTED: 'Adjustment requested.',
+      ITEM_RETURNED_PENDING: 'Review item returned to pending.',
+      ITEM_UPDATE_FAILED: 'Could not update this review item. The previous review state was kept.',
+      RESET_FAILED: 'Could not reset the review state. The previous review state was kept.',
+      STATE_RESET: 'Review state reset.',
+      NOTE_SAVE_FAILED: 'Could not save this note. The previous review state was kept.',
+    },
     console: {
       untitledItem: 'Untitled review item',
       required: 'Required',
@@ -346,6 +370,11 @@ export const en = {
       safetyRestraint: 'Controlled V2 Preview built — a Safety-restraint translation with real, bounded changes. See the comparison below.',
       identityFallback: 'Controlled V2 Preview built — no supported change was available, so an honest Identity preview is shown instead.',
       unavailable: 'Analysis complete, but the Controlled V2 preview is not yet available — see the details below.',
+      // R4 Phase G: exact-blocker-reason variant used when the settled
+      // Visual Preview Comparison render outcome carries a known
+      // blockerCode -- replaces the generic 'unavailable' message
+      // whenever a specific reason is available.
+      blocked: 'Analysis complete, but the Controlled V2 preview is blocked — {{reason}}',
     },
   },
   comparison: {
@@ -387,6 +416,38 @@ export const en = {
       V2_UNRESOLVED_SAFETY_CONCERNS: 'The V2 preview currently has unresolved safety concerns, so a confident comparison is not possible yet. Legacy remains the active production path.',
       SIMILAR_NEEDS_MANUAL_REVIEW: 'The Legacy and V2 data comparisons are similar in most areas, but some parts still require manual human review — no rendered image preview is available yet. Legacy remains the active production path.',
       DIFFERS_NEEDS_MANUAL_REVIEW: 'The Legacy and V2 data comparisons differ in some areas and still require manual human review before any conclusions are drawn — no rendered image preview is available yet. Legacy remains the active production path.',
+      // LOCALE RUNTIME TRUTH + QA NEUTRALITY R4 -- Phase E
+      LEGACY_DATA_UNAVAILABLE: 'Legacy preview data is not available for this comparison.',
+      LEGACY_DATA_AVAILABLE: 'Legacy Mapping data is available for abstract comparison. This is data-level evidence only, not a rendered visual preview.',
+      V2_DATA_UNAVAILABLE_CARD: 'V2 preview data is not available for this comparison.',
+      V2_SANDBOX_NOT_ELIGIBLE: 'The V2 Controlled Preview has not been generated yet (Sandbox is not currently eligible) — nothing to compare against Legacy yet.',
+      V2_DATA_AVAILABLE_CARD: 'V2 Controlled Preview data is available for abstract comparison. This is data-level evidence only, not a rendered visual preview — no real Lightroom slider values or XMP fields are involved.',
+    },
+    strengthCode: {
+      unknown: 'Unrecognised strength.',
+      LEGACY_IS_PRODUCTION_PATH: 'Legacy Mapping is the current, proven production path — every exported preset today comes from it.',
+      SKIN_ALWAYS_PROTECTED_FIRST: 'Skin tones are always previewed as protected first.',
+      NO_RISKY_AREAS_KEEP_LEGACY: 'No specific risky areas beyond default skin protection — preview recommends keeping legacy mapping as-is.',
+      HARD_STOPS_RECOMMEND_REVIEW: '{{count}} active hard stop(s) — preview recommends human review before anything further.',
+      DERIVED_FROM_OVERLAY_SIMULATION: 'Derived from Overlay Simulation V2: {{detail}}',
+    },
+    riskCode: {
+      unknown: 'Unrecognised risk note.',
+      LEGACY_SUMMARY_HIGH_RISK: 'Legacy mapping summary itself reports a "high" abstract risk level for this input.',
+      V2_HARD_STOPS_ACTIVE: '{{count}} hard stop(s) currently active in the V2 preview.',
+      V2_OVERSTACK_SEVERITY: 'Over-stack severity is "{{severity}}".',
+    },
+    dimensionReasonCode: {
+      unknown: 'Unrecognised dimension note.',
+      COMPARES_TONAL_MAGNITUDE: 'Compares overall exposure/highlight/shadow magnitude classification.',
+      NO_COLOR_SEPARATION_CONCEPT: 'Legacy mapping has no explicit color-separation concept to compare against.',
+      NO_SKIN_PROTECTION_CONCEPT: 'Legacy preset has no explicit skin-protection concept — only V2 evaluates this directly.',
+      NO_COMBINED_TOOL_STACKING: 'Legacy mapping does not evaluate combined-tool stacking at all — only V2 does.',
+      NO_OVERSTACK_CONCEPT: 'Legacy mapping has no over-stack concept — only V2 evaluates this directly.',
+      NO_CAPTURE_CAPABILITY_CONSULT: 'Legacy mapping does not consult capture-capability data; only V2 planning considers it.',
+      NO_STYLE_DNA_CONSULT: 'Legacy mapping does not consult Photographer Style/DNA; only V2 planning considers it.',
+      NO_INTENT_CONSULT: 'Legacy mapping does not consult Photographer Intent; only V2 planning considers it.',
+      NO_SAFETY_CONFIDENCE_SCORE: 'Legacy mapping has no safety-confidence score of its own — only V2 Safety Clamp computes one.',
     },
     scoreLevel: { veryLow: 'Very low', low: 'Low', moderate: 'Moderate', high: 'High', veryHigh: 'Very high', unknown: 'Unknown' },
     field: {

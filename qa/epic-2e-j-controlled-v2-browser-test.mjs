@@ -230,7 +230,7 @@ async function main() {
       await page.waitForTimeout(150);
       snap = await qaSnapshot(page);
       const guidanceAfterManualReview = snap?.reviewGuidance ?? null;
-      recordCondition(`${tag} All 6 visual review items are completable and readyToBuildV2 becomes true`, guidanceAfterManualReview?.visualPassed === 6 && guidanceAfterManualReview?.readyToBuildV2 === true, `passedCount=${passedCount}, guidance=${JSON.stringify(guidanceAfterManualReview)}`);
+      recordCondition(`${tag} All 6 visual review items are completable and readyToBuildV2 becomes true`, guidanceAfterManualReview?.visualPassed === 6 && guidanceAfterManualReview?.readyToBuildV2 === true, `manualVisualButtonsClicked=${passedCount?.manualVisualButtonsClicked}, systemButtonsClicked=${passedCount?.systemButtonsClicked}, guidance=${JSON.stringify(guidanceAfterManualReview)}`);
 
       const xmpBefore = await captureXmpText(page);
 

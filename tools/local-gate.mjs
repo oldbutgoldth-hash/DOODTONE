@@ -4,7 +4,10 @@
  *
  * LOCAL-FIRST GEOMETRY R3 -- Phase E2: `npm run test:local-gate`, the
  * fail-closed everyday pre-commit/pre-deploy check for local Windows
- * development. Runs the 12 required steps IN ORDER, and exits non-zero
+ * development. Runs all required steps (STEPS.length below; currently
+ * 13, after LOCALE RUNTIME TRUTH + QA NEUTRALITY R4 kept the existing
+ * Step 13 full-system i18n suite as the final step) IN ORDER, and exits
+ * non-zero
  * when any of the following is true:
  *   - any required suite fails
  *   - Browser is unavailable
@@ -178,7 +181,7 @@ async function main() {
     console.log('\nLOCAL GATE: FAIL — one or more required steps did not pass. See reasons above.');
     process.exit(1);
   }
-  console.log('\nLOCAL GATE: PASS — all 12 required steps passed with fresh, non-stale, well-formed evidence.');
+  console.log(`\nLOCAL GATE: PASS — all ${STEPS.length} required steps passed with fresh, non-stale, well-formed evidence.`);
   process.exit(0);
 }
 

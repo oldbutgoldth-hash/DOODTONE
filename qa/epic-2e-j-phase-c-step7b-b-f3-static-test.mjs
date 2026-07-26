@@ -324,7 +324,12 @@ function noClickBetween(a, b) {
 {
   const hasScenarioA = testSrc.includes('Scenario A precondition 1: exactly one Reason selected before the audited action') && testSrc.includes('Scenario A precondition 2: exactly two Reasons selected (never reaching five)') && testSrc.includes('Scenario A: selecting an ordinary second Reason (well under the limit) produces ZERO live-region TEXT TRANSITIONS') && testSrc.includes('Scenario A: ordinary Selected Reasons text has no live-region ancestor');
   const hasScenarioB = testSrc.includes('Scenario B precondition 1: exactly four Reasons selected') && testSrc.includes('Scenario B precondition 2: the fifth Reason (contrast) is enabled and unchecked before selection') && testSrc.includes('Scenario B: selecting the fifth Reason through a real UI action reaches exactly five selected') && testSrc.includes('Scenario B: reaching the five-Reason limit produces exactly one meaningful non-empty ipoReasonLimit announcement') && testSrc.includes('Scenario B: no duplicate identical ipoReasonLimit announcement was recorded');
-  const hasScenarioC = testSrc.includes("const REASONS_CLEARED_ANNOUNCEMENT_TEXT = 'Reasons cleared. Observation remains selected. Production output was not changed.';") && testSrc.includes('Scenario C / FIX 8 (F3-P1): Clear Reasons produces EXACTLY the bounded accessible message') && testSrc.includes('auditC_reasonLimit.distinctNonEmptyTexts[0] === REASONS_CLEARED_ANNOUNCEMENT_TEXT');
+    // R4 Phase J: REASONS_CLEARED_ANNOUNCEMENT_TEXT is now read via
+  // expectedLocalizedText(page, 'observation.reasonsCleared') instead
+  // of a hardcoded English literal, so this suite's own default-
+  // language (Thai) run compares against the CORRECT text -- updated
+  // to match the locale-neutral form rather than the old literal.
+  const hasScenarioC = testSrc.includes("const REASONS_CLEARED_ANNOUNCEMENT_TEXT = await expectedLocalizedText(page, 'observation.reasonsCleared');") && testSrc.includes('Scenario C / FIX 8 (F3-P1): Clear Reasons produces EXACTLY the bounded accessible message') && testSrc.includes('auditC_reasonLimit.distinctNonEmptyTexts[0] === REASONS_CLEARED_ANNOUNCEMENT_TEXT');
   const hasScenarioD = testSrc.includes('Scenario D: a genuine stale-generation transition') && testSrc.includes('Scenario D: no duplicate identical ipoWarning announcement was recorded');
   const hasScenarioE = testSrc.includes('Scenario E: Clear Observation produces exactly one non-empty ipoStatus announcement matching the expected cleared-state message');
   record('Part 7: all five MutationObserver scenarios are implemented per F3-S2/F3-P1 (A deterministic ordinary-selection non-live, B deterministic limit-reached single announcement, C Clear Reasons EXACT bounded message now that the Production fix exists, D stale/generation transition with Canvas exclusion, E Clear Observation requires real announcement)', hasScenarioA && hasScenarioB && hasScenarioC && hasScenarioD && hasScenarioE, `hasScenarioA=${hasScenarioA}, hasScenarioB=${hasScenarioB}, hasScenarioC=${hasScenarioC}, hasScenarioD=${hasScenarioD}, hasScenarioE=${hasScenarioE}`);
@@ -421,7 +426,9 @@ function noClickBetween(a, b) {
 {
   // FIX 5: Clear Observation requires a real non-empty announcement
   // matching the expected cleared-state message; zero mutations/messages FAIL.
-  const requiresRealAnnouncement = testSrc.includes("auditE.nonEmptyAnnouncements === 1 && auditE.distinctNonEmptyTexts.length === 1 && auditE.distinctNonEmptyTexts[0] === 'Observation cleared. Production output was not changed.' && auditE.repeatedIdenticalTexts === 0");
+  // R4 Phase J: the expected text is now read locale-neutrally via
+  // expectedLocalizedText(page, 'observation.stateMessage.cleared').
+  const requiresRealAnnouncement = testSrc.includes("auditE.nonEmptyAnnouncements === 1 && auditE.distinctNonEmptyTexts.length === 1 && auditE.distinctNonEmptyTexts[0] === _expectedObservationClearedText && auditE.repeatedIdenticalTexts === 0");
   record('FIX 5: Clear Observation requires exactly one non-empty ipoStatus announcement matching the real expected cleared-state message with no repeat; zero mutations/messages cannot PASS', requiresRealAnnouncement, `present=${requiresRealAnnouncement}`);
 }
 {
@@ -532,7 +539,9 @@ function noClickBetween(a, b) {
 {
   // FIX 4: fixed timeout is not the primary stale-warning evidence;
   // waitForFunction targets the exact stale-warning text.
-  const waitForFunctionTargetsExactText = testSrc.includes("await page.waitForFunction(") && testSrc.includes("(document.getElementById('ipoWarning')?.textContent || '').trim() === expected") && testSrc.includes("const STALE_WARNING_TEXT = 'The previous observation was cleared because a newer analysis is active.';");
+  // R4 Phase J: STALE_WARNING_TEXT is now read locale-neutrally via
+  // expectedLocalizedText(page, 'observation.unavailableReason.cancelled').
+  const waitForFunctionTargetsExactText = testSrc.includes("await page.waitForFunction(") && testSrc.includes("(document.getElementById('ipoWarning')?.textContent || '').trim() === expected") && testSrc.includes("const STALE_WARNING_TEXT = await expectedLocalizedText(page, 'observation.unavailableReason.cancelled');");
   const fixedTimeoutNotPrimary = testSrc.includes('// A SMALL timeout remains ONLY to flush one MutationObserver') && testSrc.includes('never a fixed timeout as primary evidence') && !testSrc.includes("await page.waitForTimeout(700); // allow the stale-warning render to occur");
   const failsHonestlyIfMissing = testSrc.includes('FAIL — stale warning text never appeared within the bounded 5000ms timeout (no announcement was fabricated)');
   record('FIX 4 (F3-S3): waitForFunction targets the EXACT stale-warning text as primary evidence, with a bounded timeout (not a fixed 700ms wait), failing honestly (no fabricated announcement) if the text never appears', waitForFunctionTargetsExactText && fixedTimeoutNotPrimary && failsHonestlyIfMissing, `waitForFunctionTargetsExactText=${waitForFunctionTargetsExactText}, fixedTimeoutNotPrimary=${fixedTimeoutNotPrimary}, failsHonestlyIfMissing=${failsHonestlyIfMissing}`);

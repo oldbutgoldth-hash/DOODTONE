@@ -126,7 +126,14 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
   const checksStillSameSession = /const stillSameSession = state\.imageLoaded && reviewSecVisibleBefore && document\.getElementById\('reviewConsoleSection'\)\?\.style\.display !== 'none';/.test(appSrc);
   record('A "stillSameSession" check runs after the await, before any scroll/focus/announcement', checksStillSameSession, { checksStillSameSession });
 
-  const scrollGatedByStaleness = /if \(!stillSameSession\) return;[\s\S]{0,2000}?vprSec\.scrollIntoView/.test(appSrc);
+  // R4 Phase G: window widened from 2000 to 6000 chars to accommodate
+  // the legitimate new "await the genuine Visual Preview Comparison
+  // render settlement, then re-check staleness" block inserted between
+  // the two -- that block only ADDS further early-return gates (never
+  // bypasses the original one), so scrollIntoView remains strictly
+  // reachable only after stillSameSession (and now also the post-await
+  // re-check) pass.
+  const scrollGatedByStaleness = /if \(!stillSameSession\) return;[\s\S]{0,6000}?vprSec\.scrollIntoView/.test(appSrc);
   record('scrollIntoView is only reachable after the staleness check passes', scrollGatedByStaleness, { scrollGatedByStaleness });
 
   const focusManagedSafely = /vprSec\.setAttribute\('tabindex', '-1'\)/.test(appSrc) && /vprSec\.focus\(\{ preventScroll: true \}\)/.test(appSrc);

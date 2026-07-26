@@ -73,6 +73,8 @@ import {
   importAndReachReady,
   waitForAnalysisCompletion,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
+import { auditVisibleLocaleSections, decideVisibleLocaleAudit } from './helpers/visible-locale-audit.mjs';
+import { captureXmpText, sha256XmpText } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -86,6 +88,8 @@ const FIXTURE = path.join(FIXTURES_ROOT, 'ready', 'ready-portrait-orientation-1.
 const SOURCE_HASH_INPUTS = [
   path.join(__dirname, 'epic-2e-j-full-system-i18n-browser-test.mjs'),
   path.join(__dirname, 'helpers', 'playwright-lumixa-test-runtime.mjs'),
+  path.join(__dirname, 'helpers', 'visible-locale-audit.mjs'),
+  path.join(PROJECT_ROOT, 'ui', 'isolated-visual-preview-renderer-v2.js'),
   path.join(PROJECT_ROOT, 'index.html'),
   path.join(PROJECT_ROOT, 'ui', 'app.js'),
   path.join(PROJECT_ROOT, 'ui', 'i18n', 'index.js'),
@@ -100,14 +104,30 @@ const SOURCE_HASH_INPUTS = [
 ];
 
 // Sections whose visible text must be fully Thai in TH mode.
+// R4 Phase B: expanded from 6 to the full 8 required sections the
+// spec names explicitly (App shell/nav, Analysis status/panels, Review
+// Console, Data Comparison, Visual Preview, Before/After, Observation,
+// Session Summary). `analysisStatus` and `sessionSummary` were
+// previously uncovered by this suite's per-section audit entirely.
 const REQUIRED_SECTIONS = [
   { key: 'appShell', selector: 'body' },
+  { key: 'analysisStatus', selector: '#imageAnalysisSection' },
   { key: 'reviewConsole', selector: '#reviewConsoleSection' },
   { key: 'dataComparison', selector: '#sideBySideComparisonSection' },
   { key: 'visualPreview', selector: '#visualPreviewComparisonSection' },
   { key: 'beforeAfter', selector: '#interactiveBeforeAfterSection' },
   { key: 'observation', selector: '#interactivePreviewObservationSection' },
+  { key: 'sessionSummary', selector: '#interactivePreviewObservationSessionSection' },
 ];
+// R4 Phase B: NO section key is permitted to be NOT_TESTED in this
+// suite. `#imageAnalysisSection` (analysisStatus) is set to
+// display:block once analyzeImageCore() resolves (ui/app.js) and is
+// only ever hidden again by the Reset workflow, which this suite
+// never triggers -- by the time the TH/EN audits run (well after
+// Review + Build Controlled V2), every one of the 8 required sections
+// is expected to be genuinely present. Verified directly against
+// ui/app.js rather than assumed.
+const PERMITTED_NOT_TESTED_SECTIONS = [];
 
 const APPROVED_TERMS = [
   'Visual Preview Comparison', 'Visual Preview', 'Data Comparison', 'Review Console',
@@ -137,56 +157,18 @@ function recordStatus(test, status, evidence) {
 const record = (test, ok, evidence) => recordStatus(test, ok ? 'PASS' : 'FAIL', evidence);
 
 // ══════════════════════════════════════════════════════════════════
-// PHASE D — Runtime leak detector R2. A text node containing BOTH
-// Thai and English is never skipped: Thai characters are stripped
-// from a TEMPORARY detection copy only (the original `raw` string is
-// always kept for evidence), approved technical terms and numeric/
-// unit tokens are stripped next, and whatever English remains is
-// judged on its own. This replaces the R2 detector's
-// `if (/Thai char exists/) continue`, which is the exact fail-open
-// behavior the R3 independent review flagged (defect 4/7).
+// R4 Phase A/D/K: the previous per-suite COLLECT_LEAKS template string
+// + auditSection() (which called page.evaluate with three positional
+// arguments instead of one argument object -- silently thrown away by the blanket .catch() below
+// it, turning every audited section into a false NOT_TESTED -- R4
+// Defect A) have been REMOVED. Both the Thai-mode and English-mode
+// visible-text audits below now go through the ONE shared,
+// single-argument-object helper in qa/helpers/visible-locale-audit.mjs
+// (auditVisibleLocaleSections / decideVisibleLocaleAudit), which is
+// also visibility-aware for the English direction (Defect C) instead
+// of the old truncated whole-body-text-slice approach.
 // ══════════════════════════════════════════════════════════════════
-const COLLECT_LEAKS = `(selector, terms) => {
-  const root = document.querySelector(selector);
-  if (!root) return { found: false, leaks: [] };
-  const escaped = terms.map(t => t.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&')).sort((a,b)=>b.length-a.length);
-  const termsRe = new RegExp('\\\\b(?:' + escaped.join('|') + ')\\\\b', 'gi');
-  const numericRe = /\\b[0-9]+(?:\\.[0-9]+)?(?:px|ms|%)?\\b/g;
-  const placeholderRe = /\\{\\{\\s*\\w+\\s*\\}\\}/g;
-  const thaiRe = /[\\u0E00-\\u0E7F]/g;
-  const leaks = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let n;
-  while ((n = walker.nextNode())) {
-    const el = n.parentElement;
-    if (!el) continue;
-    // Collapsed Developer Details are the ONE legitimate place raw
-    // diagnostic English may remain — this suite never opens them, so
-    // they are never visible/photographer-facing during this audit.
-    if (el.closest('details:not([open])')) continue;
-    const cs = window.getComputedStyle(el);
-    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
-    if (el.classList && el.classList.contains('material-symbols-outlined')) continue;
-    const raw = (n.nodeValue || '').trim();
-    if (!raw) continue;
-    if (/^[a-z0-9_]+$/.test(raw)) continue; // material icon ligature, e.g. "info"
-    // R2 FIX: strip Thai chars from a TEMPORARY detection copy only —
-    // 'raw' (kept above for the evidence sample) is never mutated, and
-    // the node is never skipped just because it contains Thai.
-    let detect = raw.replace(thaiRe, ' ');
-    detect = detect.replace(placeholderRe, ' ');
-    detect = detect.replace(termsRe, ' ');
-    detect = detect.replace(numericRe, ' ');
-    const words = detect.match(/[A-Za-z][A-Za-z']{2,}/g) || [];
-    if (words.length >= 2) leaks.push(raw.slice(0, 160));
-  }
-  return { found: true, leaks };
-}`;
 
-async function auditSection(page, selector) {
-  return page.evaluate(new Function('return ' + COLLECT_LEAKS)(), selector, APPROVED_TERMS)
-    .catch(() => ({ found: false, leaks: [] }));
-}
 
 // ══════════════════════════════════════════════════════════════════
 // captureInvariants() — I18N RUNTIME CLOSURE R3: reads ONLY fields
@@ -288,7 +270,18 @@ async function main() {
       const snapAfterReview = await qaSnapshot(page);
       const g = snapAfterReview?.reviewGuidance ?? {};
       record('Step 3: the six manual visual Review items are complete', (g.visualPassed ?? 0) >= (g.visualRequired ?? 6), JSON.stringify({ visualPassed: g.visualPassed, visualRequired: g.visualRequired }));
-      record('Step 4: the four system Review items are auto-verified with zero manual clicks', (g.systemVerified ?? 0) >= (g.systemRequired ?? 4), JSON.stringify({ systemVerified: g.systemVerified, systemRequired: g.systemRequired, clicked: reviewed ?? null }));
+      record('Step 4: the four system Review items are auto-verified with zero manual clicks', (g.systemVerified ?? 0) >= (g.systemRequired ?? 4), JSON.stringify({ systemVerified: g.systemVerified, systemRequired: g.systemRequired, manualVisualButtonsClicked: reviewed?.manualVisualButtonsClicked ?? null, systemButtonsClicked: reviewed?.systemButtonsClicked ?? null, totalReviewItems: reviewed?.totalReviewItems ?? null }));
+      // R4 Phase H: the previous evidence embedded `clicked: reviewed`
+      // where `reviewed` was actually `itemIds.length` (ALL 10 review
+      // items iterated, manual+system alike) mislabeled as a click
+      // count -- contradicting this row's own "zero manual clicks"
+      // wording. passAllReviewItems() now returns an honest breakdown;
+      // this row asserts systemButtonsClicked is genuinely 0 (system-
+      // verified items render no Pass button at all -- see
+      // ui/review-console-renderer.js's isSystemVerified branch) and
+      // manualVisualButtonsClicked matches the 6 real visual items.
+      record('Step 4b: system-verified items were never clicked (systemButtonsClicked === 0) -- they carry no Pass button in the DOM', reviewed?.systemButtonsClicked === 0, JSON.stringify(reviewed));
+      record('Step 4c: exactly the 6 manual visual items received a real click (manualVisualButtonsClicked === 6)', reviewed?.manualVisualButtonsClicked === 6, JSON.stringify(reviewed));
 
       // ── 5. PHASE B — guided Build Controlled V2 button, real proof ──
       const sel = BUILD_CONTROLLED_V2_BUTTON_SELECTOR;
@@ -410,39 +403,73 @@ async function main() {
       record('Step 8a: the Before/After range input.value === "73" after real input/change events', sliderDomValue === '73', `sliderDomValue=${sliderDomValue}`);
       record('Step 8b: the controller-driven split readout reflects the same 73 split', typeof sliderReadoutAfter === 'string' && sliderReadoutAfter.includes('73'), JSON.stringify({ sliderReadoutAfter }));
 
-      // ── Capture invariants BEFORE any language switch ───────────────
+      // -- Capture invariants BEFORE any language switch --------------
       const before = await captureInvariants(page);
+      // R4 Phase L: XMP exact locale invariant -- captured BEFORE the
+      // TH->EN->TH round trip below via the real #btnDownload click
+      // (captureXmpText intercepts the Blob, never actually saves a
+      // file). A Legacy preset is genuinely available at this point in
+      // the workflow (Build Controlled V2 already completed), so this
+      // must never fall back to NOT_APPLICABLE -- that was the R4
+      // Defect L gap: the previous version of this suite recorded
+      // NOT_APPLICABLE unconditionally, even though a real preset was
+      // always available to compare.
+      const xmpBeforeLocaleSwitch = await captureXmpText(page);
 
-      // ── 9. Thai visible-text audit, per required section ────────────
-      let totalThaiLeaks = 0;
-      for (const section of REQUIRED_SECTIONS) {
-        const res = await auditSection(page, section.selector);
-        if (!res.found) { recordStatus(`Step 9: Thai audit — ${section.key} section present`, 'NOT_TESTED', `selector ${section.selector} not found in this build`); continue; }
-        totalThaiLeaks += res.leaks.length;
-        record(`Step 9: Thai audit — ${section.key} has zero visible English sentences (mixed Thai+English nodes are inspected, never skipped)`, res.leaks.length === 0, JSON.stringify({ leaks: res.leaks.length, sample: res.leaks.slice(0, 5) }));
-        await page.screenshot({ path: path.join(SCREENSHOT_DIR, `th-${section.key}.png`), fullPage: false }).catch(() => {});
+      // -- 9. Thai visible-text audit, per required section (R4 Phase B/D) --
+      // Uses the shared, single-argument-object helper (R4 Phase A) --
+      // NOT the old broken 3-argument auditSection(). A section that
+      // genuinely cannot be found is now itself a decision FAIL (no
+      // permitted NOT_TESTED sections in this suite -- see
+      // PERMITTED_NOT_TESTED_SECTIONS above), and an audit that throws
+      // is distinguished from "section absent" instead of both being
+      // silently swallowed into a false zero-leak PASS.
+      const thAuditRows = await auditVisibleLocaleSections(page, REQUIRED_SECTIONS, { mode: 'th', approvedTerms: APPROVED_TERMS });
+      for (const row of thAuditRows) {
+        if (row.status === 'NOT_TESTED') {
+          recordStatus(`Step 9: Thai audit -- ${row.key} section present`, 'NOT_TESTED', `selector ${row.selector} not found in this build`);
+        } else if (row.status === 'FAIL' && row.reason === 'audit-threw') {
+          // R4 Defect A/B: an audit infrastructure failure is recorded
+          // as an explicit FAIL, never silently downgraded.
+          recordStatus(`Step 9: Thai audit -- ${row.key} audit ran without error`, 'FAIL', `audit-threw: ${row.error}`);
+        } else {
+          record(`Step 9: Thai audit -- ${row.key} has zero visible English sentences / unresolved template tokens (mixed Thai+English nodes are inspected, never skipped)`, row.status === 'PASS', JSON.stringify({ leaks: row.leaks.length, unresolvedTemplateLeaks: row.unresolvedTemplateLeaks.length, sample: row.leaks.slice(0, 5) }));
+        }
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, `th-${row.key}.png`), fullPage: false }).catch(() => {});
       }
-      record('Step 9: TOTAL visible English leak count across all Thai sections is 0', totalThaiLeaks === 0, `visibleEnglishLeakCount=${totalThaiLeaks}`);
+      const thDecision = decideVisibleLocaleAudit(thAuditRows, { permittedNotTested: PERMITTED_NOT_TESTED_SECTIONS });
+      record('Step 9: fail-closed decision across all 8 required Thai sections is PASS (no FAIL rows, no unpermitted NOT_TESTED rows)', thDecision.decision === 'PASS', JSON.stringify({ decision: thDecision.decision, totalLeaks: thDecision.totalLeaks, failedKeys: thDecision.failures.map((r) => r.key), notTestedKeys: thDecision.unpermittedNotTested.map((r) => r.key) }));
 
-      // ── 10+11. TH -> EN -> TH ───────────────────────────────────────
+      // -- 10+11. TH -> EN -> TH (R4 Phase C/K: visibility-aware EN audit,
+      //    replacing the old truncated whole-body innerText slice
+      //    check, which was neither visibility-aware nor per-section) --
       await page.evaluate(() => window.setLang && window.setLang('en'));
       await page.waitForTimeout(600);
-      const enBodyText = await page.evaluate(() => document.body.innerText.slice(0, 4000));
-      const hasStaleThai = /[฀-๿]/.test(enBodyText);
-      record('Step 10: switching to English renders English with no stale Thai fragments in the main shell', !hasStaleThai, `staleThaiDetected=${hasStaleThai}`);
-      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'en-appShell.png') }).catch(() => {});
+      const enAuditRows = await auditVisibleLocaleSections(page, REQUIRED_SECTIONS, { mode: 'en', approvedTerms: APPROVED_TERMS });
+      for (const row of enAuditRows) {
+        if (row.status === 'NOT_TESTED') {
+          recordStatus(`Step 10: English audit -- ${row.key} section present`, 'NOT_TESTED', `selector ${row.selector} not found in this build`);
+        } else if (row.status === 'FAIL' && row.reason === 'audit-threw') {
+          recordStatus(`Step 10: English audit -- ${row.key} audit ran without error`, 'FAIL', `audit-threw: ${row.error}`);
+        } else {
+          record(`Step 10: English audit -- ${row.key} has zero visible Thai fragments / unresolved template tokens`, row.status === 'PASS', JSON.stringify({ leaks: row.leaks.length, unresolvedTemplateLeaks: row.unresolvedTemplateLeaks.length, sample: row.leaks.slice(0, 5) }));
+        }
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, `en-${row.key}.png`), fullPage: false }).catch(() => {});
+      }
+      const enDecision = decideVisibleLocaleAudit(enAuditRows, { permittedNotTested: PERMITTED_NOT_TESTED_SECTIONS });
+      record('Step 10: fail-closed decision across all 8 required English sections is PASS (no FAIL rows, no unpermitted NOT_TESTED rows)', enDecision.decision === 'PASS', JSON.stringify({ decision: enDecision.decision, totalLeaks: enDecision.totalLeaks, failedKeys: enDecision.failures.map((r) => r.key), notTestedKeys: enDecision.unpermittedNotTested.map((r) => r.key) }));
 
       await page.evaluate(() => window.setLang && window.setLang('th'));
       await page.waitForTimeout(600);
-      let thaiLeaksAfterRoundTrip = 0;
-      for (const section of REQUIRED_SECTIONS) {
-        const res = await auditSection(page, section.selector);
-        if (res.found) thaiLeaksAfterRoundTrip += res.leaks.length;
-      }
-      record('Step 11: switching back to Thai renders Thai again with zero English leaks', thaiLeaksAfterRoundTrip === 0, `visibleEnglishLeakCount=${thaiLeaksAfterRoundTrip}`);
+      const thRoundTripRows = await auditVisibleLocaleSections(page, REQUIRED_SECTIONS, { mode: 'th', approvedTerms: APPROVED_TERMS });
+      const thRoundTripDecision = decideVisibleLocaleAudit(thRoundTripRows, { permittedNotTested: PERMITTED_NOT_TESTED_SECTIONS });
+      record('Step 11: switching back to Thai renders Thai again with zero English leaks (fail-closed across all 8 sections)', thRoundTripDecision.decision === 'PASS', JSON.stringify({ decision: thRoundTripDecision.decision, totalLeaks: thRoundTripDecision.totalLeaks, failedKeys: thRoundTripDecision.failures.map((r) => r.key), notTestedKeys: thRoundTripDecision.unpermittedNotTested.map((r) => r.key) }));
+
+
 
       // ── 12. State invariants after TH -> EN -> TH ───────────────────
       const after = await captureInvariants(page);
+      const xmpAfterLocaleSwitch = await captureXmpText(page);
       const changed = Object.keys(before).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
       record('Step 12: TH→EN→TH changed NO bounded state invariant (generation, Review, V2 mode, render state, alignment, slider+readout, Observation, Reasons, Session, Production source)', changed.length === 0, JSON.stringify({ changedFields: changed, before, after }));
 
@@ -452,15 +479,23 @@ async function main() {
 
       record('Production source remained Legacy for the whole run (previewSandbox.selectedOutputSource)', after.selectedOutputSource === 'legacy' || after.selectedOutputSource === null, `selectedOutputSource=${after.selectedOutputSource}`);
       record('Production write remained disabled for the whole run (previewSandbox.canWriteProduction === false)', after.canWriteProduction === false || after.canWriteProduction === null, `canWriteProduction=${after.canWriteProduction}`);
-      // Honest scope note: this in-memory workflow never triggers the
-      // separate Download-XMP action (serializeXMP/downloadXMP in
-      // ui/app.js), so there is no XMP hash to compare here — the
-      // Mapping/XMP invariant is instead proven the way it is actually
-      // enforced: Production write stays disabled and the selected
-      // output source stays 'legacy' for the entire run (asserted
-      // immediately above), so no code path capable of writing
-      // Mapping/XMP output was ever reachable.
-      recordStatus('XMP export was never triggered in this workflow, so Mapping/XMP output is unchanged by construction (no Download action was invoked)', 'NOT_APPLICABLE', 'serializeXMP/downloadXMP not called during this suite');
+      // R4 Phase L: genuine XMP-exact-locale invariant -- the same
+      // real serializeXMP()/downloadXMP() production path is invoked
+      // (via a real #btnDownload click) both before and after the
+      // TH->EN->TH round trip; locale switching must never change one
+      // byte of the exported preset, since it is presentation-only.
+      const xmpBothCaptured = typeof xmpBeforeLocaleSwitch === 'string' && typeof xmpAfterLocaleSwitch === 'string';
+      if (!xmpBothCaptured) {
+        // A genuinely missing #btnDownload or a capture failure is an
+        // infrastructure problem, not a legitimate "not applicable"
+        // case -- recorded as FAIL, never NOT_APPLICABLE, per R4
+        // Defect B's same fail-closed principle applied here.
+        recordStatus('XMP exact locale invariant: both captures succeeded (before and after TH->EN->TH)', 'FAIL', JSON.stringify({ beforeCaptured: typeof xmpBeforeLocaleSwitch === 'string', afterCaptured: typeof xmpAfterLocaleSwitch === 'string' }));
+      } else {
+        record('XMP exact locale invariant: identical text before vs. after TH->EN->TH', xmpBeforeLocaleSwitch === xmpAfterLocaleSwitch, `beforeLength=${xmpBeforeLocaleSwitch.length}, afterLength=${xmpAfterLocaleSwitch.length}`);
+        record('XMP exact locale invariant: identical length before vs. after TH->EN->TH', xmpBeforeLocaleSwitch.length === xmpAfterLocaleSwitch.length, `before=${xmpBeforeLocaleSwitch.length}, after=${xmpAfterLocaleSwitch.length}`);
+        record('XMP exact locale invariant: identical SHA-256 hash before vs. after TH->EN->TH', sha256XmpText(xmpBeforeLocaleSwitch) === sha256XmpText(xmpAfterLocaleSwitch), `before=${sha256XmpText(xmpBeforeLocaleSwitch).slice(0, 16)}..., after=${sha256XmpText(xmpAfterLocaleSwitch).slice(0, 16)}...`);
+      }
 
       completed = true;
     } finally {
@@ -475,7 +510,18 @@ async function main() {
 
   const failCount = results.filter((r) => r.result === 'FAIL').length;
   const notTested = results.filter((r) => r.result === 'NOT_TESTED').length;
-  const decision = !completed ? 'INCOMPLETE' : failCount > 0 ? 'FAIL' : 'PASS';
+  // R4 Phase B (Defect B fix): the previous decision ONLY checked
+  // failCount, silently ignoring any required NOT_TESTED row -- a
+  // section that fell through to NOT_TESTED (whether from a genuine
+  // "not in this build" case or, before the R4 Phase A fix, from a
+  // swallowed audit-infrastructure exception) never affected the
+  // suite's final PASS/FAIL verdict. Fixed: ANY NOT_TESTED row now
+  // fails the suite closed, with no exception list for this suite (the
+  // one legitimate conditional NOT_TESTED source, Step 5k's focus
+  // check, is itself gated on the section being genuinely
+  // absent/hidden, which never happens in the deterministic fixture
+  // workflow this suite drives).
+  const decision = !completed ? 'INCOMPLETE' : (failCount > 0 || notTested > 0) ? 'FAIL' : 'PASS';
   await writeResultAtomic(RESULTS_PATH, {
     suite: SUITE_NAME,
     decision,
@@ -484,7 +530,7 @@ async function main() {
     summary: { total: results.length, pass: results.filter((r) => r.result === 'PASS').length, fail: failCount, notTested },
   });
   console.log(`\nFinal decision: ${decision} (${results.length} rows, ${failCount} FAIL, ${notTested} NOT_TESTED)`);
-  return failCount > 0 || !completed ? 1 : 0;
+  return failCount > 0 || notTested > 0 || !completed ? 1 : 0;
 }
 
 process.exit(await main());

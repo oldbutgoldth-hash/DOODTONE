@@ -284,8 +284,17 @@ async function main() {
       record('Reasons preserved across same-generation Observation change', skinStillChecked && contrastStillChecked, `skinTone=${skinStillChecked}, contrast=${contrastStillChecked}`);
       record('Same Generation remains active across Observation change', s?.observation?.observationGenerationId === genIdBeforeSwitch, `before=${genIdBeforeSwitch}, after=${s?.observation?.observationGenerationId}`);
       record('Session contains one active V2 Observation (not two records)', s?.sessionSummary?.activeObservations === 1 && s?.sessionSummary?.preferV2 === 1, JSON.stringify(s?.sessionSummary));
-      const legacyWordingVisible = await page.evaluate(() => document.body.textContent.includes('Legacy remains production') || document.body.textContent.toLowerCase().includes('legacy remains production'));
-      record('Legacy Production wording remains visible', legacyWordingVisible, `visible=${legacyWordingVisible}`);
+      // R4 Phase I: replaced a hardcoded-English-prose body-text search
+      // ("Legacy remains production") -- which breaks the instant the
+      // UI is genuinely localized to Thai, since that literal English
+      // sentence is then never on the page -- with the QA-snapshot
+      // fields that are the actual SOURCE of truth for "Legacy is the
+      // active production path": selectedOutputSource stays 'legacy'
+      // and canWriteProduction stays false, in EITHER language.
+      const legacyProductionSnapshot = await qaSnapshot(page);
+      const legacyRemainsProduction = legacyProductionSnapshot?.previewSandbox?.selectedOutputSource === 'legacy'
+        && legacyProductionSnapshot?.previewSandbox?.canWriteProduction === false;
+      record('Legacy remains the active Production source (selectedOutputSource==="legacy", canWriteProduction===false) -- locale-neutral, read from the QA snapshot rather than English body prose', legacyRemainsProduction, JSON.stringify({ selectedOutputSource: legacyProductionSnapshot?.previewSandbox?.selectedOutputSource, canWriteProduction: legacyProductionSnapshot?.previewSandbox?.canWriteProduction }));
 
       await page.click('#ipoOption_no-visible-difference');
       await page.waitForTimeout(150);
@@ -431,16 +440,45 @@ async function main() {
       const snapshotAfterXmp = await qaSnapshot(page);
       record('XMP exact comparison: selected output remains Legacy', snapshotAfterXmp?.previewSandbox?.selectedOutputSource === 'legacy', `value=${snapshotAfterXmp?.previewSandbox?.selectedOutputSource}`);
 
-      // ── Identity Preview UI honesty (already visually confirmed in Step 7A-F2-F's identity-preview-ready.png; re-confirm text presence here) ──
-      const identityWordingPresent = await page.evaluate(() => {
+      // ── R4 Phase I: Visual Preview UI honesty, branched by the ACTUAL
+      //    resolved translation mode instead of unconditionally
+      //    asserting Identity-fallback wording. The previous version
+      //    of this check always required
+      //    /no supported visual adjustment|without supported visual
+      //    adjustment/i to be present -- which is TRUE only for the
+      //    identity-fallback case. The current fixture set genuinely
+      //    produces a meaningful legacy-derived-safety-restraint
+      //    translation (a real, bounded change, not an identity
+      //    fallback), so that hardcoded assumption was a confirmed
+      //    false-FAIL source (R4 spec: LIVE APP 49/51 PASS, 2 FAIL).
+      //    Reads the mode from the QA snapshot (locale-neutral, not
+      //    English-prose-dependent) and asserts the wording that is
+      //    actually correct for whichever mode is genuinely active.
+      const honestyModeSnap = await qaSnapshot(page);
+      const honestyMode = honestyModeSnap?.controlledV2Translation?.mode ?? null;
+      const identityOrRestraintWordingPresent = await page.evaluate((mode) => {
         const text = document.getElementById('visualPreviewComparisonInner')?.textContent ?? '';
-        return /no supported visual adjustment|without supported visual adjustment/i.test(text) && /NOT Lightroom-accurate/i.test(text);
-      });
+        if (mode === 'identity-fallback') {
+          return /no supported visual adjustment|without supported visual adjustment/i.test(text) && /NOT Lightroom-accurate/i.test(text);
+        }
+        if (mode === 'legacy-derived-safety-restraint') {
+          // The Safety-restraint label/lines this UI actually renders
+          // for a meaningful translation (ui/i18n/en.js
+          // visualPreview.safetyRestraintLabel/Line1/Line2) -- a real,
+          // bounded browser simulation, explicitly NOT Lightroom/ACR
+          // output and NOT a Production result.
+          return /safety-restraint/i.test(text) && /(not Lightroom\/ACR|not a Production result)/i.test(text);
+        }
+        // Any other/unavailable mode: at minimum the honest
+        // "NOT Lightroom-accurate" browser-approximation disclosure
+        // must still be present somewhere in this section.
+        return /NOT Lightroom-accurate/i.test(text);
+      }, honestyMode);
       const noForbiddenWording = await page.evaluate(() => {
         const text = (document.getElementById('visualPreviewComparisonInner')?.textContent ?? '').toLowerCase();
         return !text.includes('applied to production') && !text.includes('v2 activated') && !text.includes('pixels enhanced');
       });
-      record('Identity Preview UI honesty: honest wording present, no forbidden claims', identityWordingPresent && noForbiddenWording, `identityWording=${identityWordingPresent}, noForbidden=${noForbiddenWording}`);
+      record('Visual Preview UI honesty: wording matches the ACTUAL resolved translation mode, with no forbidden claims', identityOrRestraintWordingPresent && noForbiddenWording, `mode=${honestyMode}, wordingPresent=${identityOrRestraintWordingPresent}, noForbidden=${noForbiddenWording}`);
 
       // ── Generation handoff test: load next fixture ──
       const genIdBeforeHandoff = (await qaSnapshot(page))?.observation?.observationGenerationId;

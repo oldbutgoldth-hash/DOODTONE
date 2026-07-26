@@ -81,6 +81,10 @@ const STATIC_SUITES = [
   // inline bilingual branches, uncoded raw arrays, wrong DOM
   // selectors) -- each with a hostile self-test.
   'qa/epic-2e-j-r3-qa-integrity-static-test.mjs',
+  // LOCALE RUNTIME TRUTH + QA NEUTRALITY R4 -- Phase M: static audit's
+  // own regression guard against the R4 defect classes (A, B, C, D, F,
+  // G, L) ever silently recurring.
+  'qa/epic-2e-j-r4-locale-runtime-truth-static-test.mjs',
 ];
 
 let anyFailed = false;

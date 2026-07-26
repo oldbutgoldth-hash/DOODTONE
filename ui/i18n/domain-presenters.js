@@ -194,6 +194,38 @@ export function presentComparisonSummaryCode(code, lang, rawFallbackText = '') {
 }
 
 /**
+ * LOCALE RUNTIME TRUTH + QA NEUTRALITY R4 — Phase E: Data Comparison
+ * card strength/risk codes and dimension-reason codes, emitted
+ * additively at the UI presentation boundary (the same
+ * production-locked core file that emits these raw English sentences
+ * cannot be edited — see the classifier tables in
+ * ui/side-by-side-comparison-renderer.js).
+ */
+export function presentComparisonStrengthCode(code, params, lang, rawFallbackText = '') {
+  const safe = _safeCode(code);
+  if (!safe) return rawFallbackText || t('comparison.strengthCode.unknown', null, lang);
+  const key = `comparison.strengthCode.${safe}`;
+  const text = t(key, params ?? null, lang);
+  return text === key ? (rawFallbackText || t('comparison.strengthCode.unknown', null, lang)) : text;
+}
+
+export function presentComparisonRiskCode(code, params, lang, rawFallbackText = '') {
+  const safe = _safeCode(code);
+  if (!safe) return rawFallbackText || t('comparison.riskCode.unknown', null, lang);
+  const key = `comparison.riskCode.${safe}`;
+  const text = t(key, params ?? null, lang);
+  return text === key ? (rawFallbackText || t('comparison.riskCode.unknown', null, lang)) : text;
+}
+
+export function presentComparisonDimensionReasonCode(code, params, lang, rawFallbackText = '') {
+  const safe = _safeCode(code);
+  if (!safe) return rawFallbackText || t('comparison.dimensionReasonCode.unknown', null, lang);
+  const key = `comparison.dimensionReasonCode.${safe}`;
+  const text = t(key, params ?? null, lang);
+  return text === key ? (rawFallbackText || t('comparison.dimensionReasonCode.unknown', null, lang)) : text;
+}
+
+/**
  * I18N RUNTIME CLOSURE R3 — Phase E: Review Console blocker/warning
  * codes (NO_SANDBOX_AVAILABLE, REQUIRED_ITEM_FAILED, ...), emitted
  * additively alongside the existing English `blockers`/`warnings`

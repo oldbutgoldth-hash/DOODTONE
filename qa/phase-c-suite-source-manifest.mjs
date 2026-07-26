@@ -125,6 +125,13 @@ export const SUITE_SOURCE_FILES = {
     'ui/interactive-before-after-controller-v2.js',
     'ui/interactive-before-after-renderer-v2.js',
     'ui/interactive-preview-observation-renderer-v2.js',
+    // LOCALE RUNTIME TRUTH + QA NEUTRALITY R4: the shared visible-
+    // locale-audit helper (Phase A) is newly touched by this suite's
+    // rewritten audit/decision logic (Phases B/K) -- omitting it would
+    // let a stale cached PASS survive a real regression in exactly the
+    // R4-touched audit code. (ui/side-by-side-comparison-renderer.js
+    // is already tracked above.)
+    'qa/helpers/visible-locale-audit.mjs',
   ],
   controlledV2Browser: [
     'qa/epic-2e-j-controlled-v2-browser-test.mjs',

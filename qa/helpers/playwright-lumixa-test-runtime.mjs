@@ -479,17 +479,70 @@ export async function qaSnapshot(page) {
 }
 
 /** Clicks every real Review Console "Pass" button currently present. */
+/**
+ * R4 Phase H fix: the previous return value was `itemIds.length` --
+ * the TOTAL number of review items iterated over (manual/visual AND
+ * system-verified alike) -- mislabeled as "clicked" by every caller's
+ * evidence field. In truth, system-verified items render NO
+ * `button[data-review-action="pass"]` at all (see
+ * ui/review-console-renderer.js's `isSystemVerified` branch, which
+ * renders only a read-only badge), so the `if (btn) btn.click();`
+ * guard below was already correctly a no-op for every system item --
+ * only the RETURN VALUE lied about what happened. Fixed to return a
+ * bounded, honestly-labeled breakdown instead of one ambiguous number.
+ */
 export async function passAllReviewItems(page) {
   const itemIds = await page.evaluate(() => [...new Set(Array.from(document.querySelectorAll('#reviewConsoleInner [data-review-item-id]')).map((i) => i.dataset.reviewItemId))]);
+  let manualVisualButtonsClicked = 0;
+  let systemButtonsClicked = 0; // expected to stay 0 -- system-verified items have no Pass button to click
+  let itemsWithNoButtonFound = 0;
   for (const itemId of itemIds) {
-    await page.evaluate((id) => {
+    const outcome = await page.evaluate((id) => {
       const container = document.querySelector(`#reviewConsoleInner [data-review-item-id="${id}"]`);
       const btn = container ? container.querySelector('button[data-review-action="pass"]') : null;
-      if (btn) btn.click();
+      if (btn) { btn.click(); return { clicked: true, hadButton: true }; }
+      return { clicked: false, hadButton: false };
     }, itemId);
+    if (outcome.clicked) manualVisualButtonsClicked += 1;
+    else itemsWithNoButtonFound += 1;
     await page.waitForTimeout(80);
   }
-  return itemIds.length;
+  return {
+    totalReviewItems: itemIds.length,
+    manualVisualButtonsClicked,
+    systemButtonsClicked, // always 0 by construction -- kept explicit rather than omitted, so a FUTURE regression that adds a clickable system-item button would show up as a nonzero value here instead of silently vanishing
+    itemsWithNoButtonFound, // the system-verified items -- expected to equal totalReviewItems - manualVisualButtonsClicked
+  };
+}
+
+/**
+ * R4 Phase L: captures the real, currently-generated XMP text by
+ * clicking the actual #btnDownload button and intercepting the Blob
+ * passed to URL.createObjectURL -- this invokes the SAME production
+ * serializeXMP()/downloadXMP() code path a real photographer's click
+ * would, without ever triggering an actual browser file-save dialog
+ * or writing to disk. Moved here (from
+ * epic-2e-j-phase-c-live-app-test.mjs, which keeps its own local copy
+ * unchanged to avoid touching an already-passing suite) so any other
+ * suite -- e.g. the full-system TH/EN locale suite -- can prove the
+ * XMP-exact-locale invariant without inventing a second
+ * implementation of the same interception technique.
+ */
+export async function captureXmpText(page) {
+  return page.evaluate(() => new Promise((resolve) => {
+    let captured = null;
+    const orig = URL.createObjectURL;
+    URL.createObjectURL = (b) => { captured = b; return orig.call(URL, b); };
+    const btn = document.getElementById('btnDownload');
+    if (!btn) { URL.createObjectURL = orig; resolve(null); return; }
+    btn.click();
+    setTimeout(async () => { URL.createObjectURL = orig; resolve(captured ? await captured.text() : null); }, 300);
+  }));
+}
+
+/** SHA-256 hex digest of a text string (or of the empty string if `text` is null/undefined) -- used to prove exact-content equality without embedding a full XMP body in evidence JSON. */
+export function sha256XmpText(text) {
+  return crypto.createHash('sha256').update(text ?? '').digest('hex');
 }
 
 /** Polls the QA snapshot until a NEW, non-transient analysis Generation with an existing previewSandbox is observed (or times out). */

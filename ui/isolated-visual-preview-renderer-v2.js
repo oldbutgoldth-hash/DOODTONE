@@ -522,7 +522,7 @@ const HONESTY_WARNINGS = [
   'Color-management differences from Lightroom/ACR may remain.',
 ];
 
-function _baseResult({ side, generationId, state, rendered = false, warnings = [], reasons = [], reasonCodes = [], processingTimeMs = 0, disposed = false }) {
+function _baseResult({ side, generationId, state, rendered = false, warnings = [], reasons = [], reasonCodes = [], reasonParams = null, processingTimeMs = 0, disposed = false }) {
   return {
     mode: 'isolated-browser-preview-render',
     state, side: side === 'v2' ? 'v2' : 'legacy',
@@ -535,6 +535,15 @@ function _baseResult({ side, generationId, state, rendered = false, warnings = [
     warningCodes: [...new Set([...HONESTY_WARNING_CODES])],
     reasons,
     reasonCodes: Array.isArray(reasonCodes) ? [...reasonCodes] : [],
+    // R4 Phase F: _baseResult previously dropped a `reasonParams` argument
+    // entirely (it was never destructured or copied into the returned
+    // object), which meant every render-success call site that supplied
+    // reasonParams (e.g. { applied, skipped } counts) had it silently
+    // discarded -- the renderer then localized `RENDERED_ADJUSTMENT_COUNTS`
+    // with null params, leaving the raw `{{applied}}`/`{{skipped}}`
+    // template tokens visible instead of interpolated numbers. Fixed
+    // additively: reasonParams now flows through unchanged.
+    reasonParams: (reasonParams && typeof reasonParams === 'object') ? { ...reasonParams } : null,
     sourceGenerationId: generationId ?? null,
     disposed,
     metadata: { pixelPipelineOrder: _PIXEL_PIPELINE_ORDER },

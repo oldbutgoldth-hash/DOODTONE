@@ -52,7 +52,7 @@
 // still computes NOTHING about business state -- `locale` only
 // changes which strings are shown, never which branch is taken.
 import { t } from './i18n/index.js';
-import { presentDimensionName, presentComparisonBlockerCode, presentComparisonWarningCode, presentComparisonRecommendationCode, presentComparisonSummaryCode } from './i18n/domain-presenters.js';
+import { presentDimensionName, presentComparisonBlockerCode, presentComparisonWarningCode, presentComparisonRecommendationCode, presentComparisonSummaryCode, presentComparisonStrengthCode, presentComparisonRiskCode, presentComparisonDimensionReasonCode } from './i18n/domain-presenters.js';
 
 /** Converts a hyphenated internal code ('legacy-stronger') to the camelCase leaf key used under each i18n namespace ('legacyStronger'). Pure text mapping only -- never used for business logic. */
 function _camelFromCode(code) {
@@ -335,6 +335,57 @@ const _COMPARISON_SUMMARY_CLASSIFIERS = [
   [/^The Legacy and V2 data comparisons differ in some areas and still require manual human review before any conclusions are drawn — no rendered image preview is available yet\. Legacy remains the active production path\.$/, 'DIFFERS_NEEDS_MANUAL_REVIEW', null],
 ];
 
+// LOCALE RUNTIME TRUTH + QA NEUTRALITY R4 -- Phase E: preview-card
+// summary variants for the two data-unavailable branches, plus
+// strength/risk/warning classifiers for the Legacy/V2 preview cards,
+// and dimension-reason classifiers for the 9 comparison dimensions
+// that carry a static Core `reasons` sentence. Same UI-only
+// exact-sentence classification pattern as above -- the producing
+// core files (`mapping-v2-side-by-side-comparison.js`, LOCKED, and
+// `mapping-v2-overlay-preview-sandbox.js`, not locked but whose
+// `.reason` field is consumed as opaque text by the LOCKED file) are
+// never edited or depended upon beyond string equality.
+_COMPARISON_SUMMARY_CLASSIFIERS.push(
+  [/^Legacy preview data is not available for this comparison\.$/, 'LEGACY_DATA_UNAVAILABLE', null],
+  [/^Legacy Mapping data is available for abstract comparison\. This is data-level evidence only, not a rendered visual preview\.$/, 'LEGACY_DATA_AVAILABLE', null],
+  [/^V2 preview data is not available for this comparison\.$/, 'V2_DATA_UNAVAILABLE_CARD', null],
+  [/^The V2 Controlled Preview has not been generated yet \(Sandbox is not currently eligible\) — nothing to compare against Legacy yet\.$/, 'V2_SANDBOX_NOT_ELIGIBLE', null],
+  [/^V2 Controlled Preview data is available for abstract comparison\. This is data-level evidence only, not a rendered visual preview — no real Lightroom slider values or XMP fields are involved\.$/, 'V2_DATA_AVAILABLE_CARD', null],
+);
+
+const _COMPARISON_STRENGTH_CLASSIFIERS = [
+  [/^Legacy Mapping is the current, proven production path — every exported preset today comes from it\.$/, 'LEGACY_IS_PRODUCTION_PATH', null],
+  [/^Skin tones are always previewed as protected first\.$/, 'SKIN_ALWAYS_PROTECTED_FIRST', null],
+  [/^No specific risky areas beyond default skin protection — preview recommends keeping legacy mapping as-is\.$/, 'NO_RISKY_AREAS_KEEP_LEGACY', null],
+  [/^(\d+) active hard stop\(s\) — preview recommends human review before anything further\.$/, 'HARD_STOPS_RECOMMEND_REVIEW', (m) => ({ count: m[1] })],
+  // "Derived from Overlay Simulation V2: <nested reason>" -- the
+  // boilerplate wrapper is translated; the nested Core reason (itself
+  // drawn from a separate engine) is preserved as a parameter rather
+  // than force-translated, since its own enumerable set was not part
+  // of this round's confirmed leak list.
+  [/^Derived from Overlay Simulation V2: (.+)$/, 'DERIVED_FROM_OVERLAY_SIMULATION', (m) => ({ detail: m[1] })],
+];
+const _COMPARISON_RISK_CLASSIFIERS = [
+  [/^Legacy mapping summary itself reports a "high" abstract risk level for this input\.$/, 'LEGACY_SUMMARY_HIGH_RISK', null],
+  [/^(\d+) hard stop\(s\) currently active in the V2 preview\.$/, 'V2_HARD_STOPS_ACTIVE', (m) => ({ count: m[1] })],
+  [/^Over-stack severity is "([a-z]+)"\.$/, 'V2_OVERSTACK_SEVERITY', (m) => ({ severity: m[1] })],
+];
+const _COMPARISON_PREVIEW_WARNING_CLASSIFIERS = [
+  [/^Legacy preset object was not supplied; relying on legacyMappingSummary only, which is a coarser signal\.$/, 'LEGACY_PRESET_NOT_SUPPLIED', null],
+  [/^Sandbox reports (\d+) blocker\(s\) preventing preview generation\.$/, 'SANDBOX_BLOCKERS_PREVENT_GENERATION', (m) => ({ count: m[1] })],
+];
+const _COMPARISON_DIMENSION_REASON_CLASSIFIERS = [
+  [/^Compares overall exposure\/highlight\/shadow magnitude classification\.$/, 'COMPARES_TONAL_MAGNITUDE', null],
+  [/^Legacy mapping has no explicit color-separation concept to compare against\.$/, 'NO_COLOR_SEPARATION_CONCEPT', null],
+  [/^Legacy preset has no explicit skin-protection concept — only V2 evaluates this directly\.$/, 'NO_SKIN_PROTECTION_CONCEPT', null],
+  [/^Legacy mapping does not evaluate combined-tool stacking at all — only V2 does\.$/, 'NO_COMBINED_TOOL_STACKING', null],
+  [/^Legacy mapping has no over-stack concept — only V2 evaluates this directly\.$/, 'NO_OVERSTACK_CONCEPT', null],
+  [/^Legacy mapping does not consult capture-capability data; only V2 planning considers it\.$/, 'NO_CAPTURE_CAPABILITY_CONSULT', null],
+  [/^Legacy mapping does not consult Photographer Style\/DNA; only V2 planning considers it\.$/, 'NO_STYLE_DNA_CONSULT', null],
+  [/^Legacy mapping does not consult Photographer Intent; only V2 planning considers it\.$/, 'NO_INTENT_CONSULT', null],
+  [/^Legacy mapping has no safety-confidence score of its own — only V2 Safety Clamp computes one\.$/, 'NO_SAFETY_CONFIDENCE_SCORE', null],
+];
+
 /** Classifies+translates a list of raw English sentences via the given classifier table + presenter. Falls back to the raw sentence when no classifier matches. */
 function _translateViaClassifier(rawList, table, presenter, lang) {
   const seen = new Set();
@@ -391,9 +442,14 @@ function _renderPreviewCard(title, preview, extraRows, locale) {
   if (extraRows) for (const [label, value] of extraRows) rows.appendChild(listRow(label, value));
   card.appendChild(rows);
 
-  const strengths = _safeArray(p.strengths);
-  const risks = _safeArray(p.risks);
-  const warnings = _safeArray(p.warnings);
+  // LOCALE RUNTIME TRUTH + QA NEUTRALITY R4 -- Phase E: classify+
+  // translate the card's raw English strengths/risks/warnings via the
+  // exact-sentence classifiers above -- an unrecognized sentence
+  // safely falls back to the raw English text (fail-open toward
+  // visibility, never toward data loss).
+  const strengths = _translateViaClassifier(_safeArray(p.strengths), _COMPARISON_STRENGTH_CLASSIFIERS, presentComparisonStrengthCode, locale);
+  const risks = _translateViaClassifier(_safeArray(p.risks), _COMPARISON_RISK_CLASSIFIERS, presentComparisonRiskCode, locale);
+  const warnings = _translateViaClassifier(_safeArray(p.warnings), _COMPARISON_PREVIEW_WARNING_CLASSIFIERS, presentComparisonWarningCode, locale);
   if (strengths.length) {
     const wrap = el('div', { style: 'font-size:10.5px;color:var(--success);margin-top:2px' });
     wrap.textContent = strengths.map(s => _safeText(s, '')).filter(Boolean).slice(0, 3).join(' \u00B7 ');
@@ -409,7 +465,8 @@ function _renderPreviewCard(title, preview, extraRows, locale) {
     wrap.textContent = warnings.map(s => _safeText(s, '')).filter(Boolean).slice(0, 3).join(' \u00B7 ');
     if (wrap.textContent) card.appendChild(wrap);
   }
-  const summaryText = _safeText(p.summary, '');
+  const summaryTextRaw = _safeText(p.summary, '');
+  const summaryText = summaryTextRaw ? _translateSingleViaClassifier(summaryTextRaw, _COMPARISON_SUMMARY_CLASSIFIERS, presentComparisonSummaryCode, locale) : '';
   if (summaryText) card.appendChild(el('div', { style: 'font-size:11px;color:var(--text-dim);line-height:1.5;margin-top:4px;overflow-wrap:anywhere', text: summaryText }));
 
   return card;
@@ -451,10 +508,14 @@ function _renderDimensionRow(dim, locale) {
   valRow.appendChild(el('span', { style: 'color:var(--text-faint)', text: t('comparison.dimension.confidence', { value: _formatPercent(dim.confidence) }, locale) }));
   wrap.appendChild(valRow);
 
-  const reasons = _safeArray(dim.reasons);
-  if (reasons.length) wrap.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:4px;overflow-wrap:anywhere', text: reasons.map(r => _safeText(r, '')).filter(Boolean).join(' ') }));
-  const warns = _safeArray(dim.warnings);
-  if (warns.length) wrap.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn);margin-top:3px;overflow-wrap:anywhere', text: warns.map(w => `\u26A0 ${_safeText(w, '')}`).filter(Boolean).join(' ') }));
+  // LOCALE RUNTIME TRUTH + QA NEUTRALITY R4 -- Phase E: dimension
+  // `reasons` is a small, fixed set of Core sentences (see
+  // _COMPARISON_DIMENSION_REASON_CLASSIFIERS) -- classify+translate
+  // rather than render raw.
+  const reasons = _translateViaClassifier(_safeArray(dim.reasons), _COMPARISON_DIMENSION_REASON_CLASSIFIERS, presentComparisonDimensionReasonCode, locale);
+  if (reasons.length) wrap.appendChild(el('div', { style: 'font-size:10.5px;color:var(--text-faint);margin-top:4px;overflow-wrap:anywhere', text: reasons.join(' ') }));
+  const warns = _translateViaClassifier(_safeArray(dim.warnings), _COMPARISON_DIMENSION_REASON_CLASSIFIERS, presentComparisonDimensionReasonCode, locale);
+  if (warns.length) wrap.appendChild(el('div', { style: 'font-size:10.5px;color:var(--warn);margin-top:3px;overflow-wrap:anywhere', text: warns.map(w => `\u26A0 ${w}`).join(' ') }));
 
   return wrap;
 }

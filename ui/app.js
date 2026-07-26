@@ -48,7 +48,7 @@ import { benchmarkStylePreservation } from '../core/style-benchmark-engine/index
 import { buildDecisionReport } from '../core/decision-report-engine/index.js';
 import { renderReviewConsole } from './review-console-renderer.js';
 import { t } from './i18n/index.js';
-import { presentReviewGuidanceCode } from './i18n/domain-presenters.js';
+import { presentReviewGuidanceCode, presentBlockerCode } from './i18n/domain-presenters.js';
 import { createReviewConsoleController } from './review-console-controller.js';
 import { renderSideBySideComparison } from './side-by-side-comparison-renderer.js';
 import { createVisualPreviewComparisonControllerV2 } from './visual-preview-comparison-controller-v2.js';
@@ -117,6 +117,13 @@ const state = {
   // results. Never influences production output.
   lastPreviewSandbox: null,
   lastPreviewReviewState: null,
+  // R4 Phase C: bounded, serializable inputs to the persistent "AI Box"
+  // analysis-complete summary, stored so it can be honestly rebuilt in
+  // the CURRENT language on a locale switch -- this box is injected
+  // via innerHTML (not a data-i18n-key element), so it falls outside
+  // rerenderAppShellForLocale()'s declarative sweep and needs its own
+  // explicit re-render hook.
+  lastAnalysisBoxSummaryData: null,
   lastProcessingLog: null,
   curveEditor: null,
   // DEPLOY GEOMETRY R1 — Phase B1: the currently-selected File, retained
@@ -792,6 +799,35 @@ function closeLangModal() { const m = document.getElementById('langModal');  if 
  * reloads the page, never re-runs Analysis, never touches a canvas,
  * and never mutates any analysis/review/observation state.
  */
+/**
+ * R4 Phase C: rebuilds the persistent "AI Box" analysis-complete
+ * summary HTML from bounded, stored data + the given language --
+ * called both at the moment analysis completes AND again from
+ * rerenderCurrentUiForLocale() on every locale switch, so this box
+ * (injected via innerHTML, not covered by the declarative
+ * data-i18n-key sweep) never keeps showing yesterday's language after
+ * the user switches. Only the photographer-facing prefix line
+ * ("Analysis complete -- category ...") is localized; the technical
+ * diagnostic detail below it (WB Temp/Tint, clamps, Pre-XMP
+ * corrections, benchmark warnings) is intentionally left as
+ * developer-facing diagnostic prose, consistent with this file's
+ * established "Developer Details" convention elsewhere.
+ */
+function _buildAnalysisBoxOkHtml(data, lang) {
+  if (!data || typeof data !== 'object') return '';
+  const { category, portraitSafe, wbTempFinal, wbTempRaw, wbTintFinal, wbTintRaw, wbConfidence, wbNeutralPixelCount, skinPct, skinSource, fingerprintMatchPct, benchmarkText, clampsApplied, violations, benchmarkWarnings } = data;
+  const prefix = `<strong>${t('analysisBox.analysisComplete', null, lang)} — ${category}${portraitSafe ? ' · Portrait Safe ✓' : ''}</strong><br><small>`;
+  const body = `WB Temp: ${wbTempFinal} (raw ${wbTempRaw}) · Tint: ${wbTintFinal} (raw ${wbTintRaw}) · ` +
+    `Confidence: ${wbConfidence}% · Neutral px: ${wbNeutralPixelCount} · ` +
+    `Skin: ${skinPct}% (${skinSource}) · ` +
+    `Style Fingerprint match: ${fingerprintMatchPct}%` +
+    `${benchmarkText ? ` · ${benchmarkText}` : ''}` +
+    `${clampsApplied?.length ? '<br><span style="color:var(--warn)">Clamps: ' + clampsApplied.join(' | ') + '</span>' : ''}` +
+    `${violations?.length ? '<br><span style="color:var(--warn)">Pre-XMP corrections: ' + violations.join(', ') + '</span>' : ''}` +
+    `${benchmarkWarnings?.length ? '<br><span style="color:var(--warn)">Benchmark warnings: ' + benchmarkWarnings.slice(0, 2).join(' | ') + '</span>' : ''}`;
+  return `${prefix}${body}</small>`;
+}
+
 function rerenderAppShellForLocale(lang) {
   let textApplied = 0;
   let placeholderApplied = 0;
@@ -823,6 +859,14 @@ function rerenderAppShellForLocale(lang) {
 function rerenderCurrentUiForLocale() {
   // App shell first: nav, buttons, section titles, upload area, tips.
   try { rerenderAppShellForLocale(state.lang); } catch (err) { console.warn('Locale re-render: app shell failed (other sections unaffected):', err); }
+
+  // R4 Phase C: the persistent "AI Box" analysis-complete summary is
+  // innerHTML-injected (not a data-i18n-key element), so it falls
+  // outside the declarative sweep above and needs its own explicit
+  // re-render from the bounded data stashed when analysis completed.
+  try {
+    if (state.lastAnalysisBoxSummaryData) setAnalysisBox('ok', _buildAnalysisBoxOkHtml(state.lastAnalysisBoxSummaryData, state.lang));
+  } catch (err) { console.warn('Locale re-render: Analysis status box failed (other sections unaffected):', err); }
 
   // Review Console (+ its own Build Controlled V2 Preview button
   // label/hint) -- already a pure function of state.lastPreviewSandbox
@@ -1082,14 +1126,14 @@ function loadFile(file) {
     document.getElementById('uploadWrap').style.display  = 'none';
     document.getElementById('previewWrap').style.display = 'block';
     document.getElementById('sliders').style.display     = 'none';
-    setAnalysisBox('loading', 'กำลังโหลดรูปภาพ…');
+    setAnalysisBox('loading', t('analysisBox.loadingImage', null, state.lang));
 
     // Wait for image to fully decode before reading pixels
     img.onload = () => {
       state.imageLoaded = true;
       runAnalysis();
     };
-    img.onerror = () => setAnalysisBox('error', 'ไม่สามารถโหลดรูปภาพได้');
+    img.onerror = () => setAnalysisBox('error', t('analysisBox.imageLoadFailed', null, state.lang));
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
@@ -1125,6 +1169,17 @@ function safeGetVisualPreviewProperty(object, key, fallback = undefined) {
 }
 
 let analysisRenderGeneration = 0;
+// R4 Phase G: tracks the in-flight, fire-and-forget Visual Preview
+// Comparison render() promise for the CURRENT generation, so callers
+// outside runAnalysis() (e.g. handleBuildControlledV2Preview) can
+// genuinely await the resolved render outcome instead of reading
+// visualPreviewComparisonController.getState() immediately after
+// runAnalysis() resolves -- which could still return a pre-render
+// eligibility/plan-time state, since render() is never awaited inside
+// runAnalysis() itself (by design, so a slow/failed preview render
+// never delays or breaks the rest of the analysis result).
+let _latestVisualPreviewRenderSettlePromise = null;
+let _latestVisualPreviewRenderSettleGeneration = null;
 
 async function waitForAnalysisRenderReady({ image = null, containers = [], maxFrames = 6 } = {}) {
   // 1. Wait for the image to fully decode. img.onload (used to trigger
@@ -1287,19 +1342,58 @@ async function handleBuildControlledV2Preview() {
   const stillSameSession = state.imageLoaded && reviewSecVisibleBefore && document.getElementById('reviewConsoleSection')?.style.display !== 'none';
   if (!stillSameSession) return;
 
-  // I18N RUNTIME CLOSURE R3 — Phase H: removed the inline
-  // the old inline Thai/English ternary branches — now sourced from
-  // review.outcome.safetyRestraint/identityFallback/unavailable,
-  // which already existed in both dictionaries but were never used.
+  // R4 Phase G: the Visual Preview Comparison render this analysis
+  // triggered is fire-and-forget inside runAnalysis() — it may not
+  // have settled yet the instant runAnalysis() resolves. Reading
+  // visualPreviewComparisonController.getState() immediately here (as
+  // the previous implementation did) could therefore still return a
+  // stale, pre-render eligibility/plan-time state (translationMode
+  // null/undefined), which fell through to the generic "not ready"
+  // message even when the real state, once settled, was a genuine
+  // safety-restraint or identity-fallback success. Fix: genuinely
+  // await this generation's render settlement before reading state.
+  const _announceGeneration = analysisRenderGeneration;
+  if (_latestVisualPreviewRenderSettleGeneration === _announceGeneration && _latestVisualPreviewRenderSettlePromise) {
+    await _latestVisualPreviewRenderSettlePromise;
+  }
+  // Re-check staleness AFTER the await above -- a newer analysis,
+  // Reset, or new-image import may have started while we were
+  // waiting. Per spec: a stale generation gets NO announcement at all
+  // (never a guessed/stale message), rather than silently reusing an
+  // older generation's outcome.
+  if (analysisRenderGeneration !== _announceGeneration) return;
+  if (!state.imageLoaded || document.getElementById('reviewConsoleSection')?.style.display === 'none') return;
+
   const vprState = visualPreviewComparisonController ? visualPreviewComparisonController.getState() : null;
-  const translationMode = vprState?.metadata?.controlledV2Translation?.mode ?? null;
+  // Only trust vprState if it actually belongs to the generation we
+  // just waited on -- a controller-level guard already exists
+  // (render() results are only committed for the still-current
+  // generation), but re-checking here is a cheap extra safety net
+  // against ever announcing a mismatched generation's outcome.
+  const vprBelongsToThisGeneration = vprState != null && (vprState.analysisGenerationId == null || vprState.analysisGenerationId === _announceGeneration);
+  const translationMode = vprBelongsToThisGeneration ? (vprState?.metadata?.controlledV2Translation?.mode ?? null) : null;
+  const overallState = vprBelongsToThisGeneration ? (vprState?.state ?? null) : null;
 
   let outcomeText;
-  if (translationMode === 'legacy-derived-safety-restraint') {
+  if (overallState === 'cancelled') {
+    // Cancellation means a newer render superseded this one -- treat
+    // exactly like a stale generation: no announcement.
+    return;
+  } else if (overallState === 'rendered' && translationMode === 'legacy-derived-safety-restraint') {
     outcomeText = t('review.outcome.safetyRestraint', null, state.lang);
-  } else if (translationMode === 'identity-fallback') {
+  } else if (overallState === 'rendered' && translationMode === 'identity-fallback') {
     outcomeText = t('review.outcome.identityFallback', null, state.lang);
+  } else if (vprBelongsToThisGeneration && Array.isArray(vprState?.blockerCodes) && vprState.blockerCodes.length > 0) {
+    // Blocked/failed/partial/unavailable with a known, exact blocker
+    // reason -- announce the SPECIFIC reason rather than a generic
+    // "not ready" sentence, per R4 Phase G/H.
+    const reasonText = presentBlockerCode(vprState.blockerCodes[0], state.lang);
+    outcomeText = t('review.outcome.blocked', { reason: reasonText }, state.lang);
   } else {
+    // Genuinely no evidence at all (no controller, no state, or a
+    // resolved-but-blocker-code-less state) -- the only case where the
+    // generic "analysis complete but preview not ready" message is
+    // honest.
     outcomeText = t('review.outcome.unavailable', null, state.lang);
   }
 
@@ -1340,11 +1434,39 @@ function ensureReviewConsoleController() {
     getState: () => state.lastPreviewReviewState,
     setState: (next) => { state.lastPreviewReviewState = next; },
     rerender: renderReviewConsoleFromState,
+    // LOCALE RUNTIME TRUTH + QA NEUTRALITY R4 -- Phase D: confirmed
+    // Review Console leak ("Review item marked as passed.") -- the
+    // controller that emits this raw English announcement is a
+    // production-locked file (ui/review-console-controller.js) and
+    // cannot be edited to emit a code. Its announcement strings are
+    // drawn from a small, fixed, enumerable set (never free-form), so
+    // they are safely classified+translated here at the presentation
+    // boundary before ever reaching the live region -- the raw
+    // English is the fallback only for an unrecognized message.
     announce: (message) => {
       const liveRegion = document.getElementById('reviewConsoleLiveRegion');
-      if (liveRegion) liveRegion.textContent = message;
+      if (liveRegion) liveRegion.textContent = _translateReviewControllerAnnouncement(message, state.lang);
     },
   });
+}
+
+const _REVIEW_CONTROLLER_ANNOUNCEMENT_CODES = {
+  'Review item marked as passed.': 'ITEM_MARKED_PASSED',
+  'Review item marked as failed.': 'ITEM_MARKED_FAILED',
+  'Adjustment requested.': 'ADJUSTMENT_REQUESTED',
+  'Review item returned to pending.': 'ITEM_RETURNED_PENDING',
+  'Could not update this review item. The previous review state was kept.': 'ITEM_UPDATE_FAILED',
+  'Could not reset the review state. The previous review state was kept.': 'RESET_FAILED',
+  'Review state reset.': 'STATE_RESET',
+  'Could not save this note. The previous review state was kept.': 'NOTE_SAVE_FAILED',
+};
+function _translateReviewControllerAnnouncement(message, lang) {
+  if (typeof message !== 'string' || !message.trim()) return message;
+  const code = _REVIEW_CONTROLLER_ANNOUNCEMENT_CODES[message];
+  if (!code) return message;
+  const key = `review.announcement.${code}`;
+  const text = t(key, null, lang);
+  return text === key ? message : text;
 }
 
 /**
@@ -1889,7 +2011,7 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
 async function runAnalysis() {
   const img = document.getElementById('previewImg');
   if (!img || !img.naturalWidth || !img.naturalHeight) {
-    setAnalysisBox('error', 'รูปภาพยังโหลดไม่เสร็จ');
+    setAnalysisBox('error', t('analysisBox.imageNotReady', null, state.lang));
     return;
   }
 
@@ -1997,10 +2119,10 @@ async function runAnalysis() {
     }
   }
 
-  setAnalysisBox('loading', 'กำลังวิเคราะห์ histogram…');
+  setAnalysisBox('loading', t('analysisBox.analyzingHistogram', null, state.lang));
 
   try {
-    setAnalysisBox('loading', 'กำลังวิเคราะห์ histogram…');
+    setAnalysisBox('loading', t('analysisBox.analyzingHistogram', null, state.lang));
 
     processingLog.reset({
       width:    img.naturalWidth,
@@ -2071,7 +2193,7 @@ async function runAnalysis() {
       return { palette, harmony };
     }).catch(err => { console.warn('Palette:', err); return { palette: null, harmony: null }; });
 
-    setAnalysisBox('loading', 'AI กำลังวิเคราะห์ผิวและสี…');
+    setAnalysisBox('loading', t('analysisBox.analyzingSkinColor', null, state.lang));
     const logS3a = processingLog.startStage('SkinClassifier+CastDetector');
 
     const [skinClassRes, castRes] = (await Promise.allSettled([
@@ -2108,7 +2230,7 @@ async function runAnalysis() {
       logS3b.warn(`Scene overrode histogram category: ${sceneRes.categoryRaw} → ${sceneRes.category}`);
     logS3b.end('ok');
 
-    setAnalysisBox('loading', 'AI กำลังวิเคราะห์สีและแสง…');
+    setAnalysisBox('loading', t('analysisBox.analyzingColorLight', null, state.lang));
     const logS3c = processingLog.startStage('ColorEngines',
       { category: sceneRes.category, skinPct: skinPctAccurate });
 
@@ -2372,19 +2494,27 @@ async function runAnalysis() {
     const val = finalPreset._validation;
     const bench = finalPreset._benchmark;
     const wb_d = dec.wb;
-    setAnalysisBox('ok',
-      `<strong>✓ วิเคราะห์เสร็จแล้ว — ${dec.category ?? stats.category}${dec.portraitSafe ? ' · Portrait Safe ✓' : ''}</strong><br>
-       <small>` +
-      `WB Temp: ${wb_d.tempFinal} (raw ${wb_d.tempRaw}) · Tint: ${wb_d.tintFinal} (raw ${wb_d.tintRaw}) · ` +
-      `Confidence: ${Math.round(wb_d.confidence * 100)}% · Neutral px: ${wb_d.neutralPixelCount} · ` +
-      `Skin: ${dec.skinPct}% (${dec.skinSource}) · ` +
-      `Style Fingerprint match: ${Math.round((val?.fingerprintMatchScore ?? 1) * 100)}%` +
-      `${bench ? ` · Style Similarity: ${Math.round(bench.overallStyleSimilarity*100)}% (safety ${Math.round(bench.safetyScore*100)}%)` : ''}` +
-      `${dec.clampsApplied.length ? '<br><span style="color:var(--warn)">Clamps: ' + dec.clampsApplied.join(' | ') + '</span>' : ''}` +
-      `${val?.violations?.length ? '<br><span style="color:var(--warn)">Pre-XMP corrections: ' + val.violations.join(', ') + '</span>' : ''}` +
-      `${bench?.warnings?.length ? '<br><span style="color:var(--warn)">Benchmark warnings: ' + bench.warnings.slice(0,2).join(' | ') + '</span>' : ''}` +
-      `</small>`
-    );
+    // R4 Phase C: stash the bounded inputs so this persistent summary
+    // can be honestly rebuilt in whichever language is active later
+    // (see _buildAnalysisBoxOkHtml + its hook in
+    // rerenderCurrentUiForLocale) -- the raw "✓ วิเคราะห์เสร็จแล้ว"
+    // Thai literal previously baked in here never updated on locale
+    // switch, which is the confirmed R4 Analysis-status leak.
+    state.lastAnalysisBoxSummaryData = {
+      category: dec.category ?? stats.category,
+      portraitSafe: dec.portraitSafe,
+      wbTempFinal: wb_d.tempFinal, wbTempRaw: wb_d.tempRaw,
+      wbTintFinal: wb_d.tintFinal, wbTintRaw: wb_d.tintRaw,
+      wbConfidence: Math.round(wb_d.confidence * 100),
+      wbNeutralPixelCount: wb_d.neutralPixelCount,
+      skinPct: dec.skinPct, skinSource: dec.skinSource,
+      fingerprintMatchPct: Math.round((val?.fingerprintMatchScore ?? 1) * 100),
+      benchmarkText: bench ? `Style Similarity: ${Math.round(bench.overallStyleSimilarity*100)}% (safety ${Math.round(bench.safetyScore*100)}%)` : null,
+      clampsApplied: dec.clampsApplied ?? [],
+      violations: val?.violations ?? [],
+      benchmarkWarnings: bench?.warnings ?? [],
+    };
+    setAnalysisBox('ok', _buildAnalysisBoxOkHtml(state.lastAnalysisBoxSummaryData, state.lang));
     document.getElementById('sliders').style.display = 'block';
     const groups = document.getElementById('analysisGroups');
     if (groups) groups.style.display = 'block';
@@ -2553,12 +2683,20 @@ async function runAnalysis() {
           // under it even if a newer generation's decode begins first.
           previewSourceGeometryNormalizer.markRenderStarted(renderGeneration);
           // Fire-and-forget (never awaited here) — see rationale above.
-          visualPreviewComparisonController.render({
+          // R4 Phase G: capture the SAME promise reference so an
+          // external caller (handleBuildControlledV2Preview) can await
+          // its genuine settlement -- this is purely an additional
+          // read-only attachment; it does not change when or how the
+          // .then()/.catch() below run, nor their side effects.
+          const _vprRenderPromise = visualPreviewComparisonController.render({
             source: _canonicalDecode.source ?? img,
             renderPlan: visualPreviewRenderPlan,
             analysisGenerationId: renderGeneration,
             v2BlockerCode: _previewGeometryDiagnostics.blockerCode,
-          }).then(vprState => {
+          });
+          _latestVisualPreviewRenderSettleGeneration = renderGeneration;
+          _latestVisualPreviewRenderSettlePromise = _vprRenderPromise.catch(() => null);
+          _vprRenderPromise.then(vprState => {
             // Phase 3: mark settled on EVERY settle path (success here,
             // failure in .catch() below) — this is what lets a
             // superseded generation's bitmap be released the instant
@@ -2687,7 +2825,7 @@ async function runAnalysis() {
     }
 
   } catch (err) {
-    setAnalysisBox('error', `<strong>⚠ ล้มเหลว:</strong> ${err.message}`);
+    setAnalysisBox('error', `<strong>⚠ ${t('analysisBox.failed', null, state.lang)}:</strong> ${err.message}`);
     console.error('runAnalysis error:', err);
   }
 }

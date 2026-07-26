@@ -197,7 +197,7 @@ async function main() {
       const passedCount = await passAllReviewItems(page);
       await page.click('#btnReanalyze');
       const afterReview = await waitForAnalysisCompletion(page, genBeforeReview, 25000);
-      recordCondition(`${tag} Step 3: Human Review completed + Re-analyze reaches a new generation`, afterReview.completed === true && (afterReview.snapshot?.analysisGeneration ?? -1) > genBeforeReview, `reviewItemsPassed=${passedCount}, generation=${afterReview.snapshot?.analysisGeneration}`);
+      recordCondition(`${tag} Step 3: Human Review completed + Re-analyze reaches a new generation`, afterReview.completed === true && (afterReview.snapshot?.analysisGeneration ?? -1) > genBeforeReview, `manualVisualButtonsClicked=${passedCount?.manualVisualButtonsClicked}, generation=${afterReview.snapshot?.analysisGeneration}`);
       priorGeneration = afterReview.snapshot?.analysisGeneration ?? genBeforeReview;
 
       let snap = afterReview.snapshot;

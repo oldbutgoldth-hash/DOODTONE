@@ -281,7 +281,10 @@ record('Setup: qa/playwright-in-memory-app-smoke.mjs is readable', smokeSrc.leng
   // start of runAnalysis() means the stale-warning lifecycle is real
   // and can genuinely fail; this checks the real waitForFunction-based
   // observation is still present and still capable of recording FAIL.
-  const staleWarningStillReal = /const STALE_WARNING_TEXT = 'The previous observation was cleared because a newer analysis is active\.';/.test(testSrc)
+  // R4 Phase J: STALE_WARNING_TEXT is now read locale-neutrally via
+  // expectedLocalizedText(page, 'observation.unavailableReason.cancelled')
+  // instead of a hardcoded English literal.
+  const staleWarningStillReal = /const STALE_WARNING_TEXT = await expectedLocalizedText\(page, 'observation\.unavailableReason\.cancelled'\);/.test(testSrc)
     && /f3StaleWarningObserved \? `stale warning text observed via waitForFunction/.test(testSrc)
     && /FAIL — stale warning text never appeared within the bounded 5000ms timeout/.test(testSrc);
   record('FIX 9 (ENV-B2-F1): (A) the stale-generation warning test remains a real, honestly-failable waitForFunction-based observation — never hard-coded to PASS', staleWarningStillReal, `present=${staleWarningStillReal}`);

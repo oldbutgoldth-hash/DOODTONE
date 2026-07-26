@@ -169,6 +169,13 @@ if (rerenderFnSrc) {
     'renderInteractiveBeforeAfterStatus', 'renderInteractivePreviewObservationV2',
     'renderInteractivePreviewObservationContextV2', 'getSummary',
     'renderInteractivePreviewObservationSessionV2', 'console',
+    // R4 Phase C: the persistent "AI Box" analysis-complete summary is
+    // innerHTML-injected (not a data-i18n-key element), so it needs
+    // its own explicit pure re-render call, gated the same way as
+    // every other section above (only fires if
+    // state.lastAnalysisBoxSummaryData already exists -- never forces
+    // a premature render, never re-runs analysis).
+    'setAnalysisBox', '_buildAnalysisBoxOkHtml',
   ]);
   const unexpectedCalls = [...new Set(calledFunctionNames)].filter((n) => !allowedFunctionNames.has(n) && n !== 'warn');
   record('Every function called inside rerenderCurrentUiForLocale() is one of the known pure re-render/lookup functions (no unexpected new call introduced)', unexpectedCalls.length === 0, { unexpectedCalls });

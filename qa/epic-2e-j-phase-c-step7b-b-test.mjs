@@ -46,6 +46,29 @@ import {
   writeBrowserUnavailableResult,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
 import { CANONICAL_ORIGIN } from './helpers/playwright-in-memory-app.mjs';
+// R4 Phase J: import the REAL translation dictionaries directly (they
+// are plain ESM objects, importable outside the browser too) so
+// locale-sensitive announcement assertions can compare against
+// whichever language the app is ACTUALLY running in at test time,
+// instead of a hardcoded English literal. This suite never calls
+// setLang() itself, so the app runs in its natural default language
+// (Thai) -- the previous hardcoded-English assertions below were
+// therefore comparing against text the UI would never actually show
+// in this suite's own default run, a confirmed R4 Defect J instance.
+import { en as EN_DICT } from '../ui/i18n/en.js';
+import { th as TH_DICT } from '../ui/i18n/th.js';
+
+/** Reads a dotted path (e.g. 'observation.reasonLimit') out of a nested i18n dictionary object. Returns null if any segment is missing. */
+function _dictLookup(dict, dottedPath) {
+  return dottedPath.split('.').reduce((acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined), dict) ?? null;
+}
+
+/** Returns the CORRECT localized string for whichever language the app is actually running in right now (read from the page's own localStorage 'lang' key, the same source ui/app.js itself reads at boot) -- never assumes a language. */
+async function expectedLocalizedText(page, dottedPath) {
+  const lang = await page.evaluate(() => localStorage.getItem('lang')).catch(() => null);
+  const dict = lang === 'en' ? EN_DICT : TH_DICT; // ui/app.js's own default is 'th' when unset
+  return _dictLookup(dict, dottedPath);
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -1963,7 +1986,8 @@ async function main() {
     const auditB = summarizeLiveTexts('ipoReasonLimit', auditB_raw.ipoReasonLimit);
     const auditB_cross = summarizeCrossRegionWindow(auditB_raw);
     f3AllCapturedLiveTexts.push(...auditB.distinctNonEmptyTexts);
-    record('Scenario B: reaching the five-Reason limit produces exactly one meaningful non-empty ipoReasonLimit announcement', auditB.nonEmptyAnnouncements === 1 && auditB.distinctNonEmptyTexts.length === 1 && auditB.distinctNonEmptyTexts[0] === 'You can select up to five reasons.', JSON.stringify(auditB));
+    const _expectedReasonLimitText = await expectedLocalizedText(page, 'observation.reasonLimit');
+    record('Scenario B: reaching the five-Reason limit produces exactly one meaningful non-empty ipoReasonLimit announcement', auditB.nonEmptyAnnouncements === 1 && auditB.distinctNonEmptyTexts.length === 1 && auditB.distinctNonEmptyTexts[0] === _expectedReasonLimitText, JSON.stringify({ ...auditB, expected: _expectedReasonLimitText }));
     record('Scenario B: no duplicate identical ipoReasonLimit announcement was recorded', auditB.repeatedIdenticalTexts === 0, JSON.stringify(auditB));
     record('FIX 5/6 (F3-S3): Scenario B cross-region duplicate check (ipoStatus+ipoWarning+ipoReasonLimit combined) shows no duplicate announcement', auditB_cross.repeatedIdenticalTexts === 0, JSON.stringify(auditB_cross));
 
@@ -1978,7 +2002,11 @@ async function main() {
     // all three regions, Observation remains selected, Reason counts
     // empty, and no Analysis/Slider/Canvas side effect (checked in Part
     // 9's pre-D window, since Scenario C falls inside it).
-    const REASONS_CLEARED_ANNOUNCEMENT_TEXT = 'Reasons cleared. Observation remains selected. Production output was not changed.';
+    // R4 Phase J: was a hardcoded English literal -- now read from the
+    // real dictionary for whichever language the app is actually
+    // running in (this suite never calls setLang(), so it runs in the
+    // app's natural default language).
+    const REASONS_CLEARED_ANNOUNCEMENT_TEXT = await expectedLocalizedText(page, 'observation.reasonsCleared');
     await resetLiveRegionAudit(page);
     await page.click('#ipoClearReasonsButton');
     await page.waitForTimeout(150);
@@ -2038,7 +2066,10 @@ async function main() {
     // targets the EXACT expected stale-warning text as the primary
     // evidence (never a fixed timeout). A bounded timeout is used so a
     // genuinely missing Warning FAILS honestly rather than hanging.
-    const STALE_WARNING_TEXT = 'The previous observation was cleared because a newer analysis is active.';
+    // R4 Phase J: was a hardcoded English literal -- now read from the
+    // real dictionary for whichever language the app is actually
+    // running in.
+    const STALE_WARNING_TEXT = await expectedLocalizedText(page, 'observation.unavailableReason.cancelled');
     let f3StaleWarningObserved = true;
     let f3StaleWarningError = null;
     try {
@@ -2106,10 +2137,11 @@ async function main() {
     const auditE = summarizeLiveTexts('ipoStatus', auditE_raw.ipoStatus);
     const auditE_cross = summarizeCrossRegionWindow(auditE_raw);
     f3AllCapturedLiveTexts.push(...auditE.distinctNonEmptyTexts);
+    const _expectedObservationClearedText = await expectedLocalizedText(page, 'observation.stateMessage.cleared');
     record(
       'Scenario E: Clear Observation produces exactly one non-empty ipoStatus announcement matching the expected cleared-state message, with no repeated identical announcement (zero mutations/messages FAIL)',
-      auditE.nonEmptyAnnouncements === 1 && auditE.distinctNonEmptyTexts.length === 1 && auditE.distinctNonEmptyTexts[0] === 'Observation cleared. Production output was not changed.' && auditE.repeatedIdenticalTexts === 0,
-      JSON.stringify(auditE)
+      auditE.nonEmptyAnnouncements === 1 && auditE.distinctNonEmptyTexts.length === 1 && auditE.distinctNonEmptyTexts[0] === _expectedObservationClearedText && auditE.repeatedIdenticalTexts === 0,
+      JSON.stringify({ ...auditE, expected: _expectedObservationClearedText })
     );
     record('FIX 5/6 (F3-S3): Scenario E cross-region duplicate check (ipoStatus+ipoWarning+ipoReasonLimit combined) shows no duplicate announcement', auditE_cross.repeatedIdenticalTexts === 0, JSON.stringify(auditE_cross));
 
