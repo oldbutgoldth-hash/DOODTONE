@@ -17,8 +17,22 @@ import {
   isValidCategoryList, isValidLightingCondition, isValidUserDecision, isValidIssueCodeList,
   USER_DECISION_SET,
 } from './codes.js';
+import { createNotRenderedPreviewEvidence, isValidPreviewEvidence } from './preview-evidence.js';
 
-export const CALIBRATION_SCHEMA_VERSION = 1;
+// EPIC 2E-K-R2-FIX1 -- Section 2: Calibration Schema V2. Bumped from 1
+// to 2 because every Semantic Image Test Record now carries a
+// `previewEvidence` object (see createImageTestRecord() below) plus
+// two migration-audit fields -- a v1 record read back from storage has
+// neither, and `ui/calibration-lab/calibration-lab-storage.js`'s
+// migration step (Section 5) is the ONLY place that gap is closed.
+export const CALIBRATION_SCHEMA_VERSION = 2;
+
+// Per-RECORD schema version (independent of the session-level
+// CALIBRATION_SCHEMA_VERSION above) -- lets the storage layer detect
+// and migrate individual v1 image records even inside an otherwise
+// up-to-date session object, without needing every record in a
+// session to share one version.
+export const RECORD_SCHEMA_VERSION = 2;
 
 // Bounds -- deliberately conservative so a corrupt or hostile record
 // (e.g. a multi-megabyte "notes" string, or thousands of images in one
@@ -75,6 +89,7 @@ export function createCalibrationSession({ locale, appVersion } = {}) {
     ties: 0,
     bothRejected: 0,
     pendingCount: 0,
+    legacyAuditOnlyCount: 0,
   };
 }
 
@@ -92,9 +107,21 @@ export function createImageTestRecord({
   legacySnapshot = null,
   controlledV2Snapshot = null,
   safetySnapshot = null,
+  // EPIC 2E-K-R2-FIX1 -- Section 2: real pixel-truth evidence (see
+  // core/calibration-lab/preview-evidence.js). Defaults to the honest
+  // "never measured yet" shape -- a caller (the controller, right
+  // after `pixel-truth-capture.js` resolves) overwrites this with the
+  // real captured evidence; it is never defaulted toward eligibility.
+  previewEvidence = null,
+  // EPIC 2E-K-R2-FIX1 -- Section 5: only ever set by the V1->V2
+  // migration step (ui/calibration-lab/calibration-lab-storage.js) --
+  // a freshly created record is never migrated, so both default false.
+  legacyDecisionPreservedForAudit = false,
+  requiresVisualReReview = false,
 } = {}) {
   return {
     imageId: _genId('cal-image'),
+    recordSchemaVersion: RECORD_SCHEMA_VERSION,
     imageFingerprint: typeof imageFingerprint === 'string' ? imageFingerprint : null,
     imageCategories: Array.isArray(imageCategories) ? [...imageCategories] : [],
     lightingCondition: typeof lightingCondition === 'string' ? lightingCondition : 'UNKNOWN',
@@ -103,10 +130,13 @@ export function createImageTestRecord({
     legacySnapshot,
     controlledV2Snapshot,
     safetySnapshot,
+    previewEvidence: isValidPreviewEvidence(previewEvidence) ? previewEvidence : createNotRenderedPreviewEvidence(),
     userDecision: 'NOT_REVIEWED',
     issueCodes: [],
     notes: '',
     reviewedAt: null,
+    legacyDecisionPreservedForAudit: legacyDecisionPreservedForAudit === true,
+    requiresVisualReReview: requiresVisualReReview === true,
   };
 }
 
@@ -124,7 +154,7 @@ export function validateSession(session) {
   if (session.locale !== 'th' && session.locale !== 'en') return false;
   if (typeof session.appVersion !== 'string') return false;
   if (typeof session.calibrationSchemaVersion !== 'number') return false;
-  const counters = ['imageCount', 'reviewedCount', 'legacyWins', 'v2Wins', 'ties', 'bothRejected', 'pendingCount'];
+  const counters = ['imageCount', 'reviewedCount', 'legacyWins', 'v2Wins', 'ties', 'bothRejected', 'pendingCount', 'legacyAuditOnlyCount'];
   for (const key of counters) {
     if (typeof session[key] !== 'number' || !Number.isFinite(session[key]) || session[key] < 0) return false;
   }
@@ -141,6 +171,7 @@ export function validateSession(session) {
 export function validateImageRecord(record) {
   if (!record || typeof record !== 'object') return false;
   if (typeof record.imageId !== 'string' || record.imageId.length === 0) return false;
+  if (typeof record.recordSchemaVersion !== 'number') return false;
   if (record.imageFingerprint !== null && typeof record.imageFingerprint !== 'string') return false;
   if (!isValidCategoryList(record.imageCategories) && !(Array.isArray(record.imageCategories) && record.imageCategories.length === 0)) return false;
   if (!isValidLightingCondition(record.lightingCondition)) return false;
@@ -152,6 +183,14 @@ export function validateImageRecord(record) {
   for (const snap of [record.legacySnapshot, record.controlledV2Snapshot, record.safetySnapshot]) {
     if (snap !== null && (typeof snap !== 'object' || Array.isArray(snap))) return false;
   }
+  // EPIC 2E-K-R2-FIX1 -- Section 2: previewEvidence is REQUIRED on
+  // every schema-v2 record (never optional/null) -- a record that
+  // somehow lacks it has not gone through createImageTestRecord()'s
+  // own default and is treated as structurally invalid, never silently
+  // accepted with missing evidence.
+  if (!isValidPreviewEvidence(record.previewEvidence)) return false;
+  if (typeof record.legacyDecisionPreservedForAudit !== 'boolean') return false;
+  if (typeof record.requiresVisualReReview !== 'boolean') return false;
   return true;
 }
 
@@ -164,9 +203,19 @@ export function validateImageRecord(record) {
 export function recomputeSessionCounts(session, records) {
   const list = Array.isArray(records) ? records : [];
   let reviewedCount = 0, legacyWins = 0, v2Wins = 0, ties = 0, bothRejected = 0, pendingCount = 0;
+  // EPIC 2E-K-R2-FIX1 -- Section 4/5 (Readiness Honesty): a decision
+  // that was PRESERVED FOR AUDIT from a V1 migration (see
+  // `legacyDecisionPreservedForAudit` on schema v2 records) is real
+  // history and must stay visible on the record itself, but it is
+  // NEVER allowed to feed the session's own win/tie/reject counters --
+  // those numbers must only ever reflect decisions made against real,
+  // browser-verified pixel evidence. Counted separately below so
+  // nothing is silently dropped from the summary.
+  let legacyAuditOnlyCount = 0;
   for (const r of list) {
     const d = r && USER_DECISION_SET.has(r.userDecision) ? r.userDecision : 'NOT_REVIEWED';
     if (d === 'NOT_REVIEWED') { pendingCount += 1; continue; }
+    if (r?.legacyDecisionPreservedForAudit === true) { legacyAuditOnlyCount += 1; continue; }
     reviewedCount += 1;
     if (d === 'LEGACY_BETTER') legacyWins += 1;
     else if (d === 'V2_BETTER') v2Wins += 1;
@@ -177,7 +226,7 @@ export function recomputeSessionCounts(session, records) {
   return {
     ...session,
     imageCount: list.length,
-    reviewedCount, legacyWins, v2Wins, ties, bothRejected, pendingCount,
+    reviewedCount, legacyWins, v2Wins, ties, bothRejected, pendingCount, legacyAuditOnlyCount,
     updatedAt: _nowIso(),
   };
 }

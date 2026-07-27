@@ -51,7 +51,7 @@ record('Exactly 14 image categories declared', IMAGE_CATEGORIES.length === 14, {
 record('Exactly 9 lighting conditions declared', LIGHTING_CONDITIONS.length === 9, { count: LIGHTING_CONDITIONS.length });
 record('Exactly 6 user decisions declared', USER_DECISIONS.length === 6, { count: USER_DECISIONS.length });
 record('Exactly 20 issue codes declared', ISSUE_CODES.length === 20, { count: ISSUE_CODES.length });
-record('Exactly 5 readiness statuses declared', READINESS_STATUSES.length === 5, { count: READINESS_STATUSES.length });
+record('Exactly 8 readiness statuses declared (5 original + 3 added by EPIC 2E-K-R2-FIX1 Section 4)', READINESS_STATUSES.length === 8, { count: READINESS_STATUSES.length });
 record('PRODUCTION_READY is never a member of READINESS_STATUSES', !READINESS_STATUSES.includes('PRODUCTION_READY'), {});
 record('isValidReadinessStatus() rejects the forbidden PRODUCTION_READY value', isValidReadinessStatus(FORBIDDEN_READINESS_STATUS) === false, {});
 record('isValidCategoryList() accepts a valid list', isValidCategoryList(['WEDDING', 'INDOOR']) === true, {});
@@ -166,6 +166,29 @@ record('isValidIssueCodeList() rejects an unknown code', isValidIssueCodeList(['
     return !src.includes("'PRODUCTION_READY'");
   })(), {});
 
+  // EPIC 2E-K-R2-FIX1 -- Section 4: the readiness ladder now ALSO
+  // requires genuine, browser-verified, visually-decision-eligible
+  // pixel evidence before it will even look at win-rate/coverage
+  // numbers (NEEDS_BROWSER_VERIFICATION / NEEDS_PIXEL_PREVIEW sit
+  // below INSUFFICIENT_DATA but above NEEDS_MORE_COVERAGE in the
+  // ladder) -- every fixture record built here for the ladder tests
+  // below must carry a genuinely eligible previewEvidence object, or
+  // these tests would only ever be proving the NEW evidence gate
+  // (already covered by qa/epic-2e-k-r2-fix1-pixel-truth-static-test.mjs),
+  // never reaching the older coverage/win-rate tiers they intend to
+  // exercise.
+  function _eligiblePreviewEvidence() {
+    return {
+      previewTruthCode: 'BOTH_RENDERED_DIFFERENT', legacyPreviewState: 'rendered', controlledV2PreviewState: 'rendered',
+      legacyTransformed: true, controlledV2Transformed: true, sameSourceGeometry: true,
+      sourceWidth: 800, sourceHeight: 600, legacyOutputWidth: 800, legacyOutputHeight: 600,
+      controlledV2OutputWidth: 800, controlledV2OutputHeight: 600,
+      legacyPixelHash: 'a'.repeat(64), controlledV2PixelHash: 'b'.repeat(64),
+      legacyNonTransparentPixelCount: 480000, controlledV2NonTransparentPixelCount: 480000,
+      pixelDifferenceDetected: true, browserVerified: true, visualDecisionEligible: true,
+      sourceFingerprintMatch: true, renderGenerationId: 'gen-fixture', verifiedAt: new Date().toISOString(),
+    };
+  }
   function mkBig(n, catList, mixedEvery, skinEvery, v2WinEvery) {
     const out = [];
     for (let i = 0; i < n; i++) {
@@ -173,6 +196,7 @@ record('isValidIssueCodeList() rejects an unknown code', isValidIssueCodeList(['
         imageCategories: [catList[i % catList.length]],
         lightingCondition: (mixedEvery && i % mixedEvery === 0) ? 'MIXED' : 'DAYLIGHT',
         containsSkin: !!(skinEvery && i % skinEvery === 0),
+        previewEvidence: _eligiblePreviewEvidence(),
       });
       r.userDecision = (v2WinEvery && i % v2WinEvery === 0) ? 'LEGACY_BETTER' : 'V2_BETTER';
       r.safetySnapshot = { legacySafetyWarningCount: 0, v2HardStopCount: 0, v2SoftCapCount: 0, severeIssueDetected: false };

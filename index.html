@@ -258,10 +258,18 @@
       <!-- EPIC 2E-K: Controlled V2 Calibration Lab entry point. Wired
            entirely by ui/calibration-lab/calibration-lab-entry.js
            (its own separate module script, loaded further below) --
-           ui/app.js does not know this button exists. -->
-      <button id="calibrationLabNavBtn" title="Calibration Lab" style="min-height:44px;display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase">
+           ui/app.js does not know this button exists.
+
+           EPIC 2E-K-R2-FIX1 -- Section 8: this button's visible text,
+           title, and aria-label are NEVER hardcoded here -- they are
+           set exclusively by calibration-lab-entry.js's
+           _applyNavButtonLabel(), reading the SAME i18n dictionary the
+           rest of the Calibration Lab uses, both at bootstrap and on
+           every language change. No English/Thai text node is present
+           in this markup on purpose, so there is no stale/hardcoded
+           string for a language switch to ever leave behind. -->
+      <button id="calibrationLabNavBtn" style="min-height:44px;display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase">
         <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;font-size:16px">science</span>
-        Calibration Lab
       </button>
       <button id="langBtn" title="Language" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:2px;background:transparent;border:1px solid transparent;color:var(--text-dim);cursor:pointer">
         <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;font-size:19px">language</span>

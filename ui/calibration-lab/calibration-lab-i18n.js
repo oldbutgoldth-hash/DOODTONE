@@ -82,6 +82,10 @@ const en = {
     NEEDS_CALIBRATION: 'Needs calibration',
     PROMISING_NOT_READY: 'Promising, not ready',
     READY_FOR_CANDIDATE_REVIEW: 'Ready for candidate review',
+    // EPIC 2E-K-R2-FIX1 -- Section 4: Readiness Honesty statuses.
+    NEEDS_BROWSER_VERIFICATION: 'Needs real Browser verification',
+    NEEDS_PIXEL_PREVIEW: 'Needs real pixel preview evidence',
+    NEEDS_REVIEW_REFRESH: 'Needs review refresh (migrated records pending re-review)',
     reportTitle: 'Controlled V2 Readiness Report',
     disclaimer: 'This report is informational only -- it never enables Controlled V2 in Production, and no status here can ever mean "ready for Production".',
   },
@@ -120,12 +124,29 @@ const en = {
     stateUnavailable: 'Preview unavailable for this side.',
     stateFailed: 'Preview failed to render -- see the numbers on the right.',
     stateCancelled: 'Preview render was superseded.',
+    // EPIC 2E-K-R2-FIX1 -- Section 3: the exact reason Decision
+    // Controls are disabled right now (see preview-evidence.js's
+    // deriveUiBlockerReasonCode()) -- always a plain-language
+    // explanation of the STABLE CODE, never the code itself shown to
+    // the user.
+    blocker: {
+      V2_RENDER_PLAN_UNAVAILABLE: 'Controlled V2 has no render plan for this image yet -- a comparative decision cannot be recorded until it does.',
+      V2_RENDER_FAILED: 'Controlled V2 did not render for this image -- a comparative decision cannot be recorded until it does.',
+      V2_EMPTY_CANVAS: 'Controlled V2 reported success but produced no real pixels (an empty canvas) -- a comparative decision cannot be recorded from this.',
+      V2_STALE_GENERATION: 'This preview evidence is from a superseded render -- re-add or re-open the image before deciding.',
+      V2_SOURCE_MISMATCH: 'Legacy and Controlled V2 did not render from the exact same source image -- a comparative decision cannot be trusted.',
+      GEOMETRY_MISMATCH: 'Legacy and Controlled V2 produced different output dimensions -- a pixel comparison would not be meaningful.',
+    },
   },
 };
 
 const th = {
   nav: {
-    openButton: 'ห้องปฏิบัติการปรับเทียบ',
+    // EPIC 2E-K-R2-FIX1 -- Section 8: this is the exact Thai text the
+    // spec requires for the NAV BUTTON specifically ("ห้องทดสอบการปรับค่า")
+    // -- distinct from `title` below, which is the dialog's own header
+    // and keeps its existing, separately-approved Thai wording.
+    openButton: 'ห้องทดสอบการปรับค่า',
     title: 'ห้องปฏิบัติการปรับเทียบ Controlled V2',
     subtitle: 'พื้นที่เปรียบเทียบแบบ Preview/Shadow เท่านั้น -- ไม่มีผลต่อพรีเซ็ตที่คุณส่งออก',
     closeButton: 'ปิดห้องปฏิบัติการปรับเทียบ',
@@ -184,6 +205,9 @@ const th = {
     NEEDS_CALIBRATION: 'ต้องปรับเทียบเพิ่มเติม',
     PROMISING_NOT_READY: 'มีแนวโน้มดีแต่ยังไม่พร้อม',
     READY_FOR_CANDIDATE_REVIEW: 'พร้อมสำหรับการทบทวนเป็นตัวเลือก',
+    NEEDS_BROWSER_VERIFICATION: 'ต้องการการยืนยันด้วย Browser จริง',
+    NEEDS_PIXEL_PREVIEW: 'ต้องการหลักฐานภาพตัวอย่างพิกเซลจริง',
+    NEEDS_REVIEW_REFRESH: 'ต้องทบทวนใหม่ (มีรายการที่ย้ายข้อมูลรอการทบทวนซ้ำ)',
     reportTitle: 'รายงานความพร้อมของ Controlled V2',
     disclaimer: 'รายงานนี้เป็นข้อมูลประกอบเท่านั้น -- ไม่มีผลเปิดใช้งาน Controlled V2 ใน Production และไม่มีสถานะใดในรายงานนี้ที่แปลว่า "พร้อมใช้งานจริง"',
   },
@@ -216,6 +240,14 @@ const th = {
     stateUnavailable: 'ไม่มีภาพตัวอย่างสำหรับด้านนี้',
     stateFailed: 'เรนเดอร์ภาพตัวอย่างไม่สำเร็จ -- ดูตัวเลขทางขวา',
     stateCancelled: 'การเรนเดอร์ภาพตัวอย่างถูกแทนที่ด้วยรายการใหม่',
+    blocker: {
+      V2_RENDER_PLAN_UNAVAILABLE: 'Controlled V2 ยังไม่มีแผนการเรนเดอร์สำหรับภาพนี้ -- ยังไม่สามารถบันทึกผลการเปรียบเทียบได้จนกว่าจะมี',
+      V2_RENDER_FAILED: 'Controlled V2 ไม่สามารถเรนเดอร์สำหรับภาพนี้ได้ -- ยังไม่สามารถบันทึกผลการเปรียบเทียบได้จนกว่าจะเรนเดอร์สำเร็จ',
+      V2_EMPTY_CANVAS: 'Controlled V2 รายงานว่าสำเร็จแต่ไม่มีพิกเซลจริง (Canvas ว่างเปล่า) -- ไม่สามารถบันทึกผลการเปรียบเทียบจากข้อมูลนี้ได้',
+      V2_STALE_GENERATION: 'หลักฐานภาพตัวอย่างนี้มาจากการเรนเดอร์รุ่นเก่าที่ถูกแทนที่แล้ว -- กรุณาเพิ่มภาพใหม่หรือเปิดภาพใหม่ก่อนตัดสินใจ',
+      V2_SOURCE_MISMATCH: 'Legacy และ Controlled V2 ไม่ได้เรนเดอร์จากภาพต้นฉบับเดียวกัน -- ไม่สามารถเชื่อถือผลการเปรียบเทียบได้',
+      GEOMETRY_MISMATCH: 'Legacy และ Controlled V2 ให้ขนาดผลลัพธ์ที่แตกต่างกัน -- การเปรียบเทียบพิกเซลจะไม่มีความหมาย',
+    },
   },
 };
 
@@ -264,6 +296,31 @@ export function checkCalibrationLabDictionaryCoverage() {
   for (const key of pixelPreviewKeys) {
     for (const lang of ['en', 'th']) {
       if (_lookup(DICTIONARIES[lang], `pixelPreview.${key}`) === undefined) missing.push(`${lang}.pixelPreview.${key}`);
+    }
+  }
+  // EPIC 2E-K-R2-FIX1 -- Section 1/3: the 6 pixel-blocker reason codes
+  // (core/calibration-lab/codes.js's PIXEL_BLOCKER_REASON_CODES) must
+  // each have a translated explanation in both locales.
+  const pixelBlockerKeys = [
+    'V2_RENDER_PLAN_UNAVAILABLE', 'V2_RENDER_FAILED', 'V2_EMPTY_CANVAS',
+    'V2_STALE_GENERATION', 'V2_SOURCE_MISMATCH', 'GEOMETRY_MISMATCH',
+  ];
+  for (const key of pixelBlockerKeys) {
+    for (const lang of ['en', 'th']) {
+      if (_lookup(DICTIONARIES[lang], `pixelPreview.blocker.${key}`) === undefined) missing.push(`${lang}.pixelPreview.blocker.${key}`);
+    }
+  }
+  // EPIC 2E-K-R2-FIX1 -- Section 8: the nav button's own presentation
+  // keys (openButton/title/closeButton) must be genuinely translated
+  // in both locales -- this is the exact coverage check that would
+  // have caught the hardcoded-English-in-index.html defect had it been
+  // a missing-dictionary-entry bug rather than a markup bug (the
+  // markup fix itself is verified separately by the hostile static
+  // test's index.html scan).
+  const navKeys = ['openButton', 'title', 'closeButton'];
+  for (const key of navKeys) {
+    for (const lang of ['en', 'th']) {
+      if (_lookup(DICTIONARIES[lang], `nav.${key}`) === undefined) missing.push(`${lang}.nav.${key}`);
     }
   }
   return { ok: missing.length === 0, missing };

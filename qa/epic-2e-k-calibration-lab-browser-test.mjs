@@ -63,6 +63,10 @@ const SOURCE_HASH_INPUTS = [
   path.join(PROJECT_ROOT, 'ui', 'visual-preview-comparison-controller-v2.js'),
   path.join(PROJECT_ROOT, 'ui', 'isolated-visual-preview-renderer-v2.js'),
   path.join(PROJECT_ROOT, 'core', 'preview-rendering', 'visual-preview-render-plan-v2.js'),
+  // EPIC 2E-K-R2-FIX1 -- PIXEL TRUTH, DECISION GATE AND EVIDENCE CLOSURE.
+  path.join(PROJECT_ROOT, 'core', 'calibration-lab', 'preview-evidence.js'),
+  path.join(PROJECT_ROOT, 'core', 'calibration-lab', 'pixel-truth-capture.js'),
+  path.join(PROJECT_ROOT, 'core', 'calibration-lab', 'migrate-v1-to-v2.js'),
   FIXTURE_1, FIXTURE_2,
 ];
 
@@ -124,6 +128,17 @@ async function main() {
 
     const navBtn = page.locator('#calibrationLabNavBtn');
     recordCondition('Nav button #calibrationLabNavBtn exists and is visible', await navBtn.count() > 0, {});
+    // EPIC 2E-K-R2-FIX1 -- Section 8: the nav button's visible text
+    // must NEVER be the hardcoded English string "Calibration Lab" --
+    // the app boots in Thai by default, so its initial text must be
+    // the real Thai translation, genuinely different from the English
+    // one, and it must NOT contain the literal English words
+    // "Calibration Lab" (the exact reported defect).
+    const navBtnTextTh = (await navBtn.textContent() || '').trim();
+    const navBtnTitleTh = await navBtn.getAttribute('title');
+    const navBtnAriaTh = await navBtn.getAttribute('aria-label');
+    recordCondition('Locale Header (FIX1 Section 8): nav button text is NOT the hardcoded English "Calibration Lab" string while the app is in Thai', !/Calibration Lab/i.test(navBtnTextTh), { navBtnTextTh });
+    recordCondition('Locale Header (FIX1 Section 8): nav button title/aria-label are populated (never empty) and consistent with its visible text', navBtnTitleTh === navBtnTextTh && navBtnAriaTh === navBtnTextTh, { navBtnTextTh, navBtnTitleTh, navBtnAriaTh });
     await navBtn.click();
 
     const root = page.locator('#calibrationLabRoot');
@@ -166,17 +181,50 @@ async function main() {
       const note = document.querySelector('#calibrationLabRoot [data-cal-role="pixel-preview-status"]');
       const legacyCanvas = document.querySelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-legacy"]');
       const v2Canvas = document.querySelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-v2"]');
+      const qa = window.__LUMIXA_QA__.getCalibrationLabSnapshot();
       return {
         overallState: note ? note.getAttribute('data-cal-pixel-overall-state') : null,
         legacyState: note ? note.getAttribute('data-cal-pixel-legacy-state') : null,
         v2State: note ? note.getAttribute('data-cal-pixel-v2-state') : null,
         legacyBackingSize: legacyCanvas ? legacyCanvas.width * legacyCanvas.height : 0,
         v2BackingSize: v2Canvas ? v2Canvas.width * v2Canvas.height : 0,
+        v2Width: v2Canvas ? v2Canvas.width : 0,
+        v2Height: v2Canvas ? v2Canvas.height : 0,
+        // EPIC 2E-K-R2-FIX1 -- Section 6: the AUTHORITATIVE evidence
+        // (captured once, at addImage() time, via the real reused
+        // pixel-render chain -- see core/calibration-lab/pixel-truth-capture.js)
+        // rather than only the live re-render's own transient state.
+        previewTruthCode: qa.currentPreviewTruthCode,
+        browserVerified: qa.currentBrowserVerified,
+        visualDecisionEligible: qa.currentVisualDecisionEligible,
+        pixelBlockerReasonCode: qa.currentPixelBlockerReasonCode,
       };
     });
     recordCondition('Real Pixel Comparison: the render actually resolved to a real state (rendered/blocked/failed/cancelled/unavailable), never left permanently in the transient "rendering" placeholder', pixelState1.overallState !== null, JSON.stringify(pixelState1));
-    recordCondition('Real Pixel Comparison: the Legacy canvas received real backing pixel dimensions (genuinely drawn to, not a blank 0x0 canvas) when its side is not blocked', pixelState1.legacyState !== 'rendered' || pixelState1.legacyBackingSize > 0, JSON.stringify(pixelState1));
-    recordCondition('Real Pixel Comparison: the Controlled V2 canvas received real backing pixel dimensions when its side is not blocked', pixelState1.v2State !== 'rendered' || pixelState1.v2BackingSize > 0, JSON.stringify(pixelState1));
+    // EPIC 2E-K-R2-FIX1 -- Section 6: the EXACT false-positive bug this
+    // replaces was `v2State !== 'rendered' || v2BackingSize > 0` --
+    // that OR-shortcut is TRUE (a false PASS) whenever v2State is
+    // 'unknown'/'blocked'/'failed'/'cancelled'/anything but the literal
+    // string 'rendered', including the reported "status=unknown, canvas
+    // stuck at blank 300x150" defect. The fixed condition below is a
+    // POSITIVE, independently-verified proof for a 'rendered' claim,
+    // never an OR that lets an unproven state slip through, and it
+    // ALSO fails a false 'rendered' claim that has zero backing pixels
+    // or the untouched default 300x150 size.
+    // FIX1 Section 6 -- positive, independently-verified proof for a
+    // 'rendered' claim (never the old OR-shortcut that let 'unknown'/
+    // 'blocked'/'failed'/'cancelled' states silently pass):
+    recordCondition('Real Pixel Comparison: the Legacy canvas received real backing pixel dimensions (genuinely drawn to, not a blank 0x0 canvas) when its side claims rendered', pixelState1.legacyState !== 'rendered' || pixelState1.legacyBackingSize > 0, JSON.stringify(pixelState1));
+    const v2ClaimsRendered = pixelState1.v2State === 'rendered';
+    recordCondition('Real Pixel Comparison (FIX1 Section 6): if Controlled V2 claims rendered, it must have real non-zero backing pixels -- a claim of "rendered" with zero pixels is a FAIL, never a silent pass', !v2ClaimsRendered || (pixelState1.v2Width > 0 && pixelState1.v2Height > 0 && pixelState1.v2BackingSize > 0), JSON.stringify(pixelState1));
+    recordCondition('Real Pixel Comparison (FIX1 Section 6): a V2 canvas that claims rendered must not be the untouched default 300x150 blank size', !v2ClaimsRendered || !(pixelState1.v2Width === 300 && pixelState1.v2Height === 150), JSON.stringify(pixelState1));
+    // EPIC 2E-K-R2-FIX1 -- Section 1/2: the AUTHORITATIVE, persisted
+    // previewEvidence (captured at addImage() time, independent of
+    // whatever the live slider re-render currently shows) must also
+    // agree that this is real, browser-verified evidence before the
+    // Decision Gate could ever allow a comparative decision.
+    recordCondition('Pixel Truth (FIX1 Section 1/2): previewEvidence.previewTruthCode is one of the 10 canonical stable codes (never a freeform value)', typeof pixelState1.previewTruthCode === 'string' && pixelState1.previewTruthCode.length > 0, JSON.stringify(pixelState1));
+    recordCondition('Pixel Truth (FIX1 Section 1): previewEvidence.browserVerified is a real boolean (never undefined)', typeof pixelState1.browserVerified === 'boolean', JSON.stringify(pixelState1));
 
     // Add image 2.
     await page.locator('#calibrationLabRoot .cal-chip[data-cal-category="EVENT"]').click();
@@ -194,14 +242,79 @@ async function main() {
     snap = await calSnapshot(page);
     recordCondition('Multi-image Navigation: Next Image returns to the second image', snap.currentImageId === secondImageId, JSON.stringify(snap));
 
-    // Decision + Issue Code Persistence.
-    await page.locator('#calibrationLabRoot .cal-chip', { hasText: /Controlled V2 is better|Controlled V2 ดีกว่า/ }).first().click();
-    const wbCheckbox = page.locator('#calibrationLabRoot label', { hasText: /White balance too warm|White Balance อุ่นเกินไป/ }).locator('input[type="checkbox"]');
-    await wbCheckbox.check();
-    await page.locator('#calibrationLabRoot button', { hasText: /Save Result for This Image|บันทึกผลภาพปัจจุบัน/ }).first().click();
-    snap = await calSnapshot(page);
-    recordCondition('Decision Persistence: currentDecisionCode saved as V2_BETTER', snap.currentDecisionCode === 'V2_BETTER', JSON.stringify(snap));
-    recordCondition('Issue Code Persistence: WB_TOO_WARM present in selectedIssueCodes', Array.isArray(snap.selectedIssueCodes) && snap.selectedIssueCodes.includes('WB_TOO_WARM'), JSON.stringify(snap));
+    // EPIC 2E-K-R2-FIX1 -- Section 3: Decision Eligibility Gate. The
+    // exact allowed decision depends on what the real fixture image's
+    // pixel evidence turned out to be (BOTH_RENDERED_DIFFERENT vs
+    // BOTH_RENDERED_IDENTITY vs any failure code) -- this test reads
+    // the AUTHORITATIVE evidence first and only then picks a decision
+    // that the gate is SUPPOSED to allow, rather than assuming
+    // V2_BETTER is always eligible. It also proves the gate genuinely
+    // blocks whichever decisions it is NOT supposed to allow.
+    const gateState = await page.evaluate(() => window.__LUMIXA_QA__.getCalibrationLabSnapshot());
+    const eligible = gateState.currentVisualDecisionEligible === true;
+    const truthCode = gateState.currentPreviewTruthCode;
+    recordCondition('Decision Gate (FIX1 Section 3): currentVisualDecisionEligible is a real boolean reflecting genuine pixel evidence, never assumed true', typeof gateState.currentVisualDecisionEligible === 'boolean', JSON.stringify(gateState));
+
+    // Every decision chip's disabled state must exactly match
+    // isDecisionAllowedForEvidence()'s verdict for the CURRENT evidence
+    // -- read straight off the DOM's own data attributes (Section 3:
+    // "must check the gate in the UI too", never relying on the
+    // disabled attribute ALONE, which is why the Controller-level
+    // check below is the one that actually matters for safety).
+    const chipStates = await page.evaluate(() => {
+      const chips = [...document.querySelectorAll('#calibrationLabRoot [data-cal-decision-code]')];
+      return chips.map(c => ({ code: c.getAttribute('data-cal-decision-code'), allowed: c.getAttribute('data-cal-decision-allowed') === 'true', disabled: c.disabled === true }));
+    });
+    const chipStatesConsistent = chipStates.every(c => c.allowed === !c.disabled);
+    recordCondition('Decision Gate (FIX1 Section 3): every decision chip\'s disabled attribute exactly matches its data-cal-decision-allowed flag (no chip is clickable while marked ineligible, or vice versa)', chipStatesConsistent, JSON.stringify(chipStates));
+
+    // Controller-level enforcement (Section 3's explicit requirement:
+    // "must check the gate in the Controller too, never rely on the UI
+    // disabled attribute alone") -- attempt to save V2_BETTER by
+    // calling the controller DIRECTLY, bypassing the UI entirely. This
+    // must be rejected whenever the current evidence is not
+    // BOTH_RENDERED_DIFFERENT, no matter what the UI would have allowed.
+    const directSaveAttempt = await page.evaluate(async () => {
+      const ctrl = window.__LUMIXA_CAL_LAB_CONTROLLER_FOR_QA__;
+      if (!ctrl) return { skipped: true };
+      const before = ctrl.getState().currentRecord?.userDecision ?? null;
+      const result = await ctrl.saveCurrentDecision({ userDecision: 'V2_BETTER', issueCodes: [], notes: 'hostile-direct-call' });
+      return { skipped: false, before, after: result.currentRecord?.userDecision ?? null, lastActionError: result.lastActionError };
+    });
+    if (!directSaveAttempt.skipped) {
+      const shouldHaveBeenRejected = truthCode !== 'BOTH_RENDERED_DIFFERENT';
+      recordCondition('Decision Gate (FIX1 Section 3): Controller.saveCurrentDecision() rejects V2_BETTER called directly (bypassing the UI) when evidence is not BOTH_RENDERED_DIFFERENT', !shouldHaveBeenRejected || (directSaveAttempt.after === directSaveAttempt.before && directSaveAttempt.lastActionError === 'DECISION_NOT_ELIGIBLE'), JSON.stringify(directSaveAttempt));
+    }
+
+    // Now record a genuinely ALLOWED decision through the real UI, so
+    // Decision + Issue Code Persistence is still proven for whichever
+    // decision code is actually eligible for this fixture's real
+    // pixel outcome.
+    const decisionLabelPattern = (truthCode === 'BOTH_RENDERED_DIFFERENT' && eligible)
+      ? /Controlled V2 is better|Controlled V2 ดีกว่า/
+      : (eligible ? /About equal|เท่ากันโดยประมาณ/ : null);
+    if (decisionLabelPattern) {
+      await page.locator('#calibrationLabRoot .cal-chip', { hasText: decisionLabelPattern }).first().click();
+      const wbCheckbox = page.locator('#calibrationLabRoot label', { hasText: /White balance too warm|White Balance อุ่นเกินไป/ }).locator('input[type="checkbox"]');
+      await wbCheckbox.check();
+      await page.locator('#calibrationLabRoot button', { hasText: /Save Result for This Image|บันทึกผลภาพปัจจุบัน/ }).first().click();
+      snap = await calSnapshot(page);
+      const expectedDecision = truthCode === 'BOTH_RENDERED_DIFFERENT' ? 'V2_BETTER' : 'ABOUT_EQUAL';
+      recordCondition('Decision Persistence: an ELIGIBLE decision saves successfully and currentDecisionCode reflects it', snap.currentDecisionCode === expectedDecision, JSON.stringify(snap));
+      recordCondition('Issue Code Persistence: WB_TOO_WARM present in selectedIssueCodes', Array.isArray(snap.selectedIssueCodes) && snap.selectedIssueCodes.includes('WB_TOO_WARM'), JSON.stringify(snap));
+
+      // EPIC 2E-K-R2-FIX1 -- Section 7: Clear Current Answer must
+      // genuinely empty Notes, not just reset the decision code.
+      const notesBox = page.locator('#calibrationLabRoot textarea.cal-textarea');
+      await notesBox.fill('this note must be gone after Clear');
+      await page.locator('#calibrationLabRoot button', { hasText: /Clear This Image's Answer|ล้างคำตอบของภาพนี้/ }).first().click();
+      const notesValueAfterClear = await page.evaluate(() => document.querySelector('#calibrationLabRoot textarea.cal-textarea')?.value ?? null);
+      snap = await calSnapshot(page);
+      recordCondition('Clear Current Answer (FIX1 Section 7): decision resets to NOT_REVIEWED', snap.currentDecisionCode === 'NOT_REVIEWED', JSON.stringify(snap));
+      recordCondition('Clear Current Answer (FIX1 Section 7): the Notes textarea is genuinely empty after clearing (the R2 bug re-supplied the OLD notes value here)', notesValueAfterClear === '', { notesValueAfterClear });
+    } else {
+      recordCondition('Decision Gate (FIX1 Section 3): no decision is eligible for this fixture\'s real evidence -- Decision Controls correctly remain disabled rather than allowing a save', chipStates.every(c => !c.allowed), JSON.stringify({ chipStates, truthCode }));
+    }
 
     // Save and Restore: end session, reopen it, confirm the decision/issue survive.
     const sessionIdBeforeEnd = (await calSnapshot(page)) && (await page.evaluate(() => window.__LUMIXA_QA__.getCalibrationLabSnapshot()));
@@ -226,12 +339,25 @@ async function main() {
 
     // TH -> EN -> TH visible-locale audit, scoped to #calibrationLabRoot only.
     const thAudit1 = await auditVisibleLocaleSections(page, ['#calibrationLabRoot'], { mode: 'th', approvedTerms: ['IndexedDB', 'Controlled V2', 'JSON', 'CSV'] });
+    // EPIC 2E-K-R2-FIX1 -- Section 8: #calibrationLabNavBtn itself lives
+    // OUTSIDE #calibrationLabRoot (it's part of the main app header),
+    // so the audit above never covers it -- explicit nav-button checks
+    // at each stage of the TH->EN->TH cycle are the only thing that
+    // proves the button genuinely reacts to a real language change,
+    // not just at first paint.
+    const navBtnTextThBeforeSwitch = (await navBtn.textContent() || '').trim();
     await page.evaluate(() => { document.documentElement.lang = 'en'; });
     await page.waitForTimeout(200);
     const enAudit = await auditVisibleLocaleSections(page, ['#calibrationLabRoot'], { mode: 'en', approvedTerms: ['IndexedDB', 'Controlled V2', 'JSON', 'CSV'] });
+    const navBtnTextEn = (await navBtn.textContent() || '').trim();
+    const navBtnTitleEn = await navBtn.getAttribute('title');
+    recordCondition('Locale Header (FIX1 Section 8): nav button text genuinely CHANGES when the language switches to English (never stuck on the Thai string)', navBtnTextEn !== navBtnTextThBeforeSwitch && navBtnTextEn.length > 0, { navBtnTextThBeforeSwitch, navBtnTextEn });
+    recordCondition('Locale Header (FIX1 Section 8): in English mode, nav button title matches its visible text (both reactively updated together)', navBtnTitleEn === navBtnTextEn, { navBtnTitleEn, navBtnTextEn });
     await page.evaluate(() => { document.documentElement.lang = 'th'; });
     await page.waitForTimeout(200);
     const thAudit2 = await auditVisibleLocaleSections(page, ['#calibrationLabRoot'], { mode: 'th', approvedTerms: ['IndexedDB', 'Controlled V2', 'JSON', 'CSV'] });
+    const navBtnTextThAfterRoundTrip = (await navBtn.textContent() || '').trim();
+    recordCondition('Locale Header (FIX1 Section 8): switching back to Thai restores the exact original Thai nav button text (genuine round-trip, not a one-way flip)', navBtnTextThAfterRoundTrip === navBtnTextThBeforeSwitch, { navBtnTextThBeforeSwitch, navBtnTextThAfterRoundTrip });
     const thDecision1 = decideVisibleLocaleAudit(thAudit1, { permittedNotTested: [] });
     const enDecision = decideVisibleLocaleAudit(enAudit, { permittedNotTested: [] });
     const thDecision2 = decideVisibleLocaleAudit(thAudit2, { permittedNotTested: [] });

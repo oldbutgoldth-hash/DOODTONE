@@ -1,11 +1,11 @@
 {
   "suite": "DEPLOY GEOMETRY R1 — Preview Geometry Static test",
-  "runId": "f136e752-b0da-4c87-9822-acae3b218ac5",
-  "startedAt": "2026-07-26T18:41:03.301Z",
-  "completedAt": "2026-07-26T18:41:03.349Z",
+  "runId": "311dbe07-2131-47f6-87be-d4293b05e3cb",
+  "startedAt": "2026-07-26T20:19:19.512Z",
+  "completedAt": "2026-07-26T20:19:19.561Z",
   "completed": true,
   "sourceHash": "53c62baa1e93df98e9dcacef7321f4eae73a211080f75fb39ba42f83ac778bb6",
-  "generatedAt": "2026-07-26T18:41:03.349Z",
+  "generatedAt": "2026-07-26T20:19:19.561Z",
   "summary": {
     "total": 36,
     "pass": 36,
@@ -16,7 +16,7 @@
     {
       "test": "manifest.json is present and parses as JSON",
       "result": "PASS",
-      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r7/qa/fixtures/preview-geometry/manifest.json"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r8/qa/fixtures/preview-geometry/manifest.json"
     },
     {
       "test": "manifest declares exactly the 6 required fixtures",
@@ -186,12 +186,12 @@
     {
       "test": "epic-2e-j-preview-geometry-decoder-render-test.mjs passes a real ESM parse-goal check",
       "result": "PASS",
-      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r7/qa/epic-2e-j-preview-geometry-decoder-render-test.mjs"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r8/qa/epic-2e-j-preview-geometry-decoder-render-test.mjs"
     },
     {
       "test": "epic-2e-j-preview-geometry-full-app-eligible-test.mjs passes a real ESM parse-goal check",
       "result": "PASS",
-      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r7/qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_r8/qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs"
     }
   ],
   "decision": "PASS",

@@ -48,6 +48,42 @@ export const ISSUE_CODES = Object.freeze([
 ]);
 export const ISSUE_CODE_SET = new Set(ISSUE_CODES);
 
+// --- Preview Truth codes (EPIC 2E-K-R2-FIX1 Section 2) ---------------------
+// The ONLY stable classification of what a Legacy/Controlled-V2 pixel
+// render PAIR actually produced -- computed exclusively by
+// `core/calibration-lab/preview-evidence.js`'s `classifyPreviewTruth()`
+// from REAL measured pixel evidence (never from a Render Plan's own
+// claimed `state` alone -- see that module's docstring for why).
+export const PREVIEW_TRUTH_CODES = Object.freeze([
+  'BOTH_RENDERED_DIFFERENT', 'BOTH_RENDERED_IDENTITY',
+  'LEGACY_RENDER_FAILED', 'V2_RENDER_FAILED', 'V2_EMPTY_CANVAS',
+  'GEOMETRY_MISMATCH', 'SOURCE_MISMATCH', 'STALE_GENERATION',
+  'SOURCE_UNAVAILABLE', 'NOT_RENDERED',
+]);
+export const PREVIEW_TRUTH_CODE_SET = new Set(PREVIEW_TRUTH_CODES);
+
+/** Validate a previewTruthCode -- the single stored classification field on `previewEvidence`. */
+export function isValidPreviewTruthCode(code) {
+  return typeof code === 'string' && PREVIEW_TRUTH_CODE_SET.has(code);
+}
+
+// --- UI-facing pixel blocker reason codes (EPIC 2E-K-R2-FIX1 Section 1) -----
+// A finer-grained, UI-facing "why are Decision Controls disabled right
+// now" code, derived FROM previewEvidence by
+// `preview-evidence.js`'s `deriveUiBlockerReasonCode()` -- distinct
+// from (but derived from) the persisted previewTruthCode above. Never
+// stored on a record itself; recomputed on demand for display only.
+export const PIXEL_BLOCKER_REASON_CODES = Object.freeze([
+  'V2_RENDER_PLAN_UNAVAILABLE', 'V2_RENDER_FAILED', 'V2_EMPTY_CANVAS',
+  'V2_STALE_GENERATION', 'V2_SOURCE_MISMATCH', 'GEOMETRY_MISMATCH',
+]);
+export const PIXEL_BLOCKER_REASON_CODE_SET = new Set(PIXEL_BLOCKER_REASON_CODES);
+
+/** Validate a UI-facing pixel blocker reason code. `null` is also valid (means "not blocked"). */
+export function isValidPixelBlockerReasonCode(code) {
+  return code === null || (typeof code === 'string' && PIXEL_BLOCKER_REASON_CODE_SET.has(code));
+}
+
 // --- Readiness status (Section 12) ------------------------------------------
 // PRODUCTION_READY is intentionally NOT a member of this set -- the
 // Calibration Lab is a Preview/Shadow-only measurement tool and MUST
@@ -56,6 +92,14 @@ export const ISSUE_CODE_SET = new Set(ISSUE_CODES);
 export const READINESS_STATUSES = Object.freeze([
   'INSUFFICIENT_DATA', 'NEEDS_MORE_COVERAGE', 'NEEDS_CALIBRATION',
   'PROMISING_NOT_READY', 'READY_FOR_CANDIDATE_REVIEW',
+  // EPIC 2E-K-R2-FIX1 -- Section 4 (Readiness Honesty): these three
+  // statuses let the ladder honestly report "the numbers might look
+  // good, but the evidence behind them has not actually been proven
+  // real yet" -- distinct from NEEDS_MORE_COVERAGE (not enough
+  // reviewed samples) and NEEDS_CALIBRATION (safety signals too high).
+  // Never checked before the four legacy statuses above in the
+  // ladder -- see readiness.js's computeReadinessReport().
+  'NEEDS_BROWSER_VERIFICATION', 'NEEDS_PIXEL_PREVIEW', 'NEEDS_REVIEW_REFRESH',
 ]);
 export const READINESS_STATUS_SET = new Set(READINESS_STATUSES);
 export const FORBIDDEN_READINESS_STATUS = 'PRODUCTION_READY';

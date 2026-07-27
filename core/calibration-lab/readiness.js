@@ -34,6 +34,14 @@ export const CALIBRATION_POLICY_DEFAULTS = Object.freeze({
   // number, per the spec's own relative wording.
   maxSafetyWarningRateVsLegacyRatio: 1.0,
   minInsufficientDataFloor: 10,
+  // EPIC 2E-K-R2-FIX1 -- Section 4 (Readiness Honesty): the minimum
+  // share of ALL images in the dataset (not just reviewed ones) that
+  // must carry genuinely browser-verified, visually-decision-eligible
+  // pixel evidence before Readiness will even consider looking at
+  // win-rate numbers. A dataset mostly full of NOT_RENDERED/failed
+  // evidence must never reach a "promising" verdict just because the
+  // few eligible records happen to look good.
+  minPixelPreviewCoverage: 0.8,
 });
 
 function _rate(numerator, denominator) {
@@ -42,7 +50,40 @@ function _rate(numerator, denominator) {
 }
 
 function _reviewed(records) {
-  return (Array.isArray(records) ? records : []).filter(r => r && r.userDecision && r.userDecision !== 'NOT_REVIEWED');
+  // Mirrors aggregate.js's own exclusion -- a V1-migrated,
+  // audit-only-preserved decision is never treated as a genuine,
+  // evidence-backed review for Readiness purposes (Section 4/5).
+  return (Array.isArray(records) ? records : []).filter(r => r && r.userDecision && r.userDecision !== 'NOT_REVIEWED' && r.legacyDecisionPreservedForAudit !== true);
+}
+
+/** Every record whose previewEvidence.visualDecisionEligible is true, regardless of review state -- the denominator/numerator basis for `pixelPreviewCoverage`/`visualDecisionEligibleCount` (Section 4). */
+function _visuallyEligible(records) {
+  return (Array.isArray(records) ? records : []).filter(r => r?.previewEvidence?.visualDecisionEligible === true);
+}
+
+/** Records that STILL need a human to look at them again after a V1->V2 migration (Section 5) -- these must block READY_FOR_CANDIDATE_REVIEW until re-reviewed, even if every other number looks fine. */
+function _pendingReReview(records) {
+  return (Array.isArray(records) ? records : []).filter(r => r?.requiresVisualReReview === true);
+}
+
+/** Counts of each previewTruthCode across ALL records (Section 4's required counters) -- deliberately over every record, not just reviewed ones, so a caller can see the full evidence-quality picture regardless of review state. */
+function _previewTruthCounts(records) {
+  const list = Array.isArray(records) ? records : [];
+  const counts = {
+    verifiedDifferentCount: 0, verifiedIdentityCount: 0, renderFailureCount: 0,
+    emptyV2CanvasCount: 0, geometryMismatchCount: 0, sourceMismatchCount: 0, staleGenerationCount: 0,
+  };
+  for (const r of list) {
+    const code = r?.previewEvidence?.previewTruthCode;
+    if (code === 'BOTH_RENDERED_DIFFERENT') counts.verifiedDifferentCount += 1;
+    else if (code === 'BOTH_RENDERED_IDENTITY') counts.verifiedIdentityCount += 1;
+    else if (code === 'LEGACY_RENDER_FAILED' || code === 'V2_RENDER_FAILED') counts.renderFailureCount += 1;
+    else if (code === 'V2_EMPTY_CANVAS') counts.emptyV2CanvasCount += 1;
+    else if (code === 'GEOMETRY_MISMATCH') counts.geometryMismatchCount += 1;
+    else if (code === 'SOURCE_MISMATCH') counts.sourceMismatchCount += 1;
+    else if (code === 'STALE_GENERATION') counts.staleGenerationCount += 1;
+  }
+  return counts;
 }
 
 /** Distinct categories/lighting conditions that have at least one image recorded (any review state). */
@@ -123,9 +164,32 @@ export function computeReadinessReport(records, policy = CALIBRATION_POLICY_DEFA
   const safetyWarningRate = policyEval.criteria.safetyWarningRateNotWorseThanLegacy.value;
   const regressionCategoryCount = _regressionCategoryCount(byCategory);
 
+  // EPIC 2E-K-R2-FIX1 -- Section 4 (Readiness Honesty): every one of
+  // these fields is computed straight from `previewEvidence`/migration
+  // audit flags, never assumed. `browserSuiteVerified` is TRUE only
+  // when every eligible record's evidence was genuinely captured
+  // through the real browser pixel-truth chain (never a record where
+  // that could not be independently confirmed).
+  const eligibleRecords = _visuallyEligible(list);
+  const visualDecisionEligibleCount = eligibleRecords.length;
+  const pixelPreviewCoverage = _rate(visualDecisionEligibleCount, list.length);
+  const browserSuiteVerified = eligibleRecords.length > 0 && eligibleRecords.every(r => r?.previewEvidence?.browserVerified === true);
+  const unverifiedLegacyRecordCount = _pendingReReview(list).length;
+  const previewTruthCounts = _previewTruthCounts(list);
+
   let readinessStatus;
   if (reviewed.length < policy.minInsufficientDataFloor) {
     readinessStatus = 'INSUFFICIENT_DATA';
+  } else if (unverifiedLegacyRecordCount > 0) {
+    // Section 5: any V1-migrated record still awaiting a genuine
+    // re-review means the dataset's honest picture is incomplete --
+    // this is checked BEFORE browser/pixel-coverage checks because a
+    // migrated record has, by construction, neither.
+    readinessStatus = 'NEEDS_REVIEW_REFRESH';
+  } else if (!browserSuiteVerified) {
+    readinessStatus = 'NEEDS_BROWSER_VERIFICATION';
+  } else if (pixelPreviewCoverage === null || pixelPreviewCoverage < policy.minPixelPreviewCoverage) {
+    readinessStatus = 'NEEDS_PIXEL_PREVIEW';
   } else if (
     !policyEval.criteria.reviewedSamples.met ||
     !policyEval.criteria.skinImages.met ||
@@ -152,6 +216,12 @@ export function computeReadinessReport(records, policy = CALIBRATION_POLICY_DEFA
     severeIssueRate, safetyWarningRate, lowConfidenceRate,
     regressionCategoryCount,
     missingCoverageCategories,
+    // EPIC 2E-K-R2-FIX1 -- Section 4's required counters.
+    browserSuiteVerified,
+    visualDecisionEligibleCount,
+    pixelPreviewCoverage,
+    unverifiedLegacyRecordCount,
+    ...previewTruthCounts,
     readinessStatus,
     // Full policy evaluation is carried through so a caller/UI can show
     // exactly which criteria drove the status, never just the label.

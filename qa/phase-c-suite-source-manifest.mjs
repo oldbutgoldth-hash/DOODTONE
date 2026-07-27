@@ -170,6 +170,10 @@ export const SUITE_SOURCE_FILES = {
     'ui/visual-preview-comparison-controller-v2.js',
     'ui/isolated-visual-preview-renderer-v2.js',
     'core/preview-rendering/visual-preview-render-plan-v2.js',
+    // EPIC 2E-K-R2-FIX1 -- PIXEL TRUTH, DECISION GATE AND EVIDENCE CLOSURE.
+    'core/calibration-lab/preview-evidence.js',
+    'core/calibration-lab/pixel-truth-capture.js',
+    'core/calibration-lab/migrate-v1-to-v2.js',
   ],
 };
 

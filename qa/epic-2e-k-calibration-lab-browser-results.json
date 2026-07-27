@@ -1,13 +1,13 @@
 {
   "suite": "CONTROLLED V2 CALIBRATION LAB R1 -- Phase K: Calibration Lab Browser suite",
-  "runId": "0003fc97-e033-4638-83f3-c91ce779b428",
-  "startedAt": "2026-07-26T18:41:16.548Z",
-  "completedAt": "2026-07-26T18:41:16.548Z",
+  "runId": "abb4ce92-0bfd-42b7-ac41-61797f874095",
+  "startedAt": "2026-07-26T20:15:50.015Z",
+  "completedAt": "2026-07-26T20:15:50.015Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-26T18:41:16.548Z",
+  "generatedAt": "2026-07-26T20:15:50.015Z",
   "summary": {
     "total": 1,
     "pass": 0,

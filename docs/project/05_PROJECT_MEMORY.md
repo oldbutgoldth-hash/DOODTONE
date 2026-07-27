@@ -997,3 +997,89 @@ previously described.
 `node tools/local-gate.mjs`) on a machine with real Chromium and network
 access to close out Browser verification for both R1 and R2 together.
 EPIC 2E-L was explicitly not started, per instruction.
+
+---
+
+## EPIC 2E-K-R2-FIX1 -- Pixel Truth, Decision Gate & Evidence Closure
+
+**Status: all 15 sections closed; Final Browser Verification honestly
+attempted and not achievable in this sandbox (same confirmed
+network/environment constraint as R1 and R2).** Replaces "a Canvas
+element exists" with a real, provable pixel-truth standard for the
+Calibration Lab's Real Pixel Comparison feature: a side only counts as
+genuinely rendered if its claimed state, backing-canvas size, non-transparent
+pixel count, render generation, source fingerprint, geometry, and a real
+SHA-256 pixel hash ALL independently check out (an AND-chain, never an
+OR-shortcut). See `33_EPIC_2E_K_R2_FIX1_PIXEL_TRUTH_ARCHITECTURE.md` for
+the full architecture and the exact prior bug this replaces.
+
+**Calibration Schema V2:** every record now carries a `previewEvidence`
+object (`CALIBRATION_SCHEMA_VERSION = 2`) driving a single shared
+Decision Eligibility Gate (`isDecisionAllowedForEvidence()`) enforced
+identically in both the Controller (authoritative) and the Renderer
+(UI convenience) -- never two copies that could drift. See
+`26_EPIC_2E_K_CALIBRATION_SCHEMA.md` Section 12.
+
+**Migration:** a real, idempotent, fail-closed V1->V2 migration
+(`core/calibration-lab/migrate-v1-to-v2.js`) backs up every original
+record before migrating it, never loses data, and flags migrated
+decisions `legacyDecisionPreservedForAudit: true` -- visible for audit
+but excluded from Dashboard/Readiness math until a human re-reviews
+under the new gate. See `32_EPIC_2E_K_R2_FIX1_MIGRATION_GUIDE.md`.
+
+**Readiness Honesty:** 8 readiness statuses (was 5) -- 3 new tiers
+(`NEEDS_BROWSER_VERIFICATION`, `NEEDS_PIXEL_PREVIEW`,
+`NEEDS_REVIEW_REFRESH`) sit below `NEEDS_MORE_COVERAGE`, and
+`READY_FOR_CANDIDATE_REVIEW` is now structurally unreachable unless
+records are genuinely browser-verified with a real
+BOTH_RENDERED_DIFFERENT/IDENTITY pixel-truth verdict.
+
+**Also fixed this round:** the exact Browser-test OR-shortcut false
+positive reported by the user; Clear Current Answer now genuinely
+empties notes/decision/reviewedAt while preserving all snapshots; the
+Calibration Lab nav button's hardcoded English "Calibration Lab" label
+is now reactive i18n (TH: "ห้องทดสอบการปรับค่า"); new local QA tooling
+(`qa:preflight`, 6 other new npm scripts, `RUN_LUMIXA_CALIBRATION_QA_WINDOWS.bat`
+for a 13-step Windows-native run).
+
+**Production isolation (re-verified after FIX1):** 65/65 originally-locked
+core/ui files re-hashed with 0 mismatches, including all 5 files this
+round's spec explicitly named (`core/lightroom-mapping-engine/index.js`,
+`core/xmp-validator/index.js`, `core/preset-engine/index.js`,
+`ui/app.js`, `ui/ui-engine.js`). A real XMP generation against a fixed
+fixture, run against both the pre-FIX1 baseline and the current tree,
+produced byte-identical output (same length, same SHA-256, zero diff).
+Production Mapping and Production XMP Output are unchanged. EPIC 2E-L
+was explicitly not started; no Deploy occurred; Controlled V2 Production
+remains disabled throughout.
+
+**Test results (all real):** `node tools/esm-syntax-gate.mjs` 172/172;
+`qa/epic-2e-k-r2-fix1-pixel-truth-static-test.mjs` (NEW) 72/72;
+pre-existing suites re-verified (`epic-2e-k-calibration-lab-static-test.mjs`
+61/61, `-storage-test.mjs` 24/24 with a new Section 5 migration block,
+`-hostile-static-test.mjs` 19/19, `epic-2e-k-r2-real-pixel-comparison-static-test.mjs`
+34/34 -- zero regression from R2). `node qa/run-static-suites.mjs`: all
+green. Full detail: `34_EPIC_2E_K_R2_FIX1_QA_REPORT.md`.
+
+**Browser Verification Closure attempt:** identical finding to R1/R2 --
+no usable Chromium in this sandbox, and `npx playwright install chromium`
+fails with the same explicit `403 Connection blocked by network
+allowlist` error. `node tools/local-gate.mjs`: Steps 1-3 (Syntax,
+Focused Core, Static) genuinely PASS; Steps 4-14 (every Browser-dependent
+suite) honestly FAIL with `BROWSER_BINARY_UNAVAILABLE` -- disclosed, not
+fabricated.
+
+**Known limitations:** `core/calibration-lab/export-dataset.js` was not
+in this round's scope and does not yet expose `previewEvidence` fields
+in its CSV/JSON export; migrated V1 records contribute zero weight to
+Readiness until genuinely re-reviewed under the new gate; all prior
+rounds' unaddressed limitations (bounded live-pixel cache, version badge
+not bumped, the pre-existing header/badge documentation-drift note)
+remain as previously described. Full detail:
+`35_EPIC_2E_K_R2_FIX1_RELEASE_NOTES.md`.
+
+**Next EPIC recommendation:** close Final Browser Verification by
+running `RUN_LUMIXA_CALIBRATION_QA_WINDOWS.bat` (or
+`node tools/local-gate.mjs`) on a machine with real Chromium and
+network access -- the single remaining gap before this feature is fully
+Browser-verified. EPIC 2E-L remains explicitly not started.

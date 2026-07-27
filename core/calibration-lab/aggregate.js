@@ -25,7 +25,13 @@ function _rate(numerator, denominator) {
 }
 
 function _reviewedRecords(records) {
-  return records.filter(r => r && r.userDecision && r.userDecision !== 'NOT_REVIEWED');
+  // EPIC 2E-K-R2-FIX1 -- Section 4/5 (Readiness Honesty): a decision
+  // preserved only for audit purposes from a V1 migration (see
+  // schema.js's `legacyDecisionPreservedForAudit`) is real history but
+  // was never validated against real, browser-verified pixel evidence
+  // -- it must never be counted toward Dashboard win/tie/reject rates,
+  // exactly mirroring `recomputeSessionCounts()`'s own exclusion.
+  return records.filter(r => r && r.userDecision && r.userDecision !== 'NOT_REVIEWED' && r.legacyDecisionPreservedForAudit !== true);
 }
 
 /** Top-level counts + win/tie/rejection rates (computed over REVIEWED images only -- a denominator of unreviewed images would silently understate every rate). */

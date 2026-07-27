@@ -39,6 +39,11 @@ import {
   IMAGE_CATEGORIES, LIGHTING_CONDITIONS, USER_DECISIONS, ISSUE_CODES,
 } from '../../core/calibration-lab/codes.js';
 import { computeImageFingerprint } from '../../core/calibration-lab/run-comparison-pipeline.js';
+// EPIC 2E-K-R2-FIX1 -- PIXEL TRUTH, DECISION GATE AND EVIDENCE CLOSURE:
+// the renderer calls the exact SAME pure gate function the controller
+// uses to validate saveCurrentDecision() -- there is only ever one
+// copy of this logic, never a second UI-only approximation of it.
+import { isDecisionAllowedForEvidence, deriveUiBlockerReasonCode } from '../../core/calibration-lab/preview-evidence.js';
 // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON: reuse the exact same
 // production Visual Preview Comparison controller the main app uses
 // (never a reimplementation of pixel rendering logic). A FRESH
@@ -278,7 +283,21 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
 
   function _renderComparisonView(state) {
     const record = state.currentRecord;
-    const wrap = _el('div', { class: 'cal-grid-2' });
+    // EPIC 2E-K-R2-FIX1 -- Section 1/2/6: the AUTHORITATIVE evidence
+    // for gating/QA is the STORED previewEvidence captured for real at
+    // addImage() time (core/calibration-lab/pixel-truth-capture.js) --
+    // never the live re-render below, which exists purely so the user
+    // has something to look at in the before/after slider and can in
+    // principle be re-run many times without changing what is allowed.
+    const previewEvidence = record?.previewEvidence ?? null;
+    const pixelBlockerReasonCode = deriveUiBlockerReasonCode(previewEvidence, { v2RenderPlanAvailable: true });
+    const wrap = _el('div', {
+      class: 'cal-grid-2',
+      'data-cal-preview-truth-code': previewEvidence?.previewTruthCode ?? 'NOT_RENDERED',
+      'data-cal-browser-verified': String(previewEvidence?.browserVerified === true),
+      'data-cal-visual-decision-eligible': String(previewEvidence?.visualDecisionEligible === true),
+      'data-cal-pixel-blocker-reason': pixelBlockerReasonCode ?? 'NONE',
+    });
 
     const sliderPanel = _el('div', { class: 'cal-panel' });
     sliderPanel.appendChild(_el('div', { style: 'font-weight:600;margin-bottom:8px', text: T('a11y.sideBySide') }));
@@ -397,18 +416,46 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
 
   function _renderDecisionControls(state) {
     const record = state.currentRecord;
-    const panel = _el('div', { class: 'cal-panel', style: 'margin-top:16px' });
+    const previewEvidence = record?.previewEvidence ?? null;
+    const panel = _el('div', {
+      class: 'cal-panel', style: 'margin-top:16px',
+      'data-cal-visual-decision-eligible': String(previewEvidence?.visualDecisionEligible === true),
+    });
     const decisionRow = _el('div', { class: 'cal-row', role: 'radiogroup', 'aria-label': 'Decision' });
     let pendingDecision = record?.userDecision ?? 'NOT_REVIEWED';
     let pendingIssues = record?.issueCodes ? [...record.issueCodes] : [];
+    // EPIC 2E-K-R2-FIX1 -- Section 3: Decision Eligibility Gate. Every
+    // chip's `disabled` state is derived from the SAME pure
+    // isDecisionAllowedForEvidence() the Controller independently
+    // re-checks in saveCurrentDecision() -- this UI-side check is a
+    // convenience for the user, never the only enforcement point (see
+    // the Controller for the authoritative check).
     for (const d of USER_DECISIONS) {
       if (d === 'NOT_REVIEWED') continue;
-      decisionRow.appendChild(_el('button', {
+      const allowed = isDecisionAllowedForEvidence(d, previewEvidence);
+      const chip = _el('button', {
         class: 'cal-chip', type: 'button', 'aria-pressed': String(pendingDecision === d), text: T(`decision.${d}`),
-        onclick: (e) => { pendingDecision = d; [...decisionRow.children].forEach(c => c.setAttribute('aria-pressed', String(c === e.target))); },
-      }));
+        'data-cal-decision-code': d, 'data-cal-decision-allowed': String(allowed),
+        ...(allowed ? {} : { disabled: 'disabled', 'aria-disabled': 'true' }),
+      });
+      if (allowed) {
+        chip.addEventListener('click', (e) => { pendingDecision = d; [...decisionRow.children].forEach(c => c.setAttribute('aria-pressed', String(c === e.target))); });
+      } else {
+        chip.style.opacity = '0.45';
+        chip.style.cursor = 'not-allowed';
+      }
+      decisionRow.appendChild(chip);
     }
     panel.appendChild(decisionRow);
+
+    if (previewEvidence && previewEvidence.visualDecisionEligible !== true) {
+      const blockerCode = deriveUiBlockerReasonCode(previewEvidence, { v2RenderPlanAvailable: true });
+      panel.appendChild(_el('div', {
+        class: 'cal-note', style: 'margin-top:8px;color:var(--danger)',
+        'data-cal-role': 'decision-gate-reason', 'data-cal-pixel-blocker-reason': blockerCode ?? 'NONE',
+        text: T(`pixelPreview.blocker.${blockerCode ?? 'V2_RENDER_FAILED'}`),
+      }));
+    }
 
     panel.appendChild(_el('div', { style: 'font-weight:600;margin-top:12px', text: T('a11y.issueChecklist') }));
     const issueWrap = _el('div', { role: 'group', 'aria-label': T('a11y.issueChecklist') });
@@ -477,6 +524,16 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
       ['V2 win rate', rr.v2WinRate], ['Legacy win rate', rr.legacyWinRate], ['Severe issue rate', rr.severeIssueRate],
       ['Safety warning rate', rr.safetyWarningRate], ['Low confidence rate', rr.lowConfidenceRate],
       ['Regression category count', rr.regressionCategoryCount],
+      // EPIC 2E-K-R2-FIX1 -- Section 4: Readiness Honesty counters --
+      // always shown alongside the win-rate numbers so a reviewer
+      // never sees a rate without also seeing how much of it is
+      // actually backed by proven pixel evidence.
+      ['Browser suite verified', rr.browserSuiteVerified], ['Visually eligible images', rr.visualDecisionEligibleCount],
+      ['Pixel preview coverage', rr.pixelPreviewCoverage], ['Unverified/pending re-review records', rr.unverifiedLegacyRecordCount],
+      ['Verified different', rr.verifiedDifferentCount], ['Verified identical', rr.verifiedIdentityCount],
+      ['Render failures', rr.renderFailureCount], ['Empty V2 canvas count', rr.emptyV2CanvasCount],
+      ['Geometry mismatch count', rr.geometryMismatchCount], ['Source mismatch count', rr.sourceMismatchCount],
+      ['Stale generation count', rr.staleGenerationCount],
     ];
     for (const [label, val] of rows) table.appendChild(_el('tr', {}, [_el('td', { text: label }), _el('td', { text: val === null ? '—' : String(val) })]));
     panel.appendChild(table);

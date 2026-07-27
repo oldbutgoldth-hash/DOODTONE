@@ -1,7 +1,7 @@
 {
   "name": "lumixa_ai_epic_2e_j_phase_c_recovered_deadcode_clean",
   "version": "1.0.0",
-  "description": "This is a **drop-in replacement** for your original `PresetForge AI` static site — not a mockup. All 30 analysis engines in `core/` are byte-for-byte unchanged from your codebase (verified via diff — Stage 2.4.2B.1); `ui/app.js` and `ui/ui-engine.js` are your original controller logic with only the styling mechanism swapped (inline CSS custom properties instead of `styles.css`); every canvas renderer (`ui/*-renderer.js`) is untouched.",
+  "description": "This is a **drop-in replacement** for your original `PresetForge AI` static site \u2014 not a mockup. All 30 analysis engines in `core/` are byte-for-byte unchanged from your codebase (verified via diff \u2014 Stage 2.4.2B.1); `ui/app.js` and `ui/ui-engine.js` are your original controller logic with only the styling mechanism swapped (inline CSS custom properties instead of `styles.css`); every canvas renderer (`ui/*-renderer.js`) is untouched.",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -15,7 +15,14 @@
     "test:browser:report": "node qa/run-browser-suites.mjs --report",
     "test:local-gate": "node tools/local-gate.mjs",
     "test:deploy": "node qa/epic-2e-j-deploy-preview-geometry-test.mjs",
-    "dev:lan": "node tools/local-static-server.mjs 3000 0.0.0.0"
+    "dev:lan": "node tools/local-static-server.mjs 3000 0.0.0.0",
+    "qa:preflight": "node qa/preflight.mjs",
+    "test:calibration-browser": "node qa/epic-2e-k-calibration-lab-browser-test.mjs",
+    "test:calibration-browser:report": "node qa/epic-2e-k-calibration-lab-browser-test.mjs --report",
+    "test:calibration-storage": "node qa/epic-2e-k-calibration-lab-storage-test.mjs",
+    "test:calibration-migration": "node qa/epic-2e-k-calibration-lab-storage-test.mjs",
+    "test:calibration-pixel": "node qa/epic-2e-k-r2-fix1-pixel-truth-static-test.mjs",
+    "test:calibration-full": "node qa/calibration-full-suite.mjs"
   },
   "keywords": [],
   "author": "",

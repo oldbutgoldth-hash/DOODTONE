@@ -23,20 +23,34 @@ import {
   validateSession, validateImageRecord,
 } from '../../core/calibration-lab/schema.js';
 import { PERSISTENCE_MODES } from '../../core/calibration-lab/codes.js';
+// EPIC 2E-K-R2-FIX1 -- Section 5: Migration V1 -> V2.
+import { classifyMigrationNeed, migrateImageRecordV1ToV2 } from '../../core/calibration-lab/migrate-v1-to-v2.js';
 
 const DB_NAME = 'lumixa-calibration-lab';
-const DB_VERSION = 1;
+// EPIC 2E-K-R2-FIX1 -- Section 5: bumped 1 -> 2 to add the
+// `imagesLegacyBackupV1` object store (the "backup before migration"
+// requirement) -- IndexedDB's own `onupgradeneeded` runs exactly once
+// per browser profile the first time this new version is opened,
+// which is also naturally the first time a v1 record set is migrated.
+const DB_VERSION = 2;
 const SESSIONS_STORE = 'sessions';
 const IMAGES_STORE = 'images';
 const IMAGES_BY_SESSION_INDEX = 'bySessionId';
+const IMAGES_LEGACY_BACKUP_V1_STORE = 'imagesLegacyBackupV1';
 
-// Schema-version migration guard. Currently only v1 exists, so this is
-// an honest empty scaffold -- a session/record whose stored
-// `calibrationSchemaVersion` is NEWER than `CALIBRATION_SCHEMA_VERSION`
-// (this code is older than the data) or older but has no registered
-// migration step is treated as corrupt and quarantined, never guessed
-// at or silently coerced.
-const SESSION_MIGRATIONS = Object.freeze({});
+// Schema-version migration guard for SESSION objects (image records
+// have their own, richer migration path -- see
+// core/calibration-lab/migrate-v1-to-v2.js and `_migrateImageRecordRow`
+// below). A session's OWN shape only ever gained one additive counter
+// field (`legacyAuditOnlyCount`, Section 4/5) between v1 and v2, so
+// its migration step is a trivial additive default -- a session whose
+// stored `calibrationSchemaVersion` is NEWER than
+// `CALIBRATION_SCHEMA_VERSION` (this code is older than the data) or
+// older but has no registered migration step is treated as corrupt and
+// quarantined, never guessed at or silently coerced.
+const SESSION_MIGRATIONS = Object.freeze({
+  1: (session) => ({ ...session, calibrationSchemaVersion: 2, legacyAuditOnlyCount: typeof session.legacyAuditOnlyCount === 'number' ? session.legacyAuditOnlyCount : 0 }),
+});
 
 function _isIndexedDbAvailable() {
   try {
@@ -71,6 +85,16 @@ function _openIndexedDb() {
       if (!db.objectStoreNames.contains(IMAGES_STORE)) {
         const imagesStore = db.createObjectStore(IMAGES_STORE, { keyPath: 'imageId' });
         imagesStore.createIndex(IMAGES_BY_SESSION_INDEX, '_sessionId', { unique: false });
+      }
+      // EPIC 2E-K-R2-FIX1 -- Section 5: "Backup before migration" --
+      // the very first time a v1 record is migrated, its untouched raw
+      // shape is written here BEFORE the migrated version overwrites
+      // it in IMAGES_STORE, so original data is never lost even if a
+      // future migration step turns out to have a bug. Never read by
+      // any Calibration Lab UI/controller code path -- write-only
+      // safety net, keyed by imageId.
+      if (!db.objectStoreNames.contains(IMAGES_LEGACY_BACKUP_V1_STORE)) {
+        db.createObjectStore(IMAGES_LEGACY_BACKUP_V1_STORE, { keyPath: 'imageId' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -165,6 +189,55 @@ function _createIndexedDbBackend(db) {
     return record;
   }
 
+  /**
+   * EPIC 2E-K-R2-FIX1 -- Section 5: migrates ONE raw stored row if (and
+   * only if) it genuinely needs it, backing up the untouched original
+   * to IMAGES_LEGACY_BACKUP_V1_STORE first (skipped if a backup for
+   * this imageId already exists -- idempotent, never double-backed-up
+   * or overwritten), then persisting the migrated shape back to
+   * IMAGES_STORE so future reads see the v2 shape directly. A raw row
+   * that is already up to date is returned unchanged with zero writes.
+   * Never throws -- any failure here is treated as fail-closed
+   * (the row is reported corrupt) by the caller.
+   */
+  async function _migrateImageRecordRowIfNeeded(raw) {
+    const need = classifyMigrationNeed(raw);
+    if (need === 'CORRUPT') return null;
+    if (need === 'UP_TO_DATE') return raw;
+    const migrated = migrateImageRecordV1ToV2(raw);
+    if (!migrated) return null;
+    // A row whose OTHER fields (userDecision, imageCategories, etc.)
+    // are themselves garbage (e.g. a hostile/corrupted row that
+    // happens to have an imageId) must still be treated as corrupt
+    // even after migration adds the new v2 fields -- migration only
+    // ever ADDS previewEvidence/schema-version/audit flags, it never
+    // repairs pre-existing invalid data, so if the migrated shape
+    // still fails structural validation this row is fail-closed here,
+    // BEFORE anything is written back to IMAGES_STORE.
+    const { _sessionId: _unusedForValidation, ...migratedForValidation } = migrated;
+    if (!validateImageRecord(migratedForValidation)) return null;
+    try {
+      const backupTx = db.transaction(IMAGES_LEGACY_BACKUP_V1_STORE, 'readwrite');
+      const backupStore = backupTx.objectStore(IMAGES_LEGACY_BACKUP_V1_STORE);
+      const existingBackup = await _promisifyRequest(backupStore.get(raw.imageId));
+      if (!existingBackup) backupStore.put({ ...raw, _backedUpAt: new Date().toISOString() });
+      await new Promise((resolve, reject) => { backupTx.oncomplete = resolve; backupTx.onerror = () => reject(backupTx.error); });
+    } catch {
+      // A backup-write failure must never block migration entirely --
+      // but it means we fail closed on THIS row rather than risk
+      // persisting a migrated shape with no backup safety net.
+      return null;
+    }
+    try {
+      const writeTx = db.transaction(IMAGES_STORE, 'readwrite');
+      writeTx.objectStore(IMAGES_STORE).put({ ...migrated, _sessionId: raw._sessionId });
+      await new Promise((resolve, reject) => { writeTx.oncomplete = resolve; writeTx.onerror = () => reject(writeTx.error); });
+    } catch {
+      return null;
+    }
+    return migrated;
+  }
+
   async function _scanImageRecords(sessionId) {
     const tx = db.transaction(IMAGES_STORE, 'readonly');
     const idx = tx.objectStore(IMAGES_STORE).index(IMAGES_BY_SESSION_INDEX);
@@ -172,7 +245,9 @@ function _createIndexedDbBackend(db) {
     const valid = [];
     let corruptCount = 0;
     for (const raw of all) {
-      const { _sessionId, ...rest } = raw;
+      const migratedOrSame = await _migrateImageRecordRowIfNeeded(raw);
+      if (!migratedOrSame) { corruptCount += 1; continue; }
+      const { _sessionId, ...rest } = migratedOrSame;
       if (validateImageRecord(rest)) valid.push(rest);
       else corruptCount += 1;
     }
@@ -189,7 +264,9 @@ function _createIndexedDbBackend(db) {
     const all = await _promisifyRequest(tx.objectStore(IMAGES_STORE).getAll());
     let validCount = 0, corruptCount = 0, approxBytes = 0;
     for (const raw of all) {
-      const { _sessionId, ...rest } = raw;
+      const migratedOrSame = await _migrateImageRecordRowIfNeeded(raw);
+      if (!migratedOrSame) { corruptCount += 1; continue; }
+      const { _sessionId, ...rest } = migratedOrSame;
       if (validateImageRecord(rest)) { validCount += 1; approxBytes += JSON.stringify(rest).length; }
       else corruptCount += 1;
     }
@@ -230,6 +307,11 @@ function _createIndexedDbBackend(db) {
 function _createInMemoryBackend() {
   const sessions = new Map();
   const imagesBySession = new Map();
+  // EPIC 2E-K-R2-FIX1 -- Section 5: same backup-before-migration
+  // guarantee as the IndexedDB backend, keyed by imageId -- never
+  // persisted across a reload (this backend is memory-only by
+  // definition), but idempotent and fail-closed identically.
+  const legacyBackupV1 = new Map();
 
   async function listSessions() {
     return [...sessions.values()].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
@@ -267,7 +349,24 @@ function _createInMemoryBackend() {
   }
   async function loadImageRecordsForSession(sessionId) {
     const bucket = imagesBySession.get(sessionId);
-    return bucket ? [...bucket.values()] : [];
+    if (!bucket) return [];
+    const valid = [];
+    for (const raw of bucket.values()) {
+      const need = classifyMigrationNeed(raw);
+      if (need === 'CORRUPT') continue;
+      if (need === 'UP_TO_DATE') { if (validateImageRecord(raw)) valid.push(raw); continue; }
+      const migrated = migrateImageRecordV1ToV2(raw);
+      if (!migrated) continue;
+      // Same fail-closed guarantee as the IndexedDB backend: migration
+      // only ADDS fields, it never repairs pre-existing garbage --
+      // a still-invalid migrated shape is treated as corrupt, never
+      // persisted or handed to the caller.
+      if (!validateImageRecord(migrated)) continue;
+      if (!legacyBackupV1.has(raw.imageId)) legacyBackupV1.set(raw.imageId, { ...raw, _backedUpAt: new Date().toISOString() });
+      bucket.set(raw.imageId, migrated); // persist the migrated shape for subsequent reads, same as the IndexedDB backend
+      valid.push(migrated);
+    }
+    return valid;
   }
   async function getStorageUsageSummary() {
     let imageRecordCount = 0, approxBytes = 0;

@@ -111,6 +111,8 @@ const STATIC_SUITES = [
   // pixel-rendering chain never touches XMP serialization or
   // Production-activation code.
   'qa/epic-2e-k-r2-real-pixel-comparison-static-test.mjs',
+  // EPIC 2E-K-R2-FIX1 -- PIXEL TRUTH, DECISION GATE AND EVIDENCE CLOSURE.
+  'qa/epic-2e-k-r2-fix1-pixel-truth-static-test.mjs',
 ];
 
 let anyFailed = false;

@@ -6,7 +6,7 @@ Source of truth for all of it is `core/calibration-lab/codes.js` and
 ever disagree, the source code wins (per project convention); re-derive
 this document from source rather than trusting stale prose.
 
-`CALIBRATION_SCHEMA_VERSION = 1` (in `schema.js`).
+`CALIBRATION_SCHEMA_VERSION = 2` (in `schema.js`) as of EPIC 2E-K-R2-FIX1. Sections 1-11 below describe the V1 shape, which every V2 record still contains in full (additive-only) -- see Section 12 for exactly what V2 adds, and `32_EPIC_2E_K_R2_FIX1_MIGRATION_GUIDE.md` for how a V1 record already in storage becomes a V2 record.
 
 ## 1. Calibration Session
 
@@ -111,10 +111,16 @@ SATURATION_TOO_LOW, COLOR_SHIFT, VISUAL_RESULT_UNSTABLE, OTHER`
 `SKIN_ISSUE_CODES` (used by the dashboard's skin-tone-issue counter) is
 the subset: `SKIN_TONE_UNNATURAL, SKIN_TOO_ORANGE, SKIN_TOO_PALE`.
 
-## 8. Readiness Statuses (5 -- PRODUCTION_READY is structurally excluded)
+## 8. Readiness Statuses (8 as of FIX1 -- PRODUCTION_READY is structurally excluded)
 
 `INSUFFICIENT_DATA, NEEDS_MORE_COVERAGE, NEEDS_CALIBRATION,
-PROMISING_NOT_READY, READY_FOR_CANDIDATE_REVIEW`
+PROMISING_NOT_READY, READY_FOR_CANDIDATE_REVIEW, NEEDS_BROWSER_VERIFICATION,
+NEEDS_PIXEL_PREVIEW, NEEDS_REVIEW_REFRESH`
+
+The last three were added by EPIC 2E-K-R2-FIX1 (Section 4, "Readiness
+Honesty") specifically so that `READY_FOR_CANDIDATE_REVIEW` can never be
+reached on unverified evidence -- see Section 12 below and the ladder
+order in `core/calibration-lab/readiness.js`.
 
 `FORBIDDEN_READINESS_STATUS = 'PRODUCTION_READY'` is a named constant
 specifically so that both `isValidReadinessStatus()` and any future code
@@ -162,3 +168,80 @@ contain a comma/quote/newline); line endings are `\r\n`.
 `MAX_STORED_SESSIONS = 20`. Both storage backends enforce these by
 throwing (`.code = 'SESSION_LIMIT_REACHED'` / `'IMAGE_LIMIT_REACHED'`),
 never by silently evicting older data.
+
+## 12. Schema V2 -- `previewEvidence` (EPIC 2E-K-R2-FIX1)
+
+Every Semantic Image Test Record (Section 2) gains one additive field,
+`previewEvidence`, plus two audit-trail flags. Nothing in Sections 1-11
+above was removed or renumbered -- a V2 record is a strict superset of
+a V1 record.
+
+```
+{
+  ...(all Section 2 fields, unchanged)...
+  recordSchemaVersion: 2,
+  previewEvidence: {
+    previewTruthCode: PreviewTruthCode,             // see below, 10 codes
+    legacyPreviewState: string,                      // e.g. 'rendered' | 'unknown' | 'failed'
+    controlledV2PreviewState: string,
+    legacyTransformed: boolean,
+    controlledV2Transformed: boolean,
+    sameSourceGeometry: boolean,
+    sourceWidth: integer | null,
+    sourceHeight: integer | null,
+    legacyOutputWidth: integer | null,
+    legacyOutputHeight: integer | null,
+    controlledV2OutputWidth: integer | null,
+    controlledV2OutputHeight: integer | null,
+    legacyPixelHash: string (sha256 hex) | null,
+    controlledV2PixelHash: string (sha256 hex) | null,
+    legacyNonTransparentPixelCount: integer | null,
+    controlledV2NonTransparentPixelCount: integer | null,
+    pixelDifferenceDetected: boolean | null,
+    browserVerified: boolean,
+    visualDecisionEligible: boolean,
+    sourceFingerprintMatch: boolean,
+    renderGenerationId: string | number | null,
+    verifiedAt: ISO-8601 string | null,
+  },
+  legacyDecisionPreservedForAudit: boolean,   // true only for migrated V1 records
+  requiresVisualReReview: boolean,            // true only for migrated V1 records
+}
+```
+
+**`previewTruthCode` (10 codes, `core/calibration-lab/codes.js` ->
+`PREVIEW_TRUTH_CODES`):** `BOTH_RENDERED_DIFFERENT, BOTH_RENDERED_IDENTITY,
+LEGACY_RENDER_FAILED, V2_RENDER_FAILED, V2_EMPTY_CANVAS, GEOMETRY_MISMATCH,
+SOURCE_MISMATCH, STALE_GENERATION, SOURCE_UNAVAILABLE, NOT_RENDERED`.
+
+`previewEvidence` is built exclusively by
+`buildPreviewEvidence()`/`classifyPreviewTruth()` in
+`core/calibration-lab/preview-evidence.js` (100% pure, no DOM) from
+measurements taken by `core/calibration-lab/pixel-truth-capture.js`
+(the sole browser-only orchestrator -- see
+`33_EPIC_2E_K_R2_FIX1_PIXEL_TRUTH_ARCHITECTURE.md`). `previewEvidence`
+NEVER contains a raw canvas, blob, base64 string, object URL, file path,
+filename, or the original image -- only stable codes, booleans,
+integers, and SHA-256 hex hashes. This is enforced structurally (no
+function in the module ever reads or forwards such a value) and proven
+by the hostile static test suite.
+
+**Decision Eligibility Gate** (Section 3 of the FIX1 spec):
+`isDecisionAllowedForEvidence(decisionCode, previewEvidence)` --
+exported from the same `preview-evidence.js` module and imported by
+BOTH `ui/calibration-lab/calibration-lab-controller.js` (authoritative
+enforcement inside `saveCurrentDecision()`) and
+`ui/calibration-lab/calibration-lab-renderer.js` (UI-level chip
+disabling) -- is the single source of truth for which `UserDecision`
+values a given `previewEvidence` object may legally pair with:
+
+- `LEGACY_BETTER` / `V2_BETTER` require `previewTruthCode ===
+  'BOTH_RENDERED_DIFFERENT'` AND every other evidence field proving
+  genuine, matching, non-stale rendering on both sides.
+- `ABOUT_EQUAL` / `BOTH_UNACCEPTABLE` / `NOT_SURE` are allowed for
+  `BOTH_RENDERED_DIFFERENT` or `BOTH_RENDERED_IDENTITY` only.
+- Every other `previewTruthCode` allows only `NOT_REVIEWED` --
+  Decision Controls and Save are disabled in the UI AND rejected by the
+  Controller even when called directly, bypassing the UI (verified by
+  a hostile direct-controller-call test in
+  `qa/epic-2e-k-calibration-lab-browser-test.mjs`).

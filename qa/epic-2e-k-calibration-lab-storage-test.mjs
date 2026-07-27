@@ -57,7 +57,13 @@ async function main() {
   // partial write, manual tampering, etc.) -- reads must quarantine
   // these silently, never crash, never return them to the caller.
   const rawDb = await new Promise((resolve, reject) => {
-    const req = indexedDB.open('lumixa-calibration-lab', 1);
+    // EPIC 2E-K-R2-FIX1: open WITHOUT an explicit version -- the
+    // database already exists (created by createCalibrationLabStorage()
+    // above, now at DB_VERSION=2 per Section 5's backup-store
+    // addition). Requesting a lower version than what already exists
+    // throws VersionError; omitting the version opens at whatever
+    // version is already current.
+    const req = indexedDB.open('lumixa-calibration-lab');
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
@@ -107,6 +113,64 @@ async function main() {
   const usageAfterClearAll = await storage.getStorageUsageSummary();
   record('clearAll() ("clear all calibration data") empties every session', afterClearAll.length === 0, {});
   record('clearAll() also resets the corrupt-record count (nothing left to scan)', usageAfterClearAll.corruptRecordCount === 0 && usageAfterClearAll.sessionCount === 0, { usageAfterClearAll });
+
+  // ── EPIC 2E-K-R2-FIX1 -- Section 5: V1 -> V2 Migration, against a
+  // REAL IndexedDB transaction (via fake-indexeddb), not a mock. ──────
+
+  const v1Session = {
+    sessionId: 'cal-session-fix1-migration-test', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    locale: 'th', appVersion: 'pre-fix1', calibrationSchemaVersion: 1,
+    imageCount: 1, reviewedCount: 1, legacyWins: 0, v2Wins: 1, ties: 0, bothRejected: 0, pendingCount: 0,
+  };
+  const v1Record = {
+    imageId: 'cal-image-fix1-migration-test', imageFingerprint: 'dhash-fix1', imageCategories: ['EVENT'],
+    lightingCondition: 'MIXED', containsSkin: false, analysisGenerationId: 'gen-1',
+    legacySnapshot: null, controlledV2Snapshot: null, safetySnapshot: null,
+    userDecision: 'V2_BETTER', issueCodes: [], notes: 'pre-fix1 stored note', reviewedAt: '2025-01-01T00:00:00.000Z',
+    _sessionId: 'cal-session-fix1-migration-test',
+  };
+  await new Promise((resolve, reject) => {
+    const req = indexedDB.open('lumixa-calibration-lab', 2);
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction(['sessions', 'images'], 'readwrite');
+      tx.objectStore('sessions').put(v1Session);
+      tx.objectStore('images').put(v1Record);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    };
+    req.onerror = () => reject(req.error);
+  });
+
+  const migratedSessions = await storage.listSessions();
+  const migratedSession = migratedSessions.find(s => s.sessionId === 'cal-session-fix1-migration-test');
+  record('Section 5: a raw v1 session read back via listSessions() is migrated to calibrationSchemaVersion=2', migratedSession?.calibrationSchemaVersion === 2, { migratedSession });
+  record('Section 5: the migrated session gains legacyAuditOnlyCount=0 as an additive default (no data invented beyond the additive field)', migratedSession?.legacyAuditOnlyCount === 0, {});
+
+  const migratedRecords = await storage.loadImageRecordsForSession('cal-session-fix1-migration-test');
+  record('Section 5: loadImageRecordsForSession() migrates the raw v1 image record to schema v2 (previewEvidence present)', migratedRecords.length === 1 && migratedRecords[0].previewEvidence?.previewTruthCode === 'NOT_RENDERED', { migratedRecords });
+  record('Section 5: the migrated record PRESERVES the original notes/decision verbatim (never lost)', migratedRecords[0]?.notes === 'pre-fix1 stored note' && migratedRecords[0]?.userDecision === 'V2_BETTER', {});
+  record('Section 5: the migrated record is flagged legacyDecisionPreservedForAudit=true / requiresVisualReReview=true', migratedRecords[0]?.legacyDecisionPreservedForAudit === true && migratedRecords[0]?.requiresVisualReReview === true, {});
+
+  const migratedRecordsAgain = await storage.loadImageRecordsForSession('cal-session-fix1-migration-test');
+  record('Section 5: migration is IDEMPOTENT across repeated loads (identical result, no double-migration artifacts)', JSON.stringify(migratedRecords[0]) === JSON.stringify(migratedRecordsAgain[0]), {});
+
+  // Backup-before-migration: the untouched original row must exist in
+  // the dedicated backup store, with its original notes intact.
+  const backupRows = await new Promise((resolve, reject) => {
+    const req = indexedDB.open('lumixa-calibration-lab', 2);
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction('imagesLegacyBackupV1', 'readonly');
+      const getAllReq = tx.objectStore('imagesLegacyBackupV1').getAll();
+      getAllReq.onsuccess = () => { db.close(); resolve(getAllReq.result); };
+      getAllReq.onerror = () => { db.close(); reject(getAllReq.error); };
+    };
+    req.onerror = () => reject(req.error);
+  });
+  const backupRow = backupRows.find(r => r.imageId === 'cal-image-fix1-migration-test');
+  record('Section 5: a backup of the untouched original v1 record exists in imagesLegacyBackupV1 before migration overwrote it', !!backupRow && backupRow.notes === 'pre-fix1 stored note', { backupRow });
+  record('Section 5: exactly ONE backup row exists for this imageId (not re-backed-up on every subsequent load)', backupRows.filter(r => r.imageId === 'cal-image-fix1-migration-test').length === 1, {});
 
   console.log(`\n${passCount}/${passCount + failCount} PASS, ${failCount} FAIL`);
   process.exit(failCount > 0 ? 1 : 0);

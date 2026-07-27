@@ -24,6 +24,9 @@ import { isValidCategoryList, isValidLightingCondition, isValidUserDecision, isV
 import { computeCalibrationDashboard } from '../../core/calibration-lab/aggregate.js';
 import { computeReadinessReport } from '../../core/calibration-lab/readiness.js';
 import { buildExportJson, buildExportCsv } from '../../core/calibration-lab/export-dataset.js';
+// EPIC 2E-K-R2-FIX1 -- PIXEL TRUTH, DECISION GATE AND EVIDENCE CLOSURE
+import { capturePixelTruthEvidence } from '../../core/calibration-lab/pixel-truth-capture.js';
+import { isDecisionAllowedForEvidence, deriveUiBlockerReasonCode, createNotRenderedPreviewEvidence } from '../../core/calibration-lab/preview-evidence.js';
 
 const APP_VERSION_FALLBACK = 'unknown';
 
@@ -150,6 +153,16 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
       currentIndex = records.length > 0 ? 0 : -1;
       sessionState = 'ACTIVE';
       calibrationMode = 'REVIEW';
+      // EPIC 2E-K-R2-FIX1 -- Section 5: loading records can silently
+      // migrate one or more of them (V1 -> V2 -- see
+      // calibration-lab-storage.js), which changes which decisions are
+      // allowed to count toward legacyWins/v2Wins/ties/bothRejected
+      // (Section 4's honesty rule excludes `legacyDecisionPreservedForAudit`
+      // records). The session's own rollup counters must be
+      // recomputed and re-persisted immediately after every load --
+      // never left stale from before a migration ran.
+      session = recomputeSessionCounts(session, records);
+      await storage.saveSession(session);
     } catch {
       lastActionError = 'OPEN_FAILED';
     }
@@ -172,6 +185,27 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
     if (!isValidLightingCondition(lightingCondition)) { lastActionError = 'INVALID_LIGHTING_CONDITION'; _notify(); return getState(); }
     try {
       const pipelineResult = await runCalibrationComparisonPipeline(imgElement, { analysisGenerationId: `${session.sessionId}-${records.length + 1}` });
+      // EPIC 2E-K-R2-FIX1 -- Section 1/2: capture REAL pixel-truth
+      // evidence for THIS image right now, at ingestion time -- never
+      // deferred until the user happens to open the comparison slider.
+      // Uses two temporary, never-displayed canvases (see
+      // pixel-truth-capture.js) so every record's previewEvidence is
+      // populated before it is ever persisted, and Readiness/Dashboard
+      // gating (Section 3/4) never has to guess about an image the
+      // user has not yet looked at.
+      let previewEvidence;
+      try {
+        previewEvidence = await capturePixelTruthEvidence({
+          imgElement,
+          renderPlan: pipelineResult.renderPlanForPixelPreviewTransientOnly,
+          analysisGenerationId: pipelineResult.analysisGenerationId,
+          expectedImageFingerprint: pipelineResult.imageFingerprint,
+        });
+      } catch {
+        // A capture failure is never silently treated as success --
+        // fail closed to the honest "not rendered" evidence shape.
+        previewEvidence = createNotRenderedPreviewEvidence();
+      }
       const record = createImageTestRecord({
         imageFingerprint: pipelineResult.imageFingerprint,
         imageCategories, lightingCondition,
@@ -180,6 +214,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
         legacySnapshot: pipelineResult.legacySnapshot,
         controlledV2Snapshot: pipelineResult.controlledV2Snapshot,
         safetySnapshot: pipelineResult.safetySnapshot,
+        previewEvidence,
       });
       await storage.saveImageRecord(session.sessionId, record);
       records = [...records, record];
@@ -220,6 +255,20 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
     if (currentIndex < 0 || !records[currentIndex]) { lastActionError = 'NO_CURRENT_IMAGE'; _notify(); return getState(); }
     if (!isValidUserDecision(userDecision)) { lastActionError = 'INVALID_DECISION'; _notify(); return getState(); }
     if (!isValidIssueCodeList(issueCodes)) { lastActionError = 'INVALID_ISSUE_CODES'; _notify(); return getState(); }
+    // EPIC 2E-K-R2-FIX1 -- Section 3: the Decision Eligibility Gate is
+    // checked HERE, in the Controller, using the exact same pure
+    // isDecisionAllowedForEvidence() the renderer uses to grey out
+    // buttons -- so a caller that bypasses the UI entirely (a test, a
+    // future bug in the renderer, anything) can never save V2_BETTER/
+    // LEGACY_BETTER/etc. against evidence that was not genuinely
+    // proven. This is deliberately NOT trusted to the UI's `disabled`
+    // attribute alone (per the spec's explicit requirement).
+    const currentEvidence = records[currentIndex]?.previewEvidence ?? null;
+    if (!isDecisionAllowedForEvidence(userDecision, currentEvidence)) {
+      lastActionError = 'DECISION_NOT_ELIGIBLE';
+      _notify();
+      return getState();
+    }
     const boundedNotes = typeof notes === 'string' ? notes.slice(0, MAX_NOTES_LENGTH) : '';
     try {
       const updated = { ...records[currentIndex], userDecision, issueCodes: [...issueCodes], notes: boundedNotes, reviewedAt: new Date().toISOString() };
@@ -234,8 +283,32 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
     return getState();
   }
 
+  /**
+   * EPIC 2E-K-R2-FIX1 -- Section 7: clears the CURRENT image's answer
+   * completely -- `userDecision` back to NOT_REVIEWED, `issueCodes`
+   * emptied, `notes` genuinely emptied (the R2 implementation
+   * incorrectly re-supplied the OLD notes value here, which is exactly
+   * the "Clear Current Answer does not clear Notes" bug reported).
+   * `reviewedAt` is reset to null directly (never left at its previous
+   * timestamp) since NOT_REVIEWED is always gate-allowed and bypasses
+   * saveCurrentDecision()'s own `reviewedAt = now` behavior.
+   * Analysis/Legacy/Controlled-V2/Preview-Evidence snapshots are never
+   * touched by this function -- only the human-authored review fields.
+   */
   async function clearCurrentAnswer() {
-    return saveCurrentDecision({ userDecision: 'NOT_REVIEWED', issueCodes: [], notes: records[currentIndex]?.notes ?? '' });
+    lastActionError = null;
+    if (currentIndex < 0 || !records[currentIndex]) { lastActionError = 'NO_CURRENT_IMAGE'; _notify(); return getState(); }
+    try {
+      const updated = { ...records[currentIndex], userDecision: 'NOT_REVIEWED', issueCodes: [], notes: '', reviewedAt: null };
+      await storage.saveImageRecord(session.sessionId, updated);
+      records = records.map((r, i) => (i === currentIndex ? updated : r));
+      session = recomputeSessionCounts(session, records);
+      await storage.saveSession(session);
+    } catch (e) {
+      lastActionError = e?.code ?? 'CLEAR_ANSWER_FAILED';
+    }
+    _notify();
+    return getState();
   }
 
   async function endSession() {
@@ -278,19 +351,29 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
    * ever change them, by construction (see the module doc above).
    */
   function getQaSnapshot() {
+    const current = currentIndex >= 0 ? records[currentIndex] : null;
+    const currentEvidence = current?.previewEvidence ?? null;
     return {
       calibrationMode, sessionState, persistenceMode,
       imageCount: records.length,
       reviewedCount: records.filter(r => r.userDecision !== 'NOT_REVIEWED').length,
       pendingCount: records.filter(r => r.userDecision === 'NOT_REVIEWED').length,
-      currentImageId: currentIndex >= 0 && records[currentIndex] ? records[currentIndex].imageId : null,
-      currentDecisionCode: currentIndex >= 0 && records[currentIndex] ? records[currentIndex].userDecision : null,
-      selectedIssueCodes: currentIndex >= 0 && records[currentIndex] ? [...records[currentIndex].issueCodes] : [],
+      currentImageId: current ? current.imageId : null,
+      currentDecisionCode: current ? current.userDecision : null,
+      selectedIssueCodes: current ? [...current.issueCodes] : [],
       readinessCode: getReadinessReport().readinessStatus,
       productionSource: 'legacy',
       productionWrite: false,
       controlledV2Apply: false,
       previewExport: false,
+      // EPIC 2E-K-R2-FIX1 -- Section 3/6: the exact evidence fields the
+      // Browser QA suite must read to prove the Decision Gate is
+      // genuinely enforced -- never derived from visible text.
+      currentPreviewTruthCode: currentEvidence?.previewTruthCode ?? null,
+      currentBrowserVerified: currentEvidence?.browserVerified ?? false,
+      currentVisualDecisionEligible: currentEvidence?.visualDecisionEligible ?? false,
+      currentPixelBlockerReasonCode: deriveUiBlockerReasonCode(currentEvidence, { v2RenderPlanAvailable: true }),
+      calibrationSchemaVersion: 2,
     };
   }
 
