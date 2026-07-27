@@ -15,7 +15,7 @@
  * import), and never starts a local HTTP server.
  */
 
-import { access, readFile, writeFile, rename } from 'node:fs/promises';
+import { access, readFile, writeFile, rename, readdir } from 'node:fs/promises';
 import { constants as FS_CONSTANTS } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -67,6 +67,22 @@ async function isExecutableFile(candidatePath) {
   } catch {
     return false;
   }
+}
+
+async function readBrowserVersion(candidatePath, stdoutValue = '') {
+  const stdout = String(stdoutValue || '').trim();
+  const numericMatch = stdout.match(/\b\d+\.\d+\.\d+(?:\.\d+)?\b/);
+  if (numericMatch) return numericMatch[0];
+  if (process.platform === 'win32') {
+    try {
+      const escaped = candidatePath.replace(/'/g, "''");
+      const command = `(Get-Item -LiteralPath '${escaped}').VersionInfo.ProductVersion`;
+      const { stdout: psOut } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { timeout: 8000 });
+      const psVersion = String(psOut || '').trim();
+      if (/^\d+\.\d+\.\d+(?:\.\d+)?$/.test(psVersion)) return psVersion;
+    } catch { /* evidence remains unavailable rather than invented */ }
+  }
+  return stdout || null;
 }
 
 /**
@@ -125,13 +141,58 @@ export async function detectBrowserExecutable(chromium, options = {}) {
       const programFiles = environment['ProgramFiles'] || 'C:\\Program Files';
       const programFilesX86 = environment['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
       const localAppData = environment['LocalAppData'] || '';
+      const userProfile = environment['USERPROFILE'] || '';
+      const cwd = typeof environment.LUMIXA_PROJECT_ROOT === 'string' && environment.LUMIXA_PROJECT_ROOT
+        ? environment.LUMIXA_PROJECT_ROOT
+        : process.cwd();
+
+      // Use path.join() rather than template-literal backslashes. In JavaScript,
+      // sequences such as `\Google` are interpreted as legacy escapes and the
+      // separator can disappear (for example `C:\Program FilesGoogle...`).
       candidates.push(
-        { label: 'Chrome (Program Files)', path: `${programFiles}\Google\Chrome\Application\chrome.exe` },
-        { label: 'Chrome (Program Files x86)', path: `${programFilesX86}\Google\Chrome\Application\chrome.exe` },
-        ...(localAppData ? [{ label: 'Chrome (LocalAppData)', path: `${localAppData}\Google\Chrome\Application\chrome.exe` }] : []),
-        { label: 'Edge (Program Files x86)', path: `${programFilesX86}\Microsoft\Edge\Application\msedge.exe` },
-        { label: 'Edge (Program Files)', path: `${programFiles}\Microsoft\Edge\Application\msedge.exe` },
+        { label: 'Chrome (Program Files)', path: path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe') },
+        { label: 'Chrome (Program Files x86)', path: path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe') },
+        ...(localAppData ? [{ label: 'Chrome (LocalAppData)', path: path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe') }] : []),
+        ...(localAppData ? [{ label: 'Chrome for Testing (LocalAppData)', path: path.join(localAppData, 'Google', 'Chrome for Testing', 'Application', 'chrome.exe') }] : []),
+        ...(localAppData ? [{ label: 'Chrome Canary (LocalAppData)', path: path.join(localAppData, 'Google', 'Chrome SxS', 'Application', 'chrome.exe') }] : []),
+        { label: 'Edge (Program Files x86)', path: path.join(programFilesX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe') },
+        { label: 'Edge (Program Files)', path: path.join(programFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe') },
+        { label: 'Playwright local browsers (project)', path: path.join(cwd, 'node_modules', 'playwright-core', '.local-browsers', 'chromium', 'chrome-win', 'chrome.exe') },
       );
+
+      // `where` catches installations registered on PATH.
+      for (const executableName of ['chrome.exe', 'msedge.exe', 'chromium.exe']) {
+        try {
+          const { stdout } = await execFileAsync('where.exe', [executableName], { timeout: 5000 });
+          for (const discovered of stdout.split(/\r?\n/).map(value => value.trim()).filter(Boolean)) {
+            candidates.push({ label: `where ${executableName}`, path: discovered });
+          }
+        } catch { /* not on PATH */ }
+      }
+
+      // Playwright stores Chrome for Testing under ms-playwright with a
+      // versioned directory name. Probe it recursively with a small depth cap.
+      const cacheRoots = [
+        ...(localAppData ? [path.join(localAppData, 'ms-playwright')] : []),
+        ...(userProfile ? [path.join(userProfile, 'AppData', 'Local', 'ms-playwright')] : []),
+        ...(userProfile ? [path.join(userProfile, '.cache', 'ms-playwright')] : []),
+        path.join(cwd, 'node_modules', 'playwright-core', '.local-browsers'),
+      ];
+      const browserNames = new Set(['chrome.exe', 'msedge.exe', 'chromium.exe', 'chrome-headless-shell.exe', 'headless_shell.exe']);
+      async function collectBrowserExecutables(dir, depth = 0) {
+        if (!dir || depth > 5) return;
+        let entries;
+        try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isFile() && browserNames.has(entry.name.toLowerCase())) {
+            candidates.push({ label: 'Playwright/Chrome for Testing cache', path: fullPath });
+          } else if (entry.isDirectory()) {
+            await collectBrowserExecutables(fullPath, depth + 1);
+          }
+        }
+      }
+      for (const cacheRoot of [...new Set(cacheRoots)]) await collectBrowserExecutables(cacheRoot);
     } else {
       candidates.push(
         { label: '/usr/bin/chromium', path: '/usr/bin/chromium' },
@@ -153,8 +214,9 @@ export async function detectBrowserExecutable(chromium, options = {}) {
     }
     try {
       const { stdout } = await execFileAsync(candidate.path, ['--version'], { timeout: 8000 });
-      attempts.push({ ...candidate, exists: true, versionOutput: stdout.trim() });
-      return { found: candidate.path, executablePath: candidate.path, available: true, versionOutput: stdout.trim(), attempts };
+      const versionOutput = await readBrowserVersion(candidate.path, stdout);
+      attempts.push({ ...candidate, exists: true, versionOutput });
+      return { found: candidate.path, executablePath: candidate.path, available: true, versionOutput, attempts };
     } catch (e) {
       attempts.push({ ...candidate, exists: true, versionOutput: null, versionError: String((e && e.message) || e) });
     }

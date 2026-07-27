@@ -16,10 +16,10 @@ export const en = {
   },
   appShell: {
     brandTagline: 'LUMIXA AI — Reference Colour Intelligence',
-    headerSubtitle: 'Lightroom Mapping V2 — Interactive Before/After Visual Comparison',
-    headerStatusStrip: 'Legacy Active · Interactive Browser Preview Available · V2 Non-Production · XMP Unchanged',
+    headerSubtitle: 'Controlled V2 Candidate Review Pilot',
+    headerStatusStrip: 'Legacy Active · Candidate Pilot Available · V2 Non-Production · XMP Unchanged',
     fullEnglishInterface: 'Full English interface',
-    sidebarVersionLine: 'v1.1.9 · Interactive Before/After Visual Comparison',
+    sidebarVersionLine: 'v1.3.0 · Controlled V2 Candidate Review Pilot',
     addPhotos: 'Add Photos',
     analyzeImage: 'Analyze Image',
     aiDecisionEngine: 'AI Decision Engine',

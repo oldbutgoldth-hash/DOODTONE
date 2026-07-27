@@ -143,6 +143,10 @@ const STATIC_SUITES = [
   // EPIC 2E-K-R2-FIX4 -- Preview-before-review workflow and
   // Candidate-only approval safety contract.
   'qa/epic-2e-k-r2-fix4-preview-before-review-static-test.mjs',
+  // EPIC 2E-L -- verified-pixel Candidate Review Pilot cohort math,
+  // safety/regression gates, export hygiene, UI mode and i18n coverage.
+  'qa/epic-2e-l-candidate-pilot-static-test.mjs',
+  'qa/epic-2e-l-candidate-pilot-integration-static-test.mjs',
 ];
 
 let anyFailed = false;

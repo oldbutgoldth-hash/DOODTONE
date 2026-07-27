@@ -17,10 +17,10 @@ export const th = {
   },
   appShell: {
     brandTagline: 'LUMIXA AI — ปัญญาด้านสีอ้างอิง',
-    headerSubtitle: 'Lightroom Mapping V2 — การเปรียบเทียบภาพก่อน/หลังแบบโต้ตอบ',
-    headerStatusStrip: 'Legacy ทำงานอยู่ · มีตัวอย่างแบบโต้ตอบในเบราว์เซอร์ · V2 ไม่ใช่ Production · XMP ไม่เปลี่ยนแปลง',
+    headerSubtitle: 'โครงการทดลอง Candidate Review ของ Controlled V2',
+    headerStatusStrip: 'Legacy ทำงานอยู่ · เปิดใช้ Candidate Pilot · V2 ไม่ใช่ Production · XMP ไม่เปลี่ยนแปลง',
     fullEnglishInterface: 'อินเทอร์เฟซภาษาอังกฤษทั้งหมด',
-    sidebarVersionLine: 'v1.1.9 · การเปรียบเทียบภาพก่อน/หลังแบบโต้ตอบ',
+    sidebarVersionLine: 'v1.3.0 · โครงการทดลอง Candidate Review ของ Controlled V2',
     addPhotos: 'เพิ่มรูปภาพ',
     analyzeImage: 'วิเคราะห์ภาพ',
     aiDecisionEngine: 'เอนจินตัดสินใจ AI',

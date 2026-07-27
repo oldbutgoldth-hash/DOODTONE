@@ -1,13 +1,13 @@
 {
   "suite": "CONTROLLED V2 VISUAL TRANSLATION R1 — Phase K: Controlled V2 Browser suite",
-  "runId": "eb29e6e7-492a-4b8e-98ab-8d693c1790a9",
-  "startedAt": "2026-07-27T11:33:23.017Z",
-  "completedAt": "2026-07-27T11:33:23.017Z",
+  "runId": "a7f8ebab-a86f-4098-a974-ca78847f927c",
+  "startedAt": "2026-07-27T14:58:13.566Z",
+  "completedAt": "2026-07-27T14:58:13.566Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-27T11:33:23.017Z",
+  "generatedAt": "2026-07-27T14:58:13.566Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -18,7 +18,7 @@
     {
       "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix4_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
+      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
     }
   ],
   "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"

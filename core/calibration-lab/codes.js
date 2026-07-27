@@ -146,7 +146,7 @@ export const PERSISTENCE_MODES = Object.freeze(['INDEXEDDB', 'IN_MEMORY_FALLBACK
 export const PERSISTENCE_MODE_SET = new Set(PERSISTENCE_MODES);
 
 // --- Calibration Lab top-level UI mode (used by the Semantic QA Snapshot) --
-export const CALIBRATION_MODES = Object.freeze(['CLOSED', 'REVIEW', 'DASHBOARD', 'READINESS']);
+export const CALIBRATION_MODES = Object.freeze(['CLOSED', 'REVIEW', 'DASHBOARD', 'READINESS', 'PILOT']);
 export const CALIBRATION_MODE_SET = new Set(CALIBRATION_MODES);
 
 /** Validate an array of category codes: every entry must be a known code, at least one entry, no duplicates. */

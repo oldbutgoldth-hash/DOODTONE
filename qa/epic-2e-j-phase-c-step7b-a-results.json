@@ -1,13 +1,13 @@
 {
   "suite": "EPIC 2E-J-C-F2 Step 7B-A Final Closeout (incl. Step 7B-A-F/F2/F3) - Privacy, Storage/Network, Session-Schema and Responsive Final Audit",
-  "runId": "981e69b2-0f4f-4f9b-9b10-80b34e7d0bf4",
-  "startedAt": "2026-07-27T11:33:22.850Z",
-  "completedAt": "2026-07-27T11:33:22.850Z",
+  "runId": "297d7882-4b5d-4914-b4b5-7ac8c1529496",
+  "startedAt": "2026-07-27T14:58:13.409Z",
+  "completedAt": "2026-07-27T14:58:13.409Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-27T11:33:22.850Z",
+  "generatedAt": "2026-07-27T14:58:13.409Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -18,7 +18,7 @@
     {
       "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix4_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
+      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
     }
   ],
   "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"

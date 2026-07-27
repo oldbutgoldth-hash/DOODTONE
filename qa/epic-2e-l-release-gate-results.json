@@ -1,0 +1,56 @@
+{
+  "epic": "2E-L",
+  "suite": "CANDIDATE_PILOT_RELEASE_GATE",
+  "decision": "FINAL_PASS",
+  "completed": true,
+  "runId": "ec160457-1c9b-41f1-af61-cffb4e6b960a",
+  "startedAt": "2026-07-27T16:15:46.745Z",
+  "completedAt": "2026-07-27T16:15:51.311Z",
+  "sourceHash": "bee28aae299c0ab707186bc81ae97abd377f99a4a827110260beb25ff8ec12d0",
+  "steps": [
+    {
+      "label": "ESM Syntax",
+      "rel": "tools/esm-syntax-gate.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "[esm-syntax-gate] PASS -- 192/192 files parsed cleanly as ES modules.\n",
+      "stderrTail": ""
+    },
+    {
+      "label": "Full Static Suites",
+      "rel": "qa/run-static-suites.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "9cb410ff61f20015ad\"}\n✓ [PASS] SHA-256 known vector (input length 3): sha256PureJsHex() matches Node crypto exactly (genuine implementation, not a fake checksum) — {\"pure\":\"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\",\"node\":\"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\"}\n✓ [PASS] SHA-256 known vector (input length 56): stored expected hash matches Node crypto's real SHA-256 — {\"input\":\"abcdbcdecdefdefgefghfghighijhi\",\"expected\":\"248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1\",\"node\":\"248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1\"}\n✓ [PASS] SHA-256 known vector (input length 56): sha256PureJsHex() matches Node crypto exactly (genuine implementation, not a fake checksum) — {\"pure\":\"248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1\",\"node\":\"248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1\"}\n✓ [PASS] HOSTILE: a forged 64-hex-char hash does NOT coincidentally match the real known-vector hash (sanity check that this test can actually fail) — {\"fakeHash\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"realEmptyHash\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}\n✓ [PASS] HOSTILE: a naive byte-sum \"checksum substitute\" (not real SHA-256) fails the known-vector comparison, proving these known-vector tests would actually catch a fake implementation — {\"fakeImpl\":\"0000000000000000000000000000000000000000000000000000000000000126\",\"real\":\"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\"}\n✓ [PASS] HOSTILE (Section 5): deriveUiBlockerReasonCode() ignores a hard-coded {v2RenderPlanAvailable:true} second argument -- output is identical with or without it — {\"withoutOverride\":\"CALIBRATION_V2_PLAN_BLOCKED\",\"withFakeOverride\":\"CALIBRATION_V2_PLAN_BLOCKED\"}\n✓ [PASS] HOSTILE (Section 5): the real evidence-derived blocker code is CALIBRATION_V2_PLAN_BLOCKED, not a hard-coded pass-through — {\"withoutOverride\":\"CALIBRATION_V2_PLAN_BLOCKED\"}\n\n14 PASS, 0 FAIL\n\n=== qa/epic-2e-k-r2-fix4-preview-before-review-static-test.mjs ===\n✓ [PASS] Preview Sandbox exists without prior Human Review — {}\n✓ [PASS] Preview generation is independent of Candidate Review — {\"canGeneratePreview\":true}\n✓ [PASS] Controlled V2 Render Plan is renderable before Candidate Review — {\"renderable\":true}\n✓ [PASS] Initial Candidate Review is not auto-approved — {\"candidateReviewStatus\":\"in-progress\",\"approvalState\":\"in-progress\"}\n✓ [PASS] Review guidance explicitly says preview does not depend on review — {\"visualRequired\":6,\"visualPassed\":0,\"systemRequired\":4,\"systemVerified\":4,\"overallRequired\":10,\"overallPassed\":4,\"readyToBuildV2\":false,\"candidateReviewComplete\":false,\"previewGenerationDependsOnReview\":false,\"steps\":[\"1. Generate and inspect the Legacy / Controlled V2 visual preview.\",\"2. Review the six visual items after pixel evidence is ready.\",\"3. Candidate Review never enables Production, export, or XMP write.\"],\"primaryGuidance\":\"The preview is generated independently. Review the remaining visual item(s) (6 of 6 left).\",\"primaryGuidanceCode\":\"PREVIEW_READY_REVIEW_REMAINING\",\"primaryGuidanceParams\":{\"remaining\":6,\"total\":6}}\n✓ [PASS] Review state hard-locks Production source to Legacy — {}\n✓ [PASS] Review state cannot write Production/XMP or export preview — {\"productionWrite\":false,\"controlledV2Apply\":false,\"previewExport\":false,\"productionActivationAllowed\":false}\n✓ [PASS] Direct Candidate Review update is blocked before pixel evidence — {\"lastActionError\":\"PREVIEW_EVIDENCE_REQUIRED\"}\n✓ [PASS] Blocked pre-evidence update does not mark item passed — {}\n✓ [PASS] Candidate Review becomes available only after both previews render — {}\n✓ [PASS] Candidate Review update still cannot enable Production/XMP — {}\n✓ [PASS] All six visual checks complete Candidate Review only — {\"candidateReviewStatus\":\"approved\",\"visualPassed\":6}\n✓ [PASS] Even fully-approved Candidate Review keeps Legacy Production and XMP/write paths locked — {\"productionSource\":\"legacy\",\"productionWrite\":false,\"controlledV2Apply\":false,\"previewExport\":false}\n✓ [PASS] Authoritative Preview Sandbox disables only the Human Review preview gate — {}\n✓ [PASS] View Preview control never re-runs Analysis — {}\n✓ [PASS] App re-renders Candidate Review when pixel render settles — {}\n✓ [PASS] Controller blocks Candidate Review before evidence — {}\n✓ [PASS] Renderer disables Candidate Review controls and note fields before evidence — {}\n✓ [PASS] New analysis generation archives and invalidates prior Candidate Review — {}\n\n19/19 PASS, 0 FAIL\n\n=== qa/epic-2e-l-candidate-pilot-static-test.mjs ===\n✓ [PASS] Candidate Pilot status vocabulary never includes PRODUCTION_READY\n✓ [PASS] Eligibility requires real browser-verified visual evidence and a reviewed decision\n✓ [PASS] Cohort selector excludes migrated, pending and unverified records\n✓ [PASS] Wilson interval is bounded and conservative\n✓ [PASS] Empty dataset is PILOT_NOT_STARTED\n✓ [PASS] Small verified dataset is insufficient, never candidate-ready\n✓ [PASS] Coverage gaps are reported after sample floor is met\n✓ [PASS] Safety hard stop halts the Pilot\n✓ [PASS] Category regression halts the Pilot\n✓ [PASS] Weak V2 advantage needs more evidence rather than passing\n✓ [PASS] Strong, covered, verified cohort reaches candidate evaluation only\n✓ [PASS] Cohort hash is deterministic and changes when a decision changes\n✓ [PASS] Candidate Pilot export contains no image payload, path, preset or XMP field\n\n13/13 PASS, 0 FAIL\n\n=== qa/epic-2e-l-candidate-pilot-integration-static-test.mjs ===\n✓ [PASS] Calibration mode vocabulary includes PILOT\n✓ [PASS] Controller exposes Candidate Pilot report and export\n✓ [PASS] Renderer exposes a semantic Candidate Pilot mode and safe export control\n✓ [PASS] Pilot core hard-locks Production values\n✓ [PASS] Pilot exporter refuses image/XMP/preset-shaped keys\n✓ [PASS] EN/TH Candidate Pilot dictionary coverage is complete\n\n6/6 PASS, 0 FAIL\n\nAll static suites PASSED.\n",
+      "stderrTail": "(node:14589) ExperimentalWarning: VM Modules is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "label": "Candidate Pilot Browser",
+      "rel": "qa/epic-2e-l-candidate-pilot-browser-test.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "{\n  \"epic\": \"2E-L\",\n  \"suite\": \"CANDIDATE_PILOT_BROWSER\",\n  \"decision\": \"PASS\",\n  \"completed\": true,\n  \"runId\": \"df256582-9cd2-4048-a09d-3decb2d06425\",\n  \"startedAt\": \"2026-07-27T16:15:50.486Z\",\n  \"completedAt\": \"2026-07-27T16:15:51.096Z\",\n  \"sourceHash\": \"ffa0ff2c72a12c9ab0818dfc410cfaa07a50f29faaa1d8536427933b774a9540\",\n  \"browserExecutable\": \"/usr/bin/chromium\",\n  \"browserVersion\": \"144.0.7559.96\",\n  \"runtimeOriginStrategy\": \"ABOUT_BLANK_IMPORT_MAP\",\n  \"result\": {\n    \"completed\": true,\n    \"decision\": \"PASS\",\n    \"thai\": {\n      \"open\": true,\n      \"mode\": \"PILOT\",\n      \"pilotStatus\": \"PILOT_CANDIDATE_EVALUATION_READY\",\n      \"verifiedSamples\": 60,\n      \"productionSource\": \"legacy\",\n      \"productionWrite\": \"false\",\n      \"v2Apply\": \"false\",\n      \"previewExport\": \"false\",\n      \"title\": \"โครงการทดลอง Candidate Review ของ Controlled V2\",\n      \"exportButton\": true,\n      \"applyButtonCount\": 0,\n      \"horizontalOverflow\": false,\n      \"rawCriterionLeak\": false\n    },\n    \"english\": {\n      \"open\": true,\n      \"mode\": \"PILOT\",\n      \"pilotStatus\": \"PILOT_CANDIDATE_EVALUATION_READY\",\n      \"verifiedSamples\": 60,\n      \"productionSource\": \"legacy\",\n      \"productionWrite\": \"false\",\n      \"v2Apply\": \"false\",\n      \"previewExport\": \"false\",\n      \"title\": \"Controlled V2 Candidate Review Pilot\",\n      \"exportButton\": true,\n      \"applyButtonCount\": 0,\n      \"horizontalOverflow\": false,\n      \"rawCriterionLeak\": false\n    }\n  },\n  \"viewportResults\": [\n    {\n      \"width\": 320,\n      \"horizontalOverflow\": false,\n      \"rawCriterionLeak\": false,\n      \"pilotExists\": true\n    },\n    {\n      \"width\": 360,\n      \"horizontalOverflow\": false,\n      \"rawCriterionLeak\": false,\n      \"pilotExists\": true\n    },\n    {\n      \"width\": 390,\n      \"horizontalOverflow\": false,\n      \"rawCriterionLeak\": false,\n      \"pilotExists\": true\n    },\n    {\n      \"width\": 430,\n      \"horizontalOverflow\": false,\n      \"rawCriterionLeak\": false,\n      \"pilotExists\": true\n    },\n    {\n      \"width\": 768,\n      \"horizontalOverflow\": false,\n      \"rawCriterionLeak\": false,\n      \"pilotExists\": true\n    },\n    {\n      \"width\": 1024,\n      \"horizontalOverflow\": false,\n      \"rawCriterionLeak\": false,\n      \"pilotExists\": true\n    },\n    {\n      \"width\": 1440,\n      \"horizontalOverflow\": false,\n      \"rawCriterionLeak\": false,\n      \"pilotExists\": true\n    }\n  ]\n}\n",
+      "stderrTail": ""
+    },
+    {
+      "label": "Production/XMP Source Invariant",
+      "rel": "qa/baselines/epic-2e-l-production-invariant.json",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "{\"status\":\"PASS\",\"mismatches\":[],\"productionLocks\":{\"productionSource\":\"legacy\",\"productionWrite\":false,\"controlledV2Apply\":false,\"previewExport\":false,\"controlledV2ProductionActivation\":false}}",
+      "stderrTail": ""
+    }
+  ],
+  "productionInvariant": {
+    "status": "PASS",
+    "mismatches": [],
+    "productionLocks": {
+      "productionSource": "legacy",
+      "productionWrite": false,
+      "controlledV2Apply": false,
+      "previewExport": false,
+      "controlledV2ProductionActivation": false
+    }
+  },
+  "boundary": "Candidate Pilot only. Controlled V2 remains non-Production; Production Mapping and XMP remain Legacy."
+}

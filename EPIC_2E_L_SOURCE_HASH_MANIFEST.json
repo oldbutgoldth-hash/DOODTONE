@@ -1,0 +1,98 @@
+{
+  "epic": "2E-L",
+  "release": "CONTROLLED_V2_CANDIDATE_REVIEW_PILOT_R1",
+  "generatedAt": "2026-07-27T16:15:46.562328+00:00",
+  "productionBoundary": "Candidate Pilot only; Production remains Legacy and XMP/Production write are disabled.",
+  "files": [
+    {
+      "path": "core/calibration-lab/candidate-pilot.js",
+      "sha256": "4c028adfa516444f54f9fc8ef4aa5258449bb24416e76f86c4df43604e61eb01",
+      "bytes": 13883
+    },
+    {
+      "path": "core/calibration-lab/export-candidate-pilot.js",
+      "sha256": "45e0cc499fe13e47da1a6800d49dc1caee59264073dc450b8740839d6307165d",
+      "bytes": 1257
+    },
+    {
+      "path": "core/calibration-lab/codes.js",
+      "sha256": "b2d73bd8d2683215674a85f00f93a528147d251a4cef31b03de17552ae23760b",
+      "bytes": 9614
+    },
+    {
+      "path": "core/project-version.js",
+      "sha256": "7df323987776f001b6af4f1968cf13d5339124e12bbf74f0f82081bde64e420f",
+      "bytes": 2142
+    },
+    {
+      "path": "index.html",
+      "sha256": "92ec1402d6a3fef5a658bd1a51acd2867f8953f6cac0684d12bf19beb4a73c39",
+      "bytes": 108991
+    },
+    {
+      "path": "package.json",
+      "sha256": "e4536a6f4bbabdd6809278c5eebd81d0283dac62c4255e95b3f4ecb49394b573",
+      "bytes": 2499
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "3acbe864cb3a3a9282f08857b0c2ee96a4d7e276e7f35b402ccae935cfe35731",
+      "bytes": 2252
+    },
+    {
+      "path": "qa/epic-2e-l-candidate-pilot-static-test.mjs",
+      "sha256": "4dd3c240987caea09d240ba15a3da38780669f40025442c720cb816770e3ed33",
+      "bytes": 7767
+    },
+    {
+      "path": "qa/epic-2e-l-candidate-pilot-integration-static-test.mjs",
+      "sha256": "db7926f4f743ae2531ec1459023885d35fd2c2897c9861358c62210d57a0d9e4",
+      "bytes": 2390
+    },
+    {
+      "path": "qa/epic-2e-l-candidate-pilot-browser-test.mjs",
+      "sha256": "8eb1aba67fda51586d99d32dcdac9f3e8550d2cc416816a9d23fd51545917300",
+      "bytes": 13619
+    },
+    {
+      "path": "qa/epic-2e-l-release-gate.mjs",
+      "sha256": "c20d756047547ba34d1ee634b01907d8a07e157b2f0c1f3900752aef8c01c820",
+      "bytes": 3308
+    },
+    {
+      "path": "qa/baselines/epic-2e-l-production-invariant.json",
+      "sha256": "6d52ad365ccf25c286c39ec91a42400e082221e150465aa67068792228338d2f",
+      "bytes": 839
+    },
+    {
+      "path": "RUN_LUMIXA_2E_L_QA_WINDOWS_KEEP_OPEN.bat",
+      "sha256": "e6472943612131b9207cd7e37ff88239ad5620aa5911d9a3143bcf517c94ef85",
+      "bytes": 973
+    },
+    {
+      "path": "core/lightroom-mapping-engine/index.js",
+      "sha256": "f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099",
+      "bytes": 49905
+    },
+    {
+      "path": "core/xmp-validator/index.js",
+      "sha256": "ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f",
+      "bytes": 24307
+    },
+    {
+      "path": "core/preset-engine/index.js",
+      "sha256": "42f3bb83bf850bed3dd4d2a5b66019264c0a0e5561ff07c2e7e3d644c00dedde",
+      "bytes": 8207
+    },
+    {
+      "path": "ui/app.js",
+      "sha256": "1a8c219c2365a4462e6ed224f30e57ad1da1673fef34063a4e9eed41a42516a7",
+      "bytes": 178991
+    },
+    {
+      "path": "ui/ui-engine.js",
+      "sha256": "147a55ca9acb75b6b5fa05fbede5d246ddc0b37a8ceacd055ff5c1a4d11f6711",
+      "bytes": 12294
+    }
+  ]
+}

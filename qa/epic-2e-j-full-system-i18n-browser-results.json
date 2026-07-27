@@ -1,13 +1,13 @@
 {
   "suite": "I18N RUNTIME CLOSURE + QA INTEGRITY R3 — Phase I: full-system EN/TH Browser suite",
-  "runId": "063d2b22-6e28-4b72-a974-717fa647b464",
-  "startedAt": "2026-07-27T11:33:23.062Z",
-  "completedAt": "2026-07-27T11:33:23.062Z",
+  "runId": "f189a7f1-110f-4c57-9434-b4603a21aa70",
+  "startedAt": "2026-07-27T14:58:13.608Z",
+  "completedAt": "2026-07-27T14:58:13.608Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-27T11:33:23.062Z",
+  "generatedAt": "2026-07-27T14:58:13.608Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -18,7 +18,7 @@
     {
       "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix4_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
+      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
     }
   ],
   "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"

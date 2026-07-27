@@ -1,11 +1,11 @@
 {
   "suite": "DEPLOY GEOMETRY R1 — Preview Geometry Static test",
-  "runId": "67034cd2-22f1-47ab-b498-c40c78152559",
-  "startedAt": "2026-07-27T11:33:21.699Z",
-  "completedAt": "2026-07-27T11:33:21.709Z",
+  "runId": "37b8cb75-7588-4b01-a2bf-aab5abb27c8b",
+  "startedAt": "2026-07-27T16:15:47.878Z",
+  "completedAt": "2026-07-27T16:15:47.889Z",
   "completed": true,
   "sourceHash": "53c62baa1e93df98e9dcacef7321f4eae73a211080f75fb39ba42f83ac778bb6",
-  "generatedAt": "2026-07-27T11:33:21.709Z",
+  "generatedAt": "2026-07-27T16:15:47.889Z",
   "summary": {
     "total": 36,
     "pass": 36,
@@ -16,7 +16,7 @@
     {
       "test": "manifest.json is present and parses as JSON",
       "result": "PASS",
-      "evidence": "/mnt/data/lumixa_fix4_work/lumixa_r9/qa/fixtures/preview-geometry/manifest.json"
+      "evidence": "/mnt/data/lumixa_2el_work/lumixa_r9/qa/fixtures/preview-geometry/manifest.json"
     },
     {
       "test": "manifest declares exactly the 6 required fixtures",
@@ -186,12 +186,12 @@
     {
       "test": "epic-2e-j-preview-geometry-decoder-render-test.mjs passes a real ESM parse-goal check",
       "result": "PASS",
-      "evidence": "/mnt/data/lumixa_fix4_work/lumixa_r9/qa/epic-2e-j-preview-geometry-decoder-render-test.mjs"
+      "evidence": "/mnt/data/lumixa_2el_work/lumixa_r9/qa/epic-2e-j-preview-geometry-decoder-render-test.mjs"
     },
     {
       "test": "epic-2e-j-preview-geometry-full-app-eligible-test.mjs passes a real ESM parse-goal check",
       "result": "PASS",
-      "evidence": "/mnt/data/lumixa_fix4_work/lumixa_r9/qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs"
+      "evidence": "/mnt/data/lumixa_2el_work/lumixa_r9/qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs"
     }
   ],
   "decision": "PASS",

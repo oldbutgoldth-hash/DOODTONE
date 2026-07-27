@@ -1,13 +1,13 @@
 {
   "suite": "LOCAL-FIRST GEOMETRY R3 -- Phase C2: Full-App Safety-Eligible Geometry suite",
-  "runId": "c6c5a719-c9fa-473e-82f5-a9f1c5885640",
-  "startedAt": "2026-07-27T11:33:22.975Z",
-  "completedAt": "2026-07-27T11:33:22.975Z",
+  "runId": "9fa6b26b-4637-4d11-9c76-5bec8b4f21eb",
+  "startedAt": "2026-07-27T14:58:13.528Z",
+  "completedAt": "2026-07-27T14:58:13.528Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-27T11:33:22.975Z",
+  "generatedAt": "2026-07-27T14:58:13.528Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -18,7 +18,7 @@
     {
       "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix4_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
+      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
     }
   ],
   "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"

@@ -1,6 +1,6 @@
 {
-  "description": "EPIC 2E-K-R2-FIX4 checked-in Production-lock baseline manifest. Portable repository-relative SHA-256 baseline. FIX4 intentionally updates Candidate Review state/presentation files only to decouple preview generation from review approval; Production Mapping, Preset Engine, XMP Validator and Production write/activation paths remain locked and unchanged.",
-  "generatedAt": "2026-07-27T11:33:11.652396Z",
+  "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
+  "generatedAt": "2026-07-27T16:14:41.136Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
@@ -14,14 +14,16 @@
     "ui/visual-preview-comparison-controller-v2.js",
     "ui/visual-preview-comparison-renderer-v2.js"
   ],
-  "lockedFileCount": 92,
+  "lockedFileCount": 94,
   "files": {
     "core/basic-panel-engine/index.js": "82467e72711b3d98359e9a50543a8a9f2cc98b7f9a42c9e5e25afbec620aae5b",
     "core/calibration-engine/index.js": "c62df0620585bcb16b0ee8a6e76cd9e66d64a1075756d28e18ff9fa301510281",
     "core/calibration-lab/aggregate.js": "24ba967b3eaf78db865a039abe8c26a90174f6162f6dcada1bb057e7f2dc4cb3",
     "core/calibration-lab/bounded-lru-cache.js": "b7e241b919b0ab93ac2c81a75acda8b4e7d8499a8fbfb6190c2a9646025b0c59",
     "core/calibration-lab/build-calibration-v2-preview-plan.js": "b37983e5ad40e3431b0398ae5d4918d0951f926d7913d9c0ca7add8cc9f4a6e0",
-    "core/calibration-lab/codes.js": "7f46770c07e46083108f9ed6f20223e5b4cbab6f24517543abddad4f8b7eccbc",
+    "core/calibration-lab/candidate-pilot.js": "4c028adfa516444f54f9fc8ef4aa5258449bb24416e76f86c4df43604e61eb01",
+    "core/calibration-lab/codes.js": "b2d73bd8d2683215674a85f00f93a528147d251a4cef31b03de17552ae23760b",
+    "core/calibration-lab/export-candidate-pilot.js": "45e0cc499fe13e47da1a6800d49dc1caee59264073dc450b8740839d6307165d",
     "core/calibration-lab/export-dataset.js": "f4915a1d22e2ba29e4cc922551cfff1b85076ceb75b66de3452f5ee4885498f7",
     "core/calibration-lab/migrate-v1-to-v2.js": "fa7bdc56fc821693a423e659a8637a6355f99c31a9951cdfc500a0c5c96efb28",
     "core/calibration-lab/pixel-truth-capture.js": "8476f568dac779d564d5d9cd23f07db6bc7db054058041113514bb155113ba68",
@@ -68,7 +70,7 @@
     "core/preset-engine/index.js": "42f3bb83bf850bed3dd4d2a5b66019264c0a0e5561ff07c2e7e3d644c00dedde",
     "core/preview-rendering/controlled-v2-preview-adjustment-translator.js": "c87ebc0e3b8835f93993ebc62c36da76cbfdd0256f5cf5496ddbe513c7d3979a",
     "core/processing-log/index.js": "582c4b6bd6144c7daedda1d554197d9bae278fcc2451c2af91987a558c0ecd53",
-    "core/project-version.js": "1baffc6a59b5a3379272333af3cf36eb75b1956d2a84add6fbfb674c50f092df",
+    "core/project-version.js": "7df323987776f001b6af4f1968cf13d5339124e12bbf74f0f82081bde64e420f",
     "core/reference-transfer-engine/index.js": "9a73cb7e155b280d14ad6f22529100024e43e172ac25c5f7aff43b38d007c3ef",
     "core/scene-classifier/index.js": "8f27307e3425c270b7379008f6e9329d03a60f8d50dd0d0218209526b707347d",
     "core/skin-classifier/index.js": "b7563fcbbf39e20cae19b1df3e8ff6d8d5dc50d6e48c889563d3331fd52482d3",
@@ -80,10 +82,10 @@
     "core/whitebalance-engine/index.js": "40b111ca145636a7b4c2726d38102df3c8d60a07fe42d8403333a159e79d5106",
     "core/xmp-validator/index.js": "ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f",
     "ui/basic-panel-renderer.js": "efb96fd7bb73c98fa9355bb7f0ffee028ea6d952b320f3d62119f5538c48d04a",
-    "ui/calibration-lab/calibration-lab-controller.js": "2209f9e0872a51ec4c511b587e4976776dac1face8ff367b7378438de48da4d7",
+    "ui/calibration-lab/calibration-lab-controller.js": "c072edb40694951be8e9ce1418780793466f6523fa1b091c709db7c73bc82c5b",
     "ui/calibration-lab/calibration-lab-entry.js": "281c53fa5fd98bb6741a53a3e59b6c5727426f125de7db99e67d4830188aa98f",
-    "ui/calibration-lab/calibration-lab-i18n.js": "db3d791b381c602e84e37c2fc576745a909e68d27935b43ec1e93e14795457ce",
-    "ui/calibration-lab/calibration-lab-renderer.js": "6c99a35e625c3a2c2c73155d61516013aa2ee41f0353d9db8ebd3030d133e358",
+    "ui/calibration-lab/calibration-lab-i18n.js": "b05599fe0208aac22c73f62ec3ec4405015da0b871c4397e345b2ec11a9b490a",
+    "ui/calibration-lab/calibration-lab-renderer.js": "08ed8fb2af03eae39e825c64eae73e51a654624dde68a5644490a14820421976",
     "ui/calibration-lab/calibration-lab-storage.js": "9e171fddad9f91d9d021be09c50a978bc79f7d1276cbfd89e6439015cc885d49",
     "ui/calibration-renderer.js": "b5cc0c047be353f4762d656960a8219b7e2ec3456302d7c74cdf35bec605dba5",
     "ui/color-harmony-renderer.js": "56ca111579f9a82211a7686c6a992509f39753d0e7e9a253c9d397ae58006713",
@@ -91,9 +93,9 @@
     "ui/histogram-renderer.js": "f421cec0e0dbb9783c864e4561f07575bd12bdcffdf642eb3d1990ee50c99c24",
     "ui/hsl-analyzer-renderer.js": "5a76c96319b4a0f942f0f81739b04ee774870892953fee0fe0aa8cd16e8738f9",
     "ui/i18n/domain-presenters.js": "7b617d8277113659f600885478d23a8041f730c3b030a9f0fb59ace7b9e34959",
-    "ui/i18n/en.js": "554921033d7ea27b3b0e1c18e2a423ec34b3e296e75a954823d3a0a121b45436",
+    "ui/i18n/en.js": "dbc121d17394537772cfade03e2cdd7fb0bfd308f2ccc316708d42fbb40ac243",
     "ui/i18n/index.js": "f659ecfb05f86c844131798ef11901578db013b2cf2d542604825014c80af379",
-    "ui/i18n/th.js": "b2f82471c8d75762cdb4d56a12eaac617c27e8b047cc81d19da8260a59a4a0cc",
+    "ui/i18n/th.js": "6626e8cd99c0103f7ba43c90f1261cf6df8fbedd2bc5473e7b257506be904aae",
     "ui/image-analysis-renderer.js": "4061c83bd316981bc46bde4fad95a16679e1c2d663ad74d298d0089c528dc790",
     "ui/interactive-preview-observation-session-v2.js": "aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9",
     "ui/palette-renderer.js": "d31aab02d6842cbf53733c14c8ebaa1ac7eda2b28508c9df1854ef458a0069d0",
@@ -107,20 +109,6 @@
     "ui/tone-curve-renderer.js": "3424ad63b6c889a2025e23ea0c7513411e7c4c0bb4dddb1dbc305e1bbd254c6e",
     "ui/ui-engine.js": "147a55ca9acb75b6b5fa05fbede5d246ddc0b37a8ceacd055ff5c1a4d11f6711",
     "ui/whitebalance-renderer.js": "af235b1af3f88d38415bb6d93f34d3a9302f2f94f32e3d39f3570d202abdbe60",
-    "index.html": "35bc2717cd2a9839c1bd7aa3806e94ec14b7fe35241882873dfa3b5b219abf76"
-  },
-  "fix4CandidateReviewOnlyChanges": [
-    "core/lightroom-mapping-engine/mapping-v2-preview-review-state.js",
-    "ui/i18n/en.js",
-    "ui/i18n/th.js",
-    "ui/review-console-controller.js",
-    "ui/review-console-renderer.js"
-  ],
-  "productionBehaviorInvariant": {
-    "productionSource": "legacy",
-    "productionWrite": false,
-    "controlledV2Apply": false,
-    "previewExport": false,
-    "productionXmpMutationAllowed": false
+    "index.html": "92ec1402d6a3fef5a658bd1a51acd2867f8953f6cac0684d12bf19beb4a73c39"
   }
 }

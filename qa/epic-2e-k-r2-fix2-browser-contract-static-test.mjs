@@ -21,9 +21,6 @@
  * No Browser, no Chromium install required -- safe for
  * run-static-suites.mjs.
  */
-import { writeFile, chmod, unlink, mkdtemp } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { detectBrowserExecutable, detectPlaywrightPackage } from './helpers/playwright-lumixa-test-runtime.mjs';
 import { readFile } from 'node:fs/promises';
 
@@ -46,19 +43,42 @@ async function main() {
   record('NOT-FOUND case: found is null, available is false with injected empty candidates', notFound.found === null && notFound.available === false, { notFound });
   record('NOT-FOUND case: attempts array is empty because host candidates were explicitly disabled', Array.isArray(notFound.attempts) && notFound.attempts.length === 0, { attemptCount: notFound.attempts?.length });
 
-  // --- Case 2: genuinely FOUND, via a REAL executable file (never mocked) ---
-  const tmpDir = await mkdtemp(path.join(tmpdir(), 'lumixa-fix2-browser-contract-'));
-  const fakeBinaryPath = path.join(tmpDir, 'fake-chromium.sh');
-  await writeFile(fakeBinaryPath, '#!/bin/sh\necho "Chromium 999.0.0.0 (FIX2 contract test binary)"\n', 'utf8');
-  await chmod(fakeBinaryPath, 0o755);
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = fakeBinaryPath;
-  const found = await detectBrowserExecutable(null);
+  // --- Case 2: genuinely FOUND, using the current Node executable. ---
+  // process.execPath is a real executable on Windows, macOS and Linux and
+  // responds to --version, so this test is deterministic and does not depend
+  // on shell-script execution semantics.
+  const fakeBinaryPath = process.execPath;
+  const found = await detectBrowserExecutable(null, {
+    candidatePaths: [{ label: 'cross-platform executable fixture', path: fakeBinaryPath }],
+    includeSystemCandidates: false,
+    environment: {},
+  });
   record('FOUND case: executablePath === found', found.executablePath === found.found, { executablePath: found.executablePath, found: found.found });
   record('FOUND case: available === Boolean(found)', found.available === Boolean(found.found), { available: found.available, found: found.found });
-  record('FOUND case: found equals the real fake-binary path we just created', found.found === fakeBinaryPath, { found: found.found, fakeBinaryPath });
+  record('FOUND case: found equals the real cross-platform executable fixture', found.found === fakeBinaryPath, { found: found.found, fakeBinaryPath });
   record('FOUND case: available is true, executablePath is a non-empty string', found.available === true && typeof found.executablePath === 'string' && found.executablePath.length > 0, { found });
-  record('FOUND case: versionOutput carries the real --version output from the executed binary', found.versionOutput === 'Chromium 999.0.0.0 (FIX2 contract test binary)', { versionOutput: found.versionOutput });
-  await unlink(fakeBinaryPath);
+  // Windows may normalize the executable version through PowerShell's
+  // ProductVersion (for example `22.16.0.0`) while Node's `--version`
+  // returns `v22.16.0`. Both are truthful representations of the same
+  // executable version. Compare the semantic numeric core rather than
+  // requiring one platform-specific display format.
+  const normalizeVersion = (value) => String(value || '')
+    .trim()
+    .replace(/^v/i, '')
+    .split('.')
+    .map(part => String(Number.parseInt(part, 10)))
+    .filter(part => part !== 'NaN');
+  const actualVersionParts = normalizeVersion(found.versionOutput);
+  const expectedVersionParts = normalizeVersion(process.version);
+  const sameSemanticNodeVersion = expectedVersionParts.length >= 3
+    && actualVersionParts.length >= 3
+    && expectedVersionParts.slice(0, 3).join('.') === actualVersionParts.slice(0, 3).join('.');
+  record('FOUND case: versionOutput identifies the real executable version across Windows/macOS/Linux formatting', sameSemanticNodeVersion, {
+    versionOutput: found.versionOutput,
+    expected: process.version,
+    actualVersionParts,
+    expectedVersionParts,
+  });
 
   // Restore original env state.
   if (savedEnvPath === undefined) delete process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;

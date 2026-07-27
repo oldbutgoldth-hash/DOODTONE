@@ -1,13 +1,13 @@
 {
   "suite": "EPIC 2E-J Phase C (+ EPIC 2E-J-C-F) Observation smoke test",
-  "runId": "9974350b-d626-4f02-b377-d36aa099b785",
-  "startedAt": "2026-07-27T11:33:22.815Z",
-  "completedAt": "2026-07-27T11:33:22.815Z",
+  "runId": "1f2e34d5-378b-45cb-82fd-f7aa160daa05",
+  "startedAt": "2026-07-27T14:58:13.372Z",
+  "completedAt": "2026-07-27T14:58:13.372Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-27T11:33:22.815Z",
+  "generatedAt": "2026-07-27T14:58:13.372Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -18,7 +18,7 @@
     {
       "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix4_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
+      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
     }
   ],
   "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"

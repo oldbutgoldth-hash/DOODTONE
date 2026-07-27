@@ -1,0 +1,91 @@
+{
+  "epic": "2E-L",
+  "suite": "CANDIDATE_PILOT_BROWSER",
+  "decision": "PASS",
+  "completed": true,
+  "runId": "df256582-9cd2-4048-a09d-3decb2d06425",
+  "startedAt": "2026-07-27T16:15:50.486Z",
+  "completedAt": "2026-07-27T16:15:51.096Z",
+  "sourceHash": "ffa0ff2c72a12c9ab0818dfc410cfaa07a50f29faaa1d8536427933b774a9540",
+  "browserExecutable": "/usr/bin/chromium",
+  "browserVersion": "144.0.7559.96",
+  "runtimeOriginStrategy": "ABOUT_BLANK_IMPORT_MAP",
+  "result": {
+    "completed": true,
+    "decision": "PASS",
+    "thai": {
+      "open": true,
+      "mode": "PILOT",
+      "pilotStatus": "PILOT_CANDIDATE_EVALUATION_READY",
+      "verifiedSamples": 60,
+      "productionSource": "legacy",
+      "productionWrite": "false",
+      "v2Apply": "false",
+      "previewExport": "false",
+      "title": "โครงการทดลอง Candidate Review ของ Controlled V2",
+      "exportButton": true,
+      "applyButtonCount": 0,
+      "horizontalOverflow": false,
+      "rawCriterionLeak": false
+    },
+    "english": {
+      "open": true,
+      "mode": "PILOT",
+      "pilotStatus": "PILOT_CANDIDATE_EVALUATION_READY",
+      "verifiedSamples": 60,
+      "productionSource": "legacy",
+      "productionWrite": "false",
+      "v2Apply": "false",
+      "previewExport": "false",
+      "title": "Controlled V2 Candidate Review Pilot",
+      "exportButton": true,
+      "applyButtonCount": 0,
+      "horizontalOverflow": false,
+      "rawCriterionLeak": false
+    }
+  },
+  "viewportResults": [
+    {
+      "width": 320,
+      "horizontalOverflow": false,
+      "rawCriterionLeak": false,
+      "pilotExists": true
+    },
+    {
+      "width": 360,
+      "horizontalOverflow": false,
+      "rawCriterionLeak": false,
+      "pilotExists": true
+    },
+    {
+      "width": 390,
+      "horizontalOverflow": false,
+      "rawCriterionLeak": false,
+      "pilotExists": true
+    },
+    {
+      "width": 430,
+      "horizontalOverflow": false,
+      "rawCriterionLeak": false,
+      "pilotExists": true
+    },
+    {
+      "width": 768,
+      "horizontalOverflow": false,
+      "rawCriterionLeak": false,
+      "pilotExists": true
+    },
+    {
+      "width": 1024,
+      "horizontalOverflow": false,
+      "rawCriterionLeak": false,
+      "pilotExists": true
+    },
+    {
+      "width": 1440,
+      "horizontalOverflow": false,
+      "rawCriterionLeak": false,
+      "pilotExists": true
+    }
+  ]
+}

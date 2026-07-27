@@ -13,7 +13,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { detectBrowserExecutable } from './helpers/playwright-lumixa-test-runtime.mjs';
+import { detectBrowserExecutable, detectPlaywrightPackage } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -177,7 +177,8 @@ async function main() {
   const runId = randomUUID();
   const startedAt = new Date().toISOString();
   const sourceHash = await hashSources();
-  const detection = await detectBrowserExecutable(null);
+  const playwrightPackage = await detectPlaywrightPackage();
+  const detection = await detectBrowserExecutable(playwrightPackage.chromium);
   if (!detection.available) {
     const result = { epic: '2E-K-R2-FIX5', suite: 'NATIVE_BROWSER_INDEXEDDB', decision: 'NOT_VERIFIED', reason: 'BROWSER_BINARY_UNAVAILABLE', completed: true, runId, startedAt, completedAt: new Date().toISOString(), sourceHash, browser: detection };
     await writeResult(result); console.log(JSON.stringify(result, null, 2)); process.exit(2);

@@ -1,6 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
+set "LUMIXA_PROJECT_ROOT=%CD%"
 
 set OVERALL_FAIL=0
 set OVERALL_NOT_VERIFIED=0

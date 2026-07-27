@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test",
-  "generatedAt": "2026-07-27T11:33:22.678Z",
+  "generatedAt": "2026-07-27T14:58:13.271Z",
   "completed": true,
   "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE",
   "summary": {
@@ -13,7 +13,7 @@
     {
       "test": "PART 1: Playwright Node package resolvability",
       "result": "NOT_TESTED",
-      "evidence": "import(\"playwright\") failed: Cannot find package 'playwright' imported from /mnt/data/lumixa_fix4_work/lumixa_r9/qa/playwright-in-memory-app-smoke.mjs"
+      "evidence": "import(\"playwright\") failed: Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/playwright-in-memory-app-smoke.mjs"
     },
     {
       "test": "Honest status: Playwright package unavailable — no Browser launch fabricated",

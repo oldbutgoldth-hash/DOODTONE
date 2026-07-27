@@ -34,7 +34,8 @@ import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeCurrentSourceHash, SUITE_SOURCE_FILES } from '../qa/phase-c-suite-source-manifest.mjs';
+import { SUITE_SOURCE_FILES } from '../qa/phase-c-suite-source-manifest.mjs';
+import { verifyManifestEvidenceFreshness } from '../qa/helpers/evidence-freshness-guard.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -147,17 +148,17 @@ async function runStep(step) {
 
   const evaluation = evaluateStepResult(step, resultObj);
 
-  // Staleness: recompute the CURRENT sourceHash for this suite's own
-  // manifest entry and require an exact match — never trust mtime.
-  if (step.manifestKey && typeof resultObj.sourceHash === 'string') {
-    try {
-      const currentHash = await computeCurrentSourceHash(step.manifestKey, PROJECT_ROOT);
-      if (currentHash !== resultObj.sourceHash) {
-        evaluation.reasons.push('STALE result: sourceHash does not match current source files — rerun this suite');
-        evaluation.ok = false;
-      }
-    } catch (e) {
-      evaluation.reasons.push(`could not verify freshness via suite-source-manifest: ${e.message}`);
+  // Staleness: use the same cross-platform guard exercised by hostile QA.
+  // Never trust mtime and never recursively spawn the full Local Gate from a
+  // static suite merely to prove this branch.
+  if (step.manifestKey) {
+    const freshness = await verifyManifestEvidenceFreshness({
+      manifestKey: step.manifestKey,
+      resultObj,
+      projectRoot: PROJECT_ROOT,
+    });
+    if (!freshness.ok) {
+      evaluation.reasons.push(...freshness.reasons);
       evaluation.ok = false;
     }
   }

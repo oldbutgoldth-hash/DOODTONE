@@ -20,6 +20,7 @@
 import {
   IMAGE_CATEGORIES, LIGHTING_CONDITIONS, USER_DECISIONS, ISSUE_CODES, READINESS_STATUSES,
 } from '../../core/calibration-lab/codes.js';
+import { CANDIDATE_PILOT_STATUSES } from '../../core/calibration-lab/candidate-pilot.js';
 
 const en = {
   nav: {
@@ -88,6 +89,38 @@ const en = {
     NEEDS_REVIEW_REFRESH: 'Needs review refresh (migrated records pending re-review)',
     reportTitle: 'Controlled V2 Readiness Report',
     disclaimer: 'This report is informational only -- it never enables Controlled V2 in Production, and no status here can ever mean "ready for Production".',
+  },
+  pilot: {
+    title: 'Controlled V2 Candidate Review Pilot',
+    subtitle: 'A verified-pixel cohort review. Candidate evaluation only -- never Production approval.',
+    exportButton: 'Export Candidate Pilot Report',
+    verifiedSamples: 'Verified reviewed samples',
+    excludedRecords: 'Excluded/unverified records',
+    decisiveSamples: 'Decisive comparisons',
+    v2Wins: 'Controlled V2 wins', legacyWins: 'Legacy wins', ties: 'About equal', bothUnacceptable: 'Both unacceptable',
+    v2NetAdvantage: 'V2 net advantage', wilsonLowerBound: 'V2 preference confidence lower bound',
+    categoryCoverage: 'Category coverage', lightingCoverage: 'Lighting coverage',
+    skinSamples: 'Skin samples', mixedLightSamples: 'Mixed-light samples',
+    severeIssueRate: 'Severe issue rate', lowConfidenceRate: 'Low-confidence rate', safetyHardStops: 'Safety hard stops',
+    regressionCategories: 'Regression categories', criteriaTitle: 'Pilot gates', coverageTitle: 'Coverage and regressions',
+    met: 'Met', notMet: 'Not met', noRegressions: 'No category regressions detected in the verified cohort.',
+    disclaimer: 'Candidate Pilot results never activate Controlled V2, never change Production Mapping, and never write or export XMP.',
+    criterion: {
+      verifiedReviewedSamples: 'Verified reviewed samples', decisiveSamples: 'Decisive comparisons',
+      skinSamples: 'Skin sample coverage', mixedLightSamples: 'Mixed-light coverage',
+      categoryCoverage: 'Image-category coverage', lightingCoverage: 'Lighting-condition coverage',
+      severeIssueRate: 'Severe issue rate', bothUnacceptableRate: 'Both-unacceptable rate',
+      lowConfidenceRate: 'Low-confidence rate', regressionCategoryCount: 'Regression category count',
+      v2NetAdvantage: 'Controlled V2 net advantage', v2PreferenceWilsonLowerBound: 'V2 preference confidence lower bound',
+      noSafetyHardStops: 'No Controlled V2 safety hard stops',
+    },
+    PILOT_NOT_STARTED: 'Pilot not started',
+    PILOT_INSUFFICIENT_VERIFIED_SAMPLES: 'Insufficient verified pilot samples',
+    PILOT_COVERAGE_GAPS: 'Coverage gaps remain',
+    PILOT_SAFETY_HALT: 'Pilot halted by safety/quality signals',
+    PILOT_REGRESSION_HALT: 'Pilot halted by category regressions',
+    PILOT_NEEDS_MORE_EVIDENCE: 'More evidence is required',
+    PILOT_CANDIDATE_EVALUATION_READY: 'Ready for human candidate evaluation (not Production)',
   },
   dashboard: {
     title: 'Calibration Dashboard',
@@ -211,6 +244,38 @@ const th = {
     reportTitle: 'รายงานความพร้อมของ Controlled V2',
     disclaimer: 'รายงานนี้เป็นข้อมูลประกอบเท่านั้น -- ไม่มีผลเปิดใช้งาน Controlled V2 ใน Production และไม่มีสถานะใดในรายงานนี้ที่แปลว่า "พร้อมใช้งานจริง"',
   },
+  pilot: {
+    title: 'โครงการทดลอง Candidate Review ของ Controlled V2',
+    subtitle: 'ประเมินจากกลุ่มตัวอย่างที่มีหลักฐานพิกเซลจริง ใช้สำหรับ Candidate เท่านั้น ไม่ใช่การอนุมัติ Production',
+    exportButton: 'ส่งออกรายงาน Candidate Pilot',
+    verifiedSamples: 'จำนวนภาพที่ตรวจและยืนยันแล้ว',
+    excludedRecords: 'รายการที่ไม่ผ่านเกณฑ์/ยังไม่ยืนยัน',
+    decisiveSamples: 'ผลเปรียบเทียบที่ตัดสินชัดเจน',
+    v2Wins: 'Controlled V2 ชนะ', legacyWins: 'Legacy ชนะ', ties: 'ใกล้เคียงกัน', bothUnacceptable: 'ทั้งสองแบบใช้ไม่ได้',
+    v2NetAdvantage: 'ความได้เปรียบสุทธิของ V2', wilsonLowerBound: 'ค่าขอบล่างความเชื่อมั่นของผลเลือก V2',
+    categoryCoverage: 'ความครอบคลุมหมวดภาพ', lightingCoverage: 'ความครอบคลุมสภาพแสง',
+    skinSamples: 'ภาพที่มีผิวคน', mixedLightSamples: 'ภาพแสงผสม',
+    severeIssueRate: 'อัตราปัญหารุนแรง', lowConfidenceRate: 'อัตราความเชื่อมั่นต่ำ', safetyHardStops: 'จุดหยุดด้านความปลอดภัย',
+    regressionCategories: 'หมวดภาพที่ผลถดถอย', criteriaTitle: 'เกณฑ์ Pilot', coverageTitle: 'ความครอบคลุมและผลถดถอย',
+    met: 'ผ่าน', notMet: 'ยังไม่ผ่าน', noRegressions: 'ยังไม่พบหมวดภาพที่มีผลถดถอยในกลุ่มตัวอย่างที่ยืนยันแล้ว',
+    disclaimer: 'ผล Candidate Pilot ไม่สามารถเปิด Controlled V2, ไม่เปลี่ยน Production Mapping และไม่เขียนหรือส่งออก XMP',
+    criterion: {
+      verifiedReviewedSamples: 'จำนวนภาพที่ตรวจและยืนยันแล้ว', decisiveSamples: 'จำนวนผลเปรียบเทียบที่ตัดสินชัดเจน',
+      skinSamples: 'ความครอบคลุมภาพผิวคน', mixedLightSamples: 'ความครอบคลุมภาพแสงผสม',
+      categoryCoverage: 'ความครอบคลุมหมวดภาพ', lightingCoverage: 'ความครอบคลุมสภาพแสง',
+      severeIssueRate: 'อัตราปัญหารุนแรง', bothUnacceptableRate: 'อัตราที่ทั้งสองแบบใช้ไม่ได้',
+      lowConfidenceRate: 'อัตราความเชื่อมั่นต่ำ', regressionCategoryCount: 'จำนวนหมวดภาพที่ผลถดถอย',
+      v2NetAdvantage: 'ความได้เปรียบสุทธิของ Controlled V2', v2PreferenceWilsonLowerBound: 'ค่าขอบล่างความเชื่อมั่นของผลเลือก V2',
+      noSafetyHardStops: 'ไม่มีจุดหยุดด้านความปลอดภัยของ Controlled V2',
+    },
+    PILOT_NOT_STARTED: 'ยังไม่ได้เริ่ม Pilot',
+    PILOT_INSUFFICIENT_VERIFIED_SAMPLES: 'จำนวนตัวอย่าง Pilot ที่ยืนยันแล้วยังไม่เพียงพอ',
+    PILOT_COVERAGE_GAPS: 'ยังมีช่องว่างด้านความครอบคลุม',
+    PILOT_SAFETY_HALT: 'หยุด Pilot เนื่องจากสัญญาณด้านความปลอดภัย/คุณภาพ',
+    PILOT_REGRESSION_HALT: 'หยุด Pilot เนื่องจากพบหมวดภาพที่ผลถดถอย',
+    PILOT_NEEDS_MORE_EVIDENCE: 'ต้องเก็บหลักฐานเพิ่มเติม',
+    PILOT_CANDIDATE_EVALUATION_READY: 'พร้อมให้มนุษย์ประเมิน Candidate (ยังไม่ใช่ Production)',
+  },
   dashboard: {
     title: 'แดชบอร์ดการปรับเทียบ',
     totalImages: 'จำนวนภาพทั้งหมด', reviewedCount: 'จำนวนภาพที่ตรวจแล้ว', v2WinRate: 'อัตราชนะของ Controlled V2',
@@ -277,7 +342,7 @@ export function checkCalibrationLabDictionaryCoverage() {
   const missing = [];
   const codeGroups = {
     decision: USER_DECISIONS, category: IMAGE_CATEGORIES, lighting: LIGHTING_CONDITIONS,
-    issue: ISSUE_CODES, readiness: READINESS_STATUSES,
+    issue: ISSUE_CODES, readiness: READINESS_STATUSES, pilot: CANDIDATE_PILOT_STATUSES,
   };
   for (const [group, codes] of Object.entries(codeGroups)) {
     for (const code of codes) {
@@ -317,6 +382,17 @@ export function checkCalibrationLabDictionaryCoverage() {
   // a missing-dictionary-entry bug rather than a markup bug (the
   // markup fix itself is verified separately by the hostile static
   // test's index.html scan).
+  const pilotCriterionKeys = [
+    'verifiedReviewedSamples', 'decisiveSamples', 'skinSamples', 'mixedLightSamples',
+    'categoryCoverage', 'lightingCoverage', 'severeIssueRate', 'bothUnacceptableRate',
+    'lowConfidenceRate', 'regressionCategoryCount', 'v2NetAdvantage',
+    'v2PreferenceWilsonLowerBound', 'noSafetyHardStops',
+  ];
+  for (const key of pilotCriterionKeys) {
+    for (const lang of ['en', 'th']) {
+      if (_lookup(DICTIONARIES[lang], `pilot.criterion.${key}`) === undefined) missing.push(`${lang}.pilot.criterion.${key}`);
+    }
+  }
   const navKeys = ['openButton', 'title', 'closeButton'];
   for (const key of navKeys) {
     for (const lang of ['en', 'th']) {

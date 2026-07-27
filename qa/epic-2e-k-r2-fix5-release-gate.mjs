@@ -51,14 +51,20 @@ async function main() {
     previewExport: false, controlledV2ProductionActivation: false,
   };
 
+  // node_modules is REQUIRED while running npm-based QA and is excluded by
+  // the release packager. Treating its presence in the working directory as
+  // a dirty release caused every honest `npm ci` run to fail the final gate.
   const forbiddenDirectories = [];
-  for (const rel of ['node_modules', '.git']) {
+  for (const rel of ['.git']) {
     try {
       const stat = await fs.stat(path.join(ROOT, rel));
       if (stat.isDirectory()) forbiddenDirectories.push(rel);
     } catch { /* absent is clean */ }
   }
+  let workspaceNodeModulesPresent = false;
+  try { workspaceNodeModulesPresent = (await fs.stat(path.join(ROOT, 'node_modules'))).isDirectory(); } catch {}
   const zipFiles = (await fs.readdir(ROOT)).filter(name => /\.zip$/i.test(name));
+  const releaseExclusions = ['node_modules', '.git', '*.zip', 'Browser Cache', 'User Sessions'];
   const packageClean = forbiddenDirectories.length === 0 && zipFiles.length === 0;
 
   const requiredPass = steps.slice(0, 4).every(step => step.status === 'PASS')
@@ -69,8 +75,25 @@ async function main() {
     && packageClean;
 
   const nativeStatus = steps[4].status;
+  const nativeBrowserIndexedDbVerified = nativeStatus === 'PASS'
+    && nativeEvidence?.decision === 'PASS'
+    && nativeEvidence?.completed === true
+    && typeof nativeEvidence?.browserExecutable === 'string'
+    && nativeEvidence.browserExecutable.length > 0
+    && nativeEvidence?.seed?.decision === 'PASS'
+    && nativeEvidence?.seed?.sessionRoundTrip === true
+    && nativeEvidence?.seed?.imageRoundTrip === true
+    && nativeEvidence?.reload?.decision === 'PASS'
+    && nativeEvidence?.reload?.persistedAcrossReload === true
+    && nativeEvidence?.reload?.deletedSession === true
+    && nativeEvidence?.reload?.deletedRecords === true
+    && Array.isArray(nativeEvidence?.pageErrors)
+    && nativeEvidence.pageErrors.length === 0
+    && Array.isArray(nativeEvidence?.consoleErrors)
+    && nativeEvidence.consoleErrors.length === 0;
+
   let decision = 'FAIL';
-  if (requiredPass && nativeStatus === 'PASS' && nativeEvidence?.decision === 'PASS') decision = 'FINAL_PASS';
+  if (requiredPass && nativeBrowserIndexedDbVerified) decision = 'FINAL_PASS';
   else if (requiredPass && nativeStatus === 'NOT_VERIFIED' && nativeEvidence?.decision === 'NOT_VERIFIED') decision = 'NOT_VERIFIED';
 
   const sourceHash = await hashFiles([
@@ -89,7 +112,7 @@ async function main() {
     steps, storageEvidenceSummary: storageEvidence ? {
       decision: storageEvidence.decision, verificationMode: storageEvidence.verificationMode,
       passCount: storageEvidence.passCount, failCount: storageEvidence.failCount,
-      nativeBrowserIndexedDbVerified: storageEvidence.nativeBrowserIndexedDbVerified,
+      nativeBrowserIndexedDbVerified,
     } : null,
     nativeBrowserEvidenceSummary: nativeEvidence ? {
       decision: nativeEvidence.decision, reason: nativeEvidence.reason,
@@ -98,10 +121,12 @@ async function main() {
     } : null,
     fix4XmpInvariant: xmpInvariant?.evidence ?? null,
     productionLocks,
-    packageCleanliness: { packageClean, zipFiles, forbiddenDirectories, forbiddenDirectoryCount: forbiddenDirectories.length },
+    packageCleanliness: { packageClean, zipFiles, forbiddenDirectories, forbiddenDirectoryCount: forbiddenDirectories.length, workspaceNodeModulesPresent, releaseExclusions, nodeModulesExcludedFromRelease: true },
     boundary: decision === 'FINAL_PASS'
       ? 'Eligible to plan EPIC 2E-L Candidate Review Pilot; Production remains locked.'
-      : 'Do not start EPIC 2E-L until Native Browser IndexedDB is verified in an environment that permits a persistent web origin.',
+      : decision === 'NOT_VERIFIED'
+        ? 'Do not start EPIC 2E-L until Native Browser IndexedDB is verified in an environment that permits a persistent web origin.'
+        : 'Do not start EPIC 2E-L until every failing release-gate step is corrected and the gate is rerun.',
   };
   await fs.writeFile(RESULT_PATH, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
   console.log(`\nFIX5 RELEASE DECISION: ${decision}`);

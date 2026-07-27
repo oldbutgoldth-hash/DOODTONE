@@ -1,13 +1,13 @@
 {
   "suite": "EPIC 2E-J-C-F2 Step 7B-B - Keyboard, Accessibility, Security and Final Phase C Closeout",
-  "runId": "87395841-026f-46cc-9aea-5ac97e5ab686",
-  "startedAt": "2026-07-27T11:33:22.892Z",
-  "completedAt": "2026-07-27T11:33:22.892Z",
+  "runId": "3cbbc435-3ca0-4f80-8602-69c0c1e5eb57",
+  "startedAt": "2026-07-27T14:58:13.450Z",
+  "completedAt": "2026-07-27T14:58:13.450Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-27T11:33:22.892Z",
+  "generatedAt": "2026-07-27T14:58:13.450Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -18,7 +18,7 @@
     {
       "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix4_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
+      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
     }
   ],
   "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"

@@ -24,6 +24,8 @@ import { isValidCategoryList, isValidLightingCondition, isValidUserDecision, isV
 import { computeCalibrationDashboard } from '../../core/calibration-lab/aggregate.js';
 import { computeReadinessReport } from '../../core/calibration-lab/readiness.js';
 import { buildExportJson, buildExportCsv } from '../../core/calibration-lab/export-dataset.js';
+import { computeCandidatePilotReport } from '../../core/calibration-lab/candidate-pilot.js';
+import { buildCandidatePilotExport } from '../../core/calibration-lab/export-candidate-pilot.js';
 // EPIC 2E-K-R2-FIX1 -- PIXEL TRUTH, DECISION GATE AND EVIDENCE CLOSURE
 import { capturePixelTruthEvidence } from '../../core/calibration-lab/pixel-truth-capture.js';
 import { isDecisionAllowedForEvidence, deriveUiBlockerReasonCode, createNotRenderedPreviewEvidence } from '../../core/calibration-lab/preview-evidence.js';
@@ -351,6 +353,13 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
 
   function getDashboard() { return computeCalibrationDashboard(records); }
   function getReadinessReport() { return computeReadinessReport(records); }
+  function getCandidatePilotReport() {
+    return computeCandidatePilotReport(records, undefined, { sourceSessionId: session?.sessionId ?? null });
+  }
+
+  function exportCandidatePilotJson() {
+    return buildCandidatePilotExport(session, records);
+  }
 
   function exportJson() { return buildExportJson(session, records); }
   function exportCsv() { return buildExportCsv(session, records); }
@@ -370,6 +379,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
   function getQaSnapshot() {
     const current = currentIndex >= 0 ? records[currentIndex] : null;
     const currentEvidence = current?.previewEvidence ?? null;
+    const candidatePilot = getCandidatePilotReport();
     return {
       calibrationMode, sessionState, persistenceMode,
       imageCount: records.length,
@@ -379,6 +389,9 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
       currentDecisionCode: current ? current.userDecision : null,
       selectedIssueCodes: current ? [...current.issueCodes] : [],
       readinessCode: getReadinessReport().readinessStatus,
+      candidatePilotCode: candidatePilot.pilotStatus,
+      candidatePilotVerifiedSampleCount: candidatePilot.verifiedReviewedSamples,
+      candidatePilotCohortHash: candidatePilot.cohortHash,
       productionSource: 'legacy',
       productionWrite: false,
       controlledV2Apply: false,
@@ -410,7 +423,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
     startNewSession, listAvailableSessions, openSession,
     addImage, goToPrevious, goToNext,
     saveCurrentDecision, clearCurrentAnswer, endSession, clearAllData,
-    getDashboard, getReadinessReport, exportJson, exportCsv,
+    getDashboard, getReadinessReport, getCandidatePilotReport, exportCandidatePilotJson, exportJson, exportCsv,
     getStorageUsageSummary, getQaSnapshot,
     // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON
     getPixelPreviewInput, clearPixelPreviewCache: _clearPixelPreviewCache,

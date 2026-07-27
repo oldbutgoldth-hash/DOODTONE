@@ -561,9 +561,96 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
     return panel;
   }
 
+
+  function _formatPilotValue(value) {
+    if (value === null || value === undefined) return '—';
+    if (typeof value === 'number' && value >= 0 && value <= 1) return `${Math.round(value * 1000) / 10}%`;
+    return String(value);
+  }
+
+  function _renderCandidatePilot() {
+    const report = controller.getCandidatePilotReport();
+    const panel = _el('div', {
+      class: 'cal-panel',
+      'data-cal-role': 'candidate-pilot',
+      'data-cal-pilot-status': report.pilotStatus,
+      'data-cal-pilot-cohort-hash': report.cohortHash,
+      'data-cal-pilot-verified-samples': String(report.verifiedReviewedSamples),
+      'data-cal-pilot-production-source': report.productionLocks.productionSource,
+      'data-cal-pilot-production-write': String(report.productionLocks.productionWrite),
+      'data-cal-pilot-v2-apply': String(report.productionLocks.controlledV2Apply),
+      'data-cal-pilot-preview-export': String(report.productionLocks.previewExport),
+    });
+    panel.appendChild(_el('div', { style: 'font-weight:700;font-size:14px', text: T('pilot.title') }));
+    panel.appendChild(_el('div', { class: 'cal-note', style: 'margin-top:4px', text: T('pilot.subtitle') }));
+    panel.appendChild(_el('div', {
+      style: 'font-weight:700;margin-top:12px;color:var(--accent)',
+      text: T(`pilot.${report.pilotStatus}`),
+      'data-cal-role': 'candidate-pilot-status',
+    }));
+
+    const summaryTable = _el('table', { class: 'cal-table', style: 'margin-top:10px' });
+    const summaryRows = [
+      [T('pilot.verifiedSamples'), report.verifiedReviewedSamples],
+      [T('pilot.excludedRecords'), report.excludedRecordCount],
+      [T('pilot.decisiveSamples'), report.decisiveSamples],
+      [T('pilot.v2Wins'), report.v2Wins],
+      [T('pilot.legacyWins'), report.legacyWins],
+      [T('pilot.ties'), report.ties],
+      [T('pilot.bothUnacceptable'), report.bothUnacceptable],
+      [T('pilot.v2NetAdvantage'), report.v2NetAdvantage],
+      [T('pilot.wilsonLowerBound'), report.v2PreferenceWilson.lower],
+      [T('pilot.categoryCoverage'), report.categoryCoverage],
+      [T('pilot.lightingCoverage'), report.lightingCoverage],
+      [T('pilot.skinSamples'), report.skinSamples],
+      [T('pilot.mixedLightSamples'), report.mixedLightSamples],
+      [T('pilot.severeIssueRate'), report.severeIssueRate],
+      [T('pilot.lowConfidenceRate'), report.lowConfidenceRate],
+      [T('pilot.safetyHardStops'), report.safetyHardStopCount],
+    ];
+    for (const [label, value] of summaryRows) {
+      summaryTable.appendChild(_el('tr', {}, [_el('td', { text: label }), _el('td', { text: _formatPilotValue(value) })]));
+    }
+    panel.appendChild(summaryTable);
+
+    panel.appendChild(_el('div', { style: 'font-weight:700;margin-top:16px', text: T('pilot.criteriaTitle') }));
+    const criteriaTable = _el('table', { class: 'cal-table', style: 'margin-top:8px' });
+    for (const [code, criterion] of Object.entries(report.criteria)) {
+      criteriaTable.appendChild(_el('tr', {
+        'data-cal-pilot-criterion': code,
+        'data-cal-pilot-criterion-met': String(criterion.met === true),
+      }, [
+        _el('td', { text: T(`pilot.criterion.${code}`) }),
+        _el('td', { text: _formatPilotValue(criterion.value) }),
+        _el('td', { text: criterion.met ? T('pilot.met') : T('pilot.notMet'), style: criterion.met ? 'color:var(--success)' : 'color:var(--danger)' }),
+      ]));
+    }
+    panel.appendChild(criteriaTable);
+
+    panel.appendChild(_el('div', { style: 'font-weight:700;margin-top:16px', text: T('pilot.coverageTitle') }));
+    const regressionText = report.regressionCategories.length
+      ? `${T('pilot.regressionCategories')}: ${report.regressionCategories.map(code => T(`category.${code}`)).join(', ')}`
+      : T('pilot.noRegressions');
+    panel.appendChild(_el('div', {
+      class: 'cal-note', style: 'margin-top:8px', text: regressionText,
+      'data-cal-role': 'candidate-pilot-regressions',
+      'data-cal-regression-category-count': String(report.regressionCategoryCount),
+    }));
+
+    const actions = _el('div', { class: 'cal-row', style: 'margin-top:14px' });
+    actions.appendChild(_el('button', {
+      class: 'cal-btn', text: T('pilot.exportButton'),
+      'data-cal-role': 'export-candidate-pilot-report',
+      onclick: () => _doPilotExport(),
+    }));
+    panel.appendChild(actions);
+    panel.appendChild(_el('div', { class: 'cal-note', style: 'margin-top:10px;color:var(--warning)', text: T('pilot.disclaimer') }));
+    return panel;
+  }
+
   function _renderModeSwitcher(state) {
     const row = _el('div', { class: 'cal-row', style: 'margin-bottom:14px' });
-    for (const [mode, labelPath] of [['REVIEW', 'session.addImage'], ['DASHBOARD', 'dashboard.title'], ['READINESS', 'readiness.reportTitle']]) {
+    for (const [mode, labelPath] of [['REVIEW', 'session.addImage'], ['DASHBOARD', 'dashboard.title'], ['READINESS', 'readiness.reportTitle'], ['PILOT', 'pilot.title']]) {
       row.appendChild(_el('button', { class: state.calibrationMode === mode ? 'cal-btn cal-btn-primary' : 'cal-btn', text: T(labelPath), onclick: () => { controller.setMode(mode); render(); } }));
     }
     row.appendChild(_el('button', { class: 'cal-btn', text: T('exportPanel.exportButton'), onclick: () => _doExport() }));
@@ -577,6 +664,16 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `${json.session.sessionId || 'calibration'}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function _doPilotExport() {
+    const json = controller.exportCandidatePilotJson();
+    const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${json.report.sourceSessionId || 'candidate-pilot'}-candidate-pilot.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -604,6 +701,9 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
     } else if (state.calibrationMode === 'READINESS') {
       body.appendChild(_renderModeSwitcher(state));
       body.appendChild(_renderReadiness());
+    } else if (state.calibrationMode === 'PILOT') {
+      body.appendChild(_renderModeSwitcher(state));
+      body.appendChild(_renderCandidatePilot());
     } else {
       body.appendChild(_renderModeSwitcher(state));
       body.appendChild(_renderAddImageForm(state));

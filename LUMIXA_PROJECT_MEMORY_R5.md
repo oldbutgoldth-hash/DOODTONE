@@ -86,3 +86,17 @@ Controlled V2 Preview generation is now independent of Candidate Review approval
 ## EPIC 2E-K-R2-FIX5 — Storage / Release Gate
 
 FIX5 introduced a QA-only deterministic IndexedDB contract harness and a real Native Browser IndexedDB persistence suite. Storage Contract passes 24/24; full static suites and FIX4 Preview-before-review safety pass. Native Browser IndexedDB is `NOT_VERIFIED` in the current environment because Chromium is administratively blocked from opening the temporary localhost origin. The gate fails closed with exit code 2. No Production Mapping or XMP source changed. EPIC 2E-L remains blocked until the Windows/local runner returns `FINAL_PASS`.
+
+---
+
+## EPIC 2E-L — Controlled V2 Candidate Review Pilot (v1.3.0)
+
+- FIX5.3 Release Gate was confirmed `FINAL_PASS` on Windows before this phase.
+- Added Candidate Pilot mode to the existing Calibration Lab; no parallel Production workflow was created.
+- Pilot cohort accepts only reviewed, browser-verified, pixel-evidence-eligible records.
+- Added coverage, safety, low-confidence, regression, V2 net-advantage, and Wilson confidence gates.
+- Strongest result is `PILOT_CANDIDATE_EVALUATION_READY`; `PRODUCTION_READY` does not exist.
+- Candidate Pilot export contains semantic data/hashes only and refuses image/path/preset/XMP-shaped fields.
+- Native Chromium Browser QA passed through an `about:blank` in-memory import-map runtime.
+- EPIC 2E-L Release Gate: `FINAL_PASS`.
+- Production remains Legacy; Production Mapping, preset engine, XMP validator, `ui/app.js`, and `ui/ui-engine.js` remain byte-for-byte unchanged from FIX5.3.

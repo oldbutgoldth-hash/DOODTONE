@@ -32,3 +32,11 @@
 - `ui/app.js`
 - `ui/ui-engine.js`
 - FIX4 Preview-before-Candidate-Review behavior
+
+
+## FIX5.1 Windows QA closure
+- Corrected Windows Chrome/Edge paths with `path.join()`; previous template literals removed path separators.
+- Added Chrome for Testing / Playwright cache discovery and PATH discovery.
+- Native IndexedDB runner now passes Playwright Chromium into the unified detector.
+- Browser contract static test now uses `process.execPath`, making it deterministic on Windows/macOS/Linux.
+- `node_modules` is allowed in the QA workspace after `npm ci` and remains explicitly excluded from release ZIPs.

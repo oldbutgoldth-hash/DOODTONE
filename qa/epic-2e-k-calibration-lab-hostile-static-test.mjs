@@ -18,7 +18,6 @@
  * asserting it in the abstract.
  */
 import fs from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,6 +25,7 @@ import { validateSession, validateImageRecord, createImageTestRecord } from '../
 import { extractSafetySnapshot } from '../core/calibration-lab/run-comparison-pipeline.js';
 import { buildExportJson, buildExportCsv } from '../core/calibration-lab/export-dataset.js';
 import { computeCurrentSourceHash } from './phase-c-suite-source-manifest.mjs';
+import { verifyManifestEvidenceFreshness } from './helpers/evidence-freshness-guard.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -154,72 +154,41 @@ function read(relPath) { try { return fs.readFileSync(path.join(PROJECT_ROOT, re
 
 // ── Item 9: Stale QA evidence must fail the Local Gate ──────────────────────
 //
-// DISCOVERY while writing this test: `tools/local-gate.mjs`'s
-// `runStep()` unconditionally RE-RUNS each suite's own script before
-// ever reading/evaluating its result file (see the `spawnSync(...
-// step.script ...)` call preceding every `evaluateStepResult()` call).
-// This means a tampered/stale result file left on disk cannot even
-// survive to be evaluated at face value -- it gets overwritten by a
-// genuine, fresh, honest re-run FIRST. That is a STRONGER guarantee
-// than "a mismatched sourceHash is rejected" (which is what this test
-// originally set out to prove): stale evidence never reaches the
-// evaluation step at all. This test proves that stronger property
-// directly -- plant an obviously-fabricated PASS result with a wrong
-// sourceHash, run the real gate, and confirm the file on disk was
-// genuinely regenerated (no longer matches the tampered fixture) and
-// the gate's own summary reflects the CURRENT honest environment
-// state, never the fabricated one.
+// The old hostile test recursively spawned the entire Local Gate from inside
+// run-static-suites. On Windows that nested gate can launch Browser QA, take
+// longer than the static-test timeout, or contend with an existing Edge/Chrome
+// session. The result was an environment-dependent false FAIL. The Local Gate
+// and this hostile test now share one real freshness guard implementation.
 async function testStaleEvidenceFailsGate() {
-  if (process.env[RECURSION_GUARD_ENV] === '1') {
-    recordNotTested(
-      'Item 9: real local-gate spawn test (skipped -- this invocation is itself nested inside a local-gate -> run-static-suites -> this-file recursive chain; the OUTERMOST invocation already ran this check for real)',
-      'recursion guard active'
-    );
-    return;
-  }
-  const resultsPath = path.join(PROJECT_ROOT, 'qa', 'epic-2e-k-calibration-lab-browser-results.json');
-  let backup = null;
-  try { backup = fs.readFileSync(resultsPath, 'utf-8'); } catch { backup = null; }
-  try {
-    const currentHash = await computeCurrentSourceHash('calibrationLabBrowser', PROJECT_ROOT);
-    const tamperedFakePass = {
-      suite: 'CONTROLLED V2 CALIBRATION LAB R1 -- Phase K: Calibration Lab Browser suite (TAMPERED FOR HOSTILE TEST)',
-      runId: 'hostile-test-fake-run-DO-NOT-TRUST', startedAt: new Date().toISOString(), completedAt: new Date().toISOString(),
-      completed: true,
-      // Deliberately WRONG sourceHash -- simulates a stale/tampered
-      // result claiming PASS against source files that have since
-      // changed.
-      sourceHash: `${currentHash}-TAMPERED`,
-      results: [{ test: 'fabricated PASS row', result: 'PASS', evidence: '{}' }],
-      decision: 'PASS',
-    };
-    fs.writeFileSync(resultsPath, JSON.stringify(tamperedFakePass, null, 2));
+  const manifestKey = 'calibrationLabBrowser';
+  const currentHash = await computeCurrentSourceHash(manifestKey, PROJECT_ROOT);
+  const tampered = {
+    completed: true,
+    decision: 'PASS',
+    sourceHash: `${currentHash}-TAMPERED`,
+    results: [{ test: 'fabricated PASS row', result: 'PASS', evidence: '{}' }],
+  };
+  const stale = await verifyManifestEvidenceFreshness({
+    manifestKey,
+    resultObj: tampered,
+    projectRoot: PROJECT_ROOT,
+  });
+  record(
+    'Item 9: the exact freshness guard used by Local Gate rejects a fabricated PASS carrying a mismatched sourceHash',
+    stale.ok === false && stale.reasons.some((reason) => /STALE result/.test(reason)),
+    { currentHash: stale.currentHash, resultHash: stale.resultHash, reasons: stale.reasons }
+  );
 
-    const proc = spawnSync(process.execPath, [path.join(PROJECT_ROOT, 'tools', 'local-gate.mjs')], {
-      cwd: PROJECT_ROOT, encoding: 'utf-8', timeout: 180000,
-      env: { ...process.env, [RECURSION_GUARD_ENV]: '1' },
-    });
-    const stdout = proc.stdout ?? '';
-    const step14Line = stdout.split('\n').find((line) => /Step 14:.*Calibration Lab Browser suite/.test(line));
-
-    let resultAfterGateRun = null;
-    try { resultAfterGateRun = JSON.parse(fs.readFileSync(resultsPath, 'utf-8')); } catch { resultAfterGateRun = null; }
-    const fileWasRegenerated = resultAfterGateRun !== null && resultAfterGateRun.runId !== 'hostile-test-fake-run-DO-NOT-TRUST';
-    const gateReflectsHonestState = !!step14Line && !/fabricated PASS row/.test(stdout);
-
-    record(
-      'Item 9: a tampered result file with a fabricated PASS and a wrong sourceHash cannot survive `node tools/local-gate.mjs` -- the suite is genuinely re-run and the file is regenerated fresh before evaluation, so the fabricated evidence never reaches the pass/fail decision',
-      fileWasRegenerated && gateReflectsHonestState,
-      { step14Line: step14Line ?? null, gateExitCode: proc.status, regeneratedRunId: resultAfterGateRun?.runId ?? null }
-    );
-  } finally {
-    // Always restore the original, honest result file -- the final
-    // package must never ship this deliberately tampered fixture, nor
-    // (now moot, since the gate regenerates it) the auto-regenerated
-    // one from this test run.
-    if (backup !== null) fs.writeFileSync(resultsPath, backup);
-    else { try { fs.unlinkSync(resultsPath); } catch { /* nothing to restore */ } }
-  }
+  const fresh = await verifyManifestEvidenceFreshness({
+    manifestKey,
+    resultObj: { ...tampered, sourceHash: currentHash },
+    projectRoot: PROJECT_ROOT,
+  });
+  record(
+    'Item 9 HOSTILE SELF-CHECK: the same guard accepts an exact current sourceHash, proving the detector is not hard-coded to fail',
+    fresh.ok === true && fresh.reasons.length === 0,
+    { currentHash: fresh.currentHash, resultHash: fresh.resultHash }
+  );
 }
 
 await testStaleEvidenceFailsGate();

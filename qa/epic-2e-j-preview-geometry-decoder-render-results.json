@@ -1,13 +1,13 @@
 {
   "suite": "LOCAL-FIRST GEOMETRY R3 -- Phase C1: Decoder/Render Geometry suite (decoder-only, NOT production-safety-eligible)",
-  "runId": "bfc98308-faf1-45e6-8f16-7bc38967093e",
-  "startedAt": "2026-07-27T11:33:22.933Z",
-  "completedAt": "2026-07-27T11:33:22.933Z",
+  "runId": "3f1b5879-f7b3-4ee6-a953-fe21a1c5dcb2",
+  "startedAt": "2026-07-27T14:58:13.489Z",
+  "completedAt": "2026-07-27T14:58:13.489Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-27T11:33:22.933Z",
+  "generatedAt": "2026-07-27T14:58:13.489Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -18,7 +18,7 @@
     {
       "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix4_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
+      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
     }
   ],
   "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"
