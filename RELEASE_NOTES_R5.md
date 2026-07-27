@@ -49,3 +49,7 @@ This local-first release closes the remaining Thai/English presentation leaks an
 - No `node_modules`
 - No nested ZIP archives
 - No temporary diagnostic files
+
+## EPIC 2E-K-R2-FIX4
+
+Preview is now generated before Candidate Review. Review approval controls only Candidate status and cannot enable Production, Controlled V2 apply, Preview export, or XMP write. No deployment was performed.

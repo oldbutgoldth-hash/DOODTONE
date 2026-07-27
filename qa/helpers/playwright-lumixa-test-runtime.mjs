@@ -87,10 +87,15 @@ async function isExecutableFile(candidatePath) {
  * asserts `executablePath === found` and `available === Boolean(found)`
  * on every call, so this triple can never drift apart again.
  */
-export async function detectBrowserExecutable(chromium) {
+export async function detectBrowserExecutable(chromium, options = {}) {
+  const {
+    candidatePaths = null,
+    includeSystemCandidates = true,
+    environment = process.env,
+  } = options && typeof options === 'object' ? options : {};
   const candidates = [];
-  if (typeof process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH === 'string' && process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH.length > 0) {
-    candidates.push({ label: 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH env var', path: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
+  if (typeof environment.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH === 'string' && environment.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH.length > 0) {
+    candidates.push({ label: 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH env var', path: environment.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
   }
   try {
     const bundled = chromium && typeof chromium.executablePath === 'function' ? chromium.executablePath() : null;
@@ -105,26 +110,39 @@ export async function detectBrowserExecutable(chromium) {
   // paths -- never a Windows-only rewrite of the Linux list, both sets
   // of candidates coexist and are probed in the same honest exists-
   // then-launch order.
-  if (process.platform === 'win32') {
-    const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
-    const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
-    const localAppData = process.env['LocalAppData'] || '';
-    candidates.push(
-      { label: 'Chrome (Program Files)', path: `${programFiles}\Google\Chrome\Application\chrome.exe` },
-      { label: 'Chrome (Program Files x86)', path: `${programFilesX86}\Google\Chrome\Application\chrome.exe` },
-      ...(localAppData ? [{ label: 'Chrome (LocalAppData)', path: `${localAppData}\Google\Chrome\Application\chrome.exe` }] : []),
-      { label: 'Edge (Program Files x86)', path: `${programFilesX86}\Microsoft\Edge\Application\msedge.exe` },
-      { label: 'Edge (Program Files)', path: `${programFiles}\Microsoft\Edge\Application\msedge.exe` },
-    );
-  } else {
-    candidates.push(
-      { label: '/usr/bin/chromium', path: '/usr/bin/chromium' },
-      { label: '/usr/bin/chromium-browser', path: '/usr/bin/chromium-browser' },
-      { label: '/usr/bin/google-chrome', path: '/usr/bin/google-chrome' },
-      { label: '/usr/bin/google-chrome-stable', path: '/usr/bin/google-chrome-stable' },
-      { label: '/opt/google/chrome/chrome', path: '/opt/google/chrome/chrome' },
-    );
+  if (Array.isArray(candidatePaths)) {
+    for (const candidate of candidatePaths) {
+      if (typeof candidate === 'string' && candidate.length > 0) {
+        candidates.push({ label: 'injected candidate', path: candidate });
+      } else if (candidate && typeof candidate === 'object' && typeof candidate.path === 'string' && candidate.path.length > 0) {
+        candidates.push({ label: candidate.label || 'injected candidate', path: candidate.path });
+      }
+    }
   }
+
+  if (includeSystemCandidates) {
+    if (process.platform === 'win32') {
+      const programFiles = environment['ProgramFiles'] || 'C:\\Program Files';
+      const programFilesX86 = environment['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+      const localAppData = environment['LocalAppData'] || '';
+      candidates.push(
+        { label: 'Chrome (Program Files)', path: `${programFiles}\Google\Chrome\Application\chrome.exe` },
+        { label: 'Chrome (Program Files x86)', path: `${programFilesX86}\Google\Chrome\Application\chrome.exe` },
+        ...(localAppData ? [{ label: 'Chrome (LocalAppData)', path: `${localAppData}\Google\Chrome\Application\chrome.exe` }] : []),
+        { label: 'Edge (Program Files x86)', path: `${programFilesX86}\Microsoft\Edge\Application\msedge.exe` },
+        { label: 'Edge (Program Files)', path: `${programFiles}\Microsoft\Edge\Application\msedge.exe` },
+      );
+    } else {
+      candidates.push(
+        { label: '/usr/bin/chromium', path: '/usr/bin/chromium' },
+        { label: '/usr/bin/chromium-browser', path: '/usr/bin/chromium-browser' },
+        { label: '/usr/bin/google-chrome', path: '/usr/bin/google-chrome' },
+        { label: '/usr/bin/google-chrome-stable', path: '/usr/bin/google-chrome-stable' },
+        { label: '/opt/google/chrome/chrome', path: '/opt/google/chrome/chrome' },
+      );
+    }
+  }
+
 
   const attempts = [];
   for (const candidate of candidates) {

@@ -50,6 +50,7 @@ import { renderReviewConsole } from './review-console-renderer.js';
 import { t } from './i18n/index.js';
 import { presentReviewGuidanceCode, presentBlockerCode } from './i18n/domain-presenters.js';
 import { createReviewConsoleController } from './review-console-controller.js';
+import { applyPreviewEvidenceToReviewStateV2 } from '../core/lightroom-mapping-engine/mapping-v2-preview-review-state.js';
 import { renderSideBySideComparison } from './side-by-side-comparison-renderer.js';
 import { createVisualPreviewComparisonControllerV2 } from './visual-preview-comparison-controller-v2.js';
 import { ensureVisualPreviewComparisonLayout, renderVisualPreviewComparison, clearVisualPreviewComparisonDisplay, buildRenderingPlaceholderState, buildPreparingAnalysisState } from './visual-preview-comparison-renderer-v2.js';
@@ -117,6 +118,10 @@ const state = {
   // results. Never influences production output.
   lastPreviewSandbox: null,
   lastPreviewReviewState: null,
+  // FIX4: Candidate Review is a post-preview human decision only.
+  // It never gates preview generation and never enables Production/XMP.
+  lastPreviewReviewGenerationId: null,
+  candidateReviewAuditHistory: [],
   // R4 Phase C: bounded, serializable inputs to the persistent "AI Box"
   // analysis-complete summary, stored so it can be honestly rebuilt in
   // the CURRENT language on a locale switch -- this box is injected
@@ -237,13 +242,17 @@ function _buildPreviewGeometryDiagnostics(generationId) {
   const v2Plan = renderPlan && typeof renderPlan === 'object' ? renderPlan.v2RenderPlan ?? null : null;
 
   const sandboxExists = !!sandbox;
-  // 'human-review-complete' is the canonical gate id produced by the
-  // (LOCKED, read-only-here) Sandbox module's own
-  // _buildHumanReviewChecklist()/previewGateChecks — never re-derived
-  // or guessed at; only ever read.
+  // FIX4: Human approval is Candidate Review evidence only. It is NOT
+  // a Preview-generation gate. Read the actual Candidate Review state
+  // for diagnostics rather than the Sandbox's deliberately bypassed
+  // legacy `human-review-complete` gate row (which now means only that
+  // approval is not required to render a preview).
   const gateChecks = Array.isArray(sandbox?.previewGateChecks) ? sandbox.previewGateChecks : [];
-  const reviewGate = gateChecks.find((g) => g && typeof g === 'object' && g.id === 'human-review-complete') ?? null;
-  const humanReviewComplete = reviewGate ? reviewGate.passed === true : null;
+  const candidateReviewState = state.lastPreviewReviewState ?? null;
+  const humanReviewComplete = candidateReviewState
+    ? candidateReviewState?.reviewGuidance?.candidateReviewComplete === true
+    : null;
+  const previewGenerationDependsOnReview = false;
   const canGeneratePreview = sandbox?.canGeneratePreview === true ? true : sandbox?.canGeneratePreview === false ? false : null;
   const simulatedPreviewPresetAvailable = v2Plan?.upstreamEvidence?.simulatedPreviewAvailable === true
     ? true : v2Plan?.upstreamEvidence?.simulatedPreviewAvailable === false ? false : null;
@@ -264,14 +273,12 @@ function _buildPreviewGeometryDiagnostics(generationId) {
     && Array.isArray(supportedAdjustments) && supportedAdjustments.length === 0;
 
   const otherFailedRequiredGates = gateChecks.filter((g) => g && typeof g === 'object' && g.required && g.passed !== true && g.id !== 'human-review-complete');
-  const reviewGateFailed = reviewGate ? reviewGate.passed !== true : false;
 
   let blockerCode = null;
   if (!renderPlanExists) blockerCode = 'V2_PLAN_BUILD_FAILED';
   else if (!sandboxExists) blockerCode = 'SANDBOX_MISSING';
   else if (contradictoryEvidence) blockerCode = 'CONTRADICTORY_SAFETY_EVIDENCE';
   else if (hardStopCount > 0) blockerCode = 'HARD_SAFETY_STOP';
-  else if (reviewGateFailed && otherFailedRequiredGates.length === 0) blockerCode = 'REVIEW_INCOMPLETE';
   else if (otherFailedRequiredGates.length > 0) blockerCode = 'SANDBOX_NOT_ELIGIBLE';
   else if (!simulatedPreviewPresetAvailable && !v2Available) blockerCode = 'SIMULATED_PRESET_UNAVAILABLE';
   else if (v2Available && !v2Renderable) blockerCode = 'SANDBOX_NOT_ELIGIBLE';
@@ -320,6 +327,8 @@ function _buildPreviewGeometryDiagnostics(generationId) {
     generationId: _qaSafeGenerationId(generationId),
     sandboxExists,
     humanReviewComplete,
+    previewGenerationDependsOnReview,
+    candidateReviewStatus: _qaSafeStr(candidateReviewState?.candidateReviewStatus),
     canGeneratePreview,
     simulatedPreviewPresetAvailable,
     contradictoryEvidence,
@@ -596,6 +605,14 @@ function ensureQaSnapshotHook() {
           systemRequired: _qaSafeNum(g?.systemRequired),
           systemVerified: _qaSafeNum(g?.systemVerified),
           readyToBuildV2: _qaSafeBool(g?.readyToBuildV2),
+          candidateReviewComplete: _qaSafeBool(g?.candidateReviewComplete),
+          previewGenerationDependsOnReview: _qaSafeBool(g?.previewGenerationDependsOnReview),
+          candidateReviewStatus: _qaSafeStr(state.lastPreviewReviewState?.candidateReviewStatus),
+          previewEvidenceReady: _qaSafeBool(state.lastPreviewReviewState?.metadata?.previewEvidenceReady),
+          productionSource: _qaSafeStr(state.lastPreviewReviewState?.productionSource),
+          productionWrite: _qaSafeBool(state.lastPreviewReviewState?.productionWrite),
+          controlledV2Apply: _qaSafeBool(state.lastPreviewReviewState?.controlledV2Apply),
+          previewExport: _qaSafeBool(state.lastPreviewReviewState?.previewExport),
         };
       })(),
     };
@@ -1281,6 +1298,34 @@ async function waitForAnalysisRenderReady({ image = null, containers = [], maxFr
 // (`reviewConsoleController` itself is declared earlier, just before
 // waitForRoot(...) — see the comment there for why.)
 
+function _getCandidateReviewAvailability() {
+  const meta = state.lastPreviewReviewState?.metadata ?? null;
+  const available = meta?.previewEvidenceReady === true &&
+    meta?.currentGenerationId === analysisRenderGeneration;
+  return {
+    available,
+    reasonCode: available ? null : 'PREVIEW_EVIDENCE_REQUIRED',
+  };
+}
+
+function _archiveCandidateReviewForNewGeneration(nextGenerationId) {
+  const prior = state.lastPreviewReviewState;
+  const priorGenerationId = state.lastPreviewReviewGenerationId;
+  if (!prior || priorGenerationId === null || priorGenerationId === undefined || priorGenerationId === nextGenerationId) return;
+  const manualItems = Array.isArray(prior.reviewItems) ? prior.reviewItems.filter((item) => item?.manual !== false) : [];
+  const hasHumanInput = manualItems.some((item) => item?.reviewed === true || item?.reviewerDecision !== 'undecided' || (typeof item?.reviewerNote === 'string' && item.reviewerNote.trim()));
+  if (hasHumanInput) {
+    state.candidateReviewAuditHistory.push({
+      generationId: priorGenerationId,
+      candidateReviewStatus: typeof prior.candidateReviewStatus === 'string' ? prior.candidateReviewStatus : (prior.approvalState ?? 'not-started'),
+      visualPassed: Number(prior.reviewGuidance?.visualPassed ?? 0),
+      visualRequired: Number(prior.reviewGuidance?.visualRequired ?? 0),
+      archivedAt: new Date().toISOString(),
+    });
+    if (state.candidateReviewAuditHistory.length > 20) state.candidateReviewAuditHistory.splice(0, state.candidateReviewAuditHistory.length - 20);
+  }
+}
+
 function renderReviewConsoleFromState() {
   const reviewInner = document.getElementById('reviewConsoleInner');
   if (!reviewInner) return;
@@ -1299,16 +1344,12 @@ function renderReviewConsoleFromState() {
 let buildControlledV2InProgress = false;
 
 /**
- * CONTROLLED V2 VISUAL TRANSLATION R1 — Phase H: keeps the "Build
- * Controlled V2 Preview" button's disabled state and hint text in
- * sync with `state.lastPreviewReviewState.reviewGuidance` on every
- * Review Console re-render — this function NEVER decides readiness
- * itself; it only ever reflects `reviewGuidance.readyToBuildV2` (and
- * `primaryGuidance`), which is computed entirely by
- * core/lightroom-mapping-engine/mapping-v2-preview-review-state.js.
- * While a Build-V2 run is in progress (buildControlledV2InProgress),
- * the button stays disabled regardless of readiness, to prevent a
- * second overlapping runAnalysis() call.
+ * FIX4 — Preview-before-review workflow.
+ * Keeps the single preview control synchronized with actual render
+ * evidence. Preview generation happens automatically from Safety/Render
+ * eligibility and never depends on Candidate Review approval. Once both
+ * canvases are ready, this control only navigates to the comparison.
+ * It never runs Analysis, never activates Production, and never writes XMP.
  */
 function _syncBuildControlledV2Button() {
   const btn = document.getElementById('btnBuildControlledV2');
@@ -1332,14 +1373,19 @@ function _syncBuildControlledV2Button() {
   btn.removeAttribute('aria-busy');
   if (label) label.textContent = t('review.buildButton.label', null, state.lang);
 
-  const guidance = _isRecordLike(state.lastPreviewReviewState?.reviewGuidance) ? state.lastPreviewReviewState.reviewGuidance : null;
-  const ready = guidance?.readyToBuildV2 === true;
-  btn.disabled = !ready;
-  btn.setAttribute('aria-disabled', String(!ready));
+  const previewEligible = state.lastPreviewSandbox?.canGeneratePreview === true;
+  const previewReady = _getCandidateReviewAvailability().available;
+  btn.disabled = !previewReady;
+  btn.setAttribute('aria-disabled', String(!previewReady));
+  if (label) label.textContent = previewReady
+    ? t('review.buildButton.viewPreview', null, state.lang)
+    : t('review.buildButton.building', null, state.lang);
   if (hint) {
-    hint.textContent = guidance
-      ? presentReviewGuidanceCode(guidance.primaryGuidanceCode, guidance.primaryGuidanceParams, state.lang, typeof guidance.primaryGuidance === 'string' ? guidance.primaryGuidance : '')
-      : (state.lastPreviewReviewState ? '' : t('review.noPreview', null, state.lang));
+    hint.textContent = previewReady
+      ? t('review.previewEvidenceReady', null, state.lang)
+      : previewEligible
+        ? t('review.previewGenerating', null, state.lang)
+        : t('review.previewSafetyBlocked', null, state.lang);
   }
 }
 
@@ -1349,102 +1395,27 @@ function _isRecordLike(value) {
 }
 
 /**
- * CONTROLLED V2 VISUAL TRANSLATION R1 — Phase H: "Build Controlled V2
- * Preview" — calls the EXISTING Re-analyze pipeline (runAnalysis()),
- * never a new analysis engine. Gated on
- * reviewGuidance.readyToBuildV2 (mirrored onto the button's own
- * `disabled` attribute by _syncBuildControlledV2Button, checked again
- * here defensively). Disables the button for the duration of the run,
- * then — only if the image/analysis session is still the one this
- * click started against (state.imageLoaded still true and the Review
- * Console section still visible; a Reset or a brand-new image import
- * firing mid-flight is the only way that could stop being true) —
- * scrolls/focuses the Visual Preview Comparison section and announces
- * the honest outcome (Safety-restraint translation / Identity
- * fallback / blocked-unavailable) through a dedicated aria-live
- * region, read directly from the already-rendered Visual Preview
- * Comparison controller's own state — never re-derived or guessed.
+ * FIX4 — View the already-rendered Controlled V2 comparison.
+ * This is navigation-only: no Analysis call, no Candidate Review gate,
+ * no Production activation, no export, and no XMP mutation.
  */
 async function handleBuildControlledV2Preview() {
   const btn = document.getElementById('btnBuildControlledV2');
   if (!btn || btn.disabled || buildControlledV2InProgress) return;
-  const guidance = _isRecordLike(state.lastPreviewReviewState?.reviewGuidance) ? state.lastPreviewReviewState.reviewGuidance : null;
-  if (guidance?.readyToBuildV2 !== true) return; // defense-in-depth; the button should already be disabled in this case
+  if (!_getCandidateReviewAvailability().available) return;
 
-  const img = document.getElementById('previewImg');
-  if (!state.imageLoaded || !img?.complete || !img.naturalWidth) return;
-
-  buildControlledV2InProgress = true;
-  _syncBuildControlledV2Button();
-
-  const reviewSecVisibleBefore = document.getElementById('reviewConsoleSection')?.style.display !== 'none';
-
-  try {
-    await runAnalysis();
-  } finally {
-    buildControlledV2InProgress = false;
-    _syncBuildControlledV2Button();
-  }
-
-  // Staleness guard: only announce/scroll if this is still genuinely
-  // the same session (no Reset/new-image import happened while the
-  // above await was in flight).
-  const stillSameSession = state.imageLoaded && reviewSecVisibleBefore && document.getElementById('reviewConsoleSection')?.style.display !== 'none';
-  if (!stillSameSession) return;
-
-  // R4 Phase G: the Visual Preview Comparison render this analysis
-  // triggered is fire-and-forget inside runAnalysis() — it may not
-  // have settled yet the instant runAnalysis() resolves. Reading
-  // visualPreviewComparisonController.getState() immediately here (as
-  // the previous implementation did) could therefore still return a
-  // stale, pre-render eligibility/plan-time state (translationMode
-  // null/undefined), which fell through to the generic "not ready"
-  // message even when the real state, once settled, was a genuine
-  // safety-restraint or identity-fallback success. Fix: genuinely
-  // await this generation's render settlement before reading state.
-  const _announceGeneration = analysisRenderGeneration;
-  if (_latestVisualPreviewRenderSettleGeneration === _announceGeneration && _latestVisualPreviewRenderSettlePromise) {
-    await _latestVisualPreviewRenderSettlePromise;
-  }
-  // Re-check staleness AFTER the await above -- a newer analysis,
-  // Reset, or new-image import may have started while we were
-  // waiting. Per spec: a stale generation gets NO announcement at all
-  // (never a guessed/stale message), rather than silently reusing an
-  // older generation's outcome.
-  if (analysisRenderGeneration !== _announceGeneration) return;
-  if (!state.imageLoaded || document.getElementById('reviewConsoleSection')?.style.display === 'none') return;
-
+  // FIX4: Preview generation already happened automatically from
+  // safety/render eligibility. This control only navigates to the
+  // rendered comparison; it never re-runs Analysis and never depends
+  // on Candidate Review approval.
   const vprState = visualPreviewComparisonController ? visualPreviewComparisonController.getState() : null;
-  // Only trust vprState if it actually belongs to the generation we
-  // just waited on -- a controller-level guard already exists
-  // (render() results are only committed for the still-current
-  // generation), but re-checking here is a cheap extra safety net
-  // against ever announcing a mismatched generation's outcome.
-  const vprBelongsToThisGeneration = vprState != null && (vprState.analysisGenerationId == null || vprState.analysisGenerationId === _announceGeneration);
-  const translationMode = vprBelongsToThisGeneration ? (vprState?.metadata?.controlledV2Translation?.mode ?? null) : null;
-  const overallState = vprBelongsToThisGeneration ? (vprState?.state ?? null) : null;
-
-  let outcomePresentation;
-  if (overallState === 'cancelled') {
-    // Cancellation means a newer render superseded this one -- treat
-    // exactly like a stale generation: no announcement.
-    return;
-  } else if (overallState === 'rendered' && translationMode === 'legacy-derived-safety-restraint') {
-    outcomePresentation = { code: 'SAFETY_RESTRAINT', params: {}, category: 'build-controlled-v2', generationId: _announceGeneration };
-  } else if (overallState === 'rendered' && translationMode === 'identity-fallback') {
-    outcomePresentation = { code: 'IDENTITY_FALLBACK', params: {}, category: 'build-controlled-v2', generationId: _announceGeneration };
-  } else if (vprBelongsToThisGeneration && Array.isArray(vprState?.blockerCodes) && vprState.blockerCodes.length > 0) {
-    // Blocked/failed/partial/unavailable with a known, exact blocker
-    // reason -- announce the SPECIFIC reason rather than a generic
-    // "not ready" sentence, per R4 Phase G/H.
-    outcomePresentation = { code: 'BLOCKED', params: { blockerCode: vprState.blockerCodes[0] }, category: 'build-controlled-v2', generationId: _announceGeneration };
-  } else {
-    // Genuinely no evidence at all (no controller, no state, or a
-    // resolved-but-blocker-code-less state) -- the only case where the
-    // generic "analysis complete but preview not ready" message is
-    // honest.
-    outcomePresentation = { code: 'UNAVAILABLE', params: {}, category: 'build-controlled-v2', generationId: _announceGeneration };
-  }
+  const generationId = analysisRenderGeneration;
+  const translationMode = vprState?.metadata?.controlledV2Translation?.mode ?? null;
+  const outcomePresentation = translationMode === 'legacy-derived-safety-restraint'
+    ? { code: 'SAFETY_RESTRAINT', params: {}, category: 'view-controlled-v2', generationId }
+    : translationMode === 'identity-fallback'
+      ? { code: 'IDENTITY_FALLBACK', params: {}, category: 'view-controlled-v2', generationId }
+      : { code: 'UNAVAILABLE', params: {}, category: 'view-controlled-v2', generationId };
 
   state.lastBuildAnnouncement = outcomePresentation;
   const liveRegion = document.getElementById('buildControlledV2LiveRegion');
@@ -1483,6 +1454,7 @@ function ensureReviewConsoleController() {
     // object, which setState below then stores.
     getState: () => state.lastPreviewReviewState,
     setState: (next) => { state.lastPreviewReviewState = next; },
+    getReviewAvailability: _getCandidateReviewAvailability,
     rerender: renderReviewConsoleFromState,
     // LOCALE RUNTIME TRUTH + QA NEUTRALITY R4 -- Phase D: confirmed
     // Review Console leak ("Review item marked as passed.") -- the
@@ -2100,6 +2072,15 @@ async function runAnalysis() {
   // (now stale) render. Fixes "rapid import of two different images"
   // showing a mix of the old and new image's analysis.
   const renderGeneration = ++analysisRenderGeneration;
+  _archiveCandidateReviewForNewGeneration(renderGeneration);
+  if (state.lastPreviewReviewState) {
+    state.lastPreviewReviewState = applyPreviewEvidenceToReviewStateV2(state.lastPreviewReviewState, {
+      generationId: renderGeneration, renderState: 'preparing',
+      legacyRendered: false, v2Rendered: false, bothRendered: false,
+      visualComparisonAvailable: false,
+    });
+    renderReviewConsoleFromState();
+  }
 
   // EPIC 2E-H-C-F FIX 2: cancel any in-flight Visual Preview render and
   // clear stale pixels/metadata IMMEDIATELY on every new analysis run —
@@ -2387,7 +2368,10 @@ async function runAnalysis() {
       // user's current review progress in; the Review State Engine
       // then normalizes it against the freshly-computed Preview
       // Sandbox, safely downgrading any now-stale approval.
-      controlledPreviewReviewStateV2: state.lastPreviewReviewState,
+      // FIX4: every new Analysis generation starts a fresh Candidate
+      // Review. Prior decisions are archived in bounded UI memory and
+      // never reused for a different pixel generation.
+      controlledPreviewReviewStateV2: null,
     });
 
     const { preset: validatedPreset, report: validationReport } = validateFinalPreset(rawPreset, styleFingerprint);
@@ -2579,6 +2563,14 @@ async function runAnalysis() {
     // xmp-validator, and does NOT affect XMP export.
     state.lastPreviewSandbox = finalPreset._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2 ?? null;
     state.lastPreviewReviewState = finalPreset._decision?.finalStyleIntent?.controlledPreviewReviewStateV2 ?? null;
+    state.lastPreviewReviewGenerationId = renderGeneration;
+    if (state.lastPreviewReviewState) {
+      state.lastPreviewReviewState = applyPreviewEvidenceToReviewStateV2(state.lastPreviewReviewState, {
+        generationId: renderGeneration, renderState: 'rendering',
+        legacyRendered: false, v2Rendered: false, bothRendered: false,
+        visualComparisonAvailable: false,
+      });
+    }
     // FIX 1 (EPIC 2E-J-C-F2 Step 7A-F1): kept for the read-only QA
     // snapshot hook only (see ensureQaSnapshotHook below) — a plain
     // reference to the already-computed finalStyleIntent, never
@@ -2784,6 +2776,17 @@ async function runAnalysis() {
             // stale preview render overwrite the current one's display.
             if (renderGeneration !== analysisRenderGeneration) return;
             state.lastVisualPreviewComparisonState = vprState;
+            if (state.lastPreviewReviewState) {
+              state.lastPreviewReviewState = applyPreviewEvidenceToReviewStateV2(state.lastPreviewReviewState, {
+                generationId: renderGeneration,
+                renderState: vprState?.state ?? null,
+                legacyRendered: vprState?.legacy?.rendered === true,
+                v2Rendered: vprState?.v2?.rendered === true,
+                bothRendered: vprState?.bothRendered === true,
+                visualComparisonAvailable: vprState?.visualComparisonAvailable === true,
+              });
+              renderReviewConsoleFromState();
+            }
             renderVisualPreviewComparison(vprInner, vprState, state.lang);
             // EPIC 2E-I Phase A: sync the Interactive Before/After
             // viewer from the SAME resolved Visual Preview Comparison
@@ -2829,6 +2832,14 @@ async function runAnalysis() {
             // the current analysis's own (possibly successful) display.
             console.warn('VisualPreviewComparison render failed (analysis unaffected):', err);
             if (renderGeneration !== analysisRenderGeneration) return;
+            if (state.lastPreviewReviewState) {
+              state.lastPreviewReviewState = applyPreviewEvidenceToReviewStateV2(state.lastPreviewReviewState, {
+                generationId: renderGeneration, renderState: 'failed',
+                legacyRendered: false, v2Rendered: false, bothRendered: false,
+                visualComparisonAvailable: false,
+              });
+              renderReviewConsoleFromState();
+            }
             renderVisualPreviewComparison(vprInner, {
               state: 'failed',
               legacy: null, v2: null, bothRendered: false, visualComparisonAvailable: false,
@@ -2978,6 +2989,7 @@ function handleReset() {
   state.lastReferenceTransfer = null;
   state.lastPreviewSandbox = null;
   state.lastPreviewReviewState = null;
+  state.lastPreviewReviewGenerationId = null;
   state.lastSideBySideComparison = null;
   // DEPLOY GEOMETRY R1 — Phase B1/B4: release the retained File
   // reference and any in-flight/decoded canonical-source resource

@@ -545,17 +545,19 @@ const ACTION_LABEL = { pass: 'Pass', fail: 'Fail', adjust: 'Needs Adjustment', p
  * item's CURRENT state — never relying on color alone (each button
  * also has a distinct, always-visible text label).
  */
-function renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending, lang) {
+function renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending, lang, disabled = false) {
   const wrap = el('div', { style: 'display:flex;flex-wrap:wrap;gap:7px;margin-top:10px' });
   const al = { pass: t('review.action.pass', null, lang) || ACTION_LABEL.pass, fail: t('review.action.fail', null, lang) || ACTION_LABEL.fail, adjust: t('review.action.adjust', null, lang) || ACTION_LABEL.adjust, pending: t('review.action.pending', null, lang) || ACTION_LABEL.pending };
   const makeBtn = ({ label, action, active, color, ariaLabel }) => el('button', {
-    style: `min-height:44px;padding:9px 15px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid ${active ? color : 'var(--border)'};background:${active ? color + '20' : 'var(--surface-2)'};color:${active ? color : 'var(--text-dim)'};overflow-wrap:anywhere`,
+    style: `min-height:44px;padding:9px 15px;border-radius:3px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:${disabled ? 'not-allowed' : 'pointer'};opacity:${disabled ? '.48' : '1'};border:1.5px solid ${active ? color : 'var(--border)'};background:${active ? color + '20' : 'var(--surface-2)'};color:${active ? color : 'var(--text-dim)'};overflow-wrap:anywhere`,
     text: label,
     attrs: {
       type: 'button',
       'data-review-action': action,
       'aria-label': ariaLabel,
       'aria-pressed': String(active),
+      'aria-disabled': String(disabled),
+      disabled: disabled ? '' : null,
     },
   });
 
@@ -587,7 +589,7 @@ function renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConf
  * delegated from the console container) — this function only builds
  * the field and wires no listeners itself.
  */
-function renderNoteField(item, itemId, itemLabel, lang) {
+function renderNoteField(item, itemId, itemLabel, lang, disabled = false) {
   const wrap = el('div', { style: 'margin-top:10px' });
   const fieldId = `review-note-${itemId}`;
   wrap.appendChild(el('label', {
@@ -604,6 +606,8 @@ function renderNoteField(item, itemId, itemLabel, lang) {
       'data-review-note': 'true',
       placeholder: `Add a note about "${itemLabel}"…`,
       'aria-label': `Reviewer note for ${itemLabel}, up to 500 characters`,
+      'aria-disabled': String(disabled),
+      disabled: disabled ? '' : null,
     },
   });
   textarea.value = currentNote; // seeding a form control's content — always via .value, never textContent/innerHTML
@@ -776,8 +780,9 @@ function renderChecklistItem(item, uiState, lang) {
     wrap.appendChild(roWrap);
   } else if (itemId) {
     const isFailConfirmPending = uiState?.pendingConfirmItemIds instanceof Set && uiState.pendingConfirmItemIds.has(itemId);
-    wrap.appendChild(renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending, lang));
-    wrap.appendChild(renderNoteField(item, itemId, itemLabel, lang));
+    const reviewDisabled = uiState?.reviewAvailable === false;
+    wrap.appendChild(renderActionButtons(item, itemLabel, statusKey, decisionKey, isFailConfirmPending, lang, reviewDisabled));
+    wrap.appendChild(renderNoteField(item, itemId, itemLabel, lang, reviewDisabled));
   }
 
   return wrap;
@@ -890,9 +895,11 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
   // Core's English `photographerMessage`/`photographerSummary` prose.
   // Those raw Core sentences are still shown, but only inside the
   // collapsed Developer Details block at the bottom of this console.
-  const approvalStateCode = typeof reviewRecord?.approvalState === 'string'
-    ? reviewRecord.approvalState
-    : (reviewRecord?.reviewGuidance?.readyToBuildV2 === true ? 'ready-to-build-v2' : 'unavailable');
+  const approvalStateCode = typeof reviewRecord?.candidateReviewStatus === 'string'
+    ? reviewRecord.candidateReviewStatus
+    : typeof reviewRecord?.approvalState === 'string'
+      ? reviewRecord.approvalState
+      : 'unavailable';
   const photographerLine = presentReviewSummaryState(approvalStateCode, lang);
   container.appendChild(el('div', { style: 'font-size:13px;color:var(--text);line-height:1.6;margin-bottom:4px;overflow-wrap:anywhere', text: photographerLine }));
 
@@ -1027,6 +1034,19 @@ function _renderBody(container, sandbox, reviewState, uiState, lang) {
   const reviewItems = Array.isArray(reviewRecord?.reviewItems) ? reviewRecord.reviewItems : [];
   if (reviewItems.length) {
     container.appendChild(sectionHeading(t('review.console.humanReviewChecklist', null, lang), 'checklist'));
+    if (uiState?.reviewAvailable === false) {
+      container.appendChild(el('div', {
+        style: 'margin:8px 0 12px;padding:10px 12px;border:1px solid var(--border);background:var(--surface-2);color:var(--warn);font-size:11.5px;line-height:1.6;border-radius:3px',
+        text: t('review.previewEvidencePending', null, lang),
+        attrs: { role: 'status', 'data-review-availability': 'pending-preview-evidence' },
+      }));
+    } else {
+      container.appendChild(el('div', {
+        style: 'margin:8px 0 12px;padding:8px 12px;border:1px solid var(--border);background:var(--surface-2);color:var(--success);font-size:11.5px;line-height:1.6;border-radius:3px',
+        text: t('review.previewEvidenceReady', null, lang),
+        attrs: { role: 'status', 'data-review-availability': 'ready' },
+      }));
+    }
 
     const grouped = new Map();
     for (const item of reviewItems) {

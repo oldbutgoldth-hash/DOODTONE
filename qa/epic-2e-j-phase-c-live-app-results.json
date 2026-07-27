@@ -1,13 +1,13 @@
 {
   "suite": "EPIC 2E-J-C-F2 Step 7A (complete, incl. F3) - Full Application Reachability + Actual UI Workflow",
-  "runId": "a8ea5e8c-f59d-4371-8052-f16273c6a456",
-  "startedAt": "2026-07-27T04:37:46.459Z",
-  "completedAt": "2026-07-27T04:37:46.459Z",
+  "runId": "3c438f3d-46ef-409a-98cc-da07fd774ef1",
+  "startedAt": "2026-07-27T11:33:22.777Z",
+  "completedAt": "2026-07-27T11:33:22.777Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-27T04:37:46.459Z",
+  "generatedAt": "2026-07-27T11:33:22.777Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -18,8 +18,8 @@
     {
       "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "[{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
+      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix4_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
     }
   ],
-  "decision": "BROWSER_BINARY_UNAVAILABLE"
+  "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"
 }

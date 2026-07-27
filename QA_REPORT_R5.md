@@ -124,3 +124,13 @@ The optional `http://lumixa.test` virtual-origin smoke was blocked by the sandbo
 ## Final decision
 
 PASS for the defined R5 local-first acceptance scope. No deployment was performed.
+
+## FIX4 addendum — Preview-before-review
+
+- ESM syntax: 181/181 PASS
+- FIX4 static/functional: 19/19 PASS
+- Real Chromium workflow: 7/7 PASS
+- Candidate Review approved after six visual checks while Production remained Legacy
+- Production write/apply/export remained false
+- XMP exact SHA-256 before/after approval: `e609d864bcbb2fdab75a195bd823a86428490c8e9347f40201d3aee53168f799`
+- Full static aggregate is not labelled complete because two storage suites require unavailable `fake-indexeddb`.

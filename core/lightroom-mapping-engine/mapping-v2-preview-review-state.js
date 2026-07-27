@@ -374,7 +374,7 @@ function _buildReviewGuidance(reviewItems) {
   const systemVerified = systemItems.filter(i => i.status === 'passed').length;
   const overallPassed = required.filter(i => i.status === 'passed').length;
   const needsAdjustmentOrFailed = visualItems.some(i => i.status === 'failed' || i.reviewerDecision === 'needs-adjustment');
-  const readyToBuildV2 = required.length > 0 && required.every(i => i.status === 'passed');
+  const candidateReviewComplete = required.length > 0 && required.every(i => i.status === 'passed');
 
   return {
     visualRequired: visualItems.length,
@@ -383,27 +383,28 @@ function _buildReviewGuidance(reviewItems) {
     systemVerified,
     overallRequired: required.length,
     overallPassed,
-    readyToBuildV2,
+    // Backward-compatible field: this now mirrors candidate-review
+    // completion ONLY. Preview generation is explicitly independent
+    // from it and is controlled by safety/render eligibility upstream.
+    readyToBuildV2: candidateReviewComplete,
+    candidateReviewComplete,
+    previewGenerationDependsOnReview: false,
     steps: [
-      '1. Review the six visual items (system-verified items need no action).',
-      '2. Resolve any Needs Adjustment or Fail.',
-      '3. Re-analyze to build the Controlled V2 Preview.',
+      '1. Generate and inspect the Legacy / Controlled V2 visual preview.',
+      '2. Review the six visual items after pixel evidence is ready.',
+      '3. Candidate Review never enables Production, export, or XMP write.',
     ],
-    primaryGuidance: readyToBuildV2
-      ? 'All required review items are complete — you can build the Controlled V2 Preview.'
+    primaryGuidance: candidateReviewComplete
+      ? 'Candidate Review is complete. The preview remains preview-only and Production stays on Legacy.'
       : needsAdjustmentOrFailed
-        ? 'Resolve the visual item(s) marked Needs Adjustment or Fail, then re-analyze.'
-        : `Review the remaining visual item(s) (${visualItems.length - visualPassed} of ${visualItems.length} left), then re-analyze.`,
-    // I18N RUNTIME CLOSURE R3 — Phase E: additive stable-code twin of
-    // `primaryGuidance` above — the UI must present THIS by locale,
-    // never the raw English sentence (which stays for Developer
-    // Details / non-UI consumers only).
-    primaryGuidanceCode: readyToBuildV2
-      ? 'READY_TO_BUILD_V2'
+        ? 'The preview remains visible. Resolve the Candidate Review item(s) marked Needs Adjustment or Fail.'
+        : `The preview is generated independently. Review the remaining visual item(s) (${visualItems.length - visualPassed} of ${visualItems.length} left).`,
+    primaryGuidanceCode: candidateReviewComplete
+      ? 'CANDIDATE_REVIEW_COMPLETE'
       : needsAdjustmentOrFailed
-        ? 'NEEDS_ADJUSTMENT_OR_FAILED'
-        : 'REVIEW_REMAINING_VISUAL_ITEMS',
-    primaryGuidanceParams: readyToBuildV2 || needsAdjustmentOrFailed
+        ? 'CANDIDATE_REVIEW_NEEDS_ATTENTION'
+        : 'PREVIEW_READY_REVIEW_REMAINING',
+    primaryGuidanceParams: candidateReviewComplete || needsAdjustmentOrFailed
       ? null
       : { remaining: visualItems.length - visualPassed, total: visualItems.length },
   };
@@ -503,6 +504,9 @@ function _buildReviewState(input) {
     reviewProgress, reviewSummary, reviewGuidance: _buildReviewGuidance(reviewItems),
     canApprovePreview: approval.canApprovePreview, canRequestAdjustment: approval.canRequestAdjustment,
     canRejectPreview: approval.canRejectPreview, approvalState: approval.approvalState,
+    candidateReviewStatus: approval.approvalState, candidateReviewOnly: true,
+    productionSource: 'legacy', productionWrite: false, controlledV2Apply: false,
+    previewExport: false, productionActivationAllowed: false,
     blockers, warnings, reasons,
     blockerCodes: _buildReviewBlockerCodes(reviewItems, !!sandbox, sandbox?.canGeneratePreview === true),
     warningCodes: _buildReviewWarningCodes(!!sandbox, sandbox?.canGeneratePreview === true, missingSystemEvidenceCount),
@@ -537,6 +541,44 @@ export function createPreviewReviewStateV2(input = {}) {
  */
 export function evaluatePreviewReviewStateV2(input = {}) {
   return _buildReviewState(input ?? {});
+}
+
+/**
+ * Attaches bounded, post-render pixel evidence to an existing Candidate
+ * Review state. Human review controls are available only when BOTH
+ * Legacy and Controlled V2 previews rendered for the current generation.
+ * This function never changes Production/XMP state and never mutates the
+ * supplied object.
+ */
+export function applyPreviewEvidenceToReviewStateV2(state, evidence = {}) {
+  const generationId = evidence?.generationId ?? null;
+  const bothRendered = evidence?.legacyRendered === true && evidence?.v2Rendered === true && evidence?.bothRendered === true;
+  const visualComparisonAvailable = evidence?.visualComparisonAvailable === true;
+  const sameGeneration = generationId !== null && generationId !== undefined;
+  const previewEvidenceReady = bothRendered && visualComparisonAvailable && sameGeneration;
+  return {
+    ...(state ?? {}),
+    candidateReviewStatus: state?.approvalState ?? state?.candidateReviewStatus ?? 'not-started',
+    candidateReviewOnly: true,
+    productionSource: 'legacy',
+    productionWrite: false,
+    controlledV2Apply: false,
+    previewExport: false,
+    productionActivationAllowed: false,
+    metadata: {
+      ...(state?.metadata ?? {}),
+      reviewAvailabilityEnforced: true,
+      previewEvidenceReady,
+      humanReviewAvailable: previewEvidenceReady,
+      currentGenerationId: generationId,
+      previewRenderState: typeof evidence?.renderState === 'string' ? evidence.renderState : null,
+      legacyRendered: evidence?.legacyRendered === true,
+      v2Rendered: evidence?.v2Rendered === true,
+      visualComparisonAvailable,
+      evidenceUpdatedAt: nowIso(),
+      lastActionError: null,
+    },
+  };
 }
 
 /**
@@ -632,6 +674,25 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
     };
   }
 
+  // FIX4: Candidate Review cannot be changed before real pixel
+  // evidence for the current generation is ready. This is enforced in
+  // the state engine as well as the UI/controller, so a direct call
+  // cannot bypass the disabled controls. Legacy Production/XMP remain
+  // unaffected regardless of the attempted action.
+  if (state?.metadata?.reviewAvailabilityEnforced === true && state?.metadata?.previewEvidenceReady !== true) {
+    return {
+      ...(state ?? {}),
+      reviewItems: currentItems.map((it) => ({ ...it, evidence: it?.evidence ? { ...it.evidence } : it?.evidence, warnings: [...(it?.warnings ?? [])] })),
+      candidateReviewStatus: state?.approvalState ?? state?.candidateReviewStatus ?? 'not-started',
+      candidateReviewOnly: true,
+      productionSource: 'legacy', productionWrite: false, controlledV2Apply: false,
+      previewExport: false, productionActivationAllowed: false,
+      warnings: [...(state?.warnings ?? []), 'Candidate Review update blocked until both visual previews are rendered for the current generation.'],
+      warningCodes: [...(state?.warningCodes ?? []), { code: 'PREVIEW_EVIDENCE_REQUIRED', params: null }],
+      metadata: { ...(state?.metadata ?? {}), lastActionError: 'PREVIEW_EVIDENCE_REQUIRED', generatedAt: nowIso() },
+    };
+  }
+
   let nextStatus = _normalizeStatus(update.status ?? currentItems[targetIndex].status);
   let nextDecision = _normalizeDecision(update.reviewerDecision ?? currentItems[targetIndex].reviewerDecision);
   const nextNote = update.reviewerNote !== undefined ? _normalizeNote(update.reviewerNote) : currentItems[targetIndex].reviewerNote;
@@ -707,6 +768,9 @@ export function updatePreviewReviewItemV2(state, itemId, update = {}) {
     reviewProgress, reviewSummary, reviewGuidance: _buildReviewGuidance(newItems),
     canApprovePreview: approval.canApprovePreview, canRequestAdjustment: approval.canRequestAdjustment,
     canRejectPreview: approval.canRejectPreview, approvalState: approval.approvalState,
+    candidateReviewStatus: approval.approvalState, candidateReviewOnly: true,
+    productionSource: 'legacy', productionWrite: false, controlledV2Apply: false,
+    previewExport: false, productionActivationAllowed: false,
     blockers, warnings: dedupedWarnings, reasons,
     blockerCodes: _buildReviewBlockerCodes(newItems, state?.metadata?.sandboxAvailable === true, state?.metadata?.sandboxCanGeneratePreview === true),
     warningCodes: _buildReviewWarningCodes(state?.metadata?.sandboxAvailable === true, state?.metadata?.sandboxCanGeneratePreview === true, missingSystemEvidenceCount),
@@ -778,6 +842,9 @@ export function resetPreviewReviewStateV2(state) {
     reviewProgress, reviewSummary, reviewGuidance: _buildReviewGuidance(resetItems),
     canApprovePreview: approval.canApprovePreview, canRequestAdjustment: approval.canRequestAdjustment,
     canRejectPreview: approval.canRejectPreview, approvalState: approval.approvalState,
+    candidateReviewStatus: approval.approvalState, candidateReviewOnly: true,
+    productionSource: 'legacy', productionWrite: false, controlledV2Apply: false,
+    previewExport: false, productionActivationAllowed: false,
     blockers: [], warnings: ['Review state was reset — all manual review items returned to pending (system-verified items are unaffected, since they were never manual).'], reasons: ['Review state reset to a fresh, unreviewed baseline for manual items.'],
     rollbackPlan: _buildRollbackPlan(),
     fallbackStrategy: _buildFallbackStrategy('This review-state layer never writes production output or exported XMP — legacy Lightroom Mapping remains the exclusive production path regardless of review outcome.'),

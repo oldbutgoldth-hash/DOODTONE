@@ -78,3 +78,7 @@
 ## Next development boundary
 
 R5 stops after locale closure and semantic QA. The next feature phase must preserve all Product locks and the verified R5 regression baseline above.
+
+## EPIC 2E-K-R2-FIX4 — Preview Before Candidate Review
+
+Controlled V2 Preview generation is now independent of Candidate Review approval. Preview generation is governed only by source, current generation, render-plan, safety, and pixel-evidence eligibility. Candidate Review begins pending and becomes available only after both Legacy and Controlled V2 canvases render. Approval affects Candidate Review only; Production stays Legacy and Production write/apply/export/XMP remain disabled. Real Chromium verification passed with exact XMP equality. Storage Node suites remain unverified in this environment because `fake-indexeddb` could not be installed.

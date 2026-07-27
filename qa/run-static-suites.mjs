@@ -140,6 +140,9 @@ const STATIC_SUITES = [
   // exact-shape regression, SHA-256 known-vector + fake-hash-must-fail
   // proof, deriveUiBlockerReasonCode() hard-code-immunity proof).
   'qa/epic-2e-k-r2-fix2-hostile-closure-test.mjs',
+  // EPIC 2E-K-R2-FIX4 -- Preview-before-review workflow and
+  // Candidate-only approval safety contract.
+  'qa/epic-2e-k-r2-fix4-preview-before-review-static-test.mjs',
 ];
 
 let anyFailed = false;

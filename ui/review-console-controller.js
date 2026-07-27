@@ -86,7 +86,7 @@ function _sanitizeNote(raw) {
  * @param {() => void} opts.rerender - re-renders the console from the (now-updated) current state; called after every committed action
  * @param {(message: string) => void} [opts.announce] - optional callback for concise user feedback (e.g. an aria-live toast); never receives raw error text
  */
-export function createReviewConsoleController({ container, getState, setState, rerender, announce }) {
+export function createReviewConsoleController({ container, getState, setState, rerender, announce, getReviewAvailability }) {
   if (!container || typeof container.addEventListener !== 'function') {
     return { destroy() {} };
   }
@@ -99,6 +99,21 @@ export function createReviewConsoleController({ container, getState, setState, r
   let resetConfirmPending = false;
 
   let abortController = new AbortController();
+
+  function _getReviewAvailability() {
+    if (typeof getReviewAvailability !== 'function') {
+      return { available: true, reasonCode: null };
+    }
+    try {
+      const result = getReviewAvailability();
+      if (result && typeof result === 'object') {
+        return { available: result.available === true, reasonCode: typeof result.reasonCode === 'string' ? result.reasonCode : null };
+      }
+      return { available: result === true, reasonCode: result === true ? null : 'PREVIEW_EVIDENCE_REQUIRED' };
+    } catch {
+      return { available: false, reasonCode: 'PREVIEW_EVIDENCE_REQUIRED' };
+    }
+  }
 
   function _safeAnnounce(message) {
     if (typeof announce === 'function') {
@@ -113,6 +128,11 @@ export function createReviewConsoleController({ container, getState, setState, r
   }
 
   function _handleItemAction(itemId, action) {
+    const availability = _getReviewAvailability();
+    if (!availability.available) {
+      _safeAnnounce('Preview evidence is not ready yet. Candidate Review remains pending.');
+      return;
+    }
     const current = getState();
     if (!current) return; // no active Review State to update against — safe no-op
     const update = ACTION_UPDATES[action];
@@ -178,6 +198,8 @@ export function createReviewConsoleController({ container, getState, setState, r
   }
 
   function _handleNoteCommit(itemId, rawValue, { skipRerender = false } = {}) {
+    const availability = _getReviewAvailability();
+    if (!availability.available) return;
     const current = getState();
     if (!current) return;
     const note = _sanitizeNote(rawValue);
@@ -280,7 +302,13 @@ export function createReviewConsoleController({ container, getState, setState, r
 
   /** Exposes read-only confirmation state so the renderer can reflect it (e.g. showing "Confirm Fail?" instead of "Fail"). Never mutated by the renderer. */
   function getUiState() {
-    return { pendingConfirmItemIds: new Set(pendingConfirm), resetConfirmPending };
+    const availability = _getReviewAvailability();
+    return {
+      pendingConfirmItemIds: new Set(pendingConfirm),
+      resetConfirmPending,
+      reviewAvailable: availability.available,
+      reviewUnavailableReasonCode: availability.reasonCode,
+    };
   }
 
   /**

@@ -164,9 +164,15 @@ function detectBodyInnerTextSliceAudit(src) {
     && /_latestVisualPreviewRenderSettlePromise/.test(appSrc)
     && /_latestVisualPreviewRenderSettleGeneration/.test(appSrc);
   record('ui/app.js tracks a settle-promise for the current Visual Preview Comparison render generation (R4 Phase G)', hasSettlePromiseTracking, {});
-  const handlerAwaitsBeforeAnnounce = appSrc !== null
-    && /await _latestVisualPreviewRenderSettlePromise;/.test(appSrc);
-  record('handleBuildControlledV2Preview() genuinely awaits the settle promise before reading translation state', handlerAwaitsBeforeAnnounce, {});
+  const handlerMatch = appSrc !== null
+    ? appSrc.match(/async function handleBuildControlledV2Preview\(\) \{[\s\S]*?\n\}/)
+    : null;
+  const handlerSource = handlerMatch?.[0] ?? '';
+  const viewOnlyNoReanalysis = handlerSource.length > 0
+    && !/runAnalysis\s*\(/.test(handlerSource)
+    && /visualPreviewComparisonController\s*\?\s*visualPreviewComparisonController\.getState\(\)/.test(handlerSource)
+    && /scrollIntoView/.test(handlerSource);
+  record('handleBuildControlledV2Preview() is a view-only action: it reads the already-rendered comparison and never re-runs Analysis or gates preview generation on Candidate Review approval', viewOnlyNoReanalysis, {});
   const enHasBlockedKey = (read('ui/i18n/en.js') ?? '').includes("blocked: 'Analysis complete, but the Controlled V2 preview is blocked");
   const thHasBlockedKey = /blocked:\s*'/.test(read('ui/i18n/th.js') ?? '');
   record('review.outcome.blocked exact-reason key exists in both en.js and th.js', enHasBlockedKey && thHasBlockedKey, { enHasBlockedKey, thHasBlockedKey });

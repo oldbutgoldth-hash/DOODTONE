@@ -216,7 +216,12 @@ export function buildFinalPreset(inputs) {
       styleFeasibility: decision.finalStyleIntent.styleFeasibilityEstimate,
       captureCapability: decision.finalStyleIntent.captureCapabilityEstimate,
       humanReviewState: authoritativeHumanReviewState,
-      // No `flags` override — always resolves to the safe defaults.
+      // FIX4 — Preview-before-review: Candidate/Human Review is never a
+      // prerequisite for rendering the isolated Controlled V2 preview.
+      // This supported flag disables only the workflow-completion gate
+      // for PREVIEW generation; all safety gates remain active and
+      // Production/XMP controls remain hard-disabled elsewhere.
+      flags: { requireHumanReviewForPreview: false },
     });
     const authoritativeReviewState = createPreviewReviewStateV2({
       existingReviewState: controlledPreviewReviewStateV2,

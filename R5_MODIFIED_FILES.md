@@ -57,3 +57,7 @@ Generated from the final working tree after the successful package-local Local G
 - `?? qa/epic-2e-j-r5-semantic-presentation-static-results.json`
 - `?? qa/epic-2e-j-r5-semantic-presentation-static-test.mjs`
 - `?? R5_MODIFIED_FILES.md`
+
+## FIX4 extension
+
+See `FIX4_MODIFIED_FILES.md` for the Preview-before-review changes and QA evidence.

@@ -56,7 +56,7 @@ const appSrc = await readFile(path.join(PROJECT_ROOT, 'ui/app.js'), 'utf8');
   // The action-buttons/note-field calls must be gated behind the
   // "else if (itemId)" branch, i.e. never unconditionally reachable
   // for a system-verified item.
-  const controlsGatedCorrectly = /if \(isSystemVerified\) \{[\s\S]*?\} else if \(itemId\) \{\s*const isFailConfirmPending[\s\S]*?renderActionButtons\(item, itemLabel, statusKey, decisionKey, isFailConfirmPending, lang\)\);\s*wrap\.appendChild\(renderNoteField\(item, itemId, itemLabel, lang\)\);\s*\}/.test(rendererSrc);
+  const controlsGatedCorrectly = /if \(isSystemVerified\) \{[\s\S]*?\} else if \(itemId\) \{\s*const isFailConfirmPending[\s\S]*?const reviewDisabled = uiState\?\.reviewAvailable === false;[\s\S]*?renderActionButtons\(item, itemLabel, statusKey, decisionKey, isFailConfirmPending, lang, reviewDisabled\)\);\s*wrap\.appendChild\(renderNoteField\(item, itemId, itemLabel, lang, reviewDisabled\)\);\s*\}/.test(rendererSrc);
   record('renderActionButtons/renderNoteField are only reachable in the else-if(itemId) branch, never for isSystemVerified', controlsGatedCorrectly, { controlsGatedCorrectly });
 
   // FULL-SYSTEM I18N COMPLETION R2 — Phase E/J: the badge text moved

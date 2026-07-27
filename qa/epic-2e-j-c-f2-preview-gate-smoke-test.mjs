@@ -246,8 +246,8 @@ const resultA = buildFinalPreset({ controlledPreviewReviewStateV2: mixedReviewA 
 const sandboxA = resultA._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2;
 const missingA = sandboxA?.previewGateChecks?.filter((g) => g.required && !g.passed).map((g) => g.id) ?? [];
 record('A: buildFinalPreset duplicate integration — Sandbox exists', !!sandboxA, `sandbox exists=${!!sandboxA}`);
-record('A: buildFinalPreset duplicate integration — human-review-complete missing', missingA.includes('human-review-complete'), `missingRequirements=${JSON.stringify(missingA)}`);
-record('A: buildFinalPreset duplicate integration — canGeneratePreview=false', sandboxA?.canGeneratePreview === false, `canGeneratePreview=${sandboxA?.canGeneratePreview}`);
+record('A: buildFinalPreset duplicate integration — Human Review is not a preview-generation gate', !missingA.includes('human-review-complete'), `missingRequirements=${JSON.stringify(missingA)}`);
+record('A: buildFinalPreset duplicate integration — canGeneratePreview=true when safety/render gates pass', sandboxA?.canGeneratePreview === true, `canGeneratePreview=${sandboxA?.canGeneratePreview}`);
 
 // Test B: ACTUAL buildFinalPreset call with all ten genuinely approved.
 // Empty synthetic analysis input may leave another genuine evidence
@@ -398,7 +398,7 @@ record('B: full legacy context — confidence higher than partial', sandboxFull.
 const resultC = buildFinalPreset({});
 const sandboxC7f2 = resultC._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2;
 record('C: buildFinalPreset (no Review) — authoritative Sandbox uses legacy-preset context', sandboxC7f2?.simulatedPreviewPreset?.metadata?.legacyPreviewInputAvailable === true || sandboxC7f2?.confidence > sandboxPartial.confidence, `confidence=${sandboxC7f2?.confidence}`);
-record('C: buildFinalPreset (no Review) — Human Review remains incomplete, Preview blocked', sandboxC7f2?.canGeneratePreview === false, `canGeneratePreview=${sandboxC7f2?.canGeneratePreview}`);
+record('C: buildFinalPreset (no Review) — Preview can render before Candidate Review', sandboxC7f2?.canGeneratePreview === true, `canGeneratePreview=${sandboxC7f2?.canGeneratePreview}`);
 
 // Test D: actual buildFinalPreset with all ten genuinely approved.
 const resultD7f2 = buildFinalPreset({ controlledPreviewReviewStateV2: allApproved() });
@@ -426,7 +426,7 @@ record('D: buildFinalPreset (all approved) — V2 outcome is honestly labeled (I
 const mixedReviewE = { reviewItems: REQUIRED_IDS.flatMap((id) => [{ id, status: 'pending', reviewed: false, reviewerDecision: 'undecided' }, { id, status: 'passed', reviewed: true, reviewerDecision: 'approve' }]) };
 const resultE7f2 = buildFinalPreset({ controlledPreviewReviewStateV2: mixedReviewE });
 const sandboxE7f2 = resultE7f2._decision?.finalStyleIntent?.controlledOverlayPreviewSandboxV2;
-record('E: pending/passed duplicate — remains blocked post-rebuild', sandboxE7f2?.canGeneratePreview === false, `canGeneratePreview=${sandboxE7f2?.canGeneratePreview}`);
+record('E: pending/passed duplicate — Candidate Review remains conservative but preview generation stays independent', sandboxE7f2?.canGeneratePreview === true, `canGeneratePreview=${sandboxE7f2?.canGeneratePreview}`);
 
 // Test F: Production Mapping comparison across this patch (union of keys).
 const resultF7f2Without = buildFinalPreset({});

@@ -37,14 +37,14 @@ function record(test, ok, evidence) {
 }
 
 async function main() {
-  // --- Case 1: genuinely NOT found (this sandbox has no local Chromium/Chrome/Edge) ---
+  // --- Case 1: deterministically NOT found, independent of the host machine. ---
   const savedEnvPath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
   delete process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
-  const notFound = await detectBrowserExecutable(null);
+  const notFound = await detectBrowserExecutable(null, { candidatePaths: [], includeSystemCandidates: false, environment: {} });
   record('NOT-FOUND case: executablePath === found', notFound.executablePath === notFound.found, { executablePath: notFound.executablePath, found: notFound.found });
   record('NOT-FOUND case: available === Boolean(found)', notFound.available === Boolean(notFound.found), { available: notFound.available, found: notFound.found });
-  record('NOT-FOUND case: found is null, available is false (no real Chromium in this sandbox)', notFound.found === null && notFound.available === false, { notFound });
-  record('NOT-FOUND case: attempts array is non-empty (real candidate paths were actually probed)', Array.isArray(notFound.attempts) && notFound.attempts.length > 0, { attemptCount: notFound.attempts?.length });
+  record('NOT-FOUND case: found is null, available is false with injected empty candidates', notFound.found === null && notFound.available === false, { notFound });
+  record('NOT-FOUND case: attempts array is empty because host candidates were explicitly disabled', Array.isArray(notFound.attempts) && notFound.attempts.length === 0, { attemptCount: notFound.attempts?.length });
 
   // --- Case 2: genuinely FOUND, via a REAL executable file (never mocked) ---
   const tmpDir = await mkdtemp(path.join(tmpdir(), 'lumixa-fix2-browser-contract-'));
