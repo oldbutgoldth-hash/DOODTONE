@@ -76,10 +76,18 @@ echo.
 echo ============================================================
 echo  Step 4/12: Preflight (qa:preflight)
 echo ============================================================
+REM EPIC 2E-K-R2-FIX2 -- Section 8: a non-zero Preflight exit code
+REM (Required item Missing/NOT_VERIFIED -- Browser unavailable, a
+REM missing fixture, a missing source-hash input, etc.) must FAIL this
+REM run overall, never be downgraded to a mere [WARN] that leaves
+REM OVERALL_FAIL untouched (the exact reported gap: this step used to
+REM be the only one in this script that could report a real failure
+REM and still let the run finish "green").
 call npm run qa:preflight
 if errorlevel 1 (
-  echo [WARN] Preflight reported one or more MISSING/NOT_VERIFIED items -- see output above.
-  echo Step 4 Preflight: WARN/NOT_VERIFIED >> "%SUMMARY_FILE%"
+  echo [FAIL] Preflight reported one or more Required MISSING/NOT_VERIFIED items -- see output above.
+  echo Step 4 Preflight: FAIL >> "%SUMMARY_FILE%"
+  set "OVERALL_FAIL=1"
 ) else (
   echo [OK] Preflight passed with no gaps.
   echo Step 4 Preflight: OK >> "%SUMMARY_FILE%"

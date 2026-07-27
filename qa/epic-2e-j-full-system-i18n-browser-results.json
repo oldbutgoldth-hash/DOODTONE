@@ -1,13 +1,13 @@
 {
   "suite": "I18N RUNTIME CLOSURE + QA INTEGRITY R3 — Phase I: full-system EN/TH Browser suite",
-  "runId": "db32220b-5da0-4c29-98a3-fd0638911211",
-  "startedAt": "2026-07-26T20:19:26.500Z",
-  "completedAt": "2026-07-26T20:19:26.500Z",
+  "runId": "f8ce635b-3f03-49f4-a7dc-34342911b351",
+  "startedAt": "2026-07-27T04:37:50.186Z",
+  "completedAt": "2026-07-27T04:37:50.186Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-26T20:19:26.500Z",
+  "generatedAt": "2026-07-27T04:37:50.186Z",
   "summary": {
     "total": 1,
     "pass": 0,

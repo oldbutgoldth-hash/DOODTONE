@@ -24,9 +24,15 @@ import fs from 'node:fs';
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
 
-import { detectBrowserExecutable } from './helpers/playwright-lumixa-test-runtime.mjs';
+// EPIC 2E-K-R2-FIX2 -- Section 8: NEVER import { chromium } from
+// 'playwright' at the top level -- a missing/broken playwright install
+// would throw ERR_MODULE_NOT_FOUND before this script could report
+// ANYTHING, including the other, unrelated checks below. Both
+// detectPlaywrightPackage() (dynamic `await import('playwright')`,
+// already fail-closed) and detectBrowserExecutable() are imported as
+// plain functions -- neither one imports 'playwright' eagerly either.
+import { detectBrowserExecutable, detectPlaywrightPackage } from './helpers/playwright-lumixa-test-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -65,30 +71,40 @@ async function main() {
     report('package-lock.json / package.json readable and valid', 'FAIL', { error: e?.message });
   }
 
-  // 3. fake-indexeddb and playwright actually resolvable (not just declared).
-  for (const dep of ['fake-indexeddb', 'playwright']) {
-    try {
-      await import(dep === 'fake-indexeddb' ? 'fake-indexeddb/auto' : 'playwright');
-      report(`Dependency "${dep}" resolves and imports successfully`, 'OK', {});
-    } catch (e) {
-      report(`Dependency "${dep}" resolves and imports successfully`, 'MISSING', { error: e?.message });
-    }
+  // 3. fake-indexeddb and playwright actually resolvable (not just
+  // declared). playwright is checked via the SAME
+  // detectPlaywrightPackage() every Browser suite in this project uses
+  // (a semantic, non-crashing result -- PLAYWRIGHT_PACKAGE_AVAILABLE /
+  // PLAYWRIGHT_PACKAGE_UNAVAILABLE), never a bare top-level import.
+  try {
+    await import('fake-indexeddb/auto');
+    report('Dependency "fake-indexeddb" resolves and imports successfully', 'OK', {});
+  } catch (e) {
+    report('Dependency "fake-indexeddb" resolves and imports successfully', 'MISSING', { error: e?.message });
   }
+  const playwrightStatus = await detectPlaywrightPackage();
+  report('Dependency "playwright" resolves and imports successfully', playwrightStatus.available ? 'OK' : 'MISSING', { status: playwrightStatus.status, error: playwrightStatus.error });
 
   // 4. Browser executable + version (Chromium/Chrome/Edge). FAIL-CLOSED:
   // if this is unavailable, every Browser-dependent check downstream
-  // must report NOT_VERIFIED, never PASS.
+  // must report NOT_VERIFIED, never PASS. Section 7's unified contract
+  // means `available`/`executablePath`/`found` always agree here.
   let browserAvailable = false;
   try {
-    const detection = await detectBrowserExecutable(chromium);
-    browserAvailable = !!detection?.available;
-    report('A real Chromium/Chrome/Edge executable is available for the Browser suite', browserAvailable ? 'OK' : 'NOT_VERIFIED', detection);
+    const detection = await detectBrowserExecutable(playwrightStatus.chromium);
+    browserAvailable = detection?.available === true;
+    const binaryStatus = browserAvailable ? 'BROWSER_BINARY_AVAILABLE' : 'BROWSER_BINARY_UNAVAILABLE';
+    report('A real Chromium/Chrome/Edge executable is available for the Browser suite', browserAvailable ? 'OK' : 'NOT_VERIFIED', { ...detection, binaryStatus });
   } catch (e) {
-    report('A real Chromium/Chrome/Edge executable is available for the Browser suite', 'NOT_VERIFIED', { error: e?.message });
+    report('A real Chromium/Chrome/Edge executable is available for the Browser suite', 'NOT_VERIFIED', { error: e?.message, binaryStatus: 'BROWSER_BINARY_UNAVAILABLE' });
   }
 
   // 5. Fixtures required by the Calibration Lab Browser suite.
-  const fixtures = ['qa/fixtures/epic-2e-j/neutral-balanced.png', 'qa/fixtures/epic-2e-j/warm-portrait-synthetic.png'];
+  // EPIC 2E-K-R2-FIX2 -- Section 10: all 4 required fixtures.
+  const fixtures = [
+    'qa/fixtures/epic-2e-j/neutral-balanced.png', 'qa/fixtures/epic-2e-j/warm-portrait-synthetic.png',
+    'qa/fixtures/epic-2e-j/cool-shadow-synthetic.png', 'qa/fixtures/epic-2e-j/highlight-shadow-range.png',
+  ];
   for (const f of fixtures) {
     report(`Fixture present: ${f}`, fileExists(f) ? 'OK' : 'MISSING', {});
   }

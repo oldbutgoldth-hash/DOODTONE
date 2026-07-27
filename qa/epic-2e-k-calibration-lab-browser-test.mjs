@@ -33,6 +33,7 @@ import {
   captureXmpText, sha256XmpText,
 } from './helpers/playwright-lumixa-test-runtime.mjs';
 import { auditVisibleLocaleSections, decideVisibleLocaleAudit } from './helpers/visible-locale-audit.mjs';
+import { classifyRealPixelComparisonResult } from './helpers/real-pixel-comparison-decision.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -41,6 +42,13 @@ const SUITE_NAME = 'CONTROLLED V2 CALIBRATION LAB R1 -- Phase K: Calibration Lab
 
 const FIXTURE_1 = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j', 'neutral-balanced.png');
 const FIXTURE_2 = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j', 'warm-portrait-synthetic.png');
+// EPIC 2E-K-R2-FIX2 -- Section 10: at least 4 images, each with ONE
+// honest Real Pixel Comparison outcome (BOTH_RENDERED_DIFFERENT,
+// BOTH_RENDERED_IDENTITY, or honestly blocked with a correct Safety
+// Reason) -- never a test fixture engineered to force a pass without
+// genuinely going through the real pipeline.
+const FIXTURE_3 = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j', 'cool-shadow-synthetic.png');
+const FIXTURE_4 = path.join(PROJECT_ROOT, 'qa', 'fixtures', 'epic-2e-j', 'highlight-shadow-range.png');
 
 const MOBILE_VIEWPORTS = [320, 360, 390, 430, 768, 1024, 1440];
 
@@ -67,7 +75,7 @@ const SOURCE_HASH_INPUTS = [
   path.join(PROJECT_ROOT, 'core', 'calibration-lab', 'preview-evidence.js'),
   path.join(PROJECT_ROOT, 'core', 'calibration-lab', 'pixel-truth-capture.js'),
   path.join(PROJECT_ROOT, 'core', 'calibration-lab', 'migrate-v1-to-v2.js'),
-  FIXTURE_1, FIXTURE_2,
+  FIXTURE_1, FIXTURE_2, FIXTURE_3, FIXTURE_4,
 ];
 
 let runId = null, startedAt = null, sourceHash = null;
@@ -86,6 +94,54 @@ function recordStatus(test, status, evidence) {
   console.log(`${icon} [${finalStatus}] ${finalTest} — ${safeEvidence}`);
 }
 function recordCondition(test, condition, evidence) { recordStatus(test, condition === true ? 'PASS' : 'FAIL', evidence); }
+
+/**
+ * EPIC 2E-K-R2-FIX2 -- Section 9/10: runs the SAME strict Real Pixel
+ * Comparison proof (classifyRealPixelComparisonResult()) against
+ * whichever image is CURRENT in the Calibration Lab right now. Factored
+ * out so all 4 required fixtures (Section 10) go through the identical,
+ * hostile-tested classification -- never a per-fixture bespoke check
+ * that could quietly diverge from the one actually hostile-tested in
+ * qa/epic-2e-k-r2-fix2-real-pixel-decision-static-test.mjs.
+ */
+async function runRealPixelComparisonCheck(page, imageLabel) {
+  await page.waitForSelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-legacy"]', { timeout: 10000 });
+  await page.waitForSelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-v2"]', { timeout: 10000 });
+  await page.waitForFunction(() => {
+    const note = document.querySelector('#calibrationLabRoot [data-cal-role="pixel-preview-status"]');
+    return !!note && note.getAttribute('data-cal-pixel-overall-state') != null;
+  }, null, { timeout: 20000 }).catch(() => {});
+  const pixelState = await page.evaluate(() => {
+    const note = document.querySelector('#calibrationLabRoot [data-cal-role="pixel-preview-status"]');
+    const legacyCanvas = document.querySelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-legacy"]');
+    const v2Canvas = document.querySelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-v2"]');
+    const qa = window.__LUMIXA_QA__.getCalibrationLabSnapshot();
+    return {
+      overallState: note ? note.getAttribute('data-cal-pixel-overall-state') : null,
+      legacyState: note ? note.getAttribute('data-cal-pixel-legacy-state') : null,
+      v2State: note ? note.getAttribute('data-cal-pixel-v2-state') : null,
+      legacyBackingSize: legacyCanvas ? legacyCanvas.width * legacyCanvas.height : 0,
+      v2BackingSize: v2Canvas ? v2Canvas.width * v2Canvas.height : 0,
+      v2Width: v2Canvas ? v2Canvas.width : 0,
+      v2Height: v2Canvas ? v2Canvas.height : 0,
+      previewTruthCode: qa.currentPreviewTruthCode,
+      browserVerified: qa.currentBrowserVerified,
+      visualDecisionEligible: qa.currentVisualDecisionEligible,
+      pixelBlockerReasonCode: qa.currentPixelBlockerReasonCode,
+      v2NonTransparentPixelCount: qa.currentPreviewEvidence?.controlledV2NonTransparentPixelCount ?? null,
+      controlledV2PixelHash: qa.currentPreviewEvidence?.controlledV2PixelHash ?? null,
+      sameSourceGeometry: qa.currentPreviewEvidence?.sameSourceGeometry ?? null,
+      sourceFingerprintMatch: qa.currentPreviewEvidence?.sourceFingerprintMatch ?? null,
+    };
+  });
+  recordCondition(`Real Pixel Comparison [${imageLabel}]: the render actually resolved to a real state, never left permanently in the transient "rendering" placeholder`, pixelState.overallState !== null, JSON.stringify(pixelState));
+  recordCondition(`Real Pixel Comparison [${imageLabel}]: the Legacy canvas received real backing pixel dimensions when its side claims rendered`, pixelState.legacyState !== 'rendered' || pixelState.legacyBackingSize > 0, JSON.stringify(pixelState));
+  const verdict = classifyRealPixelComparisonResult(pixelState);
+  recordCondition(`Real Pixel Comparison (FIX2 Section 9) [${imageLabel}]: strict classification is RENDERED_PROOF_PASS or HONEST_BLOCKED -- never FALSE_CLAIM_FAIL or INDETERMINATE_FAIL`, verdict.verdict === 'RENDERED_PROOF_PASS' || verdict.verdict === 'HONEST_BLOCKED', JSON.stringify({ verdict: verdict.verdict, reasons: verdict.reasons, pixelState }));
+  recordCondition(`Pixel Truth [${imageLabel}]: previewEvidence.previewTruthCode is a real non-empty stable code`, typeof pixelState.previewTruthCode === 'string' && pixelState.previewTruthCode.length > 0, JSON.stringify(pixelState));
+  recordCondition(`Pixel Truth [${imageLabel}]: previewEvidence.browserVerified is a real boolean (never undefined)`, typeof pixelState.browserVerified === 'boolean', JSON.stringify(pixelState));
+  return { pixelState, verdict };
+}
 
 function sha256(text) { return crypto.createHash('sha256').update(text ?? '').digest('hex'); }
 
@@ -113,6 +169,11 @@ async function main() {
   }
 
   let completed = false;
+  // EPIC 2E-K-R2-FIX2 -- Section 10: how many of the 4 required
+  // fixtures genuinely achieved a RENDERED_PROOF_PASS verdict (see
+  // qa/helpers/real-pixel-comparison-decision.mjs). Release closure
+  // (Section 10's explicit bar) requires at least 2.
+  let genuineV2RenderCount = 0;
   const browser = await pkg.chromium.launch({ executablePath: chromiumInfo.executablePath, args: REQUIRED_LAUNCH_ARGS });
   try {
     const prebuiltApp = await buildLumixaAppSnapshot(PROJECT_ROOT);
@@ -169,62 +230,9 @@ async function main() {
     // REAL <canvas> elements (not the old "same source image on both
     // sides" placeholder), reusing the exact same production isolated
     // pixel renderer the main app's own Visual Preview Comparison uses.
-    await page.waitForSelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-legacy"]', { timeout: 10000 });
-    await page.waitForSelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-v2"]', { timeout: 10000 });
-    recordCondition('Real Pixel Comparison: both canvas[data-cal-role=pixel-canvas-legacy] and pixel-canvas-v2 exist for a just-added image (never the old same-image-both-sides placeholder)', true, {});
-    // Wait for the async render() to resolve (status note moves off the transient "rendering..." text).
-    await page.waitForFunction(() => {
-      const note = document.querySelector('#calibrationLabRoot [data-cal-role="pixel-preview-status"]');
-      return !!note && note.getAttribute('data-cal-pixel-overall-state') != null;
-    }, null, { timeout: 20000 }).catch(() => {});
-    const pixelState1 = await page.evaluate(() => {
-      const note = document.querySelector('#calibrationLabRoot [data-cal-role="pixel-preview-status"]');
-      const legacyCanvas = document.querySelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-legacy"]');
-      const v2Canvas = document.querySelector('#calibrationLabRoot canvas[data-cal-role="pixel-canvas-v2"]');
-      const qa = window.__LUMIXA_QA__.getCalibrationLabSnapshot();
-      return {
-        overallState: note ? note.getAttribute('data-cal-pixel-overall-state') : null,
-        legacyState: note ? note.getAttribute('data-cal-pixel-legacy-state') : null,
-        v2State: note ? note.getAttribute('data-cal-pixel-v2-state') : null,
-        legacyBackingSize: legacyCanvas ? legacyCanvas.width * legacyCanvas.height : 0,
-        v2BackingSize: v2Canvas ? v2Canvas.width * v2Canvas.height : 0,
-        v2Width: v2Canvas ? v2Canvas.width : 0,
-        v2Height: v2Canvas ? v2Canvas.height : 0,
-        // EPIC 2E-K-R2-FIX1 -- Section 6: the AUTHORITATIVE evidence
-        // (captured once, at addImage() time, via the real reused
-        // pixel-render chain -- see core/calibration-lab/pixel-truth-capture.js)
-        // rather than only the live re-render's own transient state.
-        previewTruthCode: qa.currentPreviewTruthCode,
-        browserVerified: qa.currentBrowserVerified,
-        visualDecisionEligible: qa.currentVisualDecisionEligible,
-        pixelBlockerReasonCode: qa.currentPixelBlockerReasonCode,
-      };
-    });
-    recordCondition('Real Pixel Comparison: the render actually resolved to a real state (rendered/blocked/failed/cancelled/unavailable), never left permanently in the transient "rendering" placeholder', pixelState1.overallState !== null, JSON.stringify(pixelState1));
-    // EPIC 2E-K-R2-FIX1 -- Section 6: the EXACT false-positive bug this
-    // replaces was `v2State !== 'rendered' || v2BackingSize > 0` --
-    // that OR-shortcut is TRUE (a false PASS) whenever v2State is
-    // 'unknown'/'blocked'/'failed'/'cancelled'/anything but the literal
-    // string 'rendered', including the reported "status=unknown, canvas
-    // stuck at blank 300x150" defect. The fixed condition below is a
-    // POSITIVE, independently-verified proof for a 'rendered' claim,
-    // never an OR that lets an unproven state slip through, and it
-    // ALSO fails a false 'rendered' claim that has zero backing pixels
-    // or the untouched default 300x150 size.
-    // FIX1 Section 6 -- positive, independently-verified proof for a
-    // 'rendered' claim (never the old OR-shortcut that let 'unknown'/
-    // 'blocked'/'failed'/'cancelled' states silently pass):
-    recordCondition('Real Pixel Comparison: the Legacy canvas received real backing pixel dimensions (genuinely drawn to, not a blank 0x0 canvas) when its side claims rendered', pixelState1.legacyState !== 'rendered' || pixelState1.legacyBackingSize > 0, JSON.stringify(pixelState1));
-    const v2ClaimsRendered = pixelState1.v2State === 'rendered';
-    recordCondition('Real Pixel Comparison (FIX1 Section 6): if Controlled V2 claims rendered, it must have real non-zero backing pixels -- a claim of "rendered" with zero pixels is a FAIL, never a silent pass', !v2ClaimsRendered || (pixelState1.v2Width > 0 && pixelState1.v2Height > 0 && pixelState1.v2BackingSize > 0), JSON.stringify(pixelState1));
-    recordCondition('Real Pixel Comparison (FIX1 Section 6): a V2 canvas that claims rendered must not be the untouched default 300x150 blank size', !v2ClaimsRendered || !(pixelState1.v2Width === 300 && pixelState1.v2Height === 150), JSON.stringify(pixelState1));
-    // EPIC 2E-K-R2-FIX1 -- Section 1/2: the AUTHORITATIVE, persisted
-    // previewEvidence (captured at addImage() time, independent of
-    // whatever the live slider re-render currently shows) must also
-    // agree that this is real, browser-verified evidence before the
-    // Decision Gate could ever allow a comparative decision.
-    recordCondition('Pixel Truth (FIX1 Section 1/2): previewEvidence.previewTruthCode is one of the 10 canonical stable codes (never a freeform value)', typeof pixelState1.previewTruthCode === 'string' && pixelState1.previewTruthCode.length > 0, JSON.stringify(pixelState1));
-    recordCondition('Pixel Truth (FIX1 Section 1): previewEvidence.browserVerified is a real boolean (never undefined)', typeof pixelState1.browserVerified === 'boolean', JSON.stringify(pixelState1));
+    recordCondition('Real Pixel Comparison [neutral-balanced.png]: both canvas[data-cal-role=pixel-canvas-legacy] and pixel-canvas-v2 exist for a just-added image (never the old same-image-both-sides placeholder)', true, {});
+    const { verdict: verdict1 } = await runRealPixelComparisonCheck(page, 'neutral-balanced.png');
+    genuineV2RenderCount += verdict1.verdict === 'RENDERED_PROOF_PASS' ? 1 : 0;
 
     // Add image 2.
     await page.locator('#calibrationLabRoot .cal-chip[data-cal-category="EVENT"]').click();
@@ -233,6 +241,11 @@ async function main() {
     snap = await calSnapshot(page);
     const secondImageId = snap.currentImageId;
     recordCondition('Add image 2 (Multi-image Navigation setup): imageCount becomes 2', snap.imageCount === 2 && secondImageId !== firstImageId, JSON.stringify(snap));
+    // EPIC 2E-K-R2-FIX2 -- Section 10: image 2 (warm-portrait-synthetic.png)
+    // is one of the 4 required fixtures -- run the same strict check
+    // while it is still the current image, before navigating away.
+    const { verdict: verdict2 } = await runRealPixelComparisonCheck(page, 'warm-portrait-synthetic.png');
+    genuineV2RenderCount += verdict2.verdict === 'RENDERED_PROOF_PASS' ? 1 : 0;
 
     // Multi-image Navigation: Previous returns to image 1.
     await page.locator('#calibrationLabRoot button', { hasText: /Previous Image|ภาพก่อนหน้า/ }).first().click();
@@ -286,6 +299,43 @@ async function main() {
       recordCondition('Decision Gate (FIX1 Section 3): Controller.saveCurrentDecision() rejects V2_BETTER called directly (bypassing the UI) when evidence is not BOTH_RENDERED_DIFFERENT', !shouldHaveBeenRejected || (directSaveAttempt.after === directSaveAttempt.before && directSaveAttempt.lastActionError === 'DECISION_NOT_ELIGIBLE'), JSON.stringify(directSaveAttempt));
     }
 
+    // EPIC 2E-K-R2-FIX2 -- Section 6/11: the Save Result BUTTON itself
+    // (not just the Decision Chips) must be disabled whenever the
+    // current record's Evidence is not eligible -- reported bug #2.
+    // Read straight off the real DOM's data-cal-save-eligible/disabled
+    // attributes the renderer sets (see calibration-lab-renderer.js).
+    const saveButtonState = await page.evaluate(() => {
+      const btn = document.querySelector('#calibrationLabRoot [data-cal-role="save-decision-button"]');
+      return btn ? { exists: true, saveEligible: btn.getAttribute('data-cal-save-eligible') === 'true', disabled: btn.disabled === true, ariaDisabled: btn.getAttribute('aria-disabled') } : { exists: false };
+    });
+    if (saveButtonState.exists) {
+      recordCondition('Save Result Gate (FIX2 Section 6): the Save button disabled state exactly matches its own data-cal-save-eligible flag (never enabled while marked ineligible)', saveButtonState.saveEligible === !saveButtonState.disabled, JSON.stringify(saveButtonState));
+      if (!saveButtonState.saveEligible) {
+        recordCondition('Save Result Gate (FIX2 Section 6): when Evidence is not eligible, the Save button carries aria-disabled=true', saveButtonState.ariaDisabled === 'true', JSON.stringify(saveButtonState));
+      }
+    }
+
+    // EPIC 2E-K-R2-FIX2 -- Section 6/11: Controller-level enforcement
+    // that Save Result rejects userDecision=NOT_REVIEWED -- called
+    // DIRECTLY (bypassing the UI entirely), against the REAL running
+    // app, mirroring the Node-level proof in
+    // qa/epic-2e-k-r2-fix2-save-gate-test.mjs but exercised here through
+    // an actual browser page. Must never mutate notes/issueCodes/
+    // reviewedAt/session counters when blocked.
+    const notReviewedSaveAttempt = await page.evaluate(async () => {
+      const ctrl = window.__LUMIXA_CAL_LAB_CONTROLLER_FOR_QA__;
+      if (!ctrl) return { skipped: true };
+      const beforeState = ctrl.getState();
+      const before = { userDecision: beforeState.currentRecord?.userDecision ?? null, notes: beforeState.currentRecord?.notes ?? null, reviewedAt: beforeState.currentRecord?.reviewedAt ?? null, reviewedCount: beforeState.session?.reviewedCount ?? null };
+      const result = await ctrl.saveCurrentDecision({ userDecision: 'NOT_REVIEWED', issueCodes: [], notes: 'hostile-not-reviewed-direct-call' });
+      const after = { userDecision: result.currentRecord?.userDecision ?? null, notes: result.currentRecord?.notes ?? null, reviewedAt: result.currentRecord?.reviewedAt ?? null, reviewedCount: result.session?.reviewedCount ?? null };
+      return { skipped: false, before, after, lastActionError: result.lastActionError };
+    });
+    if (!notReviewedSaveAttempt.skipped) {
+      recordCondition('Save Result Gate (FIX2 Section 6/11): saveCurrentDecision({userDecision: NOT_REVIEWED}) is rejected with DECISION_REQUIRED, called directly against the real running app', notReviewedSaveAttempt.lastActionError === 'DECISION_REQUIRED', JSON.stringify(notReviewedSaveAttempt));
+      recordCondition('Save Result Gate (FIX2 Section 6/11): the blocked NOT_REVIEWED save left userDecision/notes/reviewedAt/reviewedCount completely unchanged', JSON.stringify(notReviewedSaveAttempt.before) === JSON.stringify(notReviewedSaveAttempt.after), JSON.stringify(notReviewedSaveAttempt));
+    }
+
     // Now record a genuinely ALLOWED decision through the real UI, so
     // Decision + Issue Code Persistence is still proven for whichever
     // decision code is actually eligible for this fixture's real
@@ -316,6 +366,35 @@ async function main() {
       recordCondition('Decision Gate (FIX1 Section 3): no decision is eligible for this fixture\'s real evidence -- Decision Controls correctly remain disabled rather than allowing a save', chipStates.every(c => !c.allowed), JSON.stringify({ chipStates, truthCode }));
     }
 
+    // EPIC 2E-K-R2-FIX2 -- Section 10: add the remaining 2 required
+    // fixtures (cool-shadow-synthetic.png, highlight-shadow-range.png)
+    // and run the SAME strict, hostile-tested classification on each --
+    // no bespoke fixture engineered to force a pass, the real pipeline
+    // end to end for every one of the 4 images.
+    await page.locator('#calibrationLabRoot .cal-chip[data-cal-category="PORTRAIT"]').click();
+    await page.setInputFiles('#calibrationLabRoot input[type="file"]', FIXTURE_3);
+    await page.waitForFunction(() => window.__LUMIXA_QA__.getCalibrationLabSnapshot().imageCount >= 3, null, { timeout: 20000 });
+    snap = await calSnapshot(page);
+    recordCondition('Add image 3 (Section 10 fixture set): imageCount becomes 3', snap.imageCount === 3, JSON.stringify(snap));
+    const { verdict: verdict3 } = await runRealPixelComparisonCheck(page, 'cool-shadow-synthetic.png');
+    genuineV2RenderCount += verdict3.verdict === 'RENDERED_PROOF_PASS' ? 1 : 0;
+
+    await page.locator('#calibrationLabRoot .cal-chip[data-cal-category="LANDSCAPE"]').click();
+    await page.setInputFiles('#calibrationLabRoot input[type="file"]', FIXTURE_4);
+    await page.waitForFunction(() => window.__LUMIXA_QA__.getCalibrationLabSnapshot().imageCount >= 4, null, { timeout: 20000 });
+    snap = await calSnapshot(page);
+    recordCondition('Add image 4 (Section 10 fixture set): imageCount becomes 4', snap.imageCount === 4, JSON.stringify(snap));
+    const { verdict: verdict4 } = await runRealPixelComparisonCheck(page, 'highlight-shadow-range.png');
+    genuineV2RenderCount += verdict4.verdict === 'RENDERED_PROOF_PASS' ? 1 : 0;
+
+    // EPIC 2E-K-R2-FIX2 -- Section 10's explicit closure bar: "This
+    // release is considered closed for Real Pixel Comparison only when
+    // at least 2 images can genuinely render a real Controlled V2
+    // Canvas." Recorded as its own condition, using the honest count
+    // accumulated above across all 4 real fixtures -- never assumed,
+    // never hand-set.
+    recordCondition('Section 10 closure bar: at least 2 of the 4 required fixtures achieved a genuine RENDERED_PROOF_PASS (real Controlled V2 pixels, independently verified)', genuineV2RenderCount >= 2, { genuineV2RenderCount, totalFixtures: 4 });
+
     // Save and Restore: end session, reopen it, confirm the decision/issue survive.
     const sessionIdBeforeEnd = (await calSnapshot(page)) && (await page.evaluate(() => window.__LUMIXA_QA__.getCalibrationLabSnapshot()));
     await page.locator('#calibrationLabRoot button', { hasText: /End Session|จบ Session/ }).first().click();
@@ -327,7 +406,7 @@ async function main() {
     if (await openSessionBtn.count() > 0) await openSessionBtn.click().catch(() => {});
     await page.waitForFunction(() => window.__LUMIXA_QA__.getCalibrationLabSnapshot().sessionState === 'ACTIVE', null, { timeout: 5000 }).catch(() => {});
     snap = await calSnapshot(page);
-    recordCondition('Save and Restore: reopening the session restores imageCount=2', snap.sessionState === 'ACTIVE' && snap.imageCount === 2, JSON.stringify(snap));
+    recordCondition('Save and Restore: reopening the session restores imageCount=4', snap.sessionState === 'ACTIVE' && snap.imageCount === 4, JSON.stringify(snap));
 
     // EPIC 2E-K-R2 -- REAL PIXEL COMPARISON honest fallback: a session
     // reopened from storage never had its <img> elements re-decoded in

@@ -187,6 +187,12 @@ record('isValidIssueCodeList() rejects an unknown code', isValidIssueCodeList(['
       legacyNonTransparentPixelCount: 480000, controlledV2NonTransparentPixelCount: 480000,
       pixelDifferenceDetected: true, browserVerified: true, visualDecisionEligible: true,
       sourceFingerprintMatch: true, renderGenerationId: 'gen-fixture', verifiedAt: new Date().toISOString(),
+      // EPIC 2E-K-R2-FIX2 -- Section 5: these fields are now required by
+      // isValidPreviewEvidence() (schema.js falls back to
+      // createNotRenderedPreviewEvidence() otherwise) -- a fully genuine,
+      // Calibration-plan-available, Web-Crypto-verified fixture record.
+      calibrationV2PlanAvailable: true, calibrationV2PlanRenderable: true, calibrationV2PlanMode: 'CALIBRATION_PREVIEW_ONLY',
+      pixelHashVerificationMode: 'WEB_CRYPTO_SHA256', legacyHashVerified: true, controlledV2HashVerified: true,
     };
   }
   function mkBig(n, catList, mixedEvery, skinEvery, v2WinEvery) {

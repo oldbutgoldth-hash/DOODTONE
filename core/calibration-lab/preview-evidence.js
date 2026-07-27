@@ -30,7 +30,7 @@
  * can be mistaken for a proven one.
  */
 
-import { PREVIEW_TRUTH_CODE_SET, PIXEL_BLOCKER_REASON_CODE_SET } from './codes.js';
+import { PREVIEW_TRUTH_CODE_SET, PIXEL_BLOCKER_REASON_CODE_SET, isValidPixelHashVerificationMode } from './codes.js';
 
 // A freshly created, never-rendered-to <canvas> defaults to exactly
 // this backing size per the HTML spec -- this is the literal shape of
@@ -85,32 +85,68 @@ function _looksLikeUntouchedDefaultCanvas(width, height, nonTransparentPixelCoun
   return width === DEFAULT_BLANK_CANVAS_WIDTH && height === DEFAULT_BLANK_CANVAS_HEIGHT && nonTransparentPixelCount === 0;
 }
 
-/** A side "genuinely rendered real pixels" only when ALL of these independently-checked facts hold -- see the module docstring for why this is an AND-chain, never an OR-shortcut. */
-function _sideGenuinelyRendered(m, prefix) {
+/**
+ * A side's STRUCTURAL render status (EPIC 2E-K-R2-FIX2 -- Section 4):
+ * 'FAILED'         -- state/geometry/pixel-count proves this side did NOT
+ *                     genuinely render (or its hash is present but
+ *                     INVALID/INCONSISTENT -- e.g. forged, or matches a
+ *                     known-blank reference while claiming real pixels --
+ *                     which is treated exactly as a render failure, never
+ *                     merely "unverified").
+ * 'UNVERIFIED_HASH' -- state/geometry/pixel-count all PROVE a genuine
+ *                     render, but no pixel hash could be produced at all
+ *                     (hash is exactly null/undefined) -- e.g. an
+ *                     `about:blank` in-memory Browser QA harness with no
+ *                     Web Crypto AND (defensively) no usable Pure JS
+ *                     fallback either. This is HONESTLY distinct from a
+ *                     render failure -- see PIXEL_HASH_UNAVAILABLE below.
+ * 'OK'              -- genuinely rendered AND cryptographically verified.
+ *
+ * CORE BUG THIS FIXES (Section 4/6): previously, ANY missing/null hash
+ * (including the common case of Web Crypto being unavailable in an
+ * opaque-origin context) caused `_sideGenuinelyRendered()` to return
+ * `false`, so a Legacy side that had genuinely rendered 480,000 real
+ * pixels was misclassified `LEGACY_RENDER_FAILED` purely because of an
+ * unrelated hashing-infrastructure gap. Splitting the hash check into
+ * "did we get ANY hash" (this function) vs. "was the render otherwise
+ * proven" (state+geometry+count, checked FIRST and independently) fixes
+ * this without ever weakening the fake-hash/blank-hash hostile-test
+ * guarantees (those still hit 'FAILED', never 'UNVERIFIED_HASH').
+ */
+function _sideStructuralStatus(m, prefix) {
   const state = m[`${prefix}PreviewState`];
   const width = Number(m[`${prefix}OutputWidth`]);
   const height = Number(m[`${prefix}OutputHeight`]);
   const nonTransparentCount = Number(m[`${prefix}NonTransparentPixelCount`]);
   const hash = m[`${prefix}PixelHash`];
-  if (state !== 'rendered') return false;
-  if (!Number.isFinite(width) || width <= 0) return false;
-  if (!Number.isFinite(height) || height <= 0) return false;
-  if (!Number.isFinite(nonTransparentCount) || nonTransparentCount <= 0) return false;
-  if (_looksLikeUntouchedDefaultCanvas(width, height, nonTransparentCount)) return false;
-  if (!isPixelHashConsistentWithCount(hash, nonTransparentCount, m[`${prefix}BlankReferenceHash`] ?? null)) return false;
-  return true;
+  const blankRef = m[`${prefix}BlankReferenceHash`] ?? null;
+
+  if (state !== 'rendered') return 'FAILED';
+  if (!Number.isFinite(width) || width <= 0) return 'FAILED';
+  if (!Number.isFinite(height) || height <= 0) return 'FAILED';
+  if (!Number.isFinite(nonTransparentCount) || nonTransparentCount <= 0) return 'FAILED';
+  if (_looksLikeUntouchedDefaultCanvas(width, height, nonTransparentCount)) return 'FAILED';
+
+  if (hash === null || hash === undefined) return 'UNVERIFIED_HASH';
+  if (!isPixelHashConsistentWithCount(hash, nonTransparentCount, blankRef)) return 'FAILED';
+  return 'OK';
+}
+
+/** Backward/hostile-test-compatible boolean view of `_sideStructuralStatus` -- a side "genuinely rendered real, verified pixels" only when its status is exactly 'OK'. Exported for reuse by pixel-truth-capture.js's `browserVerified` computation (Section 3). */
+export function isSideStructurallyRenderedAndVerified(measured, prefix) {
+  return _sideStructuralStatus(measured, prefix) === 'OK';
 }
 
 /**
- * The single canonical classifier (Section 2/6/11). Takes a plain
- * "measured" object (see `pixel-truth-capture.js` for the real
- * browser-side producer, or any synthetic object in a hostile test)
- * and returns exactly one code from `PREVIEW_TRUTH_CODES`. Order is
- * significant: fatal/structural problems that make a pixel comparison
- * meaningless at all (missing source, stale generation, mismatched
- * source/geometry) are classified BEFORE finer render-outcome codes,
- * exactly mirroring the readiness ladder's own "most severe first"
- * convention elsewhere in this codebase.
+ * The single canonical classifier (Section 2/4/6/11, reordered per EPIC
+ * 2E-K-R2-FIX2 Section 4's explicit 12-step priority order): fatal/
+ * structural problems that make a comparison meaningless at all are
+ * classified first, then Legacy's own render+hash status, then whether a
+ * Calibration-only V2 Preview Plan was even available/eligible for this
+ * image (Section 1), then V2's own render+hash status, then geometry,
+ * then the final pixel-level verdict. A missing pixel hash (verification
+ * infrastructure gap) is NEVER conflated with a genuine render failure --
+ * see `_sideStructuralStatus` above.
  *
  * Expected shape of `m` (every field optional -- missing/malformed
  * fields are treated as "not proven", never guessed toward success):
@@ -120,37 +156,55 @@ function _sideGenuinelyRendered(m, prefix) {
  *   legacyBlankReferenceHash, controlledV2PreviewState,
  *   controlledV2OutputWidth/Height, controlledV2NonTransparentPixelCount,
  *   controlledV2PixelHash, controlledV2BlankReferenceHash,
+ *   calibrationV2PlanAvailable, calibrationV2PlanRenderable,
  *   pixelDifferenceDetected (true/false/null).
  */
 export function classifyPreviewTruth(measured) {
   const m = measured && typeof measured === 'object' ? measured : {};
 
+  // 1. Source Available
   if (m.sourceAvailable === false) return 'SOURCE_UNAVAILABLE';
+  // 2. Generation Current
   if (m.staleGeneration === true) return 'STALE_GENERATION';
+  // 3. Fingerprint Match
   if (m.sourceFingerprintMatch === false) return 'SOURCE_MISMATCH';
 
-  const legacyOk = _sideGenuinelyRendered(m, 'legacy');
-  if (!legacyOk) return 'LEGACY_RENDER_FAILED';
+  // 4/5. Legacy State Rendered + Legacy Pixel Count
+  const legacyStatus = _sideStructuralStatus(m, 'legacy');
+  if (legacyStatus === 'FAILED') return 'LEGACY_RENDER_FAILED';
+  // 6. Legacy Hash Verified
+  if (legacyStatus === 'UNVERIFIED_HASH') return 'PIXEL_HASH_UNAVAILABLE';
 
-  // Legacy is proven from here on -- classify V2's specific outcome.
-  // A V2 side that claims state==='rendered' but fails the pixel-level
-  // checks (zero-or-default canvas, inconsistent hash) is the EXACT
-  // false-positive shape the R2 Browser test bug allowed through --
-  // it gets its own code (V2_EMPTY_CANVAS) rather than being lumped
-  // into the generic V2_RENDER_FAILED.
+  // 7. Calibration V2 Plan Available/Renderable (Section 1) -- optional
+  // fields; a caller that never supplies them (e.g. a pre-FIX2 hostile
+  // test) falls through to the generic V2_RENDER_FAILED/V2_EMPTY_CANVAS
+  // codes below, unchanged from FIX1 behavior.
+  const planAvailable = m.calibrationV2PlanAvailable;
+  const planRenderable = m.calibrationV2PlanRenderable;
+  if (planAvailable === false) return 'CALIBRATION_V2_PLAN_UNAVAILABLE';
+  if (planAvailable === true && planRenderable === false) return 'CALIBRATION_V2_PLAN_BLOCKED';
+  const planSaidRenderable = planAvailable === true && planRenderable === true;
+
+  // 8/9. V2 State Rendered + V2 Pixel Count
   const v2ClaimsRendered = m.controlledV2PreviewState === 'rendered';
-  const v2Ok = _sideGenuinelyRendered(m, 'controlledV2');
-  if (v2ClaimsRendered && !v2Ok) return 'V2_EMPTY_CANVAS';
-  if (!v2Ok) return 'V2_RENDER_FAILED';
+  const v2Status = _sideStructuralStatus(m, 'controlledV2');
+  if (v2Status === 'FAILED') {
+    if (planSaidRenderable) return 'CALIBRATION_V2_RENDER_FAILED';
+    return v2ClaimsRendered ? 'V2_EMPTY_CANVAS' : 'V2_RENDER_FAILED';
+  }
+  // 10. V2 Hash Verified
+  if (v2Status === 'UNVERIFIED_HASH') return 'PIXEL_HASH_UNAVAILABLE';
 
-  // Both sides independently proven to have real, non-blank pixels --
+  // Both sides independently proven to have real, hash-verified pixels --
   // geometry must match before a pixel-level diff is meaningful at all.
+  // 11. Same Geometry
   if (m.sameSourceGeometry === false) return 'GEOMETRY_MISMATCH';
 
+  // 12. Pixel Difference/Identity
   if (m.pixelDifferenceDetected === true) return 'BOTH_RENDERED_DIFFERENT';
   if (m.pixelDifferenceDetected === false) return 'BOTH_RENDERED_IDENTITY';
-  // Both sides otherwise look genuinely rendered, but no honest
-  // pixel-diff verdict was computed -- fail closed rather than guess.
+  // Both sides otherwise look genuinely rendered and verified, but no
+  // honest pixel-diff verdict was computed -- fail closed rather than guess.
   return 'V2_RENDER_FAILED';
 }
 
@@ -172,6 +226,12 @@ export function computeVisualDecisionEligibility(measured, previewTruthCode) {
   if (m.staleGeneration === true) return false;
   if (!(Number(m.legacyNonTransparentPixelCount) > 0)) return false;
   if (!(Number(m.controlledV2NonTransparentPixelCount) > 0)) return false;
+  // EPIC 2E-K-R2-FIX2 -- Section 3: a genuinely rendered pair whose hash
+  // could not be cryptographically verified on either side is NEVER
+  // eligible for a comparative decision -- the mere existence of
+  // `document`/`OffscreenCanvas` is not proof, only a verified hash is.
+  if (_sideStructuralStatus(m, 'legacy') !== 'OK') return false;
+  if (_sideStructuralStatus(m, 'controlledV2') !== 'OK') return false;
   return true;
 }
 
@@ -213,6 +273,15 @@ export function buildPreviewEvidence(measured, { renderGenerationId = null, veri
     sourceFingerprintMatch: m.sourceFingerprintMatch === true,
     renderGenerationId: renderGenerationId ?? null,
     verifiedAt: verifiedAt ?? null,
+    // EPIC 2E-K-R2-FIX2 -- Section 5: real Calibration V2 Preview Plan
+    // availability/mode, and real per-side hash-verification status --
+    // never hard-coded, always read from what was actually measured.
+    calibrationV2PlanAvailable: typeof m.calibrationV2PlanAvailable === 'boolean' ? m.calibrationV2PlanAvailable : null,
+    calibrationV2PlanRenderable: typeof m.calibrationV2PlanRenderable === 'boolean' ? m.calibrationV2PlanRenderable : null,
+    calibrationV2PlanMode: typeof m.calibrationV2PlanMode === 'string' ? m.calibrationV2PlanMode : null,
+    pixelHashVerificationMode: isValidPixelHashVerificationMode(m.pixelHashVerificationMode) ? m.pixelHashVerificationMode : 'HASH_UNAVAILABLE',
+    legacyHashVerified: _sideStructuralStatus(m, 'legacy') === 'OK',
+    controlledV2HashVerified: _sideStructuralStatus(m, 'controlledV2') === 'OK',
   };
 }
 
@@ -242,12 +311,21 @@ export function isDecisionAllowedForEvidence(decisionCode, previewEvidence) {
  * the same evidence `previewTruthCode` already captures. Returns
  * `null` when nothing is blocked (i.e. some decision is allowed).
  */
-export function deriveUiBlockerReasonCode(previewEvidence, { v2RenderPlanAvailable = true } = {}) {
+export function deriveUiBlockerReasonCode(previewEvidence) {
   const ev = previewEvidence && typeof previewEvidence === 'object' ? previewEvidence : null;
   if (!ev) return 'V2_RENDER_PLAN_UNAVAILABLE';
   if (ev.visualDecisionEligible === true) return null;
-  if (v2RenderPlanAvailable === false) return 'V2_RENDER_PLAN_UNAVAILABLE';
+  // EPIC 2E-K-R2-FIX2 -- Section 5: NEVER a hard-coded
+  // `v2RenderPlanAvailable: true` default -- the real Calibration V2
+  // Preview Plan availability/renderability, as actually measured and
+  // stored on this evidence object, is the only input here.
+  if (ev.calibrationV2PlanAvailable === false) return 'CALIBRATION_V2_PLAN_UNAVAILABLE';
+  if (ev.calibrationV2PlanAvailable === true && ev.calibrationV2PlanRenderable === false) return 'CALIBRATION_V2_PLAN_BLOCKED';
   switch (ev.previewTruthCode) {
+    case 'CALIBRATION_V2_PLAN_UNAVAILABLE': return 'CALIBRATION_V2_PLAN_UNAVAILABLE';
+    case 'CALIBRATION_V2_PLAN_BLOCKED': return 'CALIBRATION_V2_PLAN_BLOCKED';
+    case 'CALIBRATION_V2_RENDER_FAILED': return 'V2_RENDER_FAILED';
+    case 'PIXEL_HASH_UNAVAILABLE': return 'HASH_UNAVAILABLE';
     case 'V2_EMPTY_CANVAS': return 'V2_EMPTY_CANVAS';
     case 'V2_RENDER_FAILED': return 'V2_RENDER_FAILED';
     case 'STALE_GENERATION': return 'V2_STALE_GENERATION';
@@ -255,6 +333,7 @@ export function deriveUiBlockerReasonCode(previewEvidence, { v2RenderPlanAvailab
     case 'GEOMETRY_MISMATCH': return 'GEOMETRY_MISMATCH';
     case 'LEGACY_RENDER_FAILED': return 'V2_RENDER_FAILED';
     case 'SOURCE_UNAVAILABLE': return 'V2_RENDER_PLAN_UNAVAILABLE';
+    case 'NOT_RENDERED': return 'V2_RENDER_PLAN_UNAVAILABLE';
     default: return 'V2_RENDER_FAILED';
   }
 }
@@ -294,6 +373,12 @@ export function createNotRenderedPreviewEvidence() {
     sourceFingerprintMatch: false,
     renderGenerationId: null,
     verifiedAt: null,
+    calibrationV2PlanAvailable: null,
+    calibrationV2PlanRenderable: null,
+    calibrationV2PlanMode: null,
+    pixelHashVerificationMode: 'HASH_UNAVAILABLE',
+    legacyHashVerified: false,
+    controlledV2HashVerified: false,
   };
 }
 
@@ -315,5 +400,13 @@ export function isValidPreviewEvidence(ev) {
   if (ev.pixelDifferenceDetected !== null && typeof ev.pixelDifferenceDetected !== 'boolean') return false;
   if (ev.renderGenerationId !== null && typeof ev.renderGenerationId !== 'string') return false;
   if (ev.verifiedAt !== null && typeof ev.verifiedAt !== 'string') return false;
+  for (const key of ['calibrationV2PlanAvailable', 'calibrationV2PlanRenderable']) {
+    if (ev[key] !== null && typeof ev[key] !== 'boolean') return false;
+  }
+  if (ev.calibrationV2PlanMode !== null && typeof ev.calibrationV2PlanMode !== 'string') return false;
+  if (!isValidPixelHashVerificationMode(ev.pixelHashVerificationMode)) return false;
+  for (const key of ['legacyHashVerified', 'controlledV2HashVerified']) {
+    if (typeof ev[key] !== 'boolean') return false;
+  }
   return true;
 }

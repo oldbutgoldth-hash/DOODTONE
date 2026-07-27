@@ -69,6 +69,24 @@ async function isExecutableFile(candidatePath) {
   }
 }
 
+/**
+ * EPIC 2E-K-R2-FIX2 -- Section 7: unified Browser Detection Contract.
+ *
+ * Historically this function returned only `{found, versionOutput,
+ * attempts}`, while qa/preflight.mjs read `detection.available` and
+ * qa/epic-2e-k-calibration-lab-browser-test.mjs read
+ * `chromiumInfo.executablePath` -- neither field ever existed, so both
+ * callers silently treated a genuinely-detected Chromium as absent
+ * (reported bugs #8/#9). The contract now ALWAYS returns all of:
+ *   - `found`          (kept, unchanged meaning: absolute path string, or null)
+ *   - `executablePath` (=== found -- the name every caller in this
+ *                        codebase actually reads for the launch path)
+ *   - `available`      (=== Boolean(found) -- the name Preflight reads)
+ *   - `versionOutput`, `attempts` (unchanged)
+ * A Contract Static Test (qa/epic-2e-k-r2-fix2-browser-contract-static-test.mjs)
+ * asserts `executablePath === found` and `available === Boolean(found)`
+ * on every call, so this triple can never drift apart again.
+ */
 export async function detectBrowserExecutable(chromium) {
   const candidates = [];
   if (typeof process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH === 'string' && process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH.length > 0) {
@@ -78,13 +96,35 @@ export async function detectBrowserExecutable(chromium) {
     const bundled = chromium && typeof chromium.executablePath === 'function' ? chromium.executablePath() : null;
     if (typeof bundled === 'string' && bundled.length > 0) candidates.push({ label: 'Playwright bundled Chromium', path: bundled });
   } catch { /* bundled path resolution itself can throw when nothing is installed — skip, never crash */ }
-  candidates.push(
-    { label: '/usr/bin/chromium', path: '/usr/bin/chromium' },
-    { label: '/usr/bin/chromium-browser', path: '/usr/bin/chromium-browser' },
-    { label: '/usr/bin/google-chrome', path: '/usr/bin/google-chrome' },
-    { label: '/usr/bin/google-chrome-stable', path: '/usr/bin/google-chrome-stable' },
-    { label: '/opt/google/chrome/chrome', path: '/opt/google/chrome/chrome' },
-  );
+  // EPIC 2E-K-R2-FIX2 -- Section 7: this helper is invoked directly by
+  // qa/preflight.mjs (via plain `node`, not only via the Windows .bat's
+  // own separate `where chrome`/`where msedge`/`exist` probes -- see
+  // RUN_LUMIXA_CALIBRATION_QA_WINDOWS.bat Step 3), so the SAME common-
+  // system-path list that script already trusts is mirrored here for
+  // process.platform === 'win32', in addition to the existing Linux
+  // paths -- never a Windows-only rewrite of the Linux list, both sets
+  // of candidates coexist and are probed in the same honest exists-
+  // then-launch order.
+  if (process.platform === 'win32') {
+    const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+    const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const localAppData = process.env['LocalAppData'] || '';
+    candidates.push(
+      { label: 'Chrome (Program Files)', path: `${programFiles}\Google\Chrome\Application\chrome.exe` },
+      { label: 'Chrome (Program Files x86)', path: `${programFilesX86}\Google\Chrome\Application\chrome.exe` },
+      ...(localAppData ? [{ label: 'Chrome (LocalAppData)', path: `${localAppData}\Google\Chrome\Application\chrome.exe` }] : []),
+      { label: 'Edge (Program Files x86)', path: `${programFilesX86}\Microsoft\Edge\Application\msedge.exe` },
+      { label: 'Edge (Program Files)', path: `${programFiles}\Microsoft\Edge\Application\msedge.exe` },
+    );
+  } else {
+    candidates.push(
+      { label: '/usr/bin/chromium', path: '/usr/bin/chromium' },
+      { label: '/usr/bin/chromium-browser', path: '/usr/bin/chromium-browser' },
+      { label: '/usr/bin/google-chrome', path: '/usr/bin/google-chrome' },
+      { label: '/usr/bin/google-chrome-stable', path: '/usr/bin/google-chrome-stable' },
+      { label: '/opt/google/chrome/chrome', path: '/opt/google/chrome/chrome' },
+    );
+  }
 
   const attempts = [];
   for (const candidate of candidates) {
@@ -96,12 +136,12 @@ export async function detectBrowserExecutable(chromium) {
     try {
       const { stdout } = await execFileAsync(candidate.path, ['--version'], { timeout: 8000 });
       attempts.push({ ...candidate, exists: true, versionOutput: stdout.trim() });
-      return { found: candidate.path, versionOutput: stdout.trim(), attempts };
+      return { found: candidate.path, executablePath: candidate.path, available: true, versionOutput: stdout.trim(), attempts };
     } catch (e) {
       attempts.push({ ...candidate, exists: true, versionOutput: null, versionError: String((e && e.message) || e) });
     }
   }
-  return { found: null, versionOutput: null, attempts };
+  return { found: null, executablePath: null, available: false, versionOutput: null, attempts };
 }
 
 export const REQUIRED_LAUNCH_ARGS = ['--no-sandbox', '--disable-dev-shm-usage'];

@@ -59,6 +59,14 @@ export const PREVIEW_TRUTH_CODES = Object.freeze([
   'LEGACY_RENDER_FAILED', 'V2_RENDER_FAILED', 'V2_EMPTY_CANVAS',
   'GEOMETRY_MISMATCH', 'SOURCE_MISMATCH', 'STALE_GENERATION',
   'SOURCE_UNAVAILABLE', 'NOT_RENDERED',
+  // EPIC 2E-K-R2-FIX2 -- Section 4: these four distinguish "genuinely
+  // failed to render" from "rendered fine but could not be VERIFIED"
+  // (hash API unavailable) or "V2 side was never eligible to render in
+  // the first place because the Calibration-only V2 Preview Plan itself
+  // reported unavailable/blocked" -- neither of these is a Legacy or V2
+  // pixel-rendering failure, and must never be classified as one.
+  'PIXEL_HASH_UNAVAILABLE', 'CALIBRATION_V2_PLAN_UNAVAILABLE',
+  'CALIBRATION_V2_PLAN_BLOCKED', 'CALIBRATION_V2_RENDER_FAILED',
 ]);
 export const PREVIEW_TRUTH_CODE_SET = new Set(PREVIEW_TRUTH_CODES);
 
@@ -76,6 +84,13 @@ export function isValidPreviewTruthCode(code) {
 export const PIXEL_BLOCKER_REASON_CODES = Object.freeze([
   'V2_RENDER_PLAN_UNAVAILABLE', 'V2_RENDER_FAILED', 'V2_EMPTY_CANVAS',
   'V2_STALE_GENERATION', 'V2_SOURCE_MISMATCH', 'GEOMETRY_MISMATCH',
+  // EPIC 2E-K-R2-FIX2 -- Section 5: the real, distinct reasons a
+  // Calibration-only V2 Preview Plan itself may be unavailable/blocked,
+  // and the real reason a genuinely-rendered side could not be
+  // cryptographically verified -- each derived from real evidence
+  // fields, never hard-coded.
+  'CALIBRATION_V2_PLAN_UNAVAILABLE', 'CALIBRATION_V2_PLAN_BLOCKED',
+  'HASH_UNAVAILABLE',
 ]);
 export const PIXEL_BLOCKER_REASON_CODE_SET = new Set(PIXEL_BLOCKER_REASON_CODES);
 
@@ -83,6 +98,24 @@ export const PIXEL_BLOCKER_REASON_CODE_SET = new Set(PIXEL_BLOCKER_REASON_CODES)
 export function isValidPixelBlockerReasonCode(code) {
   return code === null || (typeof code === 'string' && PIXEL_BLOCKER_REASON_CODE_SET.has(code));
 }
+
+// --- Pixel hash verification mode (EPIC 2E-K-R2-FIX2 Section 3) ------------
+// Which mechanism actually produced a given side's pixel hash. An
+// in-memory/opaque-origin (about:blank) Browser QA harness may not have
+// `crypto.subtle` (Web Crypto requires a secure context) -- this is
+// honestly distinguished from a genuine render failure. `HASH_UNAVAILABLE`
+// means neither mechanism could produce a hash; it is NEVER conflated
+// with "the canvas failed to render" (see preview-evidence.js Section 4).
+export const PIXEL_HASH_VERIFICATION_MODES = Object.freeze([
+  'WEB_CRYPTO_SHA256', 'PURE_JS_SHA256', 'HASH_UNAVAILABLE',
+]);
+export const PIXEL_HASH_VERIFICATION_MODE_SET = new Set(PIXEL_HASH_VERIFICATION_MODES);
+export function isValidPixelHashVerificationMode(code) {
+  return typeof code === 'string' && PIXEL_HASH_VERIFICATION_MODE_SET.has(code);
+}
+
+// --- Calibration V2 Preview Plan mode (EPIC 2E-K-R2-FIX2 Section 1) --------
+export const CALIBRATION_V2_PREVIEW_MODE = 'CALIBRATION_PREVIEW_ONLY';
 
 // --- Readiness status (Section 12) ------------------------------------------
 // PRODUCTION_READY is intentionally NOT a member of this set -- the

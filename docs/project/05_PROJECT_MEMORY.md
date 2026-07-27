@@ -1083,3 +1083,123 @@ running `RUN_LUMIXA_CALIBRATION_QA_WINDOWS.bat` (or
 `node tools/local-gate.mjs`) on a machine with real Chromium and
 network access -- the single remaining gap before this feature is fully
 Browser-verified. EPIC 2E-L remains explicitly not started.
+
+---
+
+## EPIC 2E-K-R2-FIX2 -- Calibration V2 Preview Eligibility, Browser Runner
+## and Pixel Evidence Closure
+
+**Status: all 16 sections closed; Final Browser Verification honestly
+attempted and not achievable in this sandbox (same confirmed
+network/environment constraint as R1, R2, and FIX1).** Fixes 10
+reported bugs found in real use of the Calibration Lab: Controlled V2
+not rendering real pixels; the Save Result button staying enabled when
+ineligible; Save Result silently persisting `NOT_REVIEWED` decisions
+with `reviewedAt` set; `browserVerified=true` reported against an empty
+V2 canvas and a null pixel hash; `previewTruthCode=LEGACY_RENDER_FAILED`
+reported despite a genuinely rendered Legacy canvas; the UI blocker
+hard-naming `V2_RENDER_FAILED` when the real cause was Calibration V2
+Plan/Sandbox ineligibility; a three-way mismatched Browser Detection
+Contract (`found` vs `executablePath` vs `available`); the Browser suite
+reporting `BROWSER_BINARY_UNAVAILABLE` with a real binary present; and
+an OR-shortcut in the Real Pixel Browser Test that let unknown/partial
+states pass. Full architecture: `36_EPIC_2E_K_R2_FIX2_CALIBRATION_V2_ARCHITECTURE.md`.
+
+**Calibration-only V2 Preview Plan:** `build-calibration-v2-preview-plan.js`
+(new module) reuses the existing production
+`buildControlledOverlayPreviewSandboxV2()` and
+`buildVisualPreviewRenderPlanV2()` builders completely unmodified, with
+exactly one supported override
+(`flags: { requireHumanReviewForPreview: false }`, a workflow-completion
+gate, never a safety gate) so the Calibration Lab can genuinely render a
+Controlled V2 canvas without touching Production Activation. The plan's
+own eligibility ladder (finalStyleIntent, legacyPreset, safetyClamp,
+overlaySimulation, ids, fingerprint, hard-stops, critical overstacks)
+is preserved exactly -- when any of these are missing the plan is
+honestly `CALIBRATION_V2_PLAN_BLOCKED`, never faked as rendered.
+
+**Positive-proof pixel truth:** `_sideStructuralStatus()` now separates
+"did this side genuinely render real pixels" (`FAILED` /
+`UNVERIFIED_HASH` / `OK`) from "was the hash cryptographically
+verified," so a `null` hash caused by an infra gap is never conflated
+with a genuine render failure. `classifyRealPixelComparisonResult()`
+(new pure, Node-testable module,
+`qa/helpers/real-pixel-comparison-decision.mjs`) replaces the Browser
+Test's old OR-shortcut with an explicit all-of positive proof for a
+genuine pass, plus a separate, independently-gated "honest non-render"
+classification (`HONEST_BLOCKED`) -- never accepting a non-rendered
+state merely because it is not literally the failure code.
+
+**Save Result Gate:** `saveCurrentDecision()` now rejects
+`userDecision === 'NOT_REVIEWED'` outright with `DECISION_REQUIRED`
+before the pre-existing Decision Eligibility Gate runs, and the Save
+Result button in the renderer is disabled whenever
+`previewEvidence?.visualDecisionEligible !== true` -- mirroring the
+Decision Chips' own eligibility flag rather than a second, independent
+copy. `clearCurrentAnswer()` is untouched (it legitimately uses
+`NOT_REVIEWED`).
+
+**Browser Detection Contract:** `detectBrowserExecutable()` now returns
+`executablePath`/`available` alongside the pre-existing `found` field
+(additive, backward-compatible) and gained a `process.platform ===
+'win32'` branch for Windows Chrome/Edge candidate paths. `preflight.mjs`
+and the Browser Test both read the unified contract; `preflight.mjs`
+no longer top-level-imports `playwright` (dynamic import only), so a
+missing Playwright package can no longer crash preflight before
+detection even runs.
+
+**Production isolation (re-verified after FIX2):** all 8 explicitly
+production-critical files (`core/lightroom-mapping-engine/index.js`,
+`core/xmp-validator/index.js`, `core/preset-engine/index.js`,
+`ui/app.js`, `ui/ui-engine.js`,
+`core/preview-rendering/visual-preview-render-plan-v2.js`,
+`core/lightroom-mapping-engine/mapping-v2-overlay-preview-sandbox.js`,
+`core/decision-engine/index.js`) confirmed byte-identical via direct
+`diff` against the untouched FIX1 seed -- zero drift. A full-tree
+`diff -rq` confirms the only files touched this round are
+`core/calibration-lab/*`, `ui/calibration-lab/*`, `qa/*`, the QA BAT
+file, and refreshed QA result artifacts. Production Mapping and
+Production XMP Output are unchanged. EPIC 2E-L was explicitly not
+started; no Deploy occurred; Controlled V2 Production remains disabled
+throughout.
+
+**Test results (all real):** 5 new suites this round --
+`epic-2e-k-r2-fix2-save-gate-test.mjs` (NEW, real
+`createCalibrationLabController()` + `fake-indexeddb`) 20/20;
+`epic-2e-k-r2-fix2-browser-contract-static-test.mjs` (NEW, includes a
+genuinely-created temporary executable file, not a mock) 16/16;
+`epic-2e-k-r2-fix2-real-pixel-decision-static-test.mjs` (NEW, every
+required-FAIL v2State individually proven to never silently pass)
+49/49; `epic-2e-k-r2-fix2-calibration-v2-plan-static-test.mjs` (NEW,
+full eligibility ladder + 9 hostile Production Safety forgeries) 58/58;
+`epic-2e-k-r2-fix2-hostile-closure-test.mjs` (NEW, SHA-256 known-vector
+proof + the exact bug #6 regression + blocker hard-code-immunity proof)
+14/14 -- 157/157 new assertions, zero failures. Pre-existing suites
+re-verified with updated fixtures for the new evidence fields and code
+count; `node tools/esm-syntax-gate.mjs` and `node qa/run-static-suites.mjs`
+both fully green. Full detail: `37_EPIC_2E_K_R2_FIX2_QA_REPORT.md`.
+
+**Browser Verification Closure attempt:** identical finding to every
+prior round -- no usable Chromium in this sandbox, and
+`npx playwright install chromium` fails with the same explicit `403
+Connection blocked by network allowlist` error. `node tools/local-gate.mjs`:
+Steps 1-3 genuinely PASS; Steps 4-14 (every Browser-dependent suite)
+honestly FAIL with `BROWSER_BINARY_UNAVAILABLE` -- disclosed, not
+fabricated. **Final Gate Verdict: CONDITIONAL COMPLETE --
+NOT_BROWSER_VERIFIED.**
+
+**Known limitations:** identical Chromium/network gap as R1, R2, and
+FIX1; the production-lock manifest generator (pre-existing, unrelated
+to FIX2) hashes every current core/ui file except a fixed geometry-EPIC
+allow-list rather than a FIX2-specific scope, so Production Safety for
+this round was independently verified via direct diff against the 8
+named production-critical files rather than relying on the manifest's
+file-count change alone; all FIX1 known limitations not addressed by
+this round remain as previously documented. Full detail:
+`38_EPIC_2E_K_R2_FIX2_RELEASE_NOTES.md`.
+
+**Next EPIC recommendation:** close Final Browser Verification by
+running `RUN_LUMIXA_CALIBRATION_QA_WINDOWS.bat` (or
+`node tools/local-gate.mjs`) on a machine with real Chromium and
+network access -- the single remaining gap before this feature is fully
+Browser-verified. EPIC 2E-L remains explicitly not started.

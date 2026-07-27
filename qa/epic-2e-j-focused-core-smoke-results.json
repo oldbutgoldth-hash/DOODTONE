@@ -1,11 +1,11 @@
 {
   "suite": "LOCAL-FIRST GEOMETRY R3 -- Focused Core smoke test (no-Browser, plain Node import)",
-  "runId": "2773788d-f36c-453c-9308-087a77b06cb9",
-  "startedAt": "2026-07-26T20:19:15.683Z",
-  "completedAt": "2026-07-26T20:19:16.074Z",
+  "runId": "793f8ff1-2568-4eda-bc54-0a6716ea655b",
+  "startedAt": "2026-07-27T04:37:32.172Z",
+  "completedAt": "2026-07-27T04:37:32.836Z",
   "completed": true,
   "sourceHash": "470f2709516a218711e3ebd7f5fd8c03f09d6a5d3a7d426f08e2c37f28eb9274",
-  "generatedAt": "2026-07-26T20:19:16.074Z",
+  "generatedAt": "2026-07-27T04:37:32.836Z",
   "summary": {
     "total": 31,
     "pass": 31,

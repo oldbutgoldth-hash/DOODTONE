@@ -221,7 +221,7 @@ function genuineBothRenderedDifferent() {
   record('Section 2: validateImageRecord() accepts the freshly created v2 record', validateImageRecord(rec), {});
   record('Section 2: validateImageRecord() REJECTS a record with a malformed previewEvidence (fails closed)', validateImageRecord({ ...rec, previewEvidence: { garbage: true } }) === false, {});
   record('Section 2: validateImageRecord() REJECTS a record missing recordSchemaVersion entirely', validateImageRecord((() => { const { recordSchemaVersion, ...rest } = rec; return rest; })()) === false, {});
-  record('Section 2: previewTruthCode enum has exactly the 10 required stable codes', PREVIEW_TRUTH_CODES.length === 10, { PREVIEW_TRUTH_CODES });
+  record('Section 2: previewTruthCode enum has exactly the 10 FIX1-required stable codes plus the 4 FIX2 additions (14 total)', PREVIEW_TRUTH_CODES.length === 14, { PREVIEW_TRUTH_CODES });
   record('Section 2: readiness statuses now include the 3 new FIX1 statuses', ['NEEDS_BROWSER_VERIFICATION', 'NEEDS_PIXEL_PREVIEW', 'NEEDS_REVIEW_REFRESH'].every(s => READINESS_STATUSES.includes(s)), { READINESS_STATUSES });
 }
 

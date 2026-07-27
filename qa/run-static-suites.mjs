@@ -113,6 +113,33 @@ const STATIC_SUITES = [
   'qa/epic-2e-k-r2-real-pixel-comparison-static-test.mjs',
   // EPIC 2E-K-R2-FIX1 -- PIXEL TRUTH, DECISION GATE AND EVIDENCE CLOSURE.
   'qa/epic-2e-k-r2-fix1-pixel-truth-static-test.mjs',
+  // EPIC 2E-K-R2-FIX2 -- Section 6/11: real behavioral proof (fake-
+  // indexeddb, the actual controller) that Save Result rejects
+  // userDecision=NOT_REVIEWED with DECISION_REQUIRED, never mutates
+  // notes/issueCodes/reviewedAt/session counters when blocked, and
+  // that the pre-existing DECISION_NOT_ELIGIBLE gate still works
+  // independently.
+  'qa/epic-2e-k-r2-fix2-save-gate-test.mjs',
+  // EPIC 2E-K-R2-FIX2 -- Section 7: Browser Detection Contract static
+  // proof (found/executablePath/available agree in both the not-found
+  // and genuinely-found cases; no top-level `import 'playwright'` in
+  // preflight.mjs; Windows Chrome/Edge candidate paths present).
+  'qa/epic-2e-k-r2-fix2-browser-contract-static-test.mjs',
+  // EPIC 2E-K-R2-FIX2 -- Section 9/13: hostile proof for the pure
+  // Real Pixel Comparison classifier (every required-FAIL state
+  // genuinely fails; the genuine pass genuinely passes; honest-blocked
+  // outcomes are accepted; false claims are always caught).
+  'qa/epic-2e-k-r2-fix2-real-pixel-decision-static-test.mjs',
+  // EPIC 2E-K-R2-FIX2 -- Section 1/13: dedicated coverage for
+  // build-calibration-v2-preview-plan.js (previously untested) --
+  // eligibility ladder, hard-stop/critical-overstack blocking,
+  // production-safety hard-coded fields, and the
+  // isCalibrationPlanProductionSafe() guard hostile-tested directly.
+  'qa/epic-2e-k-r2-fix2-calibration-v2-plan-static-test.mjs',
+  // EPIC 2E-K-R2-FIX2 -- Section 13: remaining hostile items (bug #6
+  // exact-shape regression, SHA-256 known-vector + fake-hash-must-fail
+  // proof, deriveUiBlockerReasonCode() hard-code-immunity proof).
+  'qa/epic-2e-k-r2-fix2-hostile-closure-test.mjs',
 ];
 
 let anyFailed = false;

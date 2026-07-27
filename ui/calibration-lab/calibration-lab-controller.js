@@ -198,6 +198,11 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
         previewEvidence = await capturePixelTruthEvidence({
           imgElement,
           renderPlan: pipelineResult.renderPlanForPixelPreviewTransientOnly,
+          // EPIC 2E-K-R2-FIX2 -- Section 5: the Calibration V2 Preview
+          // Plan's own contract (mode/available/renderable), so
+          // pixel-truth-capture.js can populate previewEvidence's real
+          // calibrationV2Plan* fields honestly, never inferred.
+          calibrationV2PreviewPlan: pipelineResult.calibrationV2PreviewPlanTransientOnly,
           analysisGenerationId: pipelineResult.analysisGenerationId,
           expectedImageFingerprint: pipelineResult.imageFingerprint,
         });
@@ -255,6 +260,18 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
     if (currentIndex < 0 || !records[currentIndex]) { lastActionError = 'NO_CURRENT_IMAGE'; _notify(); return getState(); }
     if (!isValidUserDecision(userDecision)) { lastActionError = 'INVALID_DECISION'; _notify(); return getState(); }
     if (!isValidIssueCodeList(issueCodes)) { lastActionError = 'INVALID_ISSUE_CODES'; _notify(); return getState(); }
+    // EPIC 2E-K-R2-FIX2 -- Section 6: NOT_REVIEWED is a valid record
+    // state (initial, Clear Current Answer, Migration, Reset) but is
+    // NEVER a valid *Save Result* action -- a caller must actually pick
+    // a decision to persist one. Rejecting here, before the Evidence
+    // Eligibility Gate below, guarantees this holds even when Evidence
+    // IS eligible (previously, isDecisionAllowedForEvidence('NOT_REVIEWED', ...)
+    // unconditionally returned true, so Save silently persisted
+    // NOT_REVIEWED + created a bogus reviewedAt timestamp -- reported
+    // bugs #3 and #4). This check intentionally does not touch
+    // clearCurrentAnswer(), which sets NOT_REVIEWED directly and never
+    // calls saveCurrentDecision().
+    if (userDecision === 'NOT_REVIEWED') { lastActionError = 'DECISION_REQUIRED'; _notify(); return getState(); }
     // EPIC 2E-K-R2-FIX1 -- Section 3: the Decision Eligibility Gate is
     // checked HERE, in the Controller, using the exact same pure
     // isDecisionAllowedForEvidence() the renderer uses to grey out
@@ -372,7 +389,18 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
       currentPreviewTruthCode: currentEvidence?.previewTruthCode ?? null,
       currentBrowserVerified: currentEvidence?.browserVerified ?? false,
       currentVisualDecisionEligible: currentEvidence?.visualDecisionEligible ?? false,
-      currentPixelBlockerReasonCode: deriveUiBlockerReasonCode(currentEvidence, { v2RenderPlanAvailable: true }),
+      // EPIC 2E-K-R2-FIX2 -- Section 5: no hard-coded v2RenderPlanAvailable
+      // override -- the real Calibration V2 Preview Plan fields already
+      // live on currentEvidence itself (populated by pixel-truth-capture.js).
+      currentPixelBlockerReasonCode: deriveUiBlockerReasonCode(currentEvidence),
+      // EPIC 2E-K-R2-FIX2 -- Section 9/11: the Browser QA suite's strict
+      // Real Pixel Comparison classifier (see
+      // qa/helpers/real-pixel-comparison-decision.mjs) needs the FULL
+      // previewEvidence object -- pixel counts, hashes, geometry-match
+      // flags -- not just the three summary fields above. Exposed as a
+      // single additive field (never replacing the individual
+      // current*/* fields above, which existing tests already read).
+      currentPreviewEvidence: currentEvidence ? { ...currentEvidence } : null,
       calibrationSchemaVersion: 2,
     };
   }

@@ -290,7 +290,8 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
     // has something to look at in the before/after slider and can in
     // principle be re-run many times without changing what is allowed.
     const previewEvidence = record?.previewEvidence ?? null;
-    const pixelBlockerReasonCode = deriveUiBlockerReasonCode(previewEvidence, { v2RenderPlanAvailable: true });
+    // EPIC 2E-K-R2-FIX2 -- Section 5: no hard-coded override -- real evidence only.
+    const pixelBlockerReasonCode = deriveUiBlockerReasonCode(previewEvidence);
     const wrap = _el('div', {
       class: 'cal-grid-2',
       'data-cal-preview-truth-code': previewEvidence?.previewTruthCode ?? 'NOT_RENDERED',
@@ -449,7 +450,8 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
     panel.appendChild(decisionRow);
 
     if (previewEvidence && previewEvidence.visualDecisionEligible !== true) {
-      const blockerCode = deriveUiBlockerReasonCode(previewEvidence, { v2RenderPlanAvailable: true });
+      // EPIC 2E-K-R2-FIX2 -- Section 5: no hard-coded override -- real evidence only.
+      const blockerCode = deriveUiBlockerReasonCode(previewEvidence);
       panel.appendChild(_el('div', {
         class: 'cal-note', style: 'margin-top:8px;color:var(--danger)',
         'data-cal-role': 'decision-gate-reason', 'data-cal-pixel-blocker-reason': blockerCode ?? 'NONE',
@@ -475,10 +477,28 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
     panel.appendChild(notes);
 
     const actionRow = _el('div', { class: 'cal-row', style: 'margin-top:12px' });
-    actionRow.appendChild(_el('button', {
+    // EPIC 2E-K-R2-FIX2 -- Section 6: the Save Result button itself
+    // (not just the Decision Chips) must be disabled whenever the
+    // current record's Evidence is not genuinely eligible -- otherwise
+    // a user can still press Save while `pendingDecision` sits at its
+    // NOT_REVIEWED default, which the Controller now rejects with
+    // DECISION_REQUIRED (see calibration-lab-controller.js), but the
+    // button should never invite that action in the first place
+    // (reported bug #2). This mirrors the Chips' own use of the SAME
+    // evidence flag -- never a separate, divergent condition.
+    const saveEligible = previewEvidence?.visualDecisionEligible === true;
+    const saveBtn = _el('button', {
       class: 'cal-btn cal-btn-primary', text: T('session.saveDecision'),
-      onclick: async () => { await controller.saveCurrentDecision({ userDecision: pendingDecision, issueCodes: pendingIssues, notes: notes.value }); render(); },
-    }));
+      'data-cal-role': 'save-decision-button', 'data-cal-save-eligible': String(saveEligible),
+      ...(saveEligible ? {} : { disabled: 'disabled', 'aria-disabled': 'true' }),
+      onclick: async () => {
+        if (!saveEligible) return; // belt-and-suspenders; disabled attribute already blocks real clicks
+        await controller.saveCurrentDecision({ userDecision: pendingDecision, issueCodes: pendingIssues, notes: notes.value });
+        render();
+      },
+    });
+    if (!saveEligible) { saveBtn.style.opacity = '0.45'; saveBtn.style.cursor = 'not-allowed'; }
+    actionRow.appendChild(saveBtn);
     actionRow.appendChild(_el('button', { class: 'cal-btn', text: T('session.clearCurrentAnswer'), onclick: async () => { await controller.clearCurrentAnswer(); render(); } }));
     panel.appendChild(actionRow);
     return panel;

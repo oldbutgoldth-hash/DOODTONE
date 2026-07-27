@@ -53,6 +53,7 @@ import { validateFinalPreset, quickSafetyClamp } from '../xmp-validator/index.js
 import { benchmarkStylePreservation } from '../style-benchmark-engine/index.js';
 import { classifyScene }        from '../scene-classifier/index.js';
 import { detectColorCast }      from '../color-cast-detector/index.js';
+import { buildCalibrationV2PreviewPlan } from './build-calibration-v2-preview-plan.js';
 
 function _num(v) {
   return (typeof v === 'number' && Number.isFinite(v)) ? v : null;
@@ -240,8 +241,33 @@ export async function runCalibrationComparisonPipeline(imgElement, { analysisGen
     finalPreset = { ...reclamp.preset, _decision: validatedPreset._decision, _validation: validationReport };
   }
 
+  const imageFingerprint = computeImageFingerprint(imgElement);
+
+  // EPIC 2E-K-R2-FIX2 -- Section 1/2: the Calibration-only Controlled V2
+  // Preview Plan (see build-calibration-v2-preview-plan.js) -- NOT the
+  // Human-Review-gated Production `visualPreviewRenderPlanV2` above,
+  // which is always V2-unrenderable here because
+  // `controlledPreviewReviewStateV2` is always `null` in the Calibration
+  // Lab. This plan reuses the exact same Legacy Render Plan / Mapping V2
+  // Planner / Safety Clamp / Legacy Safety Overlay / Overlay Simulation /
+  // Capture Capability / Style Budget / Photographer Intent / Controlled
+  // V2 Translation Policies -- it fixes a Human-Review-gate limitation
+  // only, never a safety gate (hard stops / critical over-stack remain
+  // fully enforced -- see that module's own tests).
+  const calibrationV2PreviewPlan = buildCalibrationV2PreviewPlan({
+    finalPreset,
+    // `finalPreset` itself IS the mapped Legacy Lightroom preset (buildFinalPreset()
+    // returns the flat exp/con/hi/sh/wh/bl/temp/tint/.../grade/cal fields merged
+    // with `_decision`) -- the exact same shape `_buildLegacyAdjustmentModel()`
+    // (inside visual-preview-render-plan-v2.js) already reads for Production's
+    // own Legacy render plan, reused here unchanged.
+    legacyPreset: finalPreset,
+    sourceGenerationId: analysisGenerationId,
+    sourceFingerprint: imageFingerprint,
+  });
+
   return {
-    imageFingerprint: computeImageFingerprint(imgElement),
+    imageFingerprint,
     containsSkin: computeContainsSkin(skin, skinPctAccurate),
     analysisGenerationId,
     legacySnapshot: extractLegacySnapshot(finalPreset, benchmark),
@@ -260,6 +286,26 @@ export async function runCalibrationComparisonPipeline(imgElement, { analysisGen
     // Lab's before/after view can call the SAME production isolated
     // pixel renderer (never a reimplementation) for the image that was
     // just analyzed in this runtime session. See docs/project/29_EPIC_2E_K_R2_REAL_PIXEL_COMPARISON.md.
-    renderPlanForPixelPreviewTransientOnly: finalPreset?._decision?.finalStyleIntent?.visualPreviewRenderPlanV2 ?? null,
+    //
+    // EPIC 2E-K-R2-FIX2 -- Section 1/2: this is now the Calibration-only
+    // Preview Plan's own render plan (real, V2-renderable when eligible)
+    // rather than the Production Sandbox-gated one, which never
+    // genuinely renders V2 pixels in the Calibration Lab (see above).
+    renderPlanForPixelPreviewTransientOnly: calibrationV2PreviewPlan.renderPlanForPixelPreview,
+    // EPIC 2E-K-R2-FIX2 -- Section 5: the Calibration V2 Preview Plan's
+    // own contract (mode/available/renderable/safety flags/reasons),
+    // TRANSIENT-ONLY (same non-persistence guarantee as above) --
+    // consumed by pixel-truth-capture.js to populate the new
+    // `calibrationV2Plan*` previewEvidence fields honestly, never
+    // inferred or hard-coded.
+    calibrationV2PreviewPlanTransientOnly: {
+      mode: calibrationV2PreviewPlan.mode,
+      available: calibrationV2PreviewPlan.available,
+      renderable: calibrationV2PreviewPlan.renderable,
+      safetyVerified: calibrationV2PreviewPlan.safetyVerified,
+      noHardStops: calibrationV2PreviewPlan.noHardStops,
+      noCriticalOverstack: calibrationV2PreviewPlan.noCriticalOverstack,
+      reasons: calibrationV2PreviewPlan.reasons,
+    },
   };
 }
