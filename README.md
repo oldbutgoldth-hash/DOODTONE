@@ -47,3 +47,17 @@ All fixes are pure additive CSS (`@media` block + a handful of `class="..."` att
 
 ## Note
 This export strips the `style-hover` micro-interactions used in the interactive design-tool preview (hover color shifts on nav links, buttons, cards) since plain HTML doesn't support that shorthand. If you want hover states preserved 1:1, add a small `<style>` block with `:hover` rules for `.nav-item:hover`, `.tab-btn:hover`, etc., or ask for a version with `onmouseover`/`onmouseout` wired in.
+
+## EPIC 2E-K-R2-FIX5 — Storage Verification and Release Gate
+
+FIX5 adds a dependency-independent Storage Contract, a Native Browser IndexedDB persistence test, and a fail-closed release gate.
+
+```bash
+npm run test:calibration-storage
+npm run test:calibration-storage:native
+npm run test:fix5
+```
+
+On Windows, run `RUN_LUMIXA_FIX5_QA_WINDOWS.bat`. Exit code `0` means `FINAL_PASS`, `1` means `FAIL`, and `2` means `NOT_VERIFIED`.
+
+Current packaged evidence is `NOT_VERIFIED` only because this execution environment blocks the required localhost Browser origin with `net::ERR_BLOCKED_BY_ADMINISTRATOR`. Storage Contract 24/24, full static suites, FIX4 workflow safety, package cleanliness, and Production locks all pass. Production remains Legacy and XMP remains locked.

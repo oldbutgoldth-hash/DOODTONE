@@ -1203,3 +1203,12 @@ running `RUN_LUMIXA_CALIBRATION_QA_WINDOWS.bat` (or
 `node tools/local-gate.mjs`) on a machine with real Chromium and
 network access -- the single remaining gap before this feature is fully
 Browser-verified. EPIC 2E-L remains explicitly not started.
+
+## EPIC 2E-K-R2-FIX5 — Storage / Release Gate
+
+- Dependency-independent Storage Contract: 24/24 PASS.
+- Full static and FIX4 workflow safety: PASS.
+- Native Browser IndexedDB: NOT_VERIFIED because the current Chromium policy blocks localhost origin navigation.
+- Release gate returns exit code 2 instead of a false PASS.
+- Production remains Legacy; write/apply/export/XMP remain disabled.
+- EPIC 2E-L may start only after a local Windows/Chrome or Edge run returns FINAL_PASS.

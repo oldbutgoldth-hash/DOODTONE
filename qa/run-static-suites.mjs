@@ -88,13 +88,13 @@ const STATIC_SUITES = [
   // FINAL LOCALE CLOSURE + SEMANTIC QA R5.
   'qa/epic-2e-j-r5-semantic-presentation-static-test.mjs',
   // CONTROLLED V2 CALIBRATION LAB R1 -- Phase J: pure schema/codes/
-  // aggregate/readiness/export logic, and a genuine IndexedDB behavior
-  // test (via fake-indexeddb, a real IndexedDB implementation -- not a
-  // mock) covering schemaVersion, migration guard, corrupt-record
-  // handling, session limits, clear-current/clear-all, and the storage
-  // usage summary. Both are no-Browser, no-network.
+  // aggregate/readiness/export logic, plus the FIX5 dependency-independent
+  // IndexedDB storage-contract harness covering schemaVersion, migration
+  // guard, corrupt-record handling, limits, clear-current/clear-all, and
+  // usage summary. Native Browser IndexedDB remains a separate fail-closed
+  // suite and is never represented as passed by this static runner.
   'qa/epic-2e-k-calibration-lab-static-test.mjs',
-  'qa/epic-2e-k-calibration-lab-storage-test.mjs',
+  'qa/epic-2e-k-r2-fix5-storage-contract-test.mjs',
   // CONTROLLED V2 CALIBRATION LAB R1 -- Phase M: the dedicated Section-17
   // hostile-test suite (production-lock immutability, no-XMP, no raw
   // Core prose, no localized-sentence-as-decision, no Base64/file-path

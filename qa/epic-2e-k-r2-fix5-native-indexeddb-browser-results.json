@@ -1,0 +1,16 @@
+{
+  "epic": "2E-K-R2-FIX5",
+  "suite": "NATIVE_BROWSER_INDEXEDDB",
+  "decision": "NOT_VERIFIED",
+  "reason": "BROWSER_ORIGIN_BLOCKED_BY_POLICY",
+  "navigationError": "net::ERR_BLOCKED_BY_ADMINISTRATOR",
+  "completed": true,
+  "runId": "e6936702-987c-4565-84b7-dd1fe277f236",
+  "startedAt": "2026-07-27T12:23:31.804Z",
+  "completedAt": "2026-07-27T12:23:32.098Z",
+  "sourceHash": "956d436e22c8bf7e672dc951e1861ae8f61df8b112c517566e2d001a64c605b5",
+  "browserExecutable": "/usr/bin/chromium",
+  "browserVersion": "Chromium 144.0.7559.96 built on Debian GNU/Linux 13 (trixie)",
+  "pageErrors": [],
+  "consoleErrors": []
+}

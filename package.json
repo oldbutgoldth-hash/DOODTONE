@@ -19,10 +19,14 @@
     "qa:preflight": "node qa/preflight.mjs",
     "test:calibration-browser": "node qa/epic-2e-k-calibration-lab-browser-test.mjs",
     "test:calibration-browser:report": "node qa/epic-2e-k-calibration-lab-browser-test.mjs --report",
-    "test:calibration-storage": "node qa/epic-2e-k-calibration-lab-storage-test.mjs",
-    "test:calibration-migration": "node qa/epic-2e-k-calibration-lab-storage-test.mjs",
+    "test:calibration-storage": "node qa/epic-2e-k-r2-fix5-storage-contract-test.mjs",
+    "test:calibration-migration": "node qa/epic-2e-k-r2-fix5-storage-contract-test.mjs",
     "test:calibration-pixel": "node qa/epic-2e-k-r2-fix1-pixel-truth-static-test.mjs",
-    "test:calibration-full": "node qa/calibration-full-suite.mjs"
+    "test:calibration-full": "node qa/epic-2e-k-r2-fix5-release-gate.mjs",
+    "test:calibration-storage:native": "node qa/epic-2e-k-r2-fix5-native-indexeddb-browser-test.mjs",
+    "test:fix5": "node qa/epic-2e-k-r2-fix5-release-gate.mjs",
+    "test:calibration-storage:official": "node qa/epic-2e-k-calibration-lab-storage-test.mjs",
+    "test:calibration-full:legacy": "node qa/calibration-full-suite.mjs"
   },
   "keywords": [],
   "author": "",

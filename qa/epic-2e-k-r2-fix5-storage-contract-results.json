@@ -1,0 +1,184 @@
+{
+  "epic": "2E-K-R2-FIX5",
+  "suite": "STORAGE_CONTRACT",
+  "verificationMode": "DETERMINISTIC_IDB_CONTRACT",
+  "nativeBrowserIndexedDbVerified": false,
+  "decision": "PASS",
+  "completed": true,
+  "runId": "23bd289f-2712-4f4d-a34e-30887da08ec2",
+  "startedAt": "2026-07-27T12:23:30.213Z",
+  "completedAt": "2026-07-27T12:23:31.690Z",
+  "sourceHash": "1c6a04d9bb0f0a17d3e1502e25b5150a6842754af802b3928c979beaacb1eab2",
+  "passCount": 24,
+  "failCount": 0,
+  "assertions": [
+    {
+      "test": "QA harness selects the IndexedDB backend rather than memory fallback",
+      "result": "PASS",
+      "evidence": {
+        "persistenceMode": "INDEXEDDB",
+        "verificationMode": "DETERMINISTIC_IDB_CONTRACT"
+      }
+    },
+    {
+      "test": "Session save/list round-trip",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Image record save/load round-trip",
+      "result": "PASS",
+      "evidence": {
+        "loaded": 1
+      }
+    },
+    {
+      "test": "Invalid session fails closed",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Invalid image record fails closed",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Corrupt session row never crashes listSessions()",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Corrupt session row is quarantined",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Corrupt image row never crashes loadImageRecordsForSession()",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Corrupt image row is quarantined",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Usage summary counts corrupt rows exactly once per scan",
+      "result": "PASS",
+      "evidence": {
+        "usageA": {
+          "sessionCount": 1,
+          "imageRecordCount": 1,
+          "approxBytes": 1637,
+          "corruptRecordCount": 2,
+          "quotaEstimate": null
+        }
+      }
+    },
+    {
+      "test": "Usage summary is idempotent",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Image-per-session limit fails closed",
+      "result": "PASS",
+      "evidence": {
+        "imageLimitCode": "IMAGE_LIMIT_REACHED",
+        "max": 500
+      }
+    },
+    {
+      "test": "Stored-session limit fails closed",
+      "result": "PASS",
+      "evidence": {
+        "sessionLimitCode": "SESSION_LIMIT_REACHED",
+        "max": 20
+      }
+    },
+    {
+      "test": "deleteSession removes the selected session",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "deleteSession cascades to its image records",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "clearAll removes all sessions and records",
+      "result": "PASS",
+      "evidence": {
+        "usageAfterClear": {
+          "sessionCount": 0,
+          "imageRecordCount": 0,
+          "approxBytes": 0,
+          "corruptRecordCount": 0,
+          "quotaEstimate": null
+        }
+      }
+    },
+    {
+      "test": "V1 session migrates to schema v2",
+      "result": "PASS",
+      "evidence": {
+        "migratedSession": {
+          "sessionId": "cal-session-fix5-v1",
+          "createdAt": "2026-07-27T12:23:31.681Z",
+          "updatedAt": "2026-07-27T12:23:31.681Z",
+          "locale": "th",
+          "appVersion": "v1",
+          "calibrationSchemaVersion": 2,
+          "imageCount": 1,
+          "reviewedCount": 1,
+          "legacyWins": 0,
+          "v2Wins": 1,
+          "ties": 0,
+          "bothRejected": 0,
+          "pendingCount": 0,
+          "legacyAuditOnlyCount": 0
+        }
+      }
+    },
+    {
+      "test": "V1 image gains NOT_RENDERED preview evidence",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "V1 decision and notes are preserved for audit",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Migrated V1 decision requires visual re-review",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Migration is idempotent",
+      "result": "PASS",
+      "evidence": {}
+    },
+    {
+      "test": "Backup-before-migrate preserves the untouched V1 row",
+      "result": "PASS",
+      "evidence": {
+        "backupCount": 1
+      }
+    },
+    {
+      "test": "Unavailable IndexedDB selects explicit bounded memory fallback",
+      "result": "PASS",
+      "evidence": {
+        "persistenceMode": "IN_MEMORY_FALLBACK"
+      }
+    },
+    {
+      "test": "Memory fallback remains usable and explicit",
+      "result": "PASS",
+      "evidence": {}
+    }
+  ]
+}

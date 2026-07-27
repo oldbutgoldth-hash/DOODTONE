@@ -82,3 +82,7 @@ R5 stops after locale closure and semantic QA. The next feature phase must prese
 ## EPIC 2E-K-R2-FIX4 — Preview Before Candidate Review
 
 Controlled V2 Preview generation is now independent of Candidate Review approval. Preview generation is governed only by source, current generation, render-plan, safety, and pixel-evidence eligibility. Candidate Review begins pending and becomes available only after both Legacy and Controlled V2 canvases render. Approval affects Candidate Review only; Production stays Legacy and Production write/apply/export/XMP remain disabled. Real Chromium verification passed with exact XMP equality. Storage Node suites remain unverified in this environment because `fake-indexeddb` could not be installed.
+
+## EPIC 2E-K-R2-FIX5 — Storage / Release Gate
+
+FIX5 introduced a QA-only deterministic IndexedDB contract harness and a real Native Browser IndexedDB persistence suite. Storage Contract passes 24/24; full static suites and FIX4 Preview-before-review safety pass. Native Browser IndexedDB is `NOT_VERIFIED` in the current environment because Chromium is administratively blocked from opening the temporary localhost origin. The gate fails closed with exit code 2. No Production Mapping or XMP source changed. EPIC 2E-L remains blocked until the Windows/local runner returns `FINAL_PASS`.

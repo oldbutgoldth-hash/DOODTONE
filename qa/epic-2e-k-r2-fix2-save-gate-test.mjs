@@ -4,7 +4,7 @@
  *
  * EPIC 2E-K-R2-FIX2 -- Section 6/11: Save Result Gate.
  *
- * Real behavioral test (fake-indexeddb, the ACTUAL
+ * Real behavioral test (deterministic IndexedDB contract harness, the ACTUAL
  * createCalibrationLabController() -- never a hand-rolled stub) proving:
  *
  *   1. saveCurrentDecision({ userDecision: 'NOT_REVIEWED' }) is REJECTED
@@ -28,16 +28,20 @@
  *      set userDecision back to NOT_REVIEWED.
  *
  * No Browser, no Chromium -- safe for run-static-suites.mjs. Uses the
- * SAME single global fake IndexedDB backend pattern established by
+ * SAME shared deterministic IndexedDB backend pattern established by
  * qa/epic-2e-k-calibration-lab-storage-test.mjs (two independent
  * createCalibrationLabStorage() handles reading/writing the same
- * underlying fake-indexeddb database).
+ * underlying QA IndexedDB-contract database).
  */
-import 'fake-indexeddb/auto';
+import { randomUUID } from 'node:crypto';
+import { createDeterministicIndexedDbEnvironment } from './helpers/deterministic-indexeddb.mjs';
 import { createCalibrationLabController } from '../ui/calibration-lab/calibration-lab-controller.js';
 import { createCalibrationLabStorage } from '../ui/calibration-lab/calibration-lab-storage.js';
 import { createImageTestRecord } from '../core/calibration-lab/schema.js';
 
+const env = createDeterministicIndexedDbEnvironment();
+globalThis.indexedDB = env.indexedDB;
+globalThis.IDBKeyRange = env.IDBKeyRange;
 let passCount = 0, failCount = 0;
 function record(test, ok, evidence) {
   const icon = ok ? '✓' : '✗';
@@ -86,7 +90,7 @@ function ineligiblePreviewEvidence() {
 
 async function seedRecordForCurrentSession(sessionId, previewEvidence) {
   // Writes directly through a SECOND storage handle onto the SAME
-  // underlying fake-indexeddb database the controller's own internal
+  // underlying QA IndexedDB-contract database the controller's own internal
   // storage (created inside init()) reads from -- this is how we get a
   // genuinely persisted, schema-valid record in place for
   // controller.openSession() to load, without needing a real decoded
