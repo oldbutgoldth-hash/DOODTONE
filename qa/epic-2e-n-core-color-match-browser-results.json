@@ -1,0 +1,1017 @@
+{
+  "epic": "2E-N",
+  "suite": "CORE_COLOR_MATCH_N1_N5_BROWSER",
+  "decision": "PASS",
+  "completed": true,
+  "runId": "c73f23d9-e11a-4ee7-92cc-8e87811c87f2",
+  "startedAt": "2026-07-28T03:51:53.481Z",
+  "completedAt": "2026-07-28T03:51:54.353Z",
+  "sourceHash": "018b0d27f508bf687a225ac7c2fce9084bf6881213162a47ee65262c4c6cd024",
+  "browserExecutable": "/usr/bin/chromium",
+  "browserVersion": "144.0.7559.96",
+  "result": {
+    "completed": true,
+    "decision": "PASS",
+    "checks": {
+      "candidateMapped": true,
+      "xmpSerialized": true,
+      "previewChanged": true,
+      "afterAnalysed": true,
+      "evaluationComplete": true,
+      "recordSaved": true,
+      "noProduction": true,
+      "xmpSingleSource": true,
+      "styleDistanceReduced": true,
+      "whiteBalanceImproved": true,
+      "fidelityThreshold": true,
+      "previewNoClipping": true,
+      "noPrivateData": true
+    },
+    "preview": {
+      "width": 480,
+      "height": 360,
+      "pixelCount": 172800,
+      "changedPixels": 172800,
+      "changedPixelPct": 100,
+      "meanAbsoluteChannelDifference": 14.862,
+      "clippedHighlightPct": 0,
+      "clippedShadowPct": 0,
+      "sourceClippedHighlightPct": 0,
+      "sourceClippedShadowPct": 0,
+      "newlyClippedHighlightPct": 0,
+      "newlyClippedShadowPct": 0,
+      "recoveredHighlightPct": 0,
+      "recoveredShadowPct": 0,
+      "identity": false
+    },
+    "evaluation": {
+      "status": "MATCH_CANDIDATE_IMPROVED",
+      "before": 13.34,
+      "after": 5.73,
+      "fidelity": 68.42,
+      "styleBefore": 19.673,
+      "styleAfter": 7.864,
+      "improvement": {
+        "overallReductionPct": 60.03,
+        "whiteBalanceReductionPct": 72.98,
+        "toneReductionPct": 35.89,
+        "paletteReductionPct": 54.34,
+        "fidelityScore": 68.42
+      },
+      "beforeComponents": {
+        "total": 19.673,
+        "whiteBalance": 30.792,
+        "tone": 13.896,
+        "transferableColor": 23.714,
+        "skin": 0,
+        "skinComparable": true,
+        "sharedPaletteWeight": 0.2,
+        "objectDistributionDistance": 80.005,
+        "sharedZoneCount": 3
+      },
+      "afterComponents": {
+        "total": 7.864,
+        "whiteBalance": 8.321,
+        "tone": 8.909,
+        "transferableColor": 10.827,
+        "skin": 0,
+        "skinComparable": true,
+        "sharedPaletteWeight": 0.8848,
+        "objectDistributionDistance": 11.52,
+        "sharedZoneCount": 3
+      }
+    },
+    "candidate": {
+      "state": "MAPPED_CANDIDATE",
+      "xmpLength": 2845,
+      "safety": 0,
+      "preset": {
+        "name": "LUMIXA-Core-Color-Match-Candidate",
+        "exp": 7,
+        "con": 2,
+        "hi": 2,
+        "sh": -1,
+        "wh": 2,
+        "bl": 0,
+        "clarity": 1,
+        "dehaze": 1,
+        "texture": 0,
+        "temp": 6,
+        "tint": -1,
+        "vib": 2,
+        "sat": 1,
+        "sharp": 0,
+        "noise": 0,
+        "crv_sh": 4,
+        "crv_mid": 129,
+        "crv_hi": 249,
+        "hsl": {
+          "hsl_h_red": 0,
+          "hsl_s_red": 0,
+          "hsl_l_red": -1,
+          "hsl_h_orange": 0,
+          "hsl_s_orange": 0,
+          "hsl_l_orange": 1,
+          "hsl_h_yellow": 0,
+          "hsl_s_yellow": 0,
+          "hsl_l_yellow": 0,
+          "hsl_h_green": -7,
+          "hsl_s_green": 2,
+          "hsl_l_green": 1,
+          "hsl_h_aqua": 0,
+          "hsl_s_aqua": 0,
+          "hsl_l_aqua": 0,
+          "hsl_h_blue": -1,
+          "hsl_s_blue": 1,
+          "hsl_l_blue": 0,
+          "hsl_h_purple": 0,
+          "hsl_s_purple": 0,
+          "hsl_l_purple": 0,
+          "hsl_h_magenta": 0,
+          "hsl_s_magenta": 0,
+          "hsl_l_magenta": 0
+        },
+        "grade": {
+          "grd_sh_h": 215,
+          "grd_sh_s": 1,
+          "grd_sh_l": 0,
+          "grd_mid_h": 115,
+          "grd_mid_s": 0,
+          "grd_mid_l": 0,
+          "grd_hi_h": 42,
+          "grd_hi_s": 1,
+          "grd_hi_l": 0,
+          "grd_blend": 50
+        },
+        "cal": {
+          "cal_red_h": 0,
+          "cal_red_s": 0,
+          "cal_green_h": 0,
+          "cal_green_s": 0,
+          "cal_blue_h": 0,
+          "cal_blue_s": 0
+        },
+        "curves": {
+          "master": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 255,
+              "y": 255
+            }
+          ],
+          "red": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 255,
+              "y": 255
+            }
+          ],
+          "green": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 255,
+              "y": 255
+            }
+          ],
+          "blue": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 255,
+              "y": 255
+            }
+          ]
+        }
+      }
+    },
+    "referenceSignature": {
+      "kind": "LUMIXA_COLOR_MATCH_SIGNATURE",
+      "schemaVersion": 1,
+      "role": "REFERENCE",
+      "analysisGenerationId": "browser-n1-n5",
+      "whiteBalance": {
+        "warmth": 10.78,
+        "tint": 2.72,
+        "zones": {
+          "shadow": {
+            "warmth": 4,
+            "tint": 1
+          },
+          "midtone": {
+            "warmth": 11,
+            "tint": 3
+          },
+          "highlight": {
+            "warmth": 15,
+            "tint": 3
+          }
+        }
+      },
+      "tone": {
+        "shadowLuma": 48,
+        "midtoneLuma": 126.67,
+        "highlightLuma": 198.67,
+        "tonalSpan": 150.67,
+        "contrast": 48,
+        "blackPoint": 29,
+        "whitePoint": 224,
+        "zoneShares": {
+          "shadow": 0.14,
+          "midtone": 0.672,
+          "highlight": 0.189
+        }
+      },
+      "color": {
+        "channels": {
+          "red": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "orange": {
+            "weight": 0.8,
+            "meanHue": 37.39,
+            "meanSaturation": 24.55,
+            "meanLuminance": 52.3,
+            "sampleCount": 6
+          },
+          "yellow": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "green": {
+            "weight": 0.1,
+            "meanHue": 109,
+            "meanSaturation": 28,
+            "meanLuminance": 41,
+            "sampleCount": 1
+          },
+          "aqua": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "blue": {
+            "weight": 0.1,
+            "meanHue": 205,
+            "meanSaturation": 34,
+            "meanLuminance": 48,
+            "sampleCount": 1
+          },
+          "purple": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "magenta": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          }
+        },
+        "totalWeight": 1,
+        "neutralShare": 0.2227,
+        "weightedSaturation": 25.84,
+        "weightedLuminance": 50.74,
+        "dominantChannel": "orange"
+      },
+      "skin": {
+        "evidenceAvailable": true,
+        "detected": true,
+        "coveragePct": 18,
+        "confidence": 0.579,
+        "meanHue": 0,
+        "meanSaturation": 0,
+        "meanLuminance": 0
+      },
+      "style": {
+        "evidenceAvailable": false,
+        "mood": null,
+        "warmth": null,
+        "contrastLevel": null,
+        "harmonyScheme": null,
+        "overallConfidence": 0
+      },
+      "captureRisk": {
+        "clipHiPct": 0,
+        "clipLoPct": 0,
+        "dynamicRangeStops": 2.94
+      },
+      "evidence": {
+        "sources": {
+          "palette": true,
+          "toneZones": true,
+          "hsl": false,
+          "skin": true,
+          "histogram": true
+        },
+        "coverage": 0.85,
+        "confidence": 0.764,
+        "warningCodes": [
+          "HSL_EVIDENCE_PARTIAL"
+        ]
+      }
+    },
+    "targetSignature": {
+      "kind": "LUMIXA_COLOR_MATCH_SIGNATURE",
+      "schemaVersion": 1,
+      "role": "TARGET",
+      "analysisGenerationId": "browser-n1-n5",
+      "whiteBalance": {
+        "warmth": -8.54,
+        "tint": -0.55,
+        "zones": {
+          "shadow": {
+            "warmth": -4,
+            "tint": -1
+          },
+          "midtone": {
+            "warmth": -8,
+            "tint": 0
+          },
+          "highlight": {
+            "warmth": -14,
+            "tint": -2
+          }
+        }
+      },
+      "tone": {
+        "shadowLuma": 51,
+        "midtoneLuma": 115,
+        "highlightLuma": 175,
+        "tonalSpan": 124,
+        "contrast": 38,
+        "blackPoint": 32,
+        "whitePoint": 192,
+        "zoneShares": {
+          "shadow": 0.157,
+          "midtone": 0.648,
+          "highlight": 0.195
+        }
+      },
+      "color": {
+        "channels": {
+          "red": {
+            "weight": 0.2027,
+            "meanHue": 15,
+            "meanSaturation": 13,
+            "meanLuminance": 51,
+            "sampleCount": 1
+          },
+          "orange": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "yellow": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "green": {
+            "weight": 0.1527,
+            "meanHue": 155,
+            "meanSaturation": 20,
+            "meanLuminance": 34,
+            "sampleCount": 1
+          },
+          "aqua": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "blue": {
+            "weight": 0.6447,
+            "meanHue": 220.11,
+            "meanSaturation": 20.02,
+            "meanLuminance": 47.5,
+            "sampleCount": 6
+          },
+          "purple": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "magenta": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          }
+        },
+        "totalWeight": 1.0001,
+        "neutralShare": 0.1497,
+        "weightedSaturation": 18.6,
+        "weightedLuminance": 46.15,
+        "dominantChannel": "blue"
+      },
+      "skin": {
+        "evidenceAvailable": true,
+        "detected": true,
+        "coveragePct": 11.1,
+        "confidence": 0.998,
+        "meanHue": 0,
+        "meanSaturation": 0,
+        "meanLuminance": 0
+      },
+      "style": {
+        "evidenceAvailable": false,
+        "mood": null,
+        "warmth": null,
+        "contrastLevel": null,
+        "harmonyScheme": null,
+        "overallConfidence": 0
+      },
+      "captureRisk": {
+        "clipHiPct": 0,
+        "clipLoPct": 0,
+        "dynamicRangeStops": 2.56
+      },
+      "evidence": {
+        "sources": {
+          "palette": true,
+          "toneZones": true,
+          "hsl": false,
+          "skin": true,
+          "histogram": true
+        },
+        "coverage": 0.85,
+        "confidence": 0.797,
+        "warningCodes": [
+          "HSL_EVIDENCE_PARTIAL"
+        ]
+      }
+    },
+    "delta": {
+      "kind": "LUMIXA_COLOR_MATCH_DELTA",
+      "schemaVersion": 1,
+      "stage": "SIGNATURE_COMPARISON_ONLY",
+      "whiteBalance": {
+        "warmth": 19.32,
+        "tint": 3.27,
+        "zones": {
+          "shadow": {
+            "warmth": 8,
+            "tint": 2
+          },
+          "midtone": {
+            "warmth": 19,
+            "tint": 3
+          },
+          "highlight": {
+            "warmth": 29,
+            "tint": 5
+          }
+        }
+      },
+      "tone": {
+        "shadowLuma": -3,
+        "midtoneLuma": 11.67,
+        "highlightLuma": 23.67,
+        "tonalSpan": 26.67,
+        "contrast": 10,
+        "blackPoint": -3,
+        "whitePoint": 32
+      },
+      "color": {
+        "weightedSaturation": 7.24,
+        "weightedLuminance": 4.59,
+        "neutralShare": 0.073,
+        "paletteDistance": 9.546,
+        "channels": {
+          "red": {
+            "weightDelta": -0.203,
+            "hueDelta": 0,
+            "saturationDelta": -13,
+            "luminanceDelta": -51
+          },
+          "orange": {
+            "weightDelta": 0.8,
+            "hueDelta": 0,
+            "saturationDelta": 24.55,
+            "luminanceDelta": 52.3
+          },
+          "yellow": {
+            "weightDelta": 0,
+            "hueDelta": 0,
+            "saturationDelta": 0,
+            "luminanceDelta": 0
+          },
+          "green": {
+            "weightDelta": -0.053,
+            "hueDelta": -46,
+            "saturationDelta": 8,
+            "luminanceDelta": 7
+          },
+          "aqua": {
+            "weightDelta": 0,
+            "hueDelta": 0,
+            "saturationDelta": 0,
+            "luminanceDelta": 0
+          },
+          "blue": {
+            "weightDelta": -0.545,
+            "hueDelta": -15.11,
+            "saturationDelta": 13.98,
+            "luminanceDelta": 0.5
+          },
+          "purple": {
+            "weightDelta": 0,
+            "hueDelta": 0,
+            "saturationDelta": 0,
+            "luminanceDelta": 0
+          },
+          "magenta": {
+            "weightDelta": 0,
+            "hueDelta": 0,
+            "saturationDelta": 0,
+            "luminanceDelta": 0
+          }
+        }
+      },
+      "skin": {
+        "targetDetected": true,
+        "referenceDetected": true,
+        "hueDelta": 0,
+        "saturationDelta": 0,
+        "luminanceDelta": 0
+      },
+      "evidence": {
+        "referenceConfidence": 0.764,
+        "targetConfidence": 0.797,
+        "combinedConfidence": 0.764
+      },
+      "matchNeedScore": 13.34,
+      "reasonCodes": [
+        "WB_REFERENCE_WARMER",
+        "TINT_REFERENCE_GREENER",
+        "REFERENCE_HIGHER_KEY",
+        "REFERENCE_MORE_CONTRAST",
+        "REFERENCE_MORE_SATURATED",
+        "PALETTE_DISTRIBUTION_DIFFERS"
+      ],
+      "riskCodes": [
+        "HIGHLIGHT_CLIP_RISK",
+        "SKIN_PROTECTION_REQUIRED"
+      ],
+      "matchState": "MATCH_ADJUSTMENT_NEEDED",
+      "production": {
+        "productionSource": "legacy",
+        "productionWrite": false,
+        "xmpWriteAllowed": false,
+        "lightroomMappingAllowed": false
+      }
+    },
+    "compensation": {
+      "kind": "LUMIXA_PHOTOGRAPHIC_COMPENSATION",
+      "schemaVersion": 1,
+      "stage": "N2_PHOTOGRAPHIC_COMPENSATION",
+      "state": "SAFE_BOUNDED_MATCH",
+      "analysisGenerationId": "browser-n1-n5",
+      "intensity": 68,
+      "illuminant": {
+        "validZoneCount": 3,
+        "validZones": [
+          "shadow",
+          "midtone",
+          "highlight"
+        ],
+        "warmthSpread": 8.58,
+        "tintSpread": 1.25,
+        "zoneConsistency": 0.819,
+        "neutralEvidence": 0.534,
+        "dominantSceneBias": 1,
+        "paletteBias": 0.53,
+        "objectBiasScore": 0.265,
+        "illuminantConfidence": 0.769,
+        "transferStrength": 0.622,
+        "semanticWarmthIntent": 12.02,
+        "semanticTintIntent": 2.035
+      },
+      "objectColorBias": {
+        "score": 0.265,
+        "wbDampeningApplied": 0.378
+      },
+      "dynamicRange": {
+        "highlightRisk": 0.526,
+        "shadowRisk": 0.067,
+        "lowDynamicRangePenalty": 1,
+        "dynamicRangeMismatch": 0.047,
+        "highlightTransferStrength": 0.371,
+        "shadowTransferStrength": 0.702,
+        "globalToneStrength": 0.771
+      },
+      "skinProtection": {
+        "active": true,
+        "pairedSkinEvidence": true,
+        "targetConfidence": 0.998,
+        "coverageFactor": 0.202,
+        "hueRisk": 0,
+        "saturationRisk": 0,
+        "protectionStrength": 0.74,
+        "skinChannelTransferStrength": 0.467,
+        "globalWbTransferStrength": 0.852
+      },
+      "targetProtection": {
+        "kind": "LUMIXA_TARGET_AWARE_PROTECTION",
+        "schemaVersion": 1,
+        "stage": "2E_O_TARGET_AWARE_PROTECTION",
+        "neutralWhite": {
+          "active": false,
+          "enabled": true,
+          "strength": 0.072,
+          "referenceHighKeyScore": 0.021,
+          "targetHighKeyScore": 0,
+          "highKeyMismatch": 0,
+          "targetNeutralShare": 0.1497,
+          "highlightCastMagnitude": 14.19,
+          "whiteBalanceScale": 0.955,
+          "tintScale": 0.948,
+          "positiveExposureScale": 0.935,
+          "positiveHighlightScale": 0.932,
+          "positiveWhitesScale": 0.931,
+          "highlightGradingScale": 0.941,
+          "globalSaturationScale": 0.982
+        },
+        "skin": {
+          "active": true,
+          "confidence": 0.998,
+          "coverageFactor": 0.264,
+          "targetHue": 0,
+          "targetSaturation": 0,
+          "referenceSkinComparable": true,
+          "referenceHueDistance": 30,
+          "targetAlreadyWarm": false,
+          "targetAlreadySaturated": false,
+          "naturalityRisk": 0.09,
+          "strength": 0.703,
+          "globalWarmthScale": 0.873,
+          "globalTintScale": 0.916,
+          "skinChannelScale": 0.508,
+          "warmSaturationScale": 0.662,
+          "gradingScale": 0.592
+        },
+        "sceneColor": {
+          "channels": {
+            "red": {
+              "referenceWeight": 0,
+              "targetWeight": 0.2027,
+              "overlapRatio": 0,
+              "distributionMismatch": 0.2027,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            },
+            "orange": {
+              "referenceWeight": 0.8,
+              "targetWeight": 0,
+              "overlapRatio": 0,
+              "distributionMismatch": 0.8,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            },
+            "yellow": {
+              "referenceWeight": 0,
+              "targetWeight": 0,
+              "overlapRatio": 0,
+              "distributionMismatch": 0,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            },
+            "green": {
+              "referenceWeight": 0.1,
+              "targetWeight": 0.1527,
+              "overlapRatio": 0.655,
+              "distributionMismatch": 0.0527,
+              "bothPresent": true,
+              "transferStrength": 0.625
+            },
+            "aqua": {
+              "referenceWeight": 0,
+              "targetWeight": 0,
+              "overlapRatio": 0,
+              "distributionMismatch": 0,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            },
+            "blue": {
+              "referenceWeight": 0.1,
+              "targetWeight": 0.6447,
+              "overlapRatio": 0.155,
+              "distributionMismatch": 0.5447,
+              "bothPresent": true,
+              "transferStrength": 0.12
+            },
+            "purple": {
+              "referenceWeight": 0,
+              "targetWeight": 0,
+              "overlapRatio": 0,
+              "distributionMismatch": 0,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            },
+            "magenta": {
+              "referenceWeight": 0,
+              "targetWeight": 0,
+              "overlapRatio": 0,
+              "distributionMismatch": 0,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            }
+          },
+          "dampenedCount": 7,
+          "sharedCount": 1
+        },
+        "reasonCodes": [
+          "SCENE_OBJECT_CHANNEL_DAMPENED",
+          "SHARED_CHANNEL_TRANSFER_SUPPORTED"
+        ],
+        "production": {
+          "productionSource": "legacy",
+          "productionWrite": false,
+          "xmpWriteAllowed": false,
+          "productionActivationAllowed": false
+        }
+      },
+      "semanticIntents": {
+        "whiteBalance": {
+          "warmth": 5.804,
+          "tint": 1.023
+        },
+        "tone": {
+          "exposureEv": 0.0673,
+          "contrast": 2.412,
+          "highlights": 2.337,
+          "shadows": -0.601,
+          "whites": 1.879,
+          "blacks": -0.358,
+          "tonalSpan": 2.797
+        },
+        "presence": {
+          "vibrance": 1.536,
+          "saturation": 0.704,
+          "clarity": 0.816,
+          "dehaze": 1.088,
+          "texture": 0
+        },
+        "hsl": {
+          "red": {
+            "hue": 0,
+            "saturation": -0.155,
+            "luminance": -0.775,
+            "sourceWeightDelta": -0.203,
+            "transferability": 0.06
+          },
+          "orange": {
+            "hue": 0,
+            "saturation": 0.293,
+            "luminance": 0.795,
+            "sourceWeightDelta": 0.8,
+            "transferability": 0.06
+          },
+          "yellow": {
+            "hue": 0,
+            "saturation": 0,
+            "luminance": 0,
+            "sourceWeightDelta": 0,
+            "transferability": 0.06
+          },
+          "green": {
+            "hue": -7.007,
+            "saturation": 1.683,
+            "luminance": 1.266,
+            "sourceWeightDelta": -0.053,
+            "transferability": 0.625
+          },
+          "aqua": {
+            "hue": 0,
+            "saturation": 0,
+            "luminance": 0,
+            "sourceWeightDelta": 0,
+            "transferability": 0.06
+          },
+          "blue": {
+            "hue": -0.973,
+            "saturation": 1.243,
+            "luminance": 0.038,
+            "sourceWeightDelta": -0.545,
+            "transferability": 0.12
+          },
+          "purple": {
+            "hue": 0,
+            "saturation": 0,
+            "luminance": 0,
+            "sourceWeightDelta": 0,
+            "transferability": 0.06
+          },
+          "magenta": {
+            "hue": 0,
+            "saturation": 0,
+            "luminance": 0,
+            "sourceWeightDelta": 0,
+            "transferability": 0.06
+          }
+        }
+      },
+      "reasonCodes": [
+        "ZONE_CONSISTENT_ILLUMINANT",
+        "NEUTRAL_EVIDENCE_SUPPORTS_WB",
+        "SKIN_PROTECTION_APPLIED",
+        "HIGHLIGHT_HEADROOM_PROTECTED",
+        "SCENE_CHANNEL_TRANSFER_DAMPENED"
+      ],
+      "warningCodes": [
+        "HIGHLIGHT_CLIP_RISK",
+        "SKIN_PROTECTION_REQUIRED"
+      ],
+      "evidence": {
+        "combinedConfidence": 0.764,
+        "matchNeedScore": 13.34,
+        "referenceConfidence": 0.764,
+        "targetConfidence": 0.797
+      },
+      "production": {
+        "productionSource": "legacy",
+        "productionWrite": false,
+        "xmpWriteAllowed": false,
+        "lightroomMappingAllowed": false
+      }
+    },
+    "matchedSignature": {
+      "kind": "LUMIXA_COLOR_MATCH_SIGNATURE",
+      "schemaVersion": 1,
+      "role": "TARGET",
+      "analysisGenerationId": "browser-n1-n5",
+      "whiteBalance": {
+        "warmth": 5.76,
+        "tint": 1.36,
+        "zones": {
+          "shadow": {
+            "warmth": 3,
+            "tint": 0
+          },
+          "midtone": {
+            "warmth": 6,
+            "tint": 2
+          },
+          "highlight": {
+            "warmth": 7,
+            "tint": 0
+          }
+        }
+      },
+      "tone": {
+        "shadowLuma": 50.33,
+        "midtoneLuma": 118.67,
+        "highlightLuma": 184.33,
+        "tonalSpan": 134,
+        "contrast": 42,
+        "blackPoint": 29,
+        "whitePoint": 209,
+        "zoneShares": {
+          "shadow": 0.141,
+          "midtone": 0.68,
+          "highlight": 0.179
+        }
+      },
+      "color": {
+        "channels": {
+          "red": {
+            "weight": 0.1097,
+            "meanHue": 21,
+            "meanSaturation": 42,
+            "meanLuminance": 55,
+            "sampleCount": 1
+          },
+          "orange": {
+            "weight": 0.6848,
+            "meanHue": 32.32,
+            "meanSaturation": 9.89,
+            "meanLuminance": 48.11,
+            "sampleCount": 5
+          },
+          "yellow": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "green": {
+            "weight": 0.1055,
+            "meanHue": 109,
+            "meanSaturation": 25,
+            "meanLuminance": 39,
+            "sampleCount": 1
+          },
+          "aqua": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "blue": {
+            "weight": 0.1,
+            "meanHue": 209,
+            "meanSaturation": 38,
+            "meanLuminance": 46,
+            "sampleCount": 1
+          },
+          "purple": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          },
+          "magenta": {
+            "weight": 0,
+            "meanHue": 0,
+            "meanSaturation": 0,
+            "meanLuminance": 0,
+            "sampleCount": 0
+          }
+        },
+        "totalWeight": 1,
+        "neutralShare": 0.3002,
+        "weightedSaturation": 17.82,
+        "weightedLuminance": 47.69,
+        "dominantChannel": "orange"
+      },
+      "skin": {
+        "evidenceAvailable": true,
+        "detected": true,
+        "coveragePct": 20.5,
+        "confidence": 0.998,
+        "meanHue": 0,
+        "meanSaturation": 0,
+        "meanLuminance": 0
+      },
+      "style": {
+        "evidenceAvailable": false,
+        "mood": null,
+        "warmth": null,
+        "contrastLevel": null,
+        "harmonyScheme": null,
+        "overallConfidence": 0
+      },
+      "captureRisk": {
+        "clipHiPct": 0,
+        "clipLoPct": 0,
+        "dynamicRangeStops": 2.82
+      },
+      "evidence": {
+        "sources": {
+          "palette": true,
+          "toneZones": true,
+          "hsl": false,
+          "skin": true,
+          "histogram": true
+        },
+        "coverage": 0.85,
+        "confidence": 0.797,
+        "warningCodes": [
+          "HSL_EVIDENCE_PARTIAL"
+        ]
+      }
+    },
+    "production": {
+      "productionSource": "legacy",
+      "productionWrite": false,
+      "xmpWriteAllowed": false,
+      "candidateXmpInMemoryOnly": true,
+      "productionActivationAllowed": false
+    }
+  }
+}

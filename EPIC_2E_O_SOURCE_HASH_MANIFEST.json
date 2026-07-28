@@ -1,0 +1,43 @@
+{
+  "epic": "2E-O",
+  "version": "1.6.0",
+  "generatedAt": "2026-07-28T04:06:32.396746+00:00",
+  "purpose": "Target-aware Color Match and Lightroom round-trip fidelity source/evidence manifest.",
+  "files": {
+    "core/color-match/target-aware-protection-engine.js": "aefe51bc2a3867f4b72485a9245021c2fc555bb3f737e6dbe36c535876ac1f21",
+    "core/color-match/lightroom-compatibility-profile.js": "393bcc58b51539610fb9cd13f629ddd57a019001970d3eb57f542ec0faae80a9",
+    "core/color-match/lightroom-roundtrip-fidelity-engine.js": "a0f03f3bbd3e482f99d6ecb79c7635c96ebf484fecc07c0664bb537109957755",
+    "core/color-match/photographic-compensation-engine.js": "95d1ced99d285c7646f071d44831835218c518313c167459b0a8862eb031f10e",
+    "core/color-match/lightroom-candidate-mapper.js": "ff4d61f903a2cc12edd01a469245700fd0bde12896053548d38a2ebe4d998e1f",
+    "core/color-match/core-color-match-pipeline.js": "a5be5ea665901ba7e4ca368d3e59abf86fd47e5aba69f4af718cc206e2e78907",
+    "core/color-match/candidate-preview-renderer.js": "68cda20f887418dc5c0e6f0dd8aa0a3a256f581bf6a0246ed0459b9cc57abecc",
+    "core/color-match/match-evaluation-engine.js": "bbab5be631fd4da250fb7736055968c6520e0ffb159fc7239a624f08a3b5356e",
+    "ui/reference-color-match-panel.js": "c43ce54ecbe84d7b97926a39d4517aade9de22f3e635b9a240f751dbd6fbb546",
+    "core/project-version.js": "3328b38141be3945cb3568d667b5c4d55a90b566ea0ab52e99a40c894b8e9627",
+    "package.json": "9d61d88080b28a1568f58dc000c410402fbb1837a1476a9757bd31e2def219f0",
+    "package-lock.json": "cf6595fa1fff5e67e8818d812adeddea68dc8eadebabbd893f6d3b5e908d8502",
+    "qa/fixtures/core-color-match/target-high-key-wedding.png": "de3a0b72b93655992b4041813f086f32924cc790afd3d9d07911a6c5fc69fb7c",
+    "qa/epic-2e-o-target-aware-roundtrip-static-test.mjs": "e14b3002c2c34c3d71886249fc76b267596a725c7c9ef13cee9cd9019f6059f1",
+    "qa/epic-2e-o-target-aware-roundtrip-browser-test.mjs": "b52ad33fc6443dfed05c47619e91e96247e853c15b8970298df89560a0aae9e2",
+    "qa/epic-2e-o-release-gate.mjs": "5dac758854f9b0599d20f78fec3781dc514d8903f222e1f22d73c30343e82231",
+    "qa/epic-2e-o-target-aware-roundtrip-browser-results.json": "406a2cd4593fc145cf690da2c73f41108a5fe9fe99c265a7c7834606902818dc",
+    "qa/epic-2e-o-release-gate-results.json": "9ed65e489c02cce39c0800d566d5299b50237627e985d0743ce6e9861c47a877",
+    "qa/baselines/lufa42-production-lock-manifest.json": "876779887a1ddda3f13c94de8cbd906195d6200abb5cc1a4716224d56aef1cb1",
+    "qa/baselines/epic-2e-n-production-invariant.json": "97af4b4558977537a98bd3736c73ee7c07cbfd210357a26882b6ac65426127e2",
+    "RUN_LUMIXA_2E_O_QA_WINDOWS_KEEP_OPEN.bat": "1cd614ad68b1ae838288c9c85bce19b1a73ed12c2497c47c4cba5c2985bc0788",
+    "README_EPIC_2E_O.txt": "d65062a9a8466a822690c3f29e4b686d7858cf8adf8b7915f6618db2852fe4da",
+    "EPIC_2E_O_RELEASE_NOTES.md": "6320c8f10febab6688438822ff15d35004b53a306f2969247a4f3f0d15cdf050",
+    "EPIC_2E_O_QA_REPORT.md": "cd03559b1b18268fc70f0c88b15a948258a512c06197185af74fd06dacbed958",
+    "EPIC_2E_O_MODIFIED_FILES.md": "9c9d5f2363e6f5c7fab3baaf68e9fde1c41044273405422a008d660b69885cee",
+    "README.md": "e1a9d143ef923a496af7f8d4e82877c3af4b608a25700b5694ade3d0ef2cd6df",
+    "LUMIXA_PROJECT_MEMORY_R5.md": "0df222e87b411852842b66930dd55d67df84f8f3138ff190e22d88db779bd77a"
+  },
+  "productionBoundary": {
+    "productionSource": "legacy",
+    "productionWrite": false,
+    "controlledV2Apply": false,
+    "previewExport": false,
+    "controlledV2ProductionActivation": false,
+    "realLightroomRoundTripPhotographicallyVerified": false
+  }
+}

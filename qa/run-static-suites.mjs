@@ -150,6 +150,17 @@ const STATIC_SUITES = [
   // EPIC 2E-M -- guided Cohort intake, explicit-decision save gate,
   // save receipt, and next-pending navigation.
   'qa/epic-2e-m-guided-cohort-intake-static-test.mjs',
+  // EPIC 2E-N1 -- Core Color Match Reference/Target signature and semantic delta foundation.
+  'qa/epic-2e-n1-core-color-match-signature-static-test.mjs',
+  'qa/epic-2e-n1-core-color-match-integration-static-test.mjs',
+  // EPIC 2E-N2..N5 — photographic compensation, Lightroom candidate, preview fidelity and evaluation harness.
+  'qa/epic-2e-n2-photographic-compensation-static-test.mjs',
+  'qa/epic-2e-n3-lightroom-candidate-static-test.mjs',
+  'qa/epic-2e-n4-preview-evaluation-static-test.mjs',
+  'qa/epic-2e-n5-evaluation-harness-static-test.mjs',
+  'qa/epic-2e-n1-n5-integration-static-test.mjs',
+  // EPIC 2E-O — target-aware neutral/skin/highlight protection and Lightroom round-trip fidelity.
+  'qa/epic-2e-o-target-aware-roundtrip-static-test.mjs',
 ];
 
 let anyFailed = false;

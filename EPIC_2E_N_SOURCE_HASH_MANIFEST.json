@@ -1,0 +1,29 @@
+{
+  "epic": "2E-N1-N5",
+  "version": "1.5.0",
+  "generatedAt": "2026-07-28T03:17:56.889192+00:00",
+  "files": {
+    "core/color-match/signature-schema.js": "be4e1070808821e05bd2c03a00443e0a1d09108256739a8217fdf1be697a2af1",
+    "core/color-match/reference-target-signature-engine.js": "e0ad7b1e9ae951181ab933be332d57a86bcd6c878194c9baddbccf596e84a38d",
+    "core/color-match/signature-delta-engine.js": "4810665c62fddb95cf8ec82e7c6c8fe5925c2679435cadc0abc9c2b9bcc07086",
+    "core/color-match/core-color-match-analysis.js": "2885c4272ec26d390057ca0285259a7f8cae1ff728fb4a04425302ee07b158b3",
+    "core/color-match/core-color-match-pipeline.js": "911a029debbeded118c371dc89546a67b929e42a48938dcab14995ac9915f60e",
+    "core/color-match/photographic-compensation-engine.js": "d273bca3a157517e8ac2d74ce4c5af7bd09542de3a6f9c231ee539fed3df14fe",
+    "core/color-match/lightroom-candidate-mapper.js": "534ab3116e5e451f507e3e2e1ded5b2662b598df3a3c1dde18c03de58237c981",
+    "core/color-match/candidate-preview-renderer.js": "7eb507a303ce0fbae75af5d2172be417b36ff875f915c68335c896f1c92248b6",
+    "core/color-match/match-evaluation-engine.js": "10c91b09892f6f8e75f582616430b6c8b869dea8bfd3801a55550d1cf3cc7643",
+    "core/color-match/evaluation-store.js": "424c04ae7e1ae308cc671cb2beadb540da7f5d09f93789c64002aae4b81eaa4e",
+    "ui/reference-color-match-panel.js": "5a8869e2647079634eeb68779c6aaad5eb4c4c0e1b4ae12c032c1b343593bd9c",
+    "index.html": "c80b87dac4f2ff082c166f5f5c9094879ba16463cf6ef54abdf762db33d7d40f",
+    "core/project-version.js": "0806d40f4b2c24dca6cd861fa96316db85f4e1e75ea6f253c55beea29b6c381b",
+    "package.json": "ab8810d30574cb6de9d83362b39e03731f816a837590822a6988caa6c6bd8165",
+    "package-lock.json": "3e1beb679d8b3f7900c78dcdc4cca7830c763da95c4c54ac50b60af8862ec84e",
+    "qa/epic-2e-n-core-color-match-browser-test.mjs": "859fffde706367fdc83a8179f20c872276ce47a5a84f15a5bcc5472d6c74de52",
+    "qa/epic-2e-n-release-gate.mjs": "407c5be88a907bda47e24a43b249728ccecdc1711f09046d680ab1b451b84c31",
+    "qa/baselines/epic-2e-n-production-invariant.json": "97af4b4558977537a98bd3736c73ee7c07cbfd210357a26882b6ac65426127e2",
+    "docs/project/44_EPIC_2E_N_CORE_COLOR_MATCH_N1_N5_ARCHITECTURE.md": "faded088ab1789a3a48a5558f61884a35d5cfc0e6f4fc59bf7004ec7688174d8",
+    "docs/project/45_EPIC_2E_N_QA_REPORT.md": "d28c1938e0014025f6e0bcd0a4787a4475d517dc1e4ac79bec0e82690fb789d5"
+  },
+  "releaseGateSourceHash": "32824b61a8ece5dbd2bebc7e108424a55d1b0b4ead0219d77b5f7078f933836b",
+  "productionInvariant": "qa/baselines/epic-2e-n-production-invariant.json"
+}

@@ -1,0 +1,74 @@
+/**
+ * EPIC 2E-N1 — Core Color Match Signature Schema
+ *
+ * A deterministic, image-free contract shared by Reference and Target
+ * analysis. It stores only bounded numeric evidence and stable codes.
+ * No pixel buffers, file names, paths, Blob URLs, XMP, or Production state.
+ */
+
+export const COLOR_MATCH_SIGNATURE_SCHEMA_VERSION = 1;
+export const COLOR_MATCH_SIGNATURE_KIND = 'LUMIXA_COLOR_MATCH_SIGNATURE';
+export const COLOR_MATCH_SIGNATURE_ROLES = Object.freeze(['REFERENCE', 'TARGET']);
+export const COLOR_MATCH_CHANNELS = Object.freeze([
+  'red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta',
+]);
+
+export const COLOR_MATCH_DELTA_SCHEMA_VERSION = 1;
+export const COLOR_MATCH_DELTA_KIND = 'LUMIXA_COLOR_MATCH_DELTA';
+
+export const COLOR_MATCH_MATCH_STATES = Object.freeze({
+  INSUFFICIENT_EVIDENCE: 'INSUFFICIENT_EVIDENCE',
+  ALREADY_CLOSE: 'ALREADY_CLOSE',
+  MATCH_ADJUSTMENT_NEEDED: 'MATCH_ADJUSTMENT_NEEDED',
+  LARGE_ADJUSTMENT_REVIEW_REQUIRED: 'LARGE_ADJUSTMENT_REVIEW_REQUIRED',
+});
+
+export const COLOR_MATCH_REASON_CODES = Object.freeze({
+  WB_REFERENCE_WARMER: 'WB_REFERENCE_WARMER',
+  WB_REFERENCE_COOLER: 'WB_REFERENCE_COOLER',
+  TINT_REFERENCE_GREENER: 'TINT_REFERENCE_GREENER',
+  TINT_REFERENCE_MORE_MAGENTA: 'TINT_REFERENCE_MORE_MAGENTA',
+  REFERENCE_HIGHER_KEY: 'REFERENCE_HIGHER_KEY',
+  REFERENCE_LOWER_KEY: 'REFERENCE_LOWER_KEY',
+  REFERENCE_MORE_CONTRAST: 'REFERENCE_MORE_CONTRAST',
+  REFERENCE_SOFTER_CONTRAST: 'REFERENCE_SOFTER_CONTRAST',
+  REFERENCE_MORE_SATURATED: 'REFERENCE_MORE_SATURATED',
+  REFERENCE_MORE_MUTED: 'REFERENCE_MORE_MUTED',
+  PALETTE_DISTRIBUTION_DIFFERS: 'PALETTE_DISTRIBUTION_DIFFERS',
+  SIGNATURES_ALREADY_CLOSE: 'SIGNATURES_ALREADY_CLOSE',
+});
+
+export const COLOR_MATCH_RISK_CODES = Object.freeze({
+  REFERENCE_EVIDENCE_LOW: 'REFERENCE_EVIDENCE_LOW',
+  TARGET_EVIDENCE_LOW: 'TARGET_EVIDENCE_LOW',
+  HIGHLIGHT_CLIP_RISK: 'HIGHLIGHT_CLIP_RISK',
+  SHADOW_CLIP_RISK: 'SHADOW_CLIP_RISK',
+  SKIN_PROTECTION_REQUIRED: 'SKIN_PROTECTION_REQUIRED',
+  LARGE_WHITE_BALANCE_SHIFT: 'LARGE_WHITE_BALANCE_SHIFT',
+  LARGE_TONE_SHIFT: 'LARGE_TONE_SHIFT',
+  PALETTE_COVERAGE_LOW: 'PALETTE_COVERAGE_LOW',
+});
+
+export function assertSignatureRole(role) {
+  if (!COLOR_MATCH_SIGNATURE_ROLES.includes(role)) {
+    throw new TypeError(`Unsupported color-match signature role: ${String(role)}`);
+  }
+  return role;
+}
+
+export function isColorMatchSignature(value) {
+  return Boolean(
+    value &&
+    value.kind === COLOR_MATCH_SIGNATURE_KIND &&
+    value.schemaVersion === COLOR_MATCH_SIGNATURE_SCHEMA_VERSION &&
+    COLOR_MATCH_SIGNATURE_ROLES.includes(value.role)
+  );
+}
+
+export function isColorMatchDelta(value) {
+  return Boolean(
+    value &&
+    value.kind === COLOR_MATCH_DELTA_KIND &&
+    value.schemaVersion === COLOR_MATCH_DELTA_SCHEMA_VERSION
+  );
+}

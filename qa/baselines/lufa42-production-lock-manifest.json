@@ -1,6 +1,6 @@
 {
   "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
-  "generatedAt": "2026-07-28T01:38:42.375Z",
+  "generatedAt": "2026-07-28T04:02:09.805Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
@@ -14,7 +14,7 @@
     "ui/visual-preview-comparison-controller-v2.js",
     "ui/visual-preview-comparison-renderer-v2.js"
   ],
-  "lockedFileCount": 95,
+  "lockedFileCount": 108,
   "files": {
     "core/basic-panel-engine/index.js": "82467e72711b3d98359e9a50543a8a9f2cc98b7f9a42c9e5e25afbec620aae5b",
     "core/calibration-engine/index.js": "c62df0620585bcb16b0ee8a6e76cd9e66d64a1075756d28e18ff9fa301510281",
@@ -37,11 +37,24 @@
     "core/color-cast-detector/index.js": "0dd7815c476430f34fb7e709ec50ed9a2ea316d183a3b70be1fd5fabfc206bca",
     "core/color-engine/index.js": "a1abced48d4984e1bf035d8ff57eff186bb0295de25716600c68d7a7148b6681",
     "core/color-harmony-engine/index.js": "6e7b64cd2cd9082871d53488e169a8077b4087ac194a38fae76d16b2ffbe9a6a",
+    "core/color-match/candidate-preview-renderer.js": "68cda20f887418dc5c0e6f0dd8aa0a3a256f581bf6a0246ed0459b9cc57abecc",
     "core/color-match/color-match-intelligence-bridge.js": "f332c53225ae81fafef93b8b4493665c479d4f739b1db25c07aaf76071d76e28",
     "core/color-match/color-transfer-engine.js": "92779008799e811734f3db5b216dfcdd1ef373424ff8e1d68af2a6774f3a3d42",
+    "core/color-match/core-color-match-analysis.js": "2885c4272ec26d390057ca0285259a7f8cae1ff728fb4a04425302ee07b158b3",
+    "core/color-match/core-color-match-pipeline.js": "a5be5ea665901ba7e4ca368d3e59abf86fd47e5aba69f4af718cc206e2e78907",
+    "core/color-match/evaluation-store.js": "424c04ae7e1ae308cc671cb2beadb540da7f5d09f93789c64002aae4b81eaa4e",
+    "core/color-match/lightroom-candidate-mapper.js": "ff4d61f903a2cc12edd01a469245700fd0bde12896053548d38a2ebe4d998e1f",
+    "core/color-match/lightroom-compatibility-profile.js": "393bcc58b51539610fb9cd13f629ddd57a019001970d3eb57f542ec0faae80a9",
+    "core/color-match/lightroom-roundtrip-fidelity-engine.js": "a0f03f3bbd3e482f99d6ecb79c7635c96ebf484fecc07c0664bb537109957755",
+    "core/color-match/match-evaluation-engine.js": "bbab5be631fd4da250fb7736055968c6520e0ffb159fc7239a624f08a3b5356e",
     "core/color-match/palette-extractor.js": "82b1e66d9e05e922324f4fd9b9d92f4647f2c81d67b68ea1ae0edb9860fcf8eb",
+    "core/color-match/photographic-compensation-engine.js": "95d1ced99d285c7646f071d44831835218c518313c167459b0a8862eb031f10e",
     "core/color-match/preserve-engine.js": "72a7a7b9232330d256691917de9312b92121937a7606a3b6e08202a9271fc1bb",
+    "core/color-match/reference-target-signature-engine.js": "e0ad7b1e9ae951181ab933be332d57a86bcd6c878194c9baddbccf596e84a38d",
     "core/color-match/reference-xmp-generator.js": "88ce0055bfee339da327604518a53bcb8213e33f8079dda0feb0d1d5e9e58e27",
+    "core/color-match/signature-delta-engine.js": "4810665c62fddb95cf8ec82e7c6c8fe5925c2679435cadc0abc9c2b9bcc07086",
+    "core/color-match/signature-schema.js": "be4e1070808821e05bd2c03a00443e0a1d09108256739a8217fdf1be697a2af1",
+    "core/color-match/target-aware-protection-engine.js": "aefe51bc2a3867f4b72485a9245021c2fc555bb3f737e6dbe36c535876ac1f21",
     "core/color-match/tone-zone-analyzer.js": "54d3fe5518f6419cf85c3e0e8bbd66787def92d445d52bafd1a1479e63b34f87",
     "core/colorgrading-ai-engine/index.js": "f95133178c1a61f906f6e90188ab7e2c5843965825bd39db54355296e53feb80",
     "core/colorgrading-engine/index.js": "d48e71b4527db43c488a1d003bd584e1dd93e728ae42db5f5b913e17accda814",
@@ -71,7 +84,7 @@
     "core/preset-engine/index.js": "42f3bb83bf850bed3dd4d2a5b66019264c0a0e5561ff07c2e7e3d644c00dedde",
     "core/preview-rendering/controlled-v2-preview-adjustment-translator.js": "c87ebc0e3b8835f93993ebc62c36da76cbfdd0256f5cf5496ddbe513c7d3979a",
     "core/processing-log/index.js": "582c4b6bd6144c7daedda1d554197d9bae278fcc2451c2af91987a558c0ecd53",
-    "core/project-version.js": "8d3f23495a4974305d2fc5795b40c5aba9f6303d505e4a2efb163ebbb280a703",
+    "core/project-version.js": "3328b38141be3945cb3568d667b5c4d55a90b566ea0ab52e99a40c894b8e9627",
     "core/reference-transfer-engine/index.js": "9a73cb7e155b280d14ad6f22529100024e43e172ac25c5f7aff43b38d007c3ef",
     "core/scene-classifier/index.js": "8f27307e3425c270b7379008f6e9329d03a60f8d50dd0d0218209526b707347d",
     "core/skin-classifier/index.js": "b7563fcbbf39e20cae19b1df3e8ff6d8d5dc50d6e48c889563d3331fd52482d3",
@@ -100,7 +113,7 @@
     "ui/image-analysis-renderer.js": "4061c83bd316981bc46bde4fad95a16679e1c2d663ad74d298d0089c528dc790",
     "ui/interactive-preview-observation-session-v2.js": "aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9",
     "ui/palette-renderer.js": "d31aab02d6842cbf53733c14c8ebaa1ac7eda2b28508c9df1854ef458a0069d0",
-    "ui/reference-color-match-panel.js": "ff291c143c5f9b1dcb1e0c134eb9d01fe404b33bf0220322cf567ed46ac93281",
+    "ui/reference-color-match-panel.js": "c43ce54ecbe84d7b97926a39d4517aade9de22f3e635b9a240f751dbd6fbb546",
     "ui/review-console-controller.js": "d65aeb334ca1b4513585bc2b0185f16efa4882225c7595fb539e0ea000a80aa1",
     "ui/review-console-renderer.js": "069892dec93b380969c4ecd24531edc65244b8cf9cd2ac3cdae399ec065ef8bb",
     "ui/side-by-side-comparison-renderer.js": "86cf70cb540b800b5e09832db917ba15f9cf5f293da04e68abd3bda7f19201b4",
@@ -110,6 +123,6 @@
     "ui/tone-curve-renderer.js": "3424ad63b6c889a2025e23ea0c7513411e7c4c0bb4dddb1dbc305e1bbd254c6e",
     "ui/ui-engine.js": "147a55ca9acb75b6b5fa05fbede5d246ddc0b37a8ceacd055ff5c1a4d11f6711",
     "ui/whitebalance-renderer.js": "af235b1af3f88d38415bb6d93f34d3a9302f2f94f32e3d39f3570d202abdbe60",
-    "index.html": "92ec1402d6a3fef5a658bd1a51acd2867f8953f6cac0684d12bf19beb4a73c39"
+    "index.html": "c80b87dac4f2ff082c166f5f5c9094879ba16463cf6ef54abdf762db33d7d40f"
   }
 }

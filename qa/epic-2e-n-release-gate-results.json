@@ -1,0 +1,107 @@
+{
+  "epic": "2E-N1-N5",
+  "suite": "CORE_REFERENCE_TARGET_COLOR_MATCH_RELEASE_GATE",
+  "decision": "FINAL_PASS",
+  "completed": true,
+  "runId": "92720cbd-f420-4a11-a04f-e6b3fda7c52a",
+  "startedAt": "2026-07-28T03:17:31.789Z",
+  "completedAt": "2026-07-28T03:17:36.951Z",
+  "sourceHash": "32824b61a8ece5dbd2bebc7e108424a55d1b0b4ead0219d77b5f7078f933836b",
+  "steps": [
+    {
+      "label": "ESM Syntax",
+      "rel": "tools/esm-syntax-gate.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "[esm-syntax-gate] PASS -- 217/217 files parsed cleanly as ES modules.\n",
+      "stderrTail": ""
+    },
+    {
+      "label": "Full Static Suites",
+      "rel": "qa/run-static-suites.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "box exists without prior Human Review — {}\n✓ [PASS] Preview generation is independent of Candidate Review — {\"canGeneratePreview\":true}\n✓ [PASS] Controlled V2 Render Plan is renderable before Candidate Review — {\"renderable\":true}\n✓ [PASS] Initial Candidate Review is not auto-approved — {\"candidateReviewStatus\":\"in-progress\",\"approvalState\":\"in-progress\"}\n✓ [PASS] Review guidance explicitly says preview does not depend on review — {\"visualRequired\":6,\"visualPassed\":0,\"systemRequired\":4,\"systemVerified\":4,\"overallRequired\":10,\"overallPassed\":4,\"readyToBuildV2\":false,\"candidateReviewComplete\":false,\"previewGenerationDependsOnReview\":false,\"steps\":[\"1. Generate and inspect the Legacy / Controlled V2 visual preview.\",\"2. Review the six visual items after pixel evidence is ready.\",\"3. Candidate Review never enables Production, export, or XMP write.\"],\"primaryGuidance\":\"The preview is generated independently. Review the remaining visual item(s) (6 of 6 left).\",\"primaryGuidanceCode\":\"PREVIEW_READY_REVIEW_REMAINING\",\"primaryGuidanceParams\":{\"remaining\":6,\"total\":6}}\n✓ [PASS] Review state hard-locks Production source to Legacy — {}\n✓ [PASS] Review state cannot write Production/XMP or export preview — {\"productionWrite\":false,\"controlledV2Apply\":false,\"previewExport\":false,\"productionActivationAllowed\":false}\n✓ [PASS] Direct Candidate Review update is blocked before pixel evidence — {\"lastActionError\":\"PREVIEW_EVIDENCE_REQUIRED\"}\n✓ [PASS] Blocked pre-evidence update does not mark item passed — {}\n✓ [PASS] Candidate Review becomes available only after both previews render — {}\n✓ [PASS] Candidate Review update still cannot enable Production/XMP — {}\n✓ [PASS] All six visual checks complete Candidate Review only — {\"candidateReviewStatus\":\"approved\",\"visualPassed\":6}\n✓ [PASS] Even fully-approved Candidate Review keeps Legacy Production and XMP/write paths locked — {\"productionSource\":\"legacy\",\"productionWrite\":false,\"controlledV2Apply\":false,\"previewExport\":false}\n✓ [PASS] Authoritative Preview Sandbox disables only the Human Review preview gate — {}\n✓ [PASS] View Preview control never re-runs Analysis — {}\n✓ [PASS] App re-renders Candidate Review when pixel render settles — {}\n✓ [PASS] Controller blocks Candidate Review before evidence — {}\n✓ [PASS] Renderer disables Candidate Review controls and note fields before evidence — {}\n✓ [PASS] New analysis generation archives and invalidates prior Candidate Review — {}\n\n19/19 PASS, 0 FAIL\n\n=== qa/epic-2e-l-candidate-pilot-static-test.mjs ===\n✓ [PASS] Candidate Pilot status vocabulary never includes PRODUCTION_READY\n✓ [PASS] Eligibility requires real browser-verified visual evidence and a reviewed decision\n✓ [PASS] Cohort selector excludes migrated, pending and unverified records\n✓ [PASS] Wilson interval is bounded and conservative\n✓ [PASS] Empty dataset is PILOT_NOT_STARTED\n✓ [PASS] Small verified dataset is insufficient, never candidate-ready\n✓ [PASS] Coverage gaps are reported after sample floor is met\n✓ [PASS] Safety hard stop halts the Pilot\n✓ [PASS] Category regression halts the Pilot\n✓ [PASS] Weak V2 advantage needs more evidence rather than passing\n✓ [PASS] Strong, covered, verified cohort reaches candidate evaluation only\n✓ [PASS] Cohort hash is deterministic and changes when a decision changes\n✓ [PASS] Candidate Pilot export contains no image payload, path, preset or XMP field\n\n13/13 PASS, 0 FAIL\n\n=== qa/epic-2e-l-candidate-pilot-integration-static-test.mjs ===\n✓ [PASS] Calibration mode vocabulary includes PILOT\n✓ [PASS] Controller exposes Candidate Pilot report and export\n✓ [PASS] Renderer exposes a semantic Candidate Pilot mode and safe export control\n✓ [PASS] Pilot core hard-locks Production values\n✓ [PASS] Pilot exporter refuses image/XMP/preset-shaped keys\n✓ [PASS] EN/TH Candidate Pilot dictionary coverage is complete\n\n6/6 PASS, 0 FAIL\n\n=== qa/epic-2e-m-guided-cohort-intake-static-test.mjs ===\n✓ [PASS] next-pending navigation moves forward and wraps\n✓ [PASS] next-pending navigation returns -1 after all images are reviewed\n✓ [PASS] valid saved review produces a Cohort receipt with hard Production locks\n✓ [PASS] saved but unverified review is reported honestly as excluded\n✓ [PASS] renderer exposes a prominent guided save bar and save-and-next control\n✓ [PASS] save controls require both pixel eligibility and an explicit decision\n✓ [PASS] controller publishes semantic save receipts and next-pending navigation\n✓ [PASS] Thai and English guided Cohort copy is present without changing canonical codes\n✓ [PASS] guided Cohort UX contains no Production activation or XMP write action\n\n9/9 PASS, 0 FAIL\n\n=== qa/epic-2e-n1-core-color-match-signature-static-test.mjs ===\n✓ [PASS] Reference and Target share one deterministic schema\n✓ [PASS] Signature never stores raw image, path, file name, Blob, or Base64 data\n✓ [PASS] Identical signatures classify as ALREADY_CLOSE with near-zero need\n✓ [PASS] Warm reference versus cool target creates positive warmth delta\n✓ [PASS] Swapping Reference and Target reverses signed WB and tone deltas\n✓ [PASS] Circular hue delta handles the 359°/1° boundary correctly\n✓ [PASS] Low evidence fails closed as INSUFFICIENT_EVIDENCE\n✓ [PASS] Orchestrator is signature-only and hard-locks Production/XMP\n✓ [PASS] Invalid role or missing core evidence is rejected\n\n9/9 PASS, 0 FAIL\n\n=== qa/epic-2e-n1-core-color-match-integration-static-test.mjs ===\n✓ [PASS] N1 core modules never import Lightroom Mapping, Preset Engine, or XMP serializer\n✓ [PASS] Reference Color Match panel preserves N1 signatures inside the complete N1-N5 candidate pipeline\n✓ [PASS] N1 UI inspector exposes explicit Legacy and no-write semantic state\n✓ [PASS] Production and XMP source files retain exact baseline hashes\n✓ [PASS] N1 production lock contract is fail-closed\n✓ [PASS] N1 package does not claim Production readiness\n\n6/6 PASS, 0 FAIL\n\n=== qa/epic-2e-n2-photographic-compensation-static-test.mjs ===\n✓ [PASS] N2 creates bounded semantic intents without Lightroom/XMP write\n✓ [PASS] Uniform cross-zone cast is treated as illuminant evidence\n✓ [PASS] Inconsistent zones and dominant colour dampen WB as object bias\n✓ [PASS] Skin protection dampens red/orange/yellow transfer\n✓ [PASS] Highlight clipping risk reduces highlight transfer strength\n✓ [PASS] Low evidence blocks compensation fail-closed\n✓ [PASS] Already-close pair becomes safe identity\n\n7/7 PASS, 0 FAIL\n\n=== qa/epic-2e-n3-lightroom-candidate-static-test.mjs ===\n✓ [PASS] N3 maps semantic intent to complete bounded Lightroom preset\n✓ [PASS] Candidate XMP is serialized from the exact safe preset source\n✓ [PASS] N3 remains candidate-only and cannot write Production\n✓ [PASS] Reason trace covers WB, tone and HSL groups\n✓ [PASS] Candidate contains no image, Base64 or local path data\n\n5/5 PASS, 0 FAIL\n\n=== qa/epic-2e-n4-preview-evaluation-static-test.mjs ===\n✓ [PASS] Identity preset leaves all pixels unchanged\n✓ [PASS] Active safe preset changes real pixels and reports metrics\n✓ [PASS] Kelvin-calibrated preview moves positive Temperature warmer and negative Temperature cooler\n✓ [PASS] Evaluation scores a matched signature closer than target as improved\n✓ [PASS] Evaluation flags a worse matched signature as regression\n\n5/5 PASS, 0 FAIL\n\n=== qa/epic-2e-n5-evaluation-harness-static-test.mjs ===\n✓ [PASS] Evaluation record stores stable review data and deduplicates issues\n✓ [PASS] Evaluation record excludes XMP body and image/private path data\n✓ [PASS] Memory fallback saves, lists and clears records\n✓ [PASS] Unsupported reviewer decision fails closed\n\n4/4 PASS, 0 FAIL\n\n=== qa/epic-2e-n1-n5-integration-static-test.mjs ===\n✓ [PASS] Reference panel runs the complete N1-N5 pipeline\n✓ [PASS] UI semantic state exposes Candidate-only Production locks\n✓ [PASS] N2-N5 modules never activate Production or Controlled V2\n✓ [PASS] Production engine source hashes remain equal to N1 baseline\n✓ [PASS] Reference UI exports Candidate XMP explicitly, not Production XMP\n\n5/5 PASS, 0 FAIL\n\nAll static suites PASSED.\n",
+      "stderrTail": "(node:16220) ExperimentalWarning: VM Modules is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "label": "Core Color Match N1-N5 Browser Runtime",
+      "rel": "qa/epic-2e-n-core-color-match-browser-test.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "E_MORE_CONTRAST\",\n        \"REFERENCE_MORE_SATURATED\",\n        \"PALETTE_DISTRIBUTION_DIFFERS\"\n      ],\n      \"riskCodes\": [\n        \"HIGHLIGHT_CLIP_RISK\",\n        \"SKIN_PROTECTION_REQUIRED\"\n      ],\n      \"matchState\": \"MATCH_ADJUSTMENT_NEEDED\",\n      \"production\": {\n        \"productionSource\": \"legacy\",\n        \"productionWrite\": false,\n        \"xmpWriteAllowed\": false,\n        \"lightroomMappingAllowed\": false\n      }\n    },\n    \"compensation\": {\n      \"kind\": \"LUMIXA_PHOTOGRAPHIC_COMPENSATION\",\n      \"schemaVersion\": 1,\n      \"stage\": \"N2_PHOTOGRAPHIC_COMPENSATION\",\n      \"state\": \"SAFE_BOUNDED_MATCH\",\n      \"analysisGenerationId\": \"browser-n1-n5\",\n      \"intensity\": 68,\n      \"illuminant\": {\n        \"validZoneCount\": 3,\n        \"validZones\": [\n          \"shadow\",\n          \"midtone\",\n          \"highlight\"\n        ],\n        \"warmthSpread\": 8.58,\n        \"tintSpread\": 1.25,\n        \"zoneConsistency\": 0.819,\n        \"neutralEvidence\": 0.534,\n        \"dominantSceneBias\": 1,\n        \"paletteBias\": 0.53,\n        \"objectBiasScore\": 0.265,\n        \"illuminantConfidence\": 0.769,\n        \"transferStrength\": 0.622,\n        \"semanticWarmthIntent\": 12.02,\n        \"semanticTintIntent\": 2.035\n      },\n      \"objectColorBias\": {\n        \"score\": 0.265,\n        \"wbDampeningApplied\": 0.378\n      },\n      \"dynamicRange\": {\n        \"highlightRisk\": 0.526,\n        \"shadowRisk\": 0.067,\n        \"lowDynamicRangePenalty\": 1,\n        \"dynamicRangeMismatch\": 0.047,\n        \"highlightTransferStrength\": 0.371,\n        \"shadowTransferStrength\": 0.702,\n        \"globalToneStrength\": 0.771\n      },\n      \"skinProtection\": {\n        \"active\": true,\n        \"pairedSkinEvidence\": true,\n        \"targetConfidence\": 0.998,\n        \"coverageFactor\": 0.202,\n        \"hueRisk\": 0,\n        \"saturationRisk\": 0,\n        \"protectionStrength\": 0.74,\n        \"skinChannelTransferStrength\": 0.467,\n        \"globalWbTransferStrength\": 0.852\n      },\n      \"semanticIntents\": {\n        \"whiteBalance\": {\n          \"warmth\": 6.962,\n          \"tint\": 1.178\n        },\n        \"tone\": {\n          \"exposureEv\": 0.072,\n          \"contrast\": 2.412,\n          \"highlights\": 2.508,\n          \"shadows\": -0.601,\n          \"whites\": 2.018,\n          \"blacks\": -0.358,\n          \"tonalSpan\": 2.797\n        },\n        \"presence\": {\n          \"vibrance\": 2.363,\n          \"saturation\": 1.083,\n          \"clarity\": 0.816,\n          \"dehaze\": 1.088,\n          \"texture\": 0\n        },\n        \"hsl\": {\n          \"red\": {\n            \"hue\": 0,\n            \"saturation\": -1.858,\n            \"luminance\": -6.154,\n            \"sourceWeightDelta\": -0.203\n          },\n          \"orange\": {\n            \"hue\": 0,\n            \"saturation\": 3.508,\n            \"luminance\": 6.311,\n            \"sourceWeightDelta\": 0.8\n          },\n          \"yellow\": {\n            \"hue\": 0,\n            \"saturation\": 0,\n            \"luminance\": 0,\n            \"sourceWeightDelta\": 0\n          },\n          \"green\": {\n            \"hue\": -5.625,\n            \"saturation\": 1.376,\n            \"luminance\": 1.017,\n            \"sourceWeightDelta\": -0.053\n          },\n          \"aqua\": {\n            \"hue\": 0,\n            \"saturation\": 0,\n            \"luminance\": 0,\n            \"sourceWeightDelta\": 0\n          },\n          \"blue\": {\n            \"hue\": -3.288,\n            \"saturation\": 4.278,\n            \"luminance\": 0.129,\n            \"sourceWeightDelta\": -0.545\n          },\n          \"purple\": {\n            \"hue\": 0,\n            \"saturation\": 0,\n            \"luminance\": 0,\n            \"sourceWeightDelta\": 0\n          },\n          \"magenta\": {\n            \"hue\": 0,\n            \"saturation\": 0,\n            \"luminance\": 0,\n            \"sourceWeightDelta\": 0\n          }\n        }\n      },\n      \"reasonCodes\": [\n        \"ZONE_CONSISTENT_ILLUMINANT\",\n        \"NEUTRAL_EVIDENCE_SUPPORTS_WB\",\n        \"SKIN_PROTECTION_APPLIED\",\n        \"HIGHLIGHT_HEADROOM_PROTECTED\"\n      ],\n      \"warningCodes\": [\n        \"HIGHLIGHT_CLIP_RISK\",\n        \"SKIN_PROTECTION_REQUIRED\"\n      ],\n      \"evidence\": {\n        \"combinedConfidence\": 0.764,\n        \"matchNeedScore\": 13.34,\n        \"referenceConfidence\": 0.764,\n        \"targetConfidence\": 0.797\n      },\n      \"production\": {\n        \"productionSource\": \"legacy\",\n        \"productionWrite\": false,\n        \"xmpWriteAllowed\": false,\n        \"lightroomMappingAllowed\": false\n      }\n    },\n    \"matchedSignature\": {\n      \"kind\": \"LUMIXA_COLOR_MATCH_SIGNATURE\",\n      \"schemaVersion\": 1,\n      \"role\": \"TARGET\",\n      \"analysisGenerationId\": \"browser-n1-n5\",\n      \"whiteBalance\": {\n        \"warmth\": 8.56,\n        \"tint\": 1.34,\n        \"zones\": {\n          \"shadow\": {\n            \"warmth\": 6,\n            \"tint\": 0\n          },\n          \"midtone\": {\n            \"warmth\": 9,\n            \"tint\": 2\n          },\n          \"highlight\": {\n            \"warmth\": 9,\n            \"tint\": 0\n          }\n        }\n      },\n      \"tone\": {\n        \"shadowLuma\": 64.33,\n        \"midtoneLuma\": 124,\n        \"highlightLuma\": 196.33,\n        \"tonalSpan\": 132,\n        \"contrast\": 42,\n        \"blackPoint\": 47,\n        \"whitePoint\": 222,\n        \"zoneShares\": {\n          \"shadow\": 0.147,\n          \"midtone\": 0.672,\n          \"highlight\": 0.181\n        }\n      },\n      \"color\": {\n        \"channels\": {\n          \"red\": {\n            \"weight\": 0.1093,\n            \"meanHue\": 22,\n            \"meanSaturation\": 42,\n            \"meanLuminance\": 50,\n            \"sampleCount\": 1\n          },\n          \"orange\": {\n            \"weight\": 0.6092,\n            \"meanHue\": 32.86,\n            \"meanSaturation\": 15.94,\n            \"meanLuminance\": 54.62,\n            \"sampleCount\": 5\n          },\n          \"yellow\": {\n            \"weight\": 0,\n            \"meanHue\": 0,\n            \"meanSaturation\": 0,\n            \"meanLuminance\": 0,\n            \"sampleCount\": 0\n          },\n          \"green\": {\n            \"weight\": 0.1815,\n            \"meanHue\": 95,\n            \"meanSaturation\": 17,\n            \"meanLuminance\": 40,\n            \"sampleCount\": 1\n          },\n          \"aqua\": {\n            \"weight\": 0,\n            \"meanHue\": 0,\n            \"meanSaturation\": 0,\n            \"meanLuminance\": 0,\n            \"sampleCount\": 0\n          },\n          \"blue\": {\n            \"weight\": 0.1,\n            \"meanHue\": 206,\n            \"meanSaturation\": 40,\n            \"meanLuminance\": 45,\n            \"sampleCount\": 1\n          },\n          \"purple\": {\n            \"weight\": 0,\n            \"meanHue\": 0,\n            \"meanSaturation\": 0,\n            \"meanLuminance\": 0,\n            \"sampleCount\": 0\n          },\n          \"magenta\": {\n            \"weight\": 0,\n            \"meanHue\": 0,\n            \"meanSaturation\": 0,\n            \"meanLuminance\": 0,\n            \"sampleCount\": 0\n          }\n        },\n        \"totalWeight\": 1,\n        \"neutralShare\": 0,\n        \"weightedSaturation\": 21.39,\n        \"weightedLuminance\": 50.5,\n        \"dominantChannel\": \"orange\"\n      },\n      \"skin\": {\n        \"evidenceAvailable\": true,\n        \"detected\": true,\n        \"coveragePct\": 37.4,\n        \"confidence\": 0.956,\n        \"meanHue\": 0,\n        \"meanSaturation\": 0,\n        \"meanLuminance\": 0\n      },\n      \"style\": {\n        \"evidenceAvailable\": false,\n        \"mood\": null,\n        \"warmth\": null,\n        \"contrastLevel\": null,\n        \"harmonyScheme\": null,\n        \"overallConfidence\": 0\n      },\n      \"captureRisk\": {\n        \"clipHiPct\": 0,\n        \"clipLoPct\": 0,\n        \"dynamicRangeStops\": 2.21\n      },\n      \"evidence\": {\n        \"sources\": {\n          \"palette\": true,\n          \"toneZones\": true,\n          \"hsl\": false,\n          \"skin\": true,\n          \"histogram\": true\n        },\n        \"coverage\": 0.85,\n        \"confidence\": 0.719,\n        \"warningCodes\": [\n          \"HSL_EVIDENCE_PARTIAL\"\n        ]\n      }\n    },\n    \"production\": {\n      \"productionSource\": \"legacy\",\n      \"productionWrite\": false,\n      \"xmpWriteAllowed\": false,\n      \"candidateXmpInMemoryOnly\": true,\n      \"productionActivationAllowed\": false\n    }\n  }\n}\n",
+      "stderrTail": ""
+    },
+    {
+      "label": "Fresh Browser Evidence",
+      "rel": "qa/epic-2e-n-core-color-match-browser-results.json",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "{\"status\":\"PASS\",\"missingChecks\":[],\"browserExecutable\":\"/usr/bin/chromium\",\"browserVersion\":\"144.0.7559.96\",\"fidelityScore\":80.73,\"styleBefore\":19.673,\"styleAfter\":5.909,\"preview\":{\"width\":480,\"height\":360,\"pixelCount\":172800,\"changedPixels\":172800,\"changedPixelPct\":100,\"meanAbsoluteChannelDifference\":20.539,\"clippedHighlightPct\":0,\"clippedShadowPct\":0,\"identity\":false}}",
+      "stderrTail": ""
+    },
+    {
+      "label": "Legacy Production/XMP Invariant",
+      "rel": "qa/baselines/epic-2e-n-production-invariant.json",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "{\"status\":\"PASS\",\"manifest\":\"qa/baselines/epic-2e-n-production-invariant.json\",\"mismatches\":[],\"productionLocks\":{\"productionSource\":\"legacy\",\"productionWrite\":false,\"controlledV2Apply\":false,\"previewExport\":false,\"controlledV2ProductionActivation\":false,\"coreColorMatchCandidateOnly\":true}}",
+      "stderrTail": ""
+    },
+    {
+      "label": "Package Cleanliness",
+      "rel": ".",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "{\"status\":\"PASS\",\"forbiddenDirectories\":[],\"zipFiles\":[]}",
+      "stderrTail": ""
+    }
+  ],
+  "browserEvidence": {
+    "status": "PASS",
+    "missingChecks": [],
+    "browserExecutable": "/usr/bin/chromium",
+    "browserVersion": "144.0.7559.96",
+    "fidelityScore": 80.73,
+    "styleBefore": 19.673,
+    "styleAfter": 5.909,
+    "preview": {
+      "width": 480,
+      "height": 360,
+      "pixelCount": 172800,
+      "changedPixels": 172800,
+      "changedPixelPct": 100,
+      "meanAbsoluteChannelDifference": 20.539,
+      "clippedHighlightPct": 0,
+      "clippedShadowPct": 0,
+      "identity": false
+    }
+  },
+  "productionInvariant": {
+    "status": "PASS",
+    "manifest": "qa/baselines/epic-2e-n-production-invariant.json",
+    "mismatches": [],
+    "productionLocks": {
+      "productionSource": "legacy",
+      "productionWrite": false,
+      "controlledV2Apply": false,
+      "previewExport": false,
+      "controlledV2ProductionActivation": false,
+      "coreColorMatchCandidateOnly": true
+    }
+  },
+  "packageCleanliness": {
+    "status": "PASS",
+    "forbiddenDirectories": [],
+    "zipFiles": []
+  },
+  "releaseBoundary": {
+    "coreN1N5CandidateImplementationComplete": true,
+    "referenceColorMatchBetaStarted": false,
+    "productionSource": "legacy",
+    "productionWrite": false,
+    "candidateXmpInMemoryOnly": true,
+    "productionActivationAllowed": false,
+    "requiresRealPhotoAndLightroomValidationBeforeProduction": true
+  }
+}

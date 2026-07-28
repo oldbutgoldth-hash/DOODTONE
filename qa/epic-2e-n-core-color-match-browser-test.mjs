@@ -1,0 +1,53 @@
+#!/usr/bin/env node
+/** EPIC 2E-N1..N5 — real Chromium Reference/Target candidate runtime. */
+import { spawn } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { detectBrowserExecutable, detectPlaywrightPackage } from './helpers/playwright-lumixa-test-runtime.mjs';
+
+const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const RESULT_PATH=path.join(ROOT,'qa/epic-2e-n-core-color-match-browser-results.json');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function buildImportMap(){
+ const modules=new Map(); const re=/((?:import|export)\s+(?:[^'";]*?\s+from\s+)?)(['"])([^'"]+)\2/g;
+ async function visit(rel){rel=rel.replace(/\\/g,'/');if(modules.has(rel))return;let source=await fs.readFile(path.join(ROOT,rel),'utf8');const deps=[];source=source.replace(re,(full,prefix,q,spec)=>{if(!spec.startsWith('.'))return full;let resolved=path.posix.normalize(path.posix.join(path.posix.dirname(rel),spec));if(!path.posix.extname(resolved))resolved+='.js';deps.push(resolved);return `${prefix}${q}lumixa:/${resolved}${q}`});modules.set(rel,source);for(const d of deps)await visit(d);}
+ for(const entry of ['core/color-match/palette-extractor.js','core/color-match/tone-zone-analyzer.js','core/skin-classifier/index.js','core/histogram-engine/index.js','core/color-match/core-color-match-pipeline.js','core/color-match/candidate-preview-renderer.js','core/color-match/match-evaluation-engine.js','core/color-match/evaluation-store.js'])await visit(entry);
+ const imports={};for(const [rel,source] of modules)imports[`lumixa:/${rel}`]=`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;return imports;
+}
+async function dataUrl(rel,type='image/png'){return `data:${type};base64,${(await fs.readFile(path.join(ROOT,rel))).toString('base64')}`;}
+function harness(imports,referenceUrl,targetUrl){return `<!doctype html><meta charset="utf-8"><canvas id="after"></canvas><script type="importmap">${JSON.stringify({imports})}<\/script><script type="module">
+import {extractReferencePalette} from 'lumixa:/core/color-match/palette-extractor.js';
+import {analyzeToneZones} from 'lumixa:/core/color-match/tone-zone-analyzer.js';
+import {classifySkin} from 'lumixa:/core/skin-classifier/index.js';
+import {analyzeImage} from 'lumixa:/core/histogram-engine/index.js';
+import {buildCoreColorMatchPipeline} from 'lumixa:/core/color-match/core-color-match-pipeline.js';
+import {renderColorMatchCandidateToCanvas} from 'lumixa:/core/color-match/candidate-preview-renderer.js';
+import {buildMatchedSignatureFromAnalysis,evaluateMatchedSignature,createColorMatchEvaluationRecord} from 'lumixa:/core/color-match/match-evaluation-engine.js';
+import {createColorMatchEvaluationStore} from 'lumixa:/core/color-match/evaluation-store.js';
+const load=src=>new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=reject;i.src=src});
+const analyse=async img=>{const [palette,toneZones,skinAnalysis,histogram]=await Promise.all([extractReferencePalette(img),analyzeToneZones(img),classifySkin(img),analyzeImage(img)]);return {palette,toneZones,skinAnalysis,histogram}};
+try{
+ const ref=await load(${JSON.stringify(referenceUrl)}), tgt=await load(${JSON.stringify(targetUrl)});
+ const reference=await analyse(ref), target=await analyse(tgt);
+ const pipeline=buildCoreColorMatchPipeline({reference,target,analysisGenerationId:'browser-n1-n5',intensity:68});
+ const canvas=document.getElementById('after'); const preview=renderColorMatchCandidateToCanvas({image:tgt,canvas,preset:pipeline.candidate.safePreset,maxWidth:480});
+ const matched=await load(canvas.toDataURL('image/png')); const matchedEvidence=await analyse(matched);
+ const matchedSignature=buildMatchedSignatureFromAnalysis({...matchedEvidence,analysisGenerationId:'browser-n1-n5'});
+ const evaluation=evaluateMatchedSignature({referenceSignature:pipeline.analysis.referenceSignature,targetSignature:pipeline.analysis.targetSignature,matchedSignature,previewMetrics:preview,candidate:pipeline.candidate});
+ const record=createColorMatchEvaluationRecord({analysis:pipeline.analysis,compensation:pipeline.compensation,candidate:pipeline.candidate,evaluation,reviewerDecision:'NOT_SURE',issueCodes:[],notes:'browser proof'});
+ const store=await createColorMatchEvaluationStore({indexedDBFactory:null}); await store.save(record); const records=await store.list();
+ const checks={candidateMapped:pipeline.candidate.candidateState!=='BLOCKED',xmpSerialized:pipeline.candidate.candidateXmp.includes('<x:xmpmeta'),previewChanged:preview.changedPixels>0,afterAnalysed:Boolean(matchedSignature?.evidence),evaluationComplete:Boolean(evaluation?.status),recordSaved:records.length===1,noProduction:pipeline.production.productionSource==='legacy'&&pipeline.production.productionWrite===false&&pipeline.production.xmpWriteAllowed===false&&record.production.productionActivationAllowed===false,xmpSingleSource:evaluation.xmpFidelity.sameSourceOfTruth===true,styleDistanceReduced:evaluation.after.photographicStyleDistance<evaluation.before.photographicStyleDistance,whiteBalanceImproved:evaluation.improvement.whiteBalanceReductionPct>0,fidelityThreshold:evaluation.improvement.fidelityScore>=60,previewNoClipping:preview.clippedHighlightPct<=0.5&&preview.clippedShadowPct<=0.5,noPrivateData:!/(data:image|blob:|C:\\\\|\\/Users\\/|\\/home\\/)/.test(JSON.stringify(record))};
+ window.__LUMIXA_2EN__={completed:true,decision:Object.values(checks).every(Boolean)?'PASS':'FAIL',checks,preview,evaluation:{status:evaluation.status,before:evaluation.before.matchNeedScore,after:evaluation.after.matchNeedScore,fidelity:evaluation.improvement.fidelityScore,styleBefore:evaluation.before.photographicStyleDistance,styleAfter:evaluation.after.photographicStyleDistance,improvement:evaluation.improvement,beforeComponents:evaluation.before.components,afterComponents:evaluation.after.components},candidate:{state:pipeline.candidate.candidateState,xmpLength:pipeline.candidate.candidateXmpLength,safety:pipeline.candidate.safetyAdjustments.length,preset:pipeline.candidate.safePreset},referenceSignature:pipeline.analysis.referenceSignature,targetSignature:pipeline.analysis.targetSignature,delta:pipeline.analysis.delta,compensation:pipeline.compensation,matchedSignature,production:pipeline.production};
+}catch(error){window.__LUMIXA_2EN__={completed:true,decision:'FAIL',error:error?.stack||String(error)}}
+<\/script>`;}
+class Cdp{constructor(url){this.ws=new WebSocket(url);this.seq=0;this.pending=new Map();this.ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.id&&this.pending.has(m.id)){const p=this.pending.get(m.id);this.pending.delete(m.id);m.error?p.reject(new Error(JSON.stringify(m.error))):p.resolve(m.result)}}}async open(){await new Promise((r,j)=>{this.ws.onopen=r;this.ws.onerror=j});return this}send(method,params={}){return new Promise((r,j)=>{const id=++this.seq;this.pending.set(id,{resolve:r,reject:j});this.ws.send(JSON.stringify({id,method,params}))})}close(){try{this.ws.close()}catch{}}}
+async function sourceHash(){const h=createHash('sha256');for(const rel of ['core/color-match/reference-target-signature-engine.js','core/color-match/signature-delta-engine.js','core/color-match/photographic-compensation-engine.js','core/color-match/lightroom-candidate-mapper.js','core/color-match/candidate-preview-renderer.js','core/color-match/match-evaluation-engine.js','core/color-match/evaluation-store.js','core/color-match/core-color-match-pipeline.js'])h.update(rel).update(await fs.readFile(path.join(ROOT,rel)));return h.digest('hex')}
+async function write(o){await fs.writeFile(RESULT_PATH,JSON.stringify(o,null,2)+'\n')}
+const runId=randomUUID(),startedAt=new Date().toISOString(),hash=await sourceHash();const pw=await detectPlaywrightPackage();const detection=await detectBrowserExecutable(pw.chromium);
+if(!detection.available){const o={epic:'2E-N',suite:'CORE_COLOR_MATCH_N1_N5_BROWSER',decision:'NOT_VERIFIED',reason:'BROWSER_BINARY_UNAVAILABLE',completed:true,runId,startedAt,completedAt:new Date().toISOString(),sourceHash:hash,browser:detection};await write(o);console.log(JSON.stringify(o,null,2));process.exit(2)}
+const profile=await fs.mkdtemp(path.join(os.tmpdir(),'lumixa-2en-'));const args=['--headless=new','--disable-gpu','--disable-dev-shm-usage','--no-proxy-server','--proxy-bypass-list=*','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'];if(process.platform!=='win32')args.unshift('--no-sandbox');const browser=spawn(detection.executablePath,args,{stdio:['ignore','ignore','pipe']});let c=null;
+try{let port=null;for(let i=0;i<240;i++){try{const raw=await fs.readFile(path.join(profile,'DevToolsActivePort'),'utf8');port=Number(raw.split(/\r?\n/)[0]);if(port)break}catch{}await sleep(50)}if(!port)throw new Error('CDP_UNAVAILABLE');const targets=await fetch(`http://127.0.0.1:${port}/json/list`).then(r=>r.json());const target=targets.find(x=>x.type==='page');c=await new Cdp(target.webSocketDebuggerUrl).open();await c.send('Runtime.enable');const html=harness(await buildImportMap(),await dataUrl('qa/fixtures/core-color-match/reference-warm-editorial.png'),await dataUrl('qa/fixtures/core-color-match/target-cool-flat.png'));await c.send('Runtime.evaluate',{expression:`document.open();document.write(${JSON.stringify(html)});document.close();`,awaitPromise:true});let result=null;const end=Date.now()+90000;while(Date.now()<end){const p=await c.send('Runtime.evaluate',{expression:'window.__LUMIXA_2EN__?JSON.stringify(window.__LUMIXA_2EN__):null',returnByValue:true});if(p?.result?.value){result=JSON.parse(p.result.value);break}await sleep(150)}if(!result)throw new Error('RUNTIME_TIMEOUT');const o={epic:'2E-N',suite:'CORE_COLOR_MATCH_N1_N5_BROWSER',decision:result.decision,completed:true,runId,startedAt,completedAt:new Date().toISOString(),sourceHash:hash,browserExecutable:detection.executablePath,browserVersion:detection.versionOutput,result};await write(o);console.log(JSON.stringify(o,null,2));process.exitCode=result.decision==='PASS'?0:1}catch(error){const o={epic:'2E-N',suite:'CORE_COLOR_MATCH_N1_N5_BROWSER',decision:'FAIL',reason:error?.stack||error.message,completed:true,runId,startedAt,completedAt:new Date().toISOString(),sourceHash:hash,browserExecutable:detection.executablePath,browserVersion:detection.versionOutput};await write(o);console.error(JSON.stringify(o,null,2));process.exitCode=1}finally{c?.close();try{browser.kill('SIGTERM')}catch{}await sleep(200);try{browser.kill('SIGKILL')}catch{}await fs.rm(profile,{recursive:true,force:true}).catch(()=>{})}

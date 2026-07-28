@@ -108,3 +108,29 @@ FIX5 introduced a QA-only deterministic IndexedDB contract harness and a real Na
 - Successful saves return semantic Cohort receipts and update Candidate Pilot progress automatically.
 - Production remains Legacy; Production write, Controlled V2 Apply and Preview export remain disabled.
 - Release gate: FINAL_PASS.
+
+---
+
+## EPIC 2E-N1 — Core Color Match Signature Engine (v1.4.0)
+
+The project returned to its central objective: Reference image → Target image
+comparison → Lightroom-compatible Color Match. N1 adds a deterministic shared
+Signature Schema and semantic Delta Engine before any Lightroom Mapping. The
+new layer is shadow-only and explicitly cannot write Production or XMP.
+
+Key decision: values measured from the Reference must never be copied directly
+to the Target. Later mapping must consume the **difference between comparable
+signatures**, then apply photographic compensation for illuminant, object
+colour, skin, dynamic range and style intent.
+
+Next boundary: EPIC 2E-N2 may translate semantic delta evidence into bounded
+Lightroom recommendations, but must not activate Production until Preview/XMP
+fidelity and real-image Color Match improvement are proven.
+
+## EPIC 2E-O — Target-aware Color Match & Lightroom Round-trip Fidelity
+- Trigger: real wedding RAW test exposed excessive warmth/brightness when a warm dark portrait reference was transferred to a high-key target.
+- Added target-aware high-key/neutral-white, skin, and scene-object transfer protection.
+- Added RAW/rendered Lightroom compatibility profile and Lightroom-return import/evaluation workflow.
+- Browser Preview is explicitly approximate and not an Adobe Camera Raw renderer.
+- Real Lightroom-exported return image remains required before Reference Color Match Beta or Production.
+- Production remains Legacy; Candidate XMP is in-memory only.

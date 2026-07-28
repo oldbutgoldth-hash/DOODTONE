@@ -1,0 +1,609 @@
+{
+  "epic": "2E-O",
+  "suite": "TARGET_AWARE_ROUNDTRIP_BROWSER",
+  "decision": "PASS",
+  "completed": true,
+  "runId": "8ce43f93-54a1-4a86-849b-622dfb51017a",
+  "startedAt": "2026-07-28T04:05:26.478Z",
+  "completedAt": "2026-07-28T04:05:27.328Z",
+  "sourceHash": "23df0b3145ec64f074622ec7ed235a77786bb7b3f9bf16e2763dbfc65868c917",
+  "browserExecutable": "/usr/bin/chromium",
+  "browserVersion": "144.0.7559.96",
+  "result": {
+    "completed": true,
+    "decision": "PASS",
+    "checks": {
+      "candidateMapped": true,
+      "xmpSerialized": true,
+      "previewChanged": true,
+      "afterAnalysed": true,
+      "evaluationComplete": true,
+      "recordSaved": true,
+      "neutralWhiteProtection": true,
+      "highKeyDetected": true,
+      "skinProtection": true,
+      "sceneTransferDampened": true,
+      "newClippingBounded": true,
+      "rawCompatibility": true,
+      "roundTripVerified": true,
+      "noProduction": true,
+      "xmpSingleSource": true,
+      "noPrivateData": true
+    },
+    "preview": {
+      "width": 480,
+      "height": 360,
+      "pixelCount": 172800,
+      "changedPixels": 172800,
+      "changedPixelPct": 100,
+      "meanAbsoluteChannelDifference": 32.5,
+      "clippedHighlightPct": 0,
+      "clippedShadowPct": 0,
+      "sourceClippedHighlightPct": 0,
+      "sourceClippedShadowPct": 0,
+      "newlyClippedHighlightPct": 0,
+      "newlyClippedShadowPct": 0,
+      "recoveredHighlightPct": 0,
+      "recoveredShadowPct": 0,
+      "identity": false
+    },
+    "evaluation": {
+      "status": "MATCH_CANDIDATE_IMPROVED",
+      "before": 14.12,
+      "after": 6.96,
+      "fidelity": 53.04,
+      "styleBefore": 21.158,
+      "styleAfter": 11.538,
+      "improvement": {
+        "overallReductionPct": 45.47,
+        "whiteBalanceReductionPct": 55.91,
+        "toneReductionPct": 52.03,
+        "paletteReductionPct": 32.09,
+        "fidelityScore": 53.04
+      },
+      "diagnostics": {
+        "rawN1MatchNeedBefore": 14.12,
+        "rawN1MatchNeedAfter": 6.96,
+        "objectDistributionDistanceBefore": 71.93,
+        "objectDistributionDistanceAfter": 19.36,
+        "objectDistributionExcludedFromPrimaryDecision": true,
+        "protectionDiagnostics": {
+          "targetHighKeyEvidence": 0.912,
+          "neutralCastBefore": 2.31,
+          "neutralCastAfter": 11,
+          "neutralCastIncrease": 8.69,
+          "highlightLumaIncrease": 0,
+          "whitePointIncrease": 0,
+          "neutralWhiteRegressionRisk": 0.198,
+          "skinRiskBefore": 0.293,
+          "skinRiskAfter": 0.293,
+          "skinRegressionRisk": 0
+        },
+        "protectionPenalty": 5.54
+      }
+    },
+    "roundTrip": {
+      "kind": "LUMIXA_LIGHTROOM_ROUNDTRIP_FIDELITY",
+      "schemaVersion": 1,
+      "stage": "2E_O_LIGHTROOM_ROUNDTRIP_EVALUATION",
+      "status": "ROUND_TRIP_STRONG",
+      "fidelityScore": 100,
+      "directionAgrees": true,
+      "xmpSingleSource": true,
+      "distances": {
+        "targetToReference": {
+          "total": 21.158,
+          "whiteBalance": 12.621,
+          "tone": 33.469,
+          "transferableColor": 30.991,
+          "skin": 0,
+          "skinComparable": true,
+          "sharedPaletteWeight": 0.2807,
+          "objectDistributionDistance": 71.93,
+          "sharedZoneCount": 2
+        },
+        "previewToReference": {
+          "total": 11.538,
+          "whiteBalance": 5.564,
+          "tone": 16.056,
+          "transferableColor": 21.047,
+          "skin": 0,
+          "skinComparable": true,
+          "sharedPaletteWeight": 0.8064,
+          "objectDistributionDistance": 19.36,
+          "sharedZoneCount": 2
+        },
+        "lightroomToReference": {
+          "total": 11.538,
+          "whiteBalance": 5.564,
+          "tone": 16.056,
+          "transferableColor": 21.047,
+          "skin": 0,
+          "skinComparable": true,
+          "sharedPaletteWeight": 0.8064,
+          "objectDistributionDistance": 19.36,
+          "sharedZoneCount": 2
+        },
+        "previewToLightroom": {
+          "total": 0,
+          "whiteBalance": 0,
+          "tone": 0,
+          "transferableColor": 0,
+          "skin": 0,
+          "skinComparable": true,
+          "sharedPaletteWeight": 1,
+          "objectDistributionDistance": 0,
+          "sharedZoneCount": 2
+        }
+      },
+      "improvement": {
+        "previewPct": 45.47,
+        "lightroomPct": 45.47,
+        "disagreementPct": 0
+      },
+      "drift": {
+        "total": 0,
+        "whiteBalance": 0,
+        "tone": 0,
+        "transferableColor": 0,
+        "skin": 0
+      },
+      "compatibilityProfile": {
+        "kind": "LUMIXA_LIGHTROOM_COMPATIBILITY_PROFILE",
+        "schemaVersion": 1,
+        "sourceClass": "RAW",
+        "extension": "cr2",
+        "mimeType": null,
+        "processVersion": "11.0",
+        "parameterSupport": {
+          "whiteBalance": "CAMERA_RAW_RELATIVE",
+          "basicTone": "LIGHTROOM_2012_APPROXIMATE_PREVIEW",
+          "hsl": "DIRECT_PARAMETER_COMPATIBLE",
+          "colorGrading": "DIRECT_PARAMETER_APPROXIMATE_RENDER",
+          "toneCurve": "DIRECT_PARAMETER_APPROXIMATE_RENDER",
+          "calibration": "NOT_USED_BY_CANDIDATE"
+        },
+        "warningCodes": [
+          "BROWSER_PREVIEW_IS_NOT_ADOBE_RAW_RENDER"
+        ],
+        "roundTripRequired": true,
+        "production": {
+          "productionSource": "legacy",
+          "productionWrite": false,
+          "xmpWriteAllowed": false
+        }
+      },
+      "production": {
+        "productionSource": "legacy",
+        "productionWrite": false,
+        "xmpWriteAllowed": false,
+        "productionActivationAllowed": false
+      }
+    },
+    "candidate": {
+      "state": "MAPPED_CANDIDATE",
+      "xmpLength": 2855,
+      "safety": 0,
+      "preset": {
+        "name": "LUMIXA-Core-Color-Match-Candidate",
+        "exp": -21,
+        "con": 2,
+        "hi": -2,
+        "sh": 1,
+        "wh": -1,
+        "bl": -1,
+        "clarity": 1,
+        "dehaze": -2,
+        "texture": 0,
+        "temp": 2,
+        "tint": 0,
+        "vib": -2,
+        "sat": -1,
+        "sharp": 0,
+        "noise": 0,
+        "crv_sh": 6,
+        "crv_mid": 126,
+        "crv_hi": 247,
+        "hsl": {
+          "hsl_h_red": 0,
+          "hsl_s_red": -1,
+          "hsl_l_red": -2,
+          "hsl_h_orange": 0,
+          "hsl_s_orange": 0,
+          "hsl_l_orange": -1,
+          "hsl_h_yellow": 0,
+          "hsl_s_yellow": 0,
+          "hsl_l_yellow": 0,
+          "hsl_h_green": 2,
+          "hsl_s_green": -1,
+          "hsl_l_green": -5,
+          "hsl_h_aqua": 0,
+          "hsl_s_aqua": 0,
+          "hsl_l_aqua": 0,
+          "hsl_h_blue": -2,
+          "hsl_s_blue": -3,
+          "hsl_l_blue": -4,
+          "hsl_h_purple": 0,
+          "hsl_s_purple": 0,
+          "hsl_l_purple": 0,
+          "hsl_h_magenta": 0,
+          "hsl_s_magenta": 0,
+          "hsl_l_magenta": 0
+        },
+        "grade": {
+          "grd_sh_h": 215,
+          "grd_sh_s": 0,
+          "grd_sh_l": 0,
+          "grd_mid_h": 115,
+          "grd_mid_s": 0,
+          "grd_mid_l": 0,
+          "grd_hi_h": 42,
+          "grd_hi_s": 0,
+          "grd_hi_l": 0,
+          "grd_blend": 50
+        },
+        "cal": {
+          "cal_red_h": 0,
+          "cal_red_s": 0,
+          "cal_green_h": 0,
+          "cal_green_s": 0,
+          "cal_blue_h": 0,
+          "cal_blue_s": 0
+        },
+        "curves": {
+          "master": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 255,
+              "y": 255
+            }
+          ],
+          "red": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 255,
+              "y": 255
+            }
+          ],
+          "green": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 255,
+              "y": 255
+            }
+          ],
+          "blue": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 255,
+              "y": 255
+            }
+          ]
+        }
+      },
+      "compatibility": {
+        "kind": "LUMIXA_LIGHTROOM_COMPATIBILITY_PROFILE",
+        "schemaVersion": 1,
+        "sourceClass": "RAW",
+        "extension": "cr2",
+        "mimeType": null,
+        "processVersion": "11.0",
+        "parameterSupport": {
+          "whiteBalance": "CAMERA_RAW_RELATIVE",
+          "basicTone": "LIGHTROOM_2012_APPROXIMATE_PREVIEW",
+          "hsl": "DIRECT_PARAMETER_COMPATIBLE",
+          "colorGrading": "DIRECT_PARAMETER_APPROXIMATE_RENDER",
+          "toneCurve": "DIRECT_PARAMETER_APPROXIMATE_RENDER",
+          "calibration": "NOT_USED_BY_CANDIDATE"
+        },
+        "warningCodes": [
+          "BROWSER_PREVIEW_IS_NOT_ADOBE_RAW_RENDER"
+        ],
+        "roundTripRequired": true,
+        "production": {
+          "productionSource": "legacy",
+          "productionWrite": false,
+          "xmpWriteAllowed": false
+        }
+      }
+    },
+    "compensation": {
+      "kind": "LUMIXA_PHOTOGRAPHIC_COMPENSATION",
+      "schemaVersion": 1,
+      "stage": "N2_PHOTOGRAPHIC_COMPENSATION",
+      "state": "SAFE_BOUNDED_MATCH",
+      "analysisGenerationId": "browser-2e-o",
+      "intensity": 68,
+      "illuminant": {
+        "validZoneCount": 2,
+        "validZones": [
+          "midtone",
+          "highlight"
+        ],
+        "warmthSpread": 4.5,
+        "tintSpread": 1,
+        "zoneConsistency": 0.897,
+        "neutralEvidence": 0.534,
+        "dominantSceneBias": 1,
+        "paletteBias": 0.537,
+        "objectBiasScore": 0.197,
+        "illuminantConfidence": 0.801,
+        "transferStrength": 0.688,
+        "semanticWarmthIntent": 5.198,
+        "semanticTintIntent": 0.88
+      },
+      "objectColorBias": {
+        "score": 0.197,
+        "wbDampeningApplied": 0.312
+      },
+      "dynamicRange": {
+        "highlightRisk": 1,
+        "shadowRisk": 0,
+        "lowDynamicRangePenalty": 1,
+        "dynamicRangeMismatch": 0.069,
+        "highlightTransferStrength": 0.18,
+        "shadowTransferStrength": 0.75,
+        "globalToneStrength": 0.568
+      },
+      "skinProtection": {
+        "active": true,
+        "pairedSkinEvidence": true,
+        "targetConfidence": 0.857,
+        "coverageFactor": 0.078,
+        "hueRisk": 0,
+        "saturationRisk": 0,
+        "protectionStrength": 0.676,
+        "skinChannelTransferStrength": 0.514,
+        "globalWbTransferStrength": 0.865
+      },
+      "targetProtection": {
+        "kind": "LUMIXA_TARGET_AWARE_PROTECTION",
+        "schemaVersion": 1,
+        "stage": "2E_O_TARGET_AWARE_PROTECTION",
+        "neutralWhite": {
+          "active": true,
+          "enabled": true,
+          "strength": 0.597,
+          "referenceHighKeyScore": 0.021,
+          "targetHighKeyScore": 0.689,
+          "highKeyMismatch": 0.667,
+          "targetNeutralShare": 0.0203,
+          "highlightCastMagnitude": 2.31,
+          "whiteBalanceScale": 0.63,
+          "tintScale": 0.57,
+          "positiveExposureScale": 0.463,
+          "positiveHighlightScale": 0.439,
+          "positiveWhitesScale": 0.427,
+          "highlightGradingScale": 0.51,
+          "globalSaturationScale": 0.851
+        },
+        "skin": {
+          "active": true,
+          "confidence": 0.857,
+          "coverageFactor": 0.102,
+          "targetHue": 0,
+          "targetSaturation": 0,
+          "referenceSkinComparable": true,
+          "referenceHueDistance": 30,
+          "targetAlreadyWarm": false,
+          "targetAlreadySaturated": false,
+          "naturalityRisk": 0.051,
+          "strength": 0.629,
+          "globalWarmthScale": 0.887,
+          "globalTintScale": 0.925,
+          "skinChannelScale": 0.56,
+          "warmSaturationScale": 0.698,
+          "gradingScale": 0.635
+        },
+        "sceneColor": {
+          "channels": {
+            "red": {
+              "referenceWeight": 0,
+              "targetWeight": 0.5658,
+              "overlapRatio": 0,
+              "distributionMismatch": 0.5658,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            },
+            "orange": {
+              "referenceWeight": 0.8,
+              "targetWeight": 0.1322,
+              "overlapRatio": 0.165,
+              "distributionMismatch": 0.6678,
+              "bothPresent": true,
+              "transferStrength": 0.12
+            },
+            "yellow": {
+              "referenceWeight": 0,
+              "targetWeight": 0,
+              "overlapRatio": 0,
+              "distributionMismatch": 0,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            },
+            "green": {
+              "referenceWeight": 0.1,
+              "targetWeight": 0.2535,
+              "overlapRatio": 0.394,
+              "distributionMismatch": 0.1535,
+              "bothPresent": true,
+              "transferStrength": 0.365
+            },
+            "aqua": {
+              "referenceWeight": 0,
+              "targetWeight": 0,
+              "overlapRatio": 0,
+              "distributionMismatch": 0,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            },
+            "blue": {
+              "referenceWeight": 0.1,
+              "targetWeight": 0.0485,
+              "overlapRatio": 0.485,
+              "distributionMismatch": 0.0515,
+              "bothPresent": true,
+              "transferStrength": 0.497
+            },
+            "purple": {
+              "referenceWeight": 0,
+              "targetWeight": 0,
+              "overlapRatio": 0,
+              "distributionMismatch": 0,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            },
+            "magenta": {
+              "referenceWeight": 0,
+              "targetWeight": 0,
+              "overlapRatio": 0,
+              "distributionMismatch": 0,
+              "bothPresent": false,
+              "transferStrength": 0.06
+            }
+          },
+          "dampenedCount": 8,
+          "sharedCount": 0
+        },
+        "reasonCodes": [
+          "HIGH_KEY_TARGET_PROTECTED",
+          "NEUTRAL_WHITE_PROTECTED",
+          "POSITIVE_EXPOSURE_DAMPENED",
+          "HIGHLIGHT_WARMTH_DAMPENED",
+          "SCENE_OBJECT_CHANNEL_DAMPENED"
+        ],
+        "production": {
+          "productionSource": "legacy",
+          "productionWrite": false,
+          "xmpWriteAllowed": false,
+          "productionActivationAllowed": false
+        }
+      },
+      "semanticIntents": {
+        "whiteBalance": {
+          "warmth": 1.71,
+          "tint": 0.273
+        },
+        "tone": {
+          "exposureEv": -0.2075,
+          "contrast": 1.777,
+          "highlights": -2.33,
+          "shadows": 1,
+          "whites": -0.826,
+          "blacks": -1.148,
+          "tonalSpan": -3.862
+        },
+        "presence": {
+          "vibrance": -1.871,
+          "saturation": -0.858,
+          "clarity": 0.816,
+          "dehaze": -2.04,
+          "texture": 0
+        },
+        "hsl": {
+          "red": {
+            "hue": 0,
+            "saturation": -0.554,
+            "luminance": -1.689,
+            "sourceWeightDelta": -0.566,
+            "transferability": 0.06
+          },
+          "orange": {
+            "hue": 0.026,
+            "saturation": 0.101,
+            "luminance": -0.94,
+            "sourceWeightDelta": 0.668,
+            "transferability": 0.12
+          },
+          "yellow": {
+            "hue": 0,
+            "saturation": 0,
+            "luminance": 0,
+            "sourceWeightDelta": 0,
+            "transferability": 0.06
+          },
+          "green": {
+            "hue": 1.707,
+            "saturation": -1.318,
+            "luminance": -4.761,
+            "sourceWeightDelta": -0.153,
+            "transferability": 0.365
+          },
+          "aqua": {
+            "hue": 0,
+            "saturation": 0,
+            "luminance": 0,
+            "sourceWeightDelta": 0,
+            "transferability": 0.06
+          },
+          "blue": {
+            "hue": -1.56,
+            "saturation": -3.424,
+            "luminance": -4.324,
+            "sourceWeightDelta": 0.052,
+            "transferability": 0.497
+          },
+          "purple": {
+            "hue": 0,
+            "saturation": 0,
+            "luminance": 0,
+            "sourceWeightDelta": 0,
+            "transferability": 0.06
+          },
+          "magenta": {
+            "hue": 0,
+            "saturation": 0,
+            "luminance": 0,
+            "sourceWeightDelta": 0,
+            "transferability": 0.06
+          }
+        }
+      },
+      "reasonCodes": [
+        "ZONE_CONSISTENT_ILLUMINANT",
+        "NEUTRAL_EVIDENCE_SUPPORTS_WB",
+        "SKIN_PROTECTION_APPLIED",
+        "HIGHLIGHT_HEADROOM_PROTECTED",
+        "TARGET_HIGH_KEY_PROTECTED",
+        "NEUTRAL_WHITE_PROTECTION_APPLIED",
+        "SCENE_CHANNEL_TRANSFER_DAMPENED"
+      ],
+      "warningCodes": [
+        "HIGHLIGHT_CLIP_RISK",
+        "SKIN_PROTECTION_REQUIRED",
+        "LARGE_TONE_SHIFT"
+      ],
+      "evidence": {
+        "combinedConfidence": 0.711,
+        "matchNeedScore": 14.12,
+        "referenceConfidence": 0.764,
+        "targetConfidence": 0.711
+      },
+      "production": {
+        "productionSource": "legacy",
+        "productionWrite": false,
+        "xmpWriteAllowed": false,
+        "lightroomMappingAllowed": false
+      }
+    },
+    "production": {
+      "productionSource": "legacy",
+      "productionWrite": false,
+      "xmpWriteAllowed": false,
+      "candidateXmpInMemoryOnly": true,
+      "productionActivationAllowed": false
+    }
+  }
+}

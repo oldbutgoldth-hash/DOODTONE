@@ -1,0 +1,19 @@
+{
+  "epic": "2E-N1",
+  "version": "1.4.0",
+  "files": {
+    "core/color-match/signature-schema.js": "be4e1070808821e05bd2c03a00443e0a1d09108256739a8217fdf1be697a2af1",
+    "core/color-match/reference-target-signature-engine.js": "e0ad7b1e9ae951181ab933be332d57a86bcd6c878194c9baddbccf596e84a38d",
+    "core/color-match/signature-delta-engine.js": "4810665c62fddb95cf8ec82e7c6c8fe5925c2679435cadc0abc9c2b9bcc07086",
+    "core/color-match/core-color-match-analysis.js": "fd9e8d1044d1940ad8dc97bd097563da7a9e635bbeff581fe6c323a10894ab48",
+    "ui/reference-color-match-panel.js": "e5ffcbacf0fc90c8aa0b69d8148fd8cc42cfe121140dc72f028540726725233e",
+    "core/project-version.js": "02f74b4af1d772fc93777610225dbd5f608b17dda92980e7905f19578b5a541b",
+    "qa/epic-2e-n1-core-color-match-signature-static-test.mjs": "f2ed1c209d79599e444a8d16cfaa5c159e52173641ca18b7f3560c6721eab7ff",
+    "qa/epic-2e-n1-core-color-match-integration-static-test.mjs": "d7c011f0b18c315f8950e82aab781a5e6a4120b93dcf91cb6ec4a2e5d0f70bf2",
+    "qa/epic-2e-n1-core-color-match-browser-test.mjs": "fc67afa4337003b4b6a32499f0cd6363d26983ac82d587c885b9adef3e8194ff",
+    "qa/epic-2e-n1-release-gate.mjs": "ff2923a3b1c74da63d04858215307c94ad44f62d51e69610c728ee9c901b062c",
+    "qa/baselines/epic-2e-n1-production-invariant.json": "c5e71767bd1c48c2aa6b37bb03590f988dde9a5ff62064f167fabc12acaaa366",
+    "qa/epic-2e-n1-release-gate-results.json": "a3cd8c76a445b0e1d3465c5b3e77f4cf28de7e6e8d17208e4d2521e000a6dde2",
+    "qa/epic-2e-n1-core-color-match-browser-results.json": "2b66f1cb4a9bedf850c2177f00b8e5788515088b4a2b91c1853327bae1f490f4"
+  }
+}

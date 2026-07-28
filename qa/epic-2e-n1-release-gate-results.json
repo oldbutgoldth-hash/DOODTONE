@@ -1,0 +1,55 @@
+{
+  "epic": "2E-N1",
+  "suite": "CORE_COLOR_MATCH_SIGNATURE_RELEASE_GATE",
+  "decision": "FINAL_PASS",
+  "completed": true,
+  "runId": "2ec362ed-767d-4540-b29b-49fa74a77e79",
+  "startedAt": "2026-07-28T02:28:47.894Z",
+  "completedAt": "2026-07-28T02:28:52.368Z",
+  "sourceHash": "59e047215a77899e0434b46eda899fbfb979c9b09f875c97dbf83dd329b1f51d",
+  "steps": [
+    {
+      "label": "ESM Syntax",
+      "rel": "tools/esm-syntax-gate.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "[esm-syntax-gate] PASS -- 204/204 files parsed cleanly as ES modules.\n",
+      "stderrTail": ""
+    },
+    {
+      "label": "Full Static Suites",
+      "rel": "qa/run-static-suites.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "te.\"],\"primaryGuidance\":\"The preview is generated independently. Review the remaining visual item(s) (6 of 6 left).\",\"primaryGuidanceCode\":\"PREVIEW_READY_REVIEW_REMAINING\",\"primaryGuidanceParams\":{\"remaining\":6,\"total\":6}}\n✓ [PASS] Review state hard-locks Production source to Legacy — {}\n✓ [PASS] Review state cannot write Production/XMP or export preview — {\"productionWrite\":false,\"controlledV2Apply\":false,\"previewExport\":false,\"productionActivationAllowed\":false}\n✓ [PASS] Direct Candidate Review update is blocked before pixel evidence — {\"lastActionError\":\"PREVIEW_EVIDENCE_REQUIRED\"}\n✓ [PASS] Blocked pre-evidence update does not mark item passed — {}\n✓ [PASS] Candidate Review becomes available only after both previews render — {}\n✓ [PASS] Candidate Review update still cannot enable Production/XMP — {}\n✓ [PASS] All six visual checks complete Candidate Review only — {\"candidateReviewStatus\":\"approved\",\"visualPassed\":6}\n✓ [PASS] Even fully-approved Candidate Review keeps Legacy Production and XMP/write paths locked — {\"productionSource\":\"legacy\",\"productionWrite\":false,\"controlledV2Apply\":false,\"previewExport\":false}\n✓ [PASS] Authoritative Preview Sandbox disables only the Human Review preview gate — {}\n✓ [PASS] View Preview control never re-runs Analysis — {}\n✓ [PASS] App re-renders Candidate Review when pixel render settles — {}\n✓ [PASS] Controller blocks Candidate Review before evidence — {}\n✓ [PASS] Renderer disables Candidate Review controls and note fields before evidence — {}\n✓ [PASS] New analysis generation archives and invalidates prior Candidate Review — {}\n\n19/19 PASS, 0 FAIL\n\n=== qa/epic-2e-l-candidate-pilot-static-test.mjs ===\n✓ [PASS] Candidate Pilot status vocabulary never includes PRODUCTION_READY\n✓ [PASS] Eligibility requires real browser-verified visual evidence and a reviewed decision\n✓ [PASS] Cohort selector excludes migrated, pending and unverified records\n✓ [PASS] Wilson interval is bounded and conservative\n✓ [PASS] Empty dataset is PILOT_NOT_STARTED\n✓ [PASS] Small verified dataset is insufficient, never candidate-ready\n✓ [PASS] Coverage gaps are reported after sample floor is met\n✓ [PASS] Safety hard stop halts the Pilot\n✓ [PASS] Category regression halts the Pilot\n✓ [PASS] Weak V2 advantage needs more evidence rather than passing\n✓ [PASS] Strong, covered, verified cohort reaches candidate evaluation only\n✓ [PASS] Cohort hash is deterministic and changes when a decision changes\n✓ [PASS] Candidate Pilot export contains no image payload, path, preset or XMP field\n\n13/13 PASS, 0 FAIL\n\n=== qa/epic-2e-l-candidate-pilot-integration-static-test.mjs ===\n✓ [PASS] Calibration mode vocabulary includes PILOT\n✓ [PASS] Controller exposes Candidate Pilot report and export\n✓ [PASS] Renderer exposes a semantic Candidate Pilot mode and safe export control\n✓ [PASS] Pilot core hard-locks Production values\n✓ [PASS] Pilot exporter refuses image/XMP/preset-shaped keys\n✓ [PASS] EN/TH Candidate Pilot dictionary coverage is complete\n\n6/6 PASS, 0 FAIL\n\n=== qa/epic-2e-m-guided-cohort-intake-static-test.mjs ===\n✓ [PASS] next-pending navigation moves forward and wraps\n✓ [PASS] next-pending navigation returns -1 after all images are reviewed\n✓ [PASS] valid saved review produces a Cohort receipt with hard Production locks\n✓ [PASS] saved but unverified review is reported honestly as excluded\n✓ [PASS] renderer exposes a prominent guided save bar and save-and-next control\n✓ [PASS] save controls require both pixel eligibility and an explicit decision\n✓ [PASS] controller publishes semantic save receipts and next-pending navigation\n✓ [PASS] Thai and English guided Cohort copy is present without changing canonical codes\n✓ [PASS] guided Cohort UX contains no Production activation or XMP write action\n\n9/9 PASS, 0 FAIL\n\n=== qa/epic-2e-n1-core-color-match-signature-static-test.mjs ===\n✓ [PASS] Reference and Target share one deterministic schema\n✓ [PASS] Signature never stores raw image, path, file name, Blob, or Base64 data\n✓ [PASS] Identical signatures classify as ALREADY_CLOSE with near-zero need\n✓ [PASS] Warm reference versus cool target creates positive warmth delta\n✓ [PASS] Swapping Reference and Target reverses signed WB and tone deltas\n✓ [PASS] Circular hue delta handles the 359°/1° boundary correctly\n✓ [PASS] Low evidence fails closed as INSUFFICIENT_EVIDENCE\n✓ [PASS] Orchestrator is signature-only and hard-locks Production/XMP\n✓ [PASS] Invalid role or missing core evidence is rejected\n\n9/9 PASS, 0 FAIL\n\n=== qa/epic-2e-n1-core-color-match-integration-static-test.mjs ===\n✓ [PASS] N1 core modules never import Lightroom Mapping, Preset Engine, or XMP serializer\n✓ [PASS] Reference Color Match panel uses N1 as shadow evidence only\n✓ [PASS] N1 UI inspector exposes explicit Legacy and no-write semantic state\n✓ [PASS] Production and XMP source files retain exact baseline hashes\n✓ [PASS] N1 production lock contract is fail-closed\n✓ [PASS] N1 package does not claim Production readiness\n\n6/6 PASS, 0 FAIL\n\nAll static suites PASSED.\n",
+      "stderrTail": "(node:7892) ExperimentalWarning: VM Modules is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "label": "Core Color Match Browser Runtime",
+      "rel": "qa/epic-2e-n1-core-color-match-browser-test.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "{\n  \"epic\": \"2E-N1\",\n  \"suite\": \"CORE_COLOR_MATCH_BROWSER\",\n  \"decision\": \"PASS\",\n  \"completed\": true,\n  \"runId\": \"589db702-6d00-4950-81ba-39d5e784ddbc\",\n  \"startedAt\": \"2026-07-28T02:28:51.790Z\",\n  \"completedAt\": \"2026-07-28T02:28:52.153Z\",\n  \"sourceHash\": \"c11cc1e61c17a757723a800e0f233f0e31da2e670f18821d497dc581f3dcf152\",\n  \"browserExecutable\": \"/usr/bin/chromium\",\n  \"browserVersion\": \"144.0.7559.96\",\n  \"result\": {\n    \"completed\": true,\n    \"decision\": \"PASS\",\n    \"matchState\": \"LARGE_ADJUSTMENT_REVIEW_REQUIRED\",\n    \"matchNeedScore\": 18.09,\n    \"warmthDelta\": 37,\n    \"production\": {\n      \"productionSource\": \"legacy\",\n      \"productionWrite\": false,\n      \"xmpWriteAllowed\": false,\n      \"lightroomMappingAllowed\": false\n    }\n  }\n}\n",
+      "stderrTail": ""
+    },
+    {
+      "label": "Production/XMP Source Invariant",
+      "rel": "qa/baselines/epic-2e-n1-production-invariant.json",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "{\"status\":\"PASS\",\"mismatches\":[],\"productionLocks\":{\"productionSource\":\"legacy\",\"productionWrite\":false,\"xmpWriteAllowedByN1\":false,\"lightroomMappingAllowedByN1\":false}}",
+      "stderrTail": ""
+    }
+  ],
+  "productionInvariant": {
+    "status": "PASS",
+    "mismatches": [],
+    "productionLocks": {
+      "productionSource": "legacy",
+      "productionWrite": false,
+      "xmpWriteAllowedByN1": false,
+      "lightroomMappingAllowedByN1": false
+    }
+  },
+  "boundary": "Reference/Target signature and semantic delta only. N1 cannot write Lightroom Mapping, Production, preset, or XMP."
+}

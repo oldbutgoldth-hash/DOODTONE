@@ -1,0 +1,25 @@
+{
+  "epic": "2E-N1",
+  "suite": "CORE_COLOR_MATCH_BROWSER",
+  "decision": "PASS",
+  "completed": true,
+  "runId": "033439eb-23d9-4d23-9f38-48ebe877034a",
+  "startedAt": "2026-07-28T03:18:08.067Z",
+  "completedAt": "2026-07-28T03:18:08.425Z",
+  "sourceHash": "edac734d8e726e353e21f710098b48344d216e79df977db65bccfb96684be5bb",
+  "browserExecutable": "/usr/bin/chromium",
+  "browserVersion": "144.0.7559.96",
+  "result": {
+    "completed": true,
+    "decision": "PASS",
+    "matchState": "LARGE_ADJUSTMENT_REVIEW_REQUIRED",
+    "matchNeedScore": 18.09,
+    "warmthDelta": 37,
+    "production": {
+      "productionSource": "legacy",
+      "productionWrite": false,
+      "xmpWriteAllowed": false,
+      "lightroomMappingAllowed": false
+    }
+  }
+}
