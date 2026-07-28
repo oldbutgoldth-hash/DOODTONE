@@ -21,6 +21,16 @@ import { createColorMatchEvaluationStore } from '../core/color-match/evaluation-
 import { downloadXMP } from '../core/preset-engine/index.js';
 import { evaluateLightroomRoundTrip } from '../core/color-match/lightroom-roundtrip-fidelity-engine.js';
 import { buildPerceptualPixelTransfer } from '../core/color-match/perceptual-pixel-transfer-engine.js';
+import { analyzeWhiteBalance } from '../core/whitebalance-engine/index.js';
+import { generateBasicPanel } from '../core/basic-panel-engine/index.js';
+import { generateToneCurves } from '../core/tone-curve-ai-engine/index.js';
+import { analyzeHSL } from '../core/hsl-analyzer-engine/index.js';
+import { analyzeColorGrading } from '../core/colorgrading-ai-engine/index.js';
+import { analyzeCalibration } from '../core/calibration-engine/index.js';
+import { analyzeImageCore } from '../core/image-analysis-core/index.js';
+import { analyzeSkinTone } from '../core/skintone-engine/index.js';
+import { generateHarmonies } from '../core/color-harmony-engine/index.js';
+
 
 const MODES = Object.freeze({ Natural: 1, Cinematic: 1.08, Vintage: 0.92, Soft: 0.78, Bold: 1.15 });
 const DECISIONS = Object.freeze([
@@ -69,12 +79,41 @@ const rcm = {
   storedRecordCount: 0,
   pixelTransfer: null,
   pixelTransferKey: null,
+  workflow: { id: 'REFERENCE_COLOR_MATCH_BETA', previewState: 'WAITING_FOR_IMAGES', previewError: null },
 };
 
 function $(id) { return document.getElementById(id); }
 function signed(value, digits = 1) { const n = Number(value) || 0; return `${n > 0 ? '+' : ''}${n.toFixed(digits)}`; }
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[c])); }
 function _setStatus(text) { const el = $('rcmStatus'); if (el) el.textContent = text; }
+
+function _setMatchedPreviewState(state, message = '', errorCode = '') {
+  rcm.workflow.previewState = state;
+  rcm.workflow.previewError = errorCode || null;
+  const box = $('rcmMatchedPreviewState');
+  if (!box) return;
+  const labels = {
+    WAITING_FOR_IMAGES: 'รอภาพ Reference และ Target',
+    REFERENCE_ANALYSIS_PENDING: 'กำลังวิเคราะห์ภาพต้นแบบ',
+    TARGET_ANALYSIS_PENDING: 'กำลังวิเคราะห์ภาพ Target',
+    PAIRWISE_FUSION_PENDING: 'กำลังรวมผล Core แบบ Pairwise',
+    RENDERING: 'กำลังสร้าง Target Matched Preview',
+    READY: 'Target Matched Preview พร้อมแล้ว',
+    ERROR: 'สร้าง Target Matched Preview ไม่สำเร็จ',
+  };
+  box.dataset.state = state;
+  box.style.display = state === 'READY' ? 'none' : 'flex';
+  box.innerHTML = `<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:${state === 'ERROR' ? 'var(--danger,#ff6b6b)' : 'var(--accent)'}">${escapeHtml(labels[state] || state)}</div>${message ? `<div style="font-size:11px;color:var(--text-dim);line-height:1.45;margin-top:4px">${escapeHtml(message)}</div>` : ''}${errorCode ? `<div style="font-family:var(--font-mono);font-size:9px;color:var(--text-faint);margin-top:4px">${escapeHtml(errorCode)}</div>` : ''}`;
+}
+
+function _clearMatchedCanvas() {
+  const canvas = $('rcmAfterCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = Math.max(1, canvas.width || 1);
+  canvas.height = Math.max(1, canvas.height || 1);
+  ctx?.clearRect(0, 0, canvas.width, canvas.height);
+}
 
 function _loadImageFile(file, onReady) {
   if (!file?.type?.startsWith('image/')) return;
@@ -107,14 +146,61 @@ function _canvasToImage(canvas) {
   });
 }
 
+function _sliderValue(result) {
+  if (Number.isFinite(Number(result))) return Number(result);
+  for (const key of ['value','adjustment','slider','amount']) if (Number.isFinite(Number(result?.[key]))) return Number(result[key]);
+  return 0;
+}
+function _curvePoints(curve) {
+  const points = curve?.points || curve;
+  if (!Array.isArray(points)) return null;
+  return points.map(p => ({ x: Number(p.x ?? p.input ?? 0), y: Number(p.y ?? p.output ?? 0) }));
+}
+function _adaptHsl(result) {
+  const channels = {};
+  for (const name of ['red','orange','yellow','green','aqua','blue','purple','magenta']) {
+    const c = result?.channels?.[name] || result?.[name] || {};
+    channels[name] = { hue:_sliderValue(c.hue), saturation:_sliderValue(c.saturation ?? c.sat), luminance:_sliderValue(c.luminance ?? c.lum) };
+  }
+  return channels;
+}
+function _adaptGrading(result) {
+  const z = name => result?.[name] || {};
+  return {
+    shadows:{hue:_sliderValue(z('shadows').hue),saturation:_sliderValue(z('shadows').sat ?? z('shadows').saturation),luminance:_sliderValue(z('shadows').luminance)},
+    midtones:{hue:_sliderValue(z('midtones').hue),saturation:_sliderValue(z('midtones').sat ?? z('midtones').saturation),luminance:_sliderValue(z('midtones').luminance)},
+    highlights:{hue:_sliderValue(z('highlights').hue),saturation:_sliderValue(z('highlights').sat ?? z('highlights').saturation),luminance:_sliderValue(z('highlights').luminance)},
+    blending:_sliderValue(result?.blending ?? 50),
+  };
+}
 async function _analyzeEvidence(img) {
   const [palette, toneZones, skinAnalysis, histogram] = await Promise.all([
-    extractReferencePalette(img),
-    analyzeToneZones(img),
-    classifySkin(img),
-    analyzeImage(img),
+    extractReferencePalette(img), analyzeToneZones(img), classifySkin(img), analyzeImage(img),
   ]);
-  return { palette, toneZones, skinAnalysis, histogram };
+  const category = skinAnalysis?.detected ? 'Portrait' : 'General';
+  const [whiteBalance, toneCurve, hsl, grading, calibration, imageCore, skinTone] = await Promise.all([
+    analyzeWhiteBalance(img,{category,skinPct:skinAnalysis?.coveragePct || 0}),
+    generateToneCurves(img,histogram),
+    analyzeHSL(img,{category}),
+    analyzeColorGrading(img,{category}),
+    analyzeCalibration(img,{category,skinPct:skinAnalysis?.coveragePct || 0}),
+    analyzeImageCore(img),
+    analyzeSkinTone(img),
+  ]);
+  const basic = generateBasicPanel(histogram);
+  const coreOutputs = {
+    whiteBalancePro:{confidence:whiteBalance?.consensus?.confidence ?? .5,recommendedAdjustments:{temperature:whiteBalance?.consensus?.temperature ?? 0,tint:whiteBalance?.consensus?.tint ?? 0},evidence:whiteBalance},
+    lightroomBasicPanel:{confidence:basic?.confidence ?? .5,recommendedAdjustments:{exposure:_sliderValue(basic.exposure),contrast:_sliderValue(basic.contrast),highlights:_sliderValue(basic.highlights),shadows:_sliderValue(basic.shadows),whites:_sliderValue(basic.whites),blacks:_sliderValue(basic.blacks)},evidence:basic},
+    toneCurveAI:{confidence:toneCurve?.confidence ?? .5,recommendedAdjustments:{curves:{master:_curvePoints(toneCurve?.master),red:_curvePoints(toneCurve?.red),green:_curvePoints(toneCurve?.green),blue:_curvePoints(toneCurve?.blue)}},evidence:{warnings:toneCurve?.warnings}},
+    hslAnalyzerPro:{confidence:hsl?.confidence ?? .5,recommendedAdjustments:{channels:_adaptHsl(hsl)},evidence:hsl},
+    colorGradingAI:{confidence:grading?.confidence ?? .5,recommendedAdjustments:_adaptGrading(grading),evidence:{look:grading?.look,warnings:grading?.warnings}},
+    calibrationEngine:{confidence:calibration?.confidence ?? .5,recommendedAdjustments:{red:{hue:_sliderValue(calibration?.red?.hue),saturation:_sliderValue(calibration?.red?.sat)},green:{hue:_sliderValue(calibration?.green?.hue),saturation:_sliderValue(calibration?.green?.sat)},blue:{hue:_sliderValue(calibration?.blue?.hue),saturation:_sliderValue(calibration?.blue?.sat)}},evidence:calibration},
+    imageAnalysisCore:{confidence:imageCore?.confidence ?? .6,evidence:imageCore},
+    colourPaletteKMeans:{confidence:.8,evidence:palette}, histogramMetrics:{confidence:.8,evidence:histogram}, toneZoneAnalyzer:{confidence:.8,evidence:toneZones},
+    colorHarmony:{confidence:.6,evidence:generateHarmonies(palette?.colors || [])}, skinToneDetectionPro:{confidence:skinTone?.confidence ?? .5,evidence:skinTone,constraints:{detected:skinAnalysis?.detected}},
+    featureFusionEngine:{confidence:.75,evidence:{source:'reference-color-match-panel'}}, decisionEngine:{confidence:.75,evidence:{category}}, xmpValidator:{confidence:1,evidence:{enabled:true}},
+  };
+  return { palette, toneZones, skinAnalysis, histogram, coreOutputs };
 }
 
 function _renderPalette(palette) {
@@ -219,6 +305,9 @@ function _renderCoreMatchInspector() {
   el.dataset.roundTripStatus = rcm.roundTripFidelity?.status ?? 'NOT_TESTED';
   el.dataset.pixelTransferState = pipeline.transferEvidence?.pixelTransfer?.state ?? 'NOT_AVAILABLE';
   el.dataset.gaussianHslConfidence = String(pipeline.transferEvidence?.gaussianHsl?.confidence ?? 0);
+  el.dataset.coreFusionGate = pipeline.unifiedFusion?.gate?.decision ?? 'NOT_AVAILABLE';
+  el.dataset.coreModulesAvailable = String(pipeline.unifiedFusion?.utilizationSummary?.available ?? 0);
+  el.dataset.coreModulesConsumed = String(pipeline.unifiedFusion?.utilizationSummary?.consumed ?? 0);
   const chip = (label, value) => `<span style="padding:5px 9px;border:1px solid var(--border);border-radius:3px;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">${label}: <b style="color:var(--text)">${escapeHtml(value)}</b></span>`;
   const p = candidate.safePreset;
   el.innerHTML = `
@@ -233,11 +322,14 @@ function _renderCoreMatchInspector() {
     <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Illuminant', `${Math.round(compensation.illuminant.illuminantConfidence * 100)}%`)}${chip('Object Bias', `${Math.round(compensation.objectColorBias.score * 100)}%`)}${chip('Skin Protect', compensation.skinProtection.active ? `${Math.round(compensation.skinProtection.protectionStrength * 100)}%` : 'ไม่พบผิว')}${chip('Highlight Risk', `${Math.round(compensation.dynamicRange.highlightRisk * 100)}%`)}${chip('White Protect', `${Math.round((compensation.targetProtection?.neutralWhite?.strength || 0) * 100)}%`)}${chip('Scene Channels', `${compensation.targetProtection?.sceneColor?.sharedCount || 0} shared`)}</div>
     <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent);margin:11px 0 6px">O8 · PERCEPTUAL TRANSFER</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Curve Source', candidate.rawPreset.transferDiagnostics?.curveSource || 'SEMANTIC_FALLBACK')}${chip('Curve Magnitude', candidate.rawPreset.transferDiagnostics?.curveMagnitude || 0)}${chip('Gaussian HSL', `${Math.round((pipeline.transferEvidence?.gaussianHsl?.confidence || 0) * 100)}%`)}${chip('Shared Channels', pipeline.transferEvidence?.gaussianHsl?.supportedChannelCount || 0)}${chip('Mean ΔE00', pipeline.transferEvidence?.gaussianHsl?.meanSharedDeltaE2000 || 0)}</div>
+    <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent);margin:11px 0 6px">O9 · UNIFIED CORE FUSION</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Fusion Gate', pipeline.unifiedFusion?.gate?.code || 'NOT_AVAILABLE')}${chip('Core Available', pipeline.unifiedFusion?.utilizationSummary?.available ?? 0)}${chip('Core Consumed', pipeline.unifiedFusion?.utilizationSummary?.consumed ?? 0)}${chip('Dropped Required', pipeline.unifiedFusion?.utilizationSummary?.droppedRequired?.length ?? 0)}</div>
     <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent);margin:11px 0 6px">N3 · LIGHTROOM CANDIDATE</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Temp Δ', `${signed(candidate.xmpCodec.wb.deltaTemperatureK, 0)} K`)}${chip('Final Temp', candidate.xmpCodec.wb.finalTemperatureK ? `${candidate.xmpCodec.wb.finalTemperatureK} K` : 'ต้องใส่ค่า Target')}${chip('Tint Δ', signed(candidate.xmpCodec.wb.deltaTint, 0))}${chip('Exposure', `${signed(p.exp / 100, 2)} EV`)}${chip('Active Params', candidate.directionGate.activeParameterCount)}${chip('Direction', candidate.directionGate.code)}${chip('XMP Readback', candidate.xmpReadback.decision)}</div>
     <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent);margin:11px 0 6px">N4/N5 · PREVIEW & EVALUATION</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Pixel Changed', rcm.previewMetrics ? `${rcm.previewMetrics.changedPixelPct.toFixed(1)}%` : 'รอ Preview')}${chip('Fidelity', evaluation ? `${evaluation.improvement.fidelityScore.toFixed(1)}/100` : 'รอวิเคราะห์ After')}${chip('Need Before→After', evaluation ? `${evaluation.before.matchNeedScore.toFixed(1)} → ${evaluation.after.matchNeedScore.toFixed(1)}` : '—')}${chip('Records', rcm.storedRecordCount)}${chip('LR Round-trip', rcm.roundTripFidelity ? `${rcm.roundTripFidelity.fidelityScore.toFixed(1)}/100` : 'ยังไม่ทดสอบ')}</div>
     <div style="font-size:11px;line-height:1.55;color:var(--text-dim);margin-top:11px">Preview ที่ถูกต้องคือ Reference → Target Original → Target Matched เท่านั้น ทุกค่าต้องผ่าน Data Lineage, Direction Gate และ XMP Structural Readback ก่อนดาวน์โหลด</div>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-family:var(--font-mono);font-size:10px;color:var(--accent)">CORE CONTRIBUTION LEDGER</summary><div style="overflow:auto;margin-top:7px"><table style="width:100%;border-collapse:collapse;font-size:9.5px;color:var(--text-dim)"><thead><tr><th style="text-align:left">Parameter</th><th style="text-align:left">Contributors</th></tr></thead><tbody>${Object.entries(pipeline.unifiedFusion?.ledger || {}).slice(0,18).map(([parameter,items])=>`<tr><td>${escapeHtml(parameter)}</td><td>${items.map(item=>`${escapeHtml(item.moduleId)} ${signed(item.value,2)} × ${Math.round(item.confidence*100)}%`).join(' · ')}</td></tr>`).join('')}</tbody></table></div></details>
     <details style="margin-top:10px"><summary style="cursor:pointer;font-family:var(--font-mono);font-size:10px;color:var(--accent)">XMP DATA LINEAGE (${candidate.dataLineage.decision})</summary><div style="overflow:auto;margin-top:7px"><table style="width:100%;border-collapse:collapse;font-size:9.5px;color:var(--text-dim)"><thead><tr><th style="text-align:left">Parameter</th><th>Delta</th><th>Intent</th><th>Safe</th><th>XML Readback</th><th>Status</th></tr></thead><tbody>${candidate.dataLineage.rows.slice(0,13).map(row=>`<tr><td>${escapeHtml(row.parameter)}</td><td style="text-align:center">${escapeHtml(row.referenceTargetDelta ?? '—')}</td><td style="text-align:center">${escapeHtml(row.compensatedIntent ?? '—')}</td><td style="text-align:center">${escapeHtml(row.safeCandidate ?? '—')}</td><td style="text-align:center">${escapeHtml(row.readback ?? '—')}</td><td style="text-align:center">${escapeHtml(row.status)}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 
@@ -409,8 +501,9 @@ async function _exportEvaluations() {
 }
 
 async function analyzeReference() {
-  if (!rcm.referenceImg) { _setStatus('กรุณาอัปโหลดภาพต้นแบบก่อน'); return; }
+  if (!rcm.referenceImg) { _setStatus('กรุณาอัปโหลดภาพต้นแบบก่อน'); _setMatchedPreviewState('WAITING_FOR_IMAGES'); return; }
   _setStatus('กำลังวิเคราะห์ภาพต้นแบบ…');
+  _setMatchedPreviewState('REFERENCE_ANALYSIS_PENDING', 'Reference Color Match Beta ใช้การวิเคราะห์คนละสถานะกับ AI Tone Extractor');
   rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg);
   _renderPalette(rcm.referenceEvidence.palette);
   _renderToneZones(rcm.referenceEvidence.toneZones);
@@ -433,78 +526,104 @@ function _effectiveIntensity() {
 }
 
 async function _rebuildAndPreview() {
-  if (!rcm.referenceEvidence || !rcm.targetImg) return;
+  if (!rcm.referenceImg || !rcm.targetImg) {
+    _setMatchedPreviewState('WAITING_FOR_IMAGES', !rcm.referenceImg ? 'กรุณาเลือกภาพ Reference' : 'กรุณาเลือกภาพ Target');
+    return;
+  }
+  const runGenerationId = rcm.generationId;
   rcm.candidateReadyForDownload = false;
   $('rcmGenerateBtn')?.setAttribute('disabled', 'true');
   $('rcmDownloadBtn')?.setAttribute('disabled', 'true');
   $('rcmSaveAfterBtn')?.setAttribute('disabled', 'true');
   if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '1';
-  _setStatus('กำลังวิเคราะห์ Target และสร้าง Core Color Match N1–N5…');
 
-  if (!rcm.targetEvidence) rcm.targetEvidence = await _analyzeEvidence(rcm.targetImg);
-  const transferKey = `${rcm.generationId}|${Math.round(_effectiveIntensity())}|${rcm.mode}`;
-  if (!rcm.pixelTransfer || rcm.pixelTransferKey !== transferKey) {
-    _setStatus('กำลังคำนวณ LAB/Gaussian HSL, Tone Curve และ Histogram Matching…');
-    rcm.pixelTransfer = await buildPerceptualPixelTransfer({
-      referenceImg: rcm.referenceImg,
-      targetImg: rcm.targetImg,
+  try {
+    if (!rcm.referenceEvidence) {
+      _setMatchedPreviewState('REFERENCE_ANALYSIS_PENDING', 'กำลังเรียก Core Analysis สำหรับ Reference โดยอัตโนมัติ');
+      rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg);
+      if (runGenerationId !== rcm.generationId) throw Object.assign(new Error('Generation changed during reference analysis.'), { code: 'STALE_GENERATION' });
+      _renderPalette(rcm.referenceEvidence.palette);
+      _renderToneZones(rcm.referenceEvidence.toneZones);
+    }
+
+    _setStatus('กำลังวิเคราะห์ Target และสร้าง Pairwise Color Match…');
+    _setMatchedPreviewState('TARGET_ANALYSIS_PENDING', 'กำลังเรียก Core ชุดเดียวกับ Reference สำหรับ Target');
+    if (!rcm.targetEvidence) rcm.targetEvidence = await _analyzeEvidence(rcm.targetImg);
+    if (runGenerationId !== rcm.generationId) throw Object.assign(new Error('Generation changed during target analysis.'), { code: 'STALE_GENERATION' });
+
+    const transferKey = `${rcm.generationId}|${Math.round(_effectiveIntensity())}|${rcm.mode}`;
+    if (!rcm.pixelTransfer || rcm.pixelTransferKey !== transferKey) {
+      _setStatus('กำลังคำนวณ LAB/Gaussian HSL, Tone Curve และ Histogram Matching…');
+      _setMatchedPreviewState('PAIRWISE_FUSION_PENDING', 'Reference − Target → Fusion → Candidate');
+      rcm.pixelTransfer = await buildPerceptualPixelTransfer({
+        referenceImg: rcm.referenceImg,
+        targetImg: rcm.targetImg,
+        intensity: _effectiveIntensity(),
+        mode: rcm.mode,
+      });
+      rcm.pixelTransferKey = transferKey;
+    }
+
+    rcm.corePipeline = buildCoreColorMatchPipeline({
+      reference: rcm.referenceEvidence,
+      target: rcm.targetEvidence,
+      analysisGenerationId: rcm.generationId,
       intensity: _effectiveIntensity(),
-      mode: rcm.mode,
+      candidateName: 'LUMIXA-Core-Color-Match-Candidate',
+      protectionOptions: { ...rcm.toggles },
+      pixelTransfer: rcm.pixelTransfer,
+      targetMediaContext: {
+        fileName: rcm.targetFile?.name || '',
+        mimeType: rcm.targetFile?.type || '',
+        mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride,
+        baseTemperatureK: rcm.targetBaseTemperatureK,
+        baseTint: rcm.targetBaseTint,
+        profileName: rcm.targetProfileName,
+      },
     });
-    rcm.pixelTransferKey = transferKey;
-  }
-  rcm.corePipeline = buildCoreColorMatchPipeline({
-    reference: rcm.referenceEvidence,
-    target: rcm.targetEvidence,
-    analysisGenerationId: rcm.generationId,
-    intensity: _effectiveIntensity(),
-    candidateName: 'LUMIXA-Core-Color-Match-Candidate',
-    protectionOptions: { ...rcm.toggles },
-    pixelTransfer: rcm.pixelTransfer,
-    targetMediaContext: {
-      fileName: rcm.targetFile?.name || '',
-      mimeType: rcm.targetFile?.type || '',
-      mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride,
-      baseTemperatureK: rcm.targetBaseTemperatureK,
-      baseTint: rcm.targetBaseTint,
-      profileName: rcm.targetProfileName,
-    },
-  });
-  _drawOriginal(rcm.targetImg, 'rcmBeforeCanvas');
-  const afterCanvas = $('rcmAfterCanvas');
-  rcm.previewMetrics = renderColorMatchCandidateToCanvas({
-    image: rcm.targetImg,
-    canvas: afterCanvas,
-    preset: rcm.corePipeline.candidate.safePreset,
-  });
+    if (!rcm.corePipeline?.candidate?.safePreset) throw Object.assign(new Error('Pairwise fusion did not produce a preview preset.'), { code: 'MATCH_CANDIDATE_UNAVAILABLE' });
 
-  const matchedImg = await _canvasToImage(afterCanvas);
-  rcm.matchedEvidence = await _analyzeEvidence(matchedImg);
-  const matchedSignature = buildMatchedSignatureFromAnalysis({
-    ...rcm.matchedEvidence,
-    analysisGenerationId: rcm.generationId,
-  });
-  rcm.previewMatchedSignature = matchedSignature;
-  rcm.evaluation = evaluateMatchedSignature({
-    referenceSignature: rcm.corePipeline.analysis.referenceSignature,
-    targetSignature: rcm.corePipeline.analysis.targetSignature,
-    matchedSignature,
-    previewMetrics: rcm.previewMetrics,
-    candidate: rcm.corePipeline.candidate,
-  });
+    _drawOriginal(rcm.targetImg, 'rcmBeforeCanvas');
+    const afterCanvas = $('rcmAfterCanvas');
+    if (!afterCanvas) throw Object.assign(new Error('Matched preview canvas is missing.'), { code: 'TARGET_RENDER_SURFACE_MISSING' });
+    _setMatchedPreviewState('RENDERING', 'Preview ใช้ Unified Candidate ชุดเดียวกับ Candidate XMP');
+    rcm.previewMetrics = renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: rcm.corePipeline.candidate.safePreset });
+    if (!afterCanvas.width || !afterCanvas.height) throw Object.assign(new Error('Matched preview rendered with invalid geometry.'), { code: 'TARGET_RENDER_EMPTY' });
 
-  _renderCoreMatchInspector();
-  _renderReasons();
-  _renderEvaluationHarness();
-  if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '0';
-  const blocked = !rcm.corePipeline.candidate.exportReady;
-  if (!blocked) {
-    $('rcmGenerateBtn')?.removeAttribute('disabled');
-    $('rcmSaveAfterBtn')?.removeAttribute('disabled');
+    const matchedImg = await _canvasToImage(afterCanvas);
+    rcm.matchedEvidence = await _analyzeEvidence(matchedImg);
+    const matchedSignature = buildMatchedSignatureFromAnalysis({ ...rcm.matchedEvidence, analysisGenerationId: rcm.generationId });
+    rcm.previewMatchedSignature = matchedSignature;
+    rcm.evaluation = evaluateMatchedSignature({
+      referenceSignature: rcm.corePipeline.analysis.referenceSignature,
+      targetSignature: rcm.corePipeline.analysis.targetSignature,
+      matchedSignature,
+      previewMetrics: rcm.previewMetrics,
+      candidate: rcm.corePipeline.candidate,
+    });
+
+    _renderCoreMatchInspector();
+    _renderReasons();
+    _renderEvaluationHarness();
+    _setMatchedPreviewState('READY');
+    const blocked = !rcm.corePipeline.candidate.exportReady;
+    if (!blocked) {
+      $('rcmGenerateBtn')?.removeAttribute('disabled');
+      $('rcmSaveAfterBtn')?.removeAttribute('disabled');
+    }
+    _setStatus(blocked
+      ? `Preview พร้อม แต่ Candidate XMP ถูกบล็อก: ${rcm.corePipeline.candidate.candidateState}`
+      : `✓ Target Matched Preview พร้อม · Fidelity ${rcm.evaluation.improvement.fidelityScore.toFixed(1)}/100 · Production ยังเป็น Legacy`);
+  } catch (error) {
+    console.error('[LUMIXA][REFERENCE_MATCH_PREVIEW]', error);
+    const code = error?.code || 'TARGET_RENDER_FAILED';
+    _clearMatchedCanvas();
+    _setMatchedPreviewState('ERROR', error?.message || 'ไม่สามารถสร้างภาพ Preview ได้', code);
+    _setStatus(`Target Matched Preview ไม่ขึ้น: ${code}`);
+    _renderCoreMatchInspector();
+  } finally {
+    if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '0';
   }
-  _setStatus(blocked
-    ? `ระบบบล็อก Candidate: ${rcm.corePipeline.candidate.candidateState} — ตรวจ Target WB Base / Direction / XMP Readback`
-    : `✓ Core Color Match พร้อมตรวจ · Fidelity ${rcm.evaluation.improvement.fidelityScore.toFixed(1)}/100 · Production ยังเป็น Legacy`);
 }
 
 function generateXMP() {
@@ -547,6 +666,8 @@ function _resetPairState() {
   rcm.candidateReadyForDownload = false;
   rcm.pixelTransfer = null;
   rcm.pixelTransferKey = null;
+  _clearMatchedCanvas();
+  _setMatchedPreviewState(rcm.referenceImg && rcm.targetImg ? 'REFERENCE_ANALYSIS_PENDING' : 'WAITING_FOR_IMAGES');
   _renderCoreMatchInspector();
   _renderEvaluationHarness();
 }
@@ -560,6 +681,7 @@ export async function initReferenceColorMatchPanel() {
   _renderCoreMatchInspector();
   _renderEvaluationHarness();
   if ($('rcmTargetMediaType')) $('rcmTargetMediaType').value = rcm.targetMediaOverride;
+  _setMatchedPreviewState('WAITING_FOR_IMAGES');
 
   refInput.addEventListener('change', event => {
     _loadImageFile(event.target.files[0], img => {
@@ -572,7 +694,8 @@ export async function initReferenceColorMatchPanel() {
       if ($('rcmPaletteSwatches')) $('rcmPaletteSwatches').innerHTML = '';
       if ($('rcmToneZones')) $('rcmToneZones').innerHTML = '';
       if ($('rcmReasons')) $('rcmReasons').innerHTML = '';
-      _setStatus('ภาพต้นแบบโหลดแล้ว — กดวิเคราะห์ภาพต้นแบบ');
+      _setStatus(rcm.targetImg ? 'ภาพต้นแบบโหลดแล้ว — กำลังสร้าง Pairwise Preview อัตโนมัติ' : 'ภาพต้นแบบโหลดแล้ว — เลือก Target หรือกดวิเคราะห์ภาพต้นแบบ');
+      if (rcm.targetImg) void _rebuildAndPreview();
     });
   });
   tgtInput.addEventListener('change', event => {

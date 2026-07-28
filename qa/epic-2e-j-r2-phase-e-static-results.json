@@ -1,6 +1,6 @@
 {
   "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
-  "generatedAt": "2026-07-28T07:00:24.247Z",
+  "generatedAt": "2026-07-28T10:20:52.567Z",
   "summary": {
     "total": 92,
     "pass": 92,
@@ -11,12 +11,12 @@
     {
       "test": "generateRunId() returns a non-empty string",
       "result": "PASS",
-      "evidence": "idA=581bf815-2a77-4596-a32e-2eca10730df4"
+      "evidence": "idA=c25ea587-27fa-4c87-b1ab-d7088cb785b9"
     },
     {
       "test": "generateRunId() returns a fresh value on each call (never reused)",
       "result": "PASS",
-      "evidence": "idA=581bf815-2a77-4596-a32e-2eca10730df4, idB=567fbd36-2cc8-4336-a1f9-4f3140377002"
+      "evidence": "idA=c25ea587-27fa-4c87-b1ab-d7088cb785b9, idB=da957ddd-2ac0-4bee-a4bb-4c09612f7d88"
     },
     {
       "test": "computeSourceHash() is deterministic for identical inputs",
@@ -131,7 +131,7 @@
     {
       "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
       "result": "PASS",
-      "evidence": "oldRunId=85c9a655-8ff8-4d95-afbb-69cb9b2b1121, newRunId=ada93044-714e-4d0b-bc47-0624e9d080a5"
+      "evidence": "oldRunId=bddaa051-8aea-445d-afe4-566dccfea88f, newRunId=7131d1ad-5b5e-4a28-bd57-1430656020b1"
     },
     {
       "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",
@@ -456,15 +456,15 @@
     {
       "test": "R3-12: qa/baselines/lufa42-production-lock-manifest.json is present and parses as JSON (checked-in, portable — never a machine-specific sibling directory)",
       "result": "PASS",
-      "evidence": "/mnt/data/lumixa_o8_base/lumixa_r9/qa/baselines/lufa42-production-lock-manifest.json"
+      "evidence": "/mnt/data/lumixa_o9/qa/baselines/lufa42-production-lock-manifest.json"
     },
     {
       "test": "R3-12: Production-lock manifest declares a non-empty locked-file set",
       "result": "PASS",
-      "evidence": "lockedFileCount=116"
+      "evidence": "lockedFileCount=118"
     },
     {
-      "test": "R3-12: every LOCKED core/ui/index.html file is byte-for-byte identical to the checked-in Production-lock manifest (116 files, SHA-256)",
+      "test": "R3-12: every LOCKED core/ui/index.html file is byte-for-byte identical to the checked-in Production-lock manifest (118 files, SHA-256)",
       "result": "PASS",
       "evidence": "match"
     }

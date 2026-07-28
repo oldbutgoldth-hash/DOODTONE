@@ -15,9 +15,10 @@ import {
   COMPENSATION_STATES,
 } from './photographic-compensation-engine.js';
 import { buildLightroomCompatibilityProfile } from './lightroom-compatibility-profile.js';
+import { applyUnifiedFusionToPreset } from './unified-core-fusion-orchestrator.js';
 
 export const LIGHTROOM_CANDIDATE_KIND = 'LUMIXA_LIGHTROOM_COLOR_MATCH_CANDIDATE';
-export const LIGHTROOM_CANDIDATE_SCHEMA_VERSION = 3;
+export const LIGHTROOM_CANDIDATE_SCHEMA_VERSION = 4;
 const CHANNELS = ['red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta'];
 const round = (value, digits = 0) => {
   const n = Number(value);
@@ -231,7 +232,7 @@ function buildReasonTrace(compensation, rawPreset, safePreset, adjustments) {
   return trace;
 }
 
-export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMIXA-Core-Color-Match-Candidate', targetMediaContext = null, pixelTransfer = null, gaussianHsl = null } = {}) {
+export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMIXA-Core-Color-Match-Candidate', targetMediaContext = null, pixelTransfer = null, gaussianHsl = null, unifiedFusion = null } = {}) {
   validate(compensation);
   const blocked = compensation.state === COMPENSATION_STATES.BLOCKED_INSUFFICIENT_EVIDENCE;
   const intent = compensation.semanticIntents;
@@ -283,7 +284,8 @@ export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMI
       hslTransferTrace,
     },
   };
-  const targetSafety = applyTargetAwareCandidateSafety(rawPreset, compensation);
+  const fusedPreset = applyUnifiedFusionToPreset(rawPreset, unifiedFusion);
+  const targetSafety = applyTargetAwareCandidateSafety(fusedPreset, compensation);
   const { preset: safePreset, adjustments: validatorAdjustments } = quickSafetyClamp(targetSafety.preset);
   const adjustments = [...targetSafety.adjustments, ...validatorAdjustments];
   const codecResult = serializeCandidateXMP({ preset: safePreset, targetMediaContext, candidateName: name });
@@ -298,7 +300,8 @@ export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMI
   const compatibilityProfile = buildLightroomCompatibilityProfile(targetMediaContext || {});
   const reasonTrace = buildReasonTrace(compensation, rawPreset, safePreset, adjustments);
   let candidateState = blocked ? 'BLOCKED' : compensation.state === COMPENSATION_STATES.SAFE_IDENTITY ? 'IDENTITY_CANDIDATE' : 'MAPPED_CANDIDATE';
-  if (!blocked && readback.decision !== 'PASS') candidateState = 'XMP_PARAMETER_PIPELINE_MISMATCH';
+  if (!blocked && unifiedFusion?.gate?.decision === 'FAIL') candidateState = unifiedFusion.gate.code;
+  else if (!blocked && readback.decision !== 'PASS') candidateState = 'XMP_PARAMETER_PIPELINE_MISMATCH';
   else if (!blocked && directionGate.decision !== 'PASS') candidateState = directionGate.code;
   const exportReady = ['MAPPED_CANDIDATE', 'IDENTITY_CANDIDATE'].includes(candidateState) && codecResult.wb.exportReady && readback.decision === 'PASS' && directionGate.decision === 'PASS';
 
@@ -309,6 +312,7 @@ export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMI
     candidateState,
     analysisGenerationId: compensation.analysisGenerationId,
     rawPreset,
+    fusedPreset,
     safePreset,
     candidateXmp: exportReady ? codecResult.xmp : null,
     candidateXmpLength: exportReady ? codecResult.xmp.length : 0,
@@ -320,6 +324,7 @@ export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMI
     dataLineage,
     safetyAdjustments: adjustments,
     transferEvidence: { pixelTransfer, gaussianHsl, hslTransferTrace },
+    unifiedCoreFusion: unifiedFusion,
     reasonTrace,
     fidelityContract: {
       previewUsesSafePreset: true,

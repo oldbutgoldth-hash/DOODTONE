@@ -1,0 +1,11 @@
+# EPIC 2E-O9 modified files
+- core/color-match/unified-core-output-contract.js
+- core/color-match/unified-core-fusion-orchestrator.js
+- core/color-match/core-color-match-pipeline.js
+- core/color-match/lightroom-candidate-mapper.js
+- ui/reference-color-match-panel.js
+- qa/epic-2e-o9-unified-core-fusion-static-test.mjs
+- qa/epic-2e-o9-release-gate.mjs
+- package.json
+- core/project-version.js
+- qa/baselines/lufa42-production-lock-manifest.json

@@ -3,10 +3,10 @@
   "suite": "BEST_OF_BOTH_PERCEPTUAL_BROWSER",
   "decision": "PASS",
   "completed": true,
-  "runId": "b628491f-067b-431a-9fdb-67a58dff5e68",
-  "startedAt": "2026-07-28T07:00:27.958Z",
-  "completedAt": "2026-07-28T07:00:28.846Z",
-  "sourceHash": "b4a3d335d14659eb037b4667e59582cae3c85aa26466c9923d1e6feb91ef2161",
+  "runId": "4c8b6cb9-b06e-4f29-8837-044d43c8171b",
+  "startedAt": "2026-07-28T10:20:57.881Z",
+  "completedAt": "2026-07-28T10:20:58.905Z",
+  "sourceHash": "69e900098b56b3c5f8586cec945e3d27df73da3ae15b386a1aa4e4af711d78ca",
   "browserExecutable": "/usr/bin/chromium",
   "browserVersion": "144.0.7559.96",
   "result": {
@@ -912,6 +912,58 @@
               "transferability": 0.06
             }
           }
+        },
+        "unifiedCoreFusion": {
+          "kind": "LUMIXA_UNIFIED_CORE_FUSION",
+          "gate": {
+            "decision": "PASS",
+            "code": "CORE_CONTRIBUTION_COMPLETE"
+          },
+          "utilizationSummary": {
+            "total": 21,
+            "available": 0,
+            "consumed": 0,
+            "primaryRequired": [
+              {
+                "moduleId": "whiteBalancePro",
+                "available": false,
+                "consumed": false,
+                "status": "NOT_AVAILABLE"
+              },
+              {
+                "moduleId": "lightroomBasicPanel",
+                "available": false,
+                "consumed": false,
+                "status": "NOT_AVAILABLE"
+              },
+              {
+                "moduleId": "toneCurveAI",
+                "available": false,
+                "consumed": false,
+                "status": "NOT_AVAILABLE"
+              },
+              {
+                "moduleId": "hslAnalyzerPro",
+                "available": false,
+                "consumed": false,
+                "status": "NOT_AVAILABLE"
+              },
+              {
+                "moduleId": "colorGradingAI",
+                "available": false,
+                "consumed": false,
+                "status": "NOT_AVAILABLE"
+              },
+              {
+                "moduleId": "calibrationEngine",
+                "available": false,
+                "consumed": false,
+                "status": "NOT_AVAILABLE"
+              }
+            ],
+            "droppedRequired": []
+          },
+          "ledger": {}
         }
       },
       "compatibility": {

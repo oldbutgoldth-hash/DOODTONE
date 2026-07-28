@@ -812,7 +812,10 @@
                 <div><div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">2 · TARGET ORIGINAL</div><canvas id="rcmBeforeCanvas" style="width:100%;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);display:block"></canvas></div>
                 <div>
                   <div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">3 · TARGET MATCHED PREVIEW <span id="rcmAfterUpdating" style="color:var(--accent);text-transform:none;font-weight:400;opacity:0;transition:opacity .15s"><span data-i18n-key="appShell.updating">— updating…</span></span></div>
-                  <canvas id="rcmAfterCanvas" style="width:100%;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);display:block"></canvas>
+                  <div style="position:relative;min-height:120px">
+                    <canvas id="rcmAfterCanvas" style="width:100%;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);display:block"></canvas>
+                    <div id="rcmMatchedPreviewState" data-state="WAITING_FOR_IMAGES" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;border:1px dashed var(--border-strong);border-radius:3px;background:color-mix(in srgb,var(--surface-2) 92%,transparent)"></div>
+                  </div>
                   <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin:8px 0 3px"><span>Intensity</span><span id="rcmAfterIntensityValue">60</span></div>
                   <input type="range" id="rcmAfterIntensitySlider" min="0" max="100" value="60" style="width:100%;margin-bottom:6px">
                   <button id="rcmSaveAfterBtn" disabled style="margin-top:2px;width:100%;padding:8px;border-radius:2px;font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text)" data-i18n-key="appShell.saveAfterImage">Save After Image</button>
