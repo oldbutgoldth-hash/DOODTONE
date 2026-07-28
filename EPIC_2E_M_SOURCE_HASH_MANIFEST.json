@@ -1,0 +1,38 @@
+{
+  "epic": "2E-M",
+  "version": "1.3.1",
+  "generatedAt": "2026-07-28T01:39:15.939568+00:00",
+  "releaseDecision": "FINAL_PASS",
+  "files": {
+    "core/calibration-lab/cohort-save-feedback.js": "97d0bf1db9ef04466e51772561d85742c3d2646159802e5258dc4140c3959edb",
+    "core/project-version.js": "8d3f23495a4974305d2fc5795b40c5aba9f6303d505e4a2efb163ebbb280a703",
+    "ui/calibration-lab/calibration-lab-controller.js": "bb244e6d282c599858e4d77af723b653aec0e0238125d476552b0f0537e16105",
+    "ui/calibration-lab/calibration-lab-renderer.js": "373e4d842b952bcb0c3fd1279f735e61a357c9f454666901517da9657eabb589",
+    "ui/calibration-lab/calibration-lab-i18n.js": "3754c22733fd60d33ca151ce5c0f75c358604a2fea60e0e020a430a4b9978f72",
+    "qa/epic-2e-m-guided-cohort-intake-static-test.mjs": "59a6036ed0002b34b5a3e240be97f4d9e64e9a30534545b434ce27b6fc36d5ab",
+    "qa/epic-2e-m-guided-cohort-intake-browser-test.mjs": "1d67622ce5bd3f0fd414d4ddef53392dab1dbad61b16c9f5c62b7bef5b353fca",
+    "qa/epic-2e-m-release-gate.mjs": "556eddbebd69c9f99349ee50e3aa458f22e6c7b1e18e864d589a2f0a4f982d32",
+    "qa/epic-2e-m-release-gate-results.json": "6b6c53243fab982a34e9671dd0f89bf46cdaf1e7a459965e31383ce730937b42",
+    "qa/epic-2e-m-guided-cohort-intake-browser-results.json": "908bbb1fd45746d34a6e095f7548717cd85e38734bb145e34d7bdf0d4265dfa5",
+    "qa/run-static-suites.mjs": "424004961335f6ff12da7b8d4756a2364f89794bf31ebda65e0452861217c675",
+    "qa/baselines/epic-2e-m-production-invariant.json": "b6a8d0806f44df2eb4b18582d7fa59364c41bff7fb1cc1026118a123573e6d05",
+    "qa/baselines/lufa42-production-lock-manifest.json": "686079b1944b0721b8a8510d471ac17fd814ccfcd8b11ed590d9e3032390eecf",
+    "package.json": "89746762711816fa2da81bbd424f3647bb6971715d57d2a17a2c1a086da3ef34",
+    "package-lock.json": "707c4c6d529bee7af39fca18b273eb9e3e41ff4e661bd9263bcb97c51869860b",
+    "RUN_LUMIXA_2E_M_QA_WINDOWS_KEEP_OPEN.bat": "6aed4249315e6331513926fa764f4a7fde13b863ad8a9548debce58d8be6f3a0",
+    "EPIC_2E_M_RELEASE_NOTES.md": "11451a73349d4f9f41283d2974e365c0c9b5d478a7f8083c0e1a5e564261acfd",
+    "EPIC_2E_M_MODIFIED_FILES.md": "98327d06abbbdae3c6ca8aa28ad0ce7010fde9751ca9645182074e2a804de125",
+    "docs/project/42_EPIC_2E_M_GUIDED_COHORT_INTAKE_ARCHITECTURE.md": "d4fa2f6124d82de78a3d113eb660caccfa1b88a417a5d52da6d8179a53ce1eb7",
+    "docs/project/43_EPIC_2E_M_QA_REPORT.md": "a0df7de87ffac4d544805bc690fbad54dfda34f876346cddaaa1edf576bcc2d5",
+    "README_EPIC_2E_M.txt": "762d4b8445c763e8535dd2a4b137bb82c57ce8b054444dae306b4a332dae094c",
+    "LUMIXA_PROJECT_MEMORY_R5.md": "b2c11a2b3c2fbc34599537491e069688dc836cd3c030c0763bd6952266b8f1f8",
+    "docs/project/05_PROJECT_MEMORY.md": "9dc8f1ccdd837d251da06e6674f7c548bfa1a5b4d35a49e40a8758507e02cb74"
+  },
+  "productionLocks": {
+    "productionSource": "legacy",
+    "productionWrite": false,
+    "controlledV2Apply": false,
+    "previewExport": false,
+    "controlledV2ProductionActivation": false
+  }
+}

@@ -1,6 +1,6 @@
 {
   "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
-  "generatedAt": "2026-07-27T16:14:41.136Z",
+  "generatedAt": "2026-07-28T01:38:42.375Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
@@ -14,7 +14,7 @@
     "ui/visual-preview-comparison-controller-v2.js",
     "ui/visual-preview-comparison-renderer-v2.js"
   ],
-  "lockedFileCount": 94,
+  "lockedFileCount": 95,
   "files": {
     "core/basic-panel-engine/index.js": "82467e72711b3d98359e9a50543a8a9f2cc98b7f9a42c9e5e25afbec620aae5b",
     "core/calibration-engine/index.js": "c62df0620585bcb16b0ee8a6e76cd9e66d64a1075756d28e18ff9fa301510281",
@@ -23,6 +23,7 @@
     "core/calibration-lab/build-calibration-v2-preview-plan.js": "b37983e5ad40e3431b0398ae5d4918d0951f926d7913d9c0ca7add8cc9f4a6e0",
     "core/calibration-lab/candidate-pilot.js": "4c028adfa516444f54f9fc8ef4aa5258449bb24416e76f86c4df43604e61eb01",
     "core/calibration-lab/codes.js": "b2d73bd8d2683215674a85f00f93a528147d251a4cef31b03de17552ae23760b",
+    "core/calibration-lab/cohort-save-feedback.js": "97d0bf1db9ef04466e51772561d85742c3d2646159802e5258dc4140c3959edb",
     "core/calibration-lab/export-candidate-pilot.js": "45e0cc499fe13e47da1a6800d49dc1caee59264073dc450b8740839d6307165d",
     "core/calibration-lab/export-dataset.js": "f4915a1d22e2ba29e4cc922551cfff1b85076ceb75b66de3452f5ee4885498f7",
     "core/calibration-lab/migrate-v1-to-v2.js": "fa7bdc56fc821693a423e659a8637a6355f99c31a9951cdfc500a0c5c96efb28",
@@ -70,7 +71,7 @@
     "core/preset-engine/index.js": "42f3bb83bf850bed3dd4d2a5b66019264c0a0e5561ff07c2e7e3d644c00dedde",
     "core/preview-rendering/controlled-v2-preview-adjustment-translator.js": "c87ebc0e3b8835f93993ebc62c36da76cbfdd0256f5cf5496ddbe513c7d3979a",
     "core/processing-log/index.js": "582c4b6bd6144c7daedda1d554197d9bae278fcc2451c2af91987a558c0ecd53",
-    "core/project-version.js": "7df323987776f001b6af4f1968cf13d5339124e12bbf74f0f82081bde64e420f",
+    "core/project-version.js": "8d3f23495a4974305d2fc5795b40c5aba9f6303d505e4a2efb163ebbb280a703",
     "core/reference-transfer-engine/index.js": "9a73cb7e155b280d14ad6f22529100024e43e172ac25c5f7aff43b38d007c3ef",
     "core/scene-classifier/index.js": "8f27307e3425c270b7379008f6e9329d03a60f8d50dd0d0218209526b707347d",
     "core/skin-classifier/index.js": "b7563fcbbf39e20cae19b1df3e8ff6d8d5dc50d6e48c889563d3331fd52482d3",
@@ -82,10 +83,10 @@
     "core/whitebalance-engine/index.js": "40b111ca145636a7b4c2726d38102df3c8d60a07fe42d8403333a159e79d5106",
     "core/xmp-validator/index.js": "ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f",
     "ui/basic-panel-renderer.js": "efb96fd7bb73c98fa9355bb7f0ffee028ea6d952b320f3d62119f5538c48d04a",
-    "ui/calibration-lab/calibration-lab-controller.js": "c072edb40694951be8e9ce1418780793466f6523fa1b091c709db7c73bc82c5b",
+    "ui/calibration-lab/calibration-lab-controller.js": "bb244e6d282c599858e4d77af723b653aec0e0238125d476552b0f0537e16105",
     "ui/calibration-lab/calibration-lab-entry.js": "281c53fa5fd98bb6741a53a3e59b6c5727426f125de7db99e67d4830188aa98f",
-    "ui/calibration-lab/calibration-lab-i18n.js": "b05599fe0208aac22c73f62ec3ec4405015da0b871c4397e345b2ec11a9b490a",
-    "ui/calibration-lab/calibration-lab-renderer.js": "08ed8fb2af03eae39e825c64eae73e51a654624dde68a5644490a14820421976",
+    "ui/calibration-lab/calibration-lab-i18n.js": "3754c22733fd60d33ca151ce5c0f75c358604a2fea60e0e020a430a4b9978f72",
+    "ui/calibration-lab/calibration-lab-renderer.js": "373e4d842b952bcb0c3fd1279f735e61a357c9f454666901517da9657eabb589",
     "ui/calibration-lab/calibration-lab-storage.js": "9e171fddad9f91d9d021be09c50a978bc79f7d1276cbfd89e6439015cc885d49",
     "ui/calibration-renderer.js": "b5cc0c047be353f4762d656960a8219b7e2ec3456302d7c74cdf35bec605dba5",
     "ui/color-harmony-renderer.js": "56ca111579f9a82211a7686c6a992509f39753d0e7e9a253c9d397ae58006713",

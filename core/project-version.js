@@ -8,10 +8,10 @@
  * place that needs editing to bump the displayed version.
  */
 export const AI_WORKFLOW_VERSION = {
-  version: 'v1.3.0',
-  epic: 'EPIC 2E-L',
-  label: 'AI Workflow v1.3.0 (EPIC 2E-L)',
-  title: 'Controlled V2 Candidate Review Pilot',
+  version: 'v1.3.1',
+  epic: 'EPIC 2E-M',
+  label: 'AI Workflow v1.3.1 (EPIC 2E-M)',
+  title: 'Guided Candidate Cohort Intake',
   status: 'Legacy Active · Candidate Pilot Available · V2 Non-Production · XMP Unchanged',
   statusLine: 'Legacy Active · Candidate Pilot Available · V2 Non-Production · XMP Unchanged',
   upgradedSystems: [
@@ -38,6 +38,9 @@ export const AI_WORKFLOW_VERSION = {
     'Controlled V2 Browser Preview Rendering',
     'Interactive Before/After Split Viewer',
     'Controlled V2 Candidate Review Pilot',
+    'Guided Candidate Cohort Intake',
+    'Save-and-Next Review Workflow',
+    'Semantic Cohort Save Receipts',
     'Verified Pixel Cohort Analysis',
     'Candidate Safety / Regression Stop Gates',
     'Legacy-left / Controlled-V2-right Comparison',

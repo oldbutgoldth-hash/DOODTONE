@@ -1212,3 +1212,8 @@ Browser-verified. EPIC 2E-L remains explicitly not started.
 - Release gate returns exit code 2 instead of a false PASS.
 - Production remains Legacy; write/apply/export/XMP remain disabled.
 - EPIC 2E-L may start only after a local Windows/Chrome or Edge run returns FINAL_PASS.
+
+
+## EPIC 2E-M — Guided Candidate Cohort Intake
+
+Added a visible three-step save workflow, semantic Cohort receipts, Save-and-Next navigation, and Candidate Pilot progress. Production remains Legacy and XMP behavior remains unchanged. Release gate: FINAL_PASS.

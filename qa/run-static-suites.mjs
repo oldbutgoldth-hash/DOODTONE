@@ -147,6 +147,9 @@ const STATIC_SUITES = [
   // safety/regression gates, export hygiene, UI mode and i18n coverage.
   'qa/epic-2e-l-candidate-pilot-static-test.mjs',
   'qa/epic-2e-l-candidate-pilot-integration-static-test.mjs',
+  // EPIC 2E-M -- guided Cohort intake, explicit-decision save gate,
+  // save receipt, and next-pending navigation.
+  'qa/epic-2e-m-guided-cohort-intake-static-test.mjs',
 ];
 
 let anyFailed = false;

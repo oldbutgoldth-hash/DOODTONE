@@ -100,3 +100,11 @@ FIX5 introduced a QA-only deterministic IndexedDB contract harness and a real Na
 - Native Chromium Browser QA passed through an `about:blank` in-memory import-map runtime.
 - EPIC 2E-L Release Gate: `FINAL_PASS`.
 - Production remains Legacy; Production Mapping, preset engine, XMP validator, `ui/app.js`, and `ui/ui-engine.js` remain byte-for-byte unchanged from FIX5.3.
+
+## EPIC 2E-M — Guided Candidate Cohort Intake (v1.3.1)
+
+- Added a visible three-step review and Cohort save workflow.
+- Save and Save-and-Next remain disabled until pixel evidence is eligible and a human decision is selected.
+- Successful saves return semantic Cohort receipts and update Candidate Pilot progress automatically.
+- Production remains Legacy; Production write, Controlled V2 Apply and Preview export remain disabled.
+- Release gate: FINAL_PASS.

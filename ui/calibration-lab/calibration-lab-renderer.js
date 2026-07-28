@@ -51,6 +51,7 @@ import { isDecisionAllowedForEvidence, deriveUiBlockerReasonCode } from '../../c
 // OWN two canvases -- it never touches ui/app.js's own controller
 // instance or canvases.
 import { createVisualPreviewComparisonControllerV2 } from '../visual-preview-comparison-controller-v2.js';
+import { isCandidatePilotEligibleRecord } from '../../core/calibration-lab/candidate-pilot.js';
 
 const STYLE_ID = 'calibrationLabStyles';
 
@@ -112,6 +113,19 @@ function _injectStylesOnce() {
 .cal-table { width:100%; border-collapse:collapse; font-size:12.5px; }
 .cal-table th, .cal-table td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
 .cal-note { font-size:11.5px; color:var(--text-faint); }
+.cal-step-title { font-weight:700; font-size:13px; margin:2px 0 5px; }
+.cal-record-status { display:flex; align-items:center; gap:8px; min-height:44px; margin-bottom:12px; padding:9px 12px; border:1px solid var(--border); border-radius:5px; background:var(--surface-2); font-size:12px; }
+.cal-record-status[data-status="saved"] { border-color:var(--success); color:var(--success); }
+.cal-record-status[data-status="excluded"] { border-color:var(--warning); color:var(--warning); }
+.cal-record-status[data-status="pending"] { color:var(--text-dim); }
+.cal-action-result { margin:0 0 12px; padding:10px 12px; border-radius:5px; border:1px solid var(--success); background:var(--surface-2); color:var(--success); font-weight:650; font-size:12.5px; }
+.cal-action-result[data-result="DECISION_SAVED_EXCLUDED"] { border-color:var(--warning); color:var(--warning); }
+.cal-action-result[data-result="CURRENT_ANSWER_CLEARED"] { border-color:var(--border-strong); color:var(--text-dim); }
+.cal-save-bar { position:sticky; bottom:-16px; z-index:4; margin:14px -14px -14px; padding:12px 14px; border-top:1px solid var(--border-strong); background:var(--surface-1); box-shadow:0 -8px 18px rgba(0,0,0,.18); }
+.cal-progress-track { width:100%; height:9px; border-radius:999px; background:var(--surface-2); overflow:hidden; border:1px solid var(--border); }
+.cal-progress-fill { height:100%; background:var(--accent); }
+.cal-save-hint { min-height:18px; margin-top:7px; font-size:11.5px; color:var(--text-faint); }
+.cal-save-hint[data-error="true"] { color:var(--danger); }
 @media (prefers-reduced-motion: reduce) { #calibrationLabRoot * { transition:none !important; animation:none !important; } }
 @media (max-width: 700px) { .cal-grid-2 > * { flex:1 1 100%; } }
 `;
@@ -418,19 +432,70 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
   function _renderDecisionControls(state) {
     const record = state.currentRecord;
     const previewEvidence = record?.previewEvidence ?? null;
+    const evidenceEligible = previewEvidence?.visualDecisionEligible === true;
+    const includedInCohort = isCandidatePilotEligibleRecord(record);
     const panel = _el('div', {
       class: 'cal-panel', style: 'margin-top:16px',
-      'data-cal-visual-decision-eligible': String(previewEvidence?.visualDecisionEligible === true),
+      'data-cal-visual-decision-eligible': String(evidenceEligible),
+      'data-cal-current-in-cohort': String(includedInCohort),
     });
+
+    const recordStatus = record?.userDecision === 'NOT_REVIEWED'
+      ? 'pending'
+      : includedInCohort ? 'saved' : 'excluded';
+    const recordStatusText = recordStatus === 'saved'
+      ? T('session.currentSavedToCohort')
+      : recordStatus === 'excluded' ? T('session.currentSavedExcluded') : T('session.currentPending');
+    panel.appendChild(_el('div', {
+      class: 'cal-record-status', 'data-status': recordStatus,
+      'data-cal-role': 'current-cohort-status', text: recordStatusText,
+    }));
+
+    const actionResult = state.lastActionResult && state.lastActionResult.imageId === record?.imageId
+      ? state.lastActionResult : null;
+    if (actionResult) {
+      const resultText = actionResult.code === 'DECISION_SAVED_TO_COHORT'
+        ? `${T('session.savedToCohort')} · ${actionResult.candidatePilotVerifiedSampleCount ?? 0}/${actionResult.targetVerifiedSamples ?? '—'}`
+        : actionResult.code === 'DECISION_SAVED_EXCLUDED'
+          ? T('session.savedExcluded')
+          : actionResult.code === 'CURRENT_ANSWER_CLEARED'
+            ? T('session.answerCleared') : null;
+      if (resultText) panel.appendChild(_el('div', {
+        class: 'cal-action-result', 'data-result': actionResult.code,
+        'data-cal-role': 'cohort-save-result', role: 'status', 'aria-live': 'polite', text: resultText,
+      }));
+    }
+
+    panel.appendChild(_el('div', { class: 'cal-step-title', text: T('session.decisionStepTitle') }));
+    panel.appendChild(_el('div', { class: 'cal-note', style: 'margin-bottom:8px', text: T('session.decisionStepHelp') }));
+
     const decisionRow = _el('div', { class: 'cal-row', role: 'radiogroup', 'aria-label': 'Decision' });
     let pendingDecision = record?.userDecision ?? 'NOT_REVIEWED';
     let pendingIssues = record?.issueCodes ? [...record.issueCodes] : [];
-    // EPIC 2E-K-R2-FIX1 -- Section 3: Decision Eligibility Gate. Every
-    // chip's `disabled` state is derived from the SAME pure
-    // isDecisionAllowedForEvidence() the Controller independently
-    // re-checks in saveCurrentDecision() -- this UI-side check is a
-    // convenience for the user, never the only enforcement point (see
-    // the Controller for the authoritative check).
+    let saveBtn = null;
+    let saveNextBtn = null;
+    let saveHint = null;
+
+    function refreshSaveState() {
+      const decisionChosen = pendingDecision !== 'NOT_REVIEWED';
+      const saveEligible = evidenceEligible && decisionChosen;
+      for (const button of [saveBtn, saveNextBtn]) {
+        if (!button) continue;
+        button.disabled = !saveEligible;
+        button.setAttribute('aria-disabled', String(!saveEligible));
+        button.setAttribute('data-cal-save-eligible', String(saveEligible));
+        button.style.opacity = saveEligible ? '1' : '0.45';
+        button.style.cursor = saveEligible ? 'pointer' : 'not-allowed';
+      }
+      if (saveHint) {
+        const blockerCode = evidenceEligible ? null : deriveUiBlockerReasonCode(previewEvidence);
+        saveHint.textContent = !evidenceEligible
+          ? T(`pixelPreview.blocker.${blockerCode ?? 'V2_RENDER_FAILED'}`)
+          : !decisionChosen ? T('session.decisionRequired') : T('session.saveHint');
+        saveHint.setAttribute('data-error', String(!saveEligible));
+      }
+    }
+
     for (const d of USER_DECISIONS) {
       if (d === 'NOT_REVIEWED') continue;
       const allowed = isDecisionAllowedForEvidence(d, previewEvidence);
@@ -440,7 +505,11 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
         ...(allowed ? {} : { disabled: 'disabled', 'aria-disabled': 'true' }),
       });
       if (allowed) {
-        chip.addEventListener('click', (e) => { pendingDecision = d; [...decisionRow.children].forEach(c => c.setAttribute('aria-pressed', String(c === e.target))); });
+        chip.addEventListener('click', (e) => {
+          pendingDecision = d;
+          [...decisionRow.children].forEach(c => c.setAttribute('aria-pressed', String(c === e.currentTarget)));
+          refreshSaveState();
+        });
       } else {
         chip.style.opacity = '0.45';
         chip.style.cursor = 'not-allowed';
@@ -449,8 +518,7 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
     }
     panel.appendChild(decisionRow);
 
-    if (previewEvidence && previewEvidence.visualDecisionEligible !== true) {
-      // EPIC 2E-K-R2-FIX2 -- Section 5: no hard-coded override -- real evidence only.
+    if (previewEvidence && !evidenceEligible) {
       const blockerCode = deriveUiBlockerReasonCode(previewEvidence);
       panel.appendChild(_el('div', {
         class: 'cal-note', style: 'margin-top:8px;color:var(--danger)',
@@ -459,12 +527,12 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
       }));
     }
 
-    panel.appendChild(_el('div', { style: 'font-weight:600;margin-top:12px', text: T('a11y.issueChecklist') }));
+    panel.appendChild(_el('div', { class: 'cal-step-title', style: 'margin-top:16px', text: T('session.issueStepTitle') }));
     const issueWrap = _el('div', { role: 'group', 'aria-label': T('a11y.issueChecklist') });
     for (const code of ISSUE_CODES) {
       const id = `cal-issue-${code}`;
       const checked = pendingIssues.includes(code);
-      const input = _el('input', { type: 'checkbox', id, ...(checked ? { checked: 'checked' } : {}) });
+      const input = _el('input', { type: 'checkbox', id, ...(checked ? { checked: 'checked' } : {}), ...(!evidenceEligible ? { disabled: 'disabled' } : {}) });
       input.addEventListener('change', () => {
         pendingIssues = input.checked ? [...pendingIssues, code] : pendingIssues.filter(c => c !== code);
       });
@@ -472,35 +540,44 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
     }
     panel.appendChild(issueWrap);
 
-    const notes = _el('textarea', { class: 'cal-textarea', style: 'margin-top:10px', 'aria-label': T('notes.label'), placeholder: T('notes.placeholder') });
+    const notes = _el('textarea', {
+      class: 'cal-textarea', style: 'margin-top:10px', 'aria-label': T('notes.label'), placeholder: T('notes.placeholder'),
+      ...(!evidenceEligible ? { disabled: 'disabled' } : {}),
+    });
     notes.value = record?.notes ?? '';
     panel.appendChild(notes);
 
-    const actionRow = _el('div', { class: 'cal-row', style: 'margin-top:12px' });
-    // EPIC 2E-K-R2-FIX2 -- Section 6: the Save Result button itself
-    // (not just the Decision Chips) must be disabled whenever the
-    // current record's Evidence is not genuinely eligible -- otherwise
-    // a user can still press Save while `pendingDecision` sits at its
-    // NOT_REVIEWED default, which the Controller now rejects with
-    // DECISION_REQUIRED (see calibration-lab-controller.js), but the
-    // button should never invite that action in the first place
-    // (reported bug #2). This mirrors the Chips' own use of the SAME
-    // evidence flag -- never a separate, divergent condition.
-    const saveEligible = previewEvidence?.visualDecisionEligible === true;
-    const saveBtn = _el('button', {
+    const saveBar = _el('div', { class: 'cal-save-bar', 'data-cal-role': 'guided-save-bar' });
+    saveBar.appendChild(_el('div', { class: 'cal-step-title', text: T('session.saveStepTitle') }));
+    const actionRow = _el('div', { class: 'cal-row' });
+
+    async function performSave(goNext) {
+      await controller.saveCurrentDecision({ userDecision: pendingDecision, issueCodes: pendingIssues, notes: notes.value });
+      const afterSave = controller.getState();
+      const saved = ['DECISION_SAVED_TO_COHORT', 'DECISION_SAVED_EXCLUDED'].includes(afterSave.lastActionResult?.code);
+      if (saved && goNext) controller.goToNextPending();
+      render();
+    }
+
+    saveBtn = _el('button', {
       class: 'cal-btn cal-btn-primary', text: T('session.saveDecision'),
-      'data-cal-role': 'save-decision-button', 'data-cal-save-eligible': String(saveEligible),
-      ...(saveEligible ? {} : { disabled: 'disabled', 'aria-disabled': 'true' }),
-      onclick: async () => {
-        if (!saveEligible) return; // belt-and-suspenders; disabled attribute already blocks real clicks
-        await controller.saveCurrentDecision({ userDecision: pendingDecision, issueCodes: pendingIssues, notes: notes.value });
-        render();
-      },
+      'data-cal-role': 'save-decision-button', onclick: () => performSave(false),
     });
-    if (!saveEligible) { saveBtn.style.opacity = '0.45'; saveBtn.style.cursor = 'not-allowed'; }
+    saveNextBtn = _el('button', {
+      class: 'cal-btn', text: T('session.saveAndNext'),
+      'data-cal-role': 'save-and-next-button', onclick: () => performSave(true),
+    });
     actionRow.appendChild(saveBtn);
-    actionRow.appendChild(_el('button', { class: 'cal-btn', text: T('session.clearCurrentAnswer'), onclick: async () => { await controller.clearCurrentAnswer(); render(); } }));
-    panel.appendChild(actionRow);
+    actionRow.appendChild(saveNextBtn);
+    actionRow.appendChild(_el('button', {
+      class: 'cal-btn', text: T('session.clearCurrentAnswer'),
+      onclick: async () => { await controller.clearCurrentAnswer(); render(); },
+    }));
+    saveBar.appendChild(actionRow);
+    saveHint = _el('div', { class: 'cal-save-hint', role: 'status', 'aria-live': 'polite', 'data-cal-role': 'save-guidance' });
+    saveBar.appendChild(saveHint);
+    panel.appendChild(saveBar);
+    refreshSaveState();
     return panel;
   }
 
@@ -588,6 +665,13 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
       text: T(`pilot.${report.pilotStatus}`),
       'data-cal-role': 'candidate-pilot-status',
     }));
+    panel.appendChild(_el('div', { class: 'cal-note', style: 'margin-top:8px', text: T('pilot.autoCollectGuide') }));
+    const targetSamples = report.criteria?.verifiedReviewedSamples?.threshold ?? 50;
+    const progressPct = Math.max(0, Math.min(100, Math.round((report.verifiedReviewedSamples / Math.max(1, targetSamples)) * 100)));
+    panel.appendChild(_el('div', { style: 'font-weight:650;margin-top:12px', text: `${T('pilot.cohortProgress')}: ${report.verifiedReviewedSamples}/${targetSamples}` }));
+    const progressTrack = _el('div', { class: 'cal-progress-track', style: 'margin-top:6px', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(targetSamples), 'aria-valuenow': String(report.verifiedReviewedSamples), 'data-cal-role': 'cohort-progress' });
+    progressTrack.appendChild(_el('div', { class: 'cal-progress-fill', style: `width:${progressPct}%` }));
+    panel.appendChild(progressTrack);
 
     const summaryTable = _el('table', { class: 'cal-table', style: 'margin-top:10px' });
     const summaryRows = [
@@ -638,6 +722,12 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
     }));
 
     const actions = _el('div', { class: 'cal-row', style: 'margin-top:14px' });
+    const pendingCount = controller.getState().records.filter(row => row.userDecision === 'NOT_REVIEWED').length;
+    actions.appendChild(_el('button', {
+      class: 'cal-btn cal-btn-primary', text: pendingCount > 0 ? T('pilot.reviewNextPending') : T('session.noPendingImages'),
+      'data-cal-role': 'review-next-pending', ...(pendingCount > 0 ? {} : { disabled: 'disabled', 'aria-disabled': 'true' }),
+      onclick: () => { if (pendingCount > 0) { controller.setMode('REVIEW'); controller.goToNextPending(); render(); } },
+    }));
     actions.appendChild(_el('button', {
       class: 'cal-btn', text: T('pilot.exportButton'),
       'data-cal-role': 'export-candidate-pilot-report',
@@ -690,6 +780,8 @@ export function mountCalibrationLabUI(root, controller, { getLocale } = {}) {
     root.setAttribute('data-cal-image-count', String(state.records.length));
     root.setAttribute('data-cal-reviewed-count', String(state.session?.reviewedCount ?? 0));
     root.setAttribute('data-cal-current-decision', state.currentRecord?.userDecision ?? 'NOT_REVIEWED');
+    root.setAttribute('data-cal-current-in-cohort', String(isCandidatePilotEligibleRecord(state.currentRecord)));
+    root.setAttribute('data-cal-last-action-result', state.lastActionResult?.code ?? 'NONE');
     root.innerHTML = '';
     root.appendChild(_renderHeader(state));
     const body = _el('div', { class: 'cal-body' });

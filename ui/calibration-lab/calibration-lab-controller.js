@@ -24,7 +24,8 @@ import { isValidCategoryList, isValidLightingCondition, isValidUserDecision, isV
 import { computeCalibrationDashboard } from '../../core/calibration-lab/aggregate.js';
 import { computeReadinessReport } from '../../core/calibration-lab/readiness.js';
 import { buildExportJson, buildExportCsv } from '../../core/calibration-lab/export-dataset.js';
-import { computeCandidatePilotReport } from '../../core/calibration-lab/candidate-pilot.js';
+import { computeCandidatePilotReport, isCandidatePilotEligibleRecord } from '../../core/calibration-lab/candidate-pilot.js';
+import { buildCohortSaveReceipt, findNextPendingIndex } from '../../core/calibration-lab/cohort-save-feedback.js';
 import { buildCandidatePilotExport } from '../../core/calibration-lab/export-candidate-pilot.js';
 // EPIC 2E-K-R2-FIX1 -- PIXEL TRUTH, DECISION GATE AND EVIDENCE CLOSURE
 import { capturePixelTruthEvidence } from '../../core/calibration-lab/pixel-truth-capture.js';
@@ -54,6 +55,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
   let records = [];
   let currentIndex = -1;
   let lastActionError = null;
+  let lastActionResult = null;
   let currentLocale = locale === 'en' ? 'en' : 'th';
 
   // Keyed by imageId -> { imgElement, objectUrl, renderPlan, analysisGenerationId }.
@@ -101,6 +103,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
       currentIndex,
       currentRecord: currentIndex >= 0 && currentIndex < records.length ? { ...records[currentIndex] } : null,
       lastActionError,
+      lastActionResult: lastActionResult ? { ...lastActionResult } : null,
       locale: currentLocale,
     };
   }
@@ -118,6 +121,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
 
   async function startNewSession() {
     lastActionError = null;
+    lastActionResult = null;
     _clearPixelPreviewCache(); // a new session starts with zero live images
     try {
       const newSession = createCalibrationSession({ locale: currentLocale, appVersion });
@@ -140,6 +144,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
 
   async function openSession(sessionId) {
     lastActionError = null;
+    lastActionResult = null;
     // Opening ANY session (even the one that was just active) never
     // has live decoded images available -- a resumed session's records
     // came back from storage, never from a freshly-decoded <img> in
@@ -182,6 +187,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
    */
   async function addImage(imgElement, { imageCategories, lightingCondition, objectUrl = null } = {}) {
     lastActionError = null;
+    lastActionResult = null;
     if (!session || sessionState !== 'ACTIVE') { lastActionError = 'NO_ACTIVE_SESSION'; _notify(); return getState(); }
     if (!isValidCategoryList(imageCategories)) { lastActionError = 'INVALID_CATEGORY_LIST'; _notify(); return getState(); }
     if (!isValidLightingCondition(lightingCondition)) { lastActionError = 'INVALID_LIGHTING_CONDITION'; _notify(); return getState(); }
@@ -239,6 +245,17 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
         renderPlan: pipelineResult.renderPlanForPixelPreviewTransientOnly,
         analysisGenerationId: pipelineResult.analysisGenerationId,
       });
+      lastActionResult = {
+        code: 'IMAGE_ADDED_TO_SESSION',
+        imageId: record.imageId,
+        reviewedCount: session.reviewedCount,
+        pendingCount: session.pendingCount,
+        totalCount: records.length,
+        productionSource: 'legacy',
+        productionWrite: false,
+        controlledV2Apply: false,
+        previewExport: false,
+      };
     } catch (e) {
       lastActionError = e?.code ?? 'ADD_IMAGE_FAILED';
     }
@@ -257,8 +274,16 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
     return getState();
   }
 
+  function goToNextPending() {
+    const nextIndex = findNextPendingIndex(records, currentIndex);
+    if (nextIndex >= 0) currentIndex = nextIndex;
+    _notify();
+    return getState();
+  }
+
   async function saveCurrentDecision({ userDecision, issueCodes = [], notes = '' }) {
     lastActionError = null;
+    lastActionResult = null;
     if (currentIndex < 0 || !records[currentIndex]) { lastActionError = 'NO_CURRENT_IMAGE'; _notify(); return getState(); }
     if (!isValidUserDecision(userDecision)) { lastActionError = 'INVALID_DECISION'; _notify(); return getState(); }
     if (!isValidIssueCodeList(issueCodes)) { lastActionError = 'INVALID_ISSUE_CODES'; _notify(); return getState(); }
@@ -295,6 +320,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
       records = records.map((r, i) => (i === currentIndex ? updated : r));
       session = recomputeSessionCounts(session, records);
       await storage.saveSession(session);
+      lastActionResult = buildCohortSaveReceipt(updated, records);
     } catch (e) {
       lastActionError = e?.code ?? 'SAVE_DECISION_FAILED';
     }
@@ -316,6 +342,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
    */
   async function clearCurrentAnswer() {
     lastActionError = null;
+    lastActionResult = null;
     if (currentIndex < 0 || !records[currentIndex]) { lastActionError = 'NO_CURRENT_IMAGE'; _notify(); return getState(); }
     try {
       const updated = { ...records[currentIndex], userDecision: 'NOT_REVIEWED', issueCodes: [], notes: '', reviewedAt: null };
@@ -323,6 +350,17 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
       records = records.map((r, i) => (i === currentIndex ? updated : r));
       session = recomputeSessionCounts(session, records);
       await storage.saveSession(session);
+      lastActionResult = {
+        code: 'CURRENT_ANSWER_CLEARED',
+        imageId: updated.imageId,
+        reviewedCount: session.reviewedCount,
+        pendingCount: session.pendingCount,
+        totalCount: records.length,
+        productionSource: 'legacy',
+        productionWrite: false,
+        controlledV2Apply: false,
+        previewExport: false,
+      };
     } catch (e) {
       lastActionError = e?.code ?? 'CLEAR_ANSWER_FAILED';
     }
@@ -331,6 +369,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
   }
 
   async function endSession() {
+    lastActionResult = null;
     sessionState = 'ENDED';
     calibrationMode = 'CLOSED';
     _clearPixelPreviewCache(); // no further edits to this session; release live images now
@@ -340,6 +379,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
 
   async function clearAllData() {
     lastActionError = null;
+    lastActionResult = null;
     _clearPixelPreviewCache();
     try {
       await storage.clearAll();
@@ -387,6 +427,8 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
       pendingCount: records.filter(r => r.userDecision === 'NOT_REVIEWED').length,
       currentImageId: current ? current.imageId : null,
       currentDecisionCode: current ? current.userDecision : null,
+      currentIncludedInCandidatePilot: current ? isCandidatePilotEligibleRecord(current) : false,
+      lastActionResultCode: lastActionResult?.code ?? null,
       selectedIssueCodes: current ? [...current.issueCodes] : [],
       readinessCode: getReadinessReport().readinessStatus,
       candidatePilotCode: candidatePilot.pilotStatus,
@@ -421,7 +463,7 @@ export function createCalibrationLabController({ locale = 'th', appVersion = APP
   return {
     init, getState, subscribe, setLocale, setMode,
     startNewSession, listAvailableSessions, openSession,
-    addImage, goToPrevious, goToNext,
+    addImage, goToPrevious, goToNext, goToNextPending,
     saveCurrentDecision, clearCurrentAnswer, endSession, clearAllData,
     getDashboard, getReadinessReport, getCandidatePilotReport, exportCandidatePilotJson, exportJson, exportCsv,
     getStorageUsageSummary, getQaSnapshot,
