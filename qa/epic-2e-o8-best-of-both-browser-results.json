@@ -1,12 +1,12 @@
 {
-  "epic": "2E-O",
-  "suite": "TARGET_AWARE_ROUNDTRIP_BROWSER",
+  "epic": "2E-O8",
+  "suite": "BEST_OF_BOTH_PERCEPTUAL_BROWSER",
   "decision": "PASS",
   "completed": true,
-  "runId": "44b3dc5b-f698-4b81-bbf6-84d79f6db44e",
-  "startedAt": "2026-07-28T06:52:52.016Z",
-  "completedAt": "2026-07-28T06:52:52.894Z",
-  "sourceHash": "9e51d03daa4daccc4456b3cee6e9cd2e6953bab6c13556f9b747aea653f573ab",
+  "runId": "b628491f-067b-431a-9fdb-67a58dff5e68",
+  "startedAt": "2026-07-28T07:00:27.958Z",
+  "completedAt": "2026-07-28T07:00:28.846Z",
+  "sourceHash": "b4a3d335d14659eb037b4667e59582cae3c85aa26466c9923d1e6feb91ef2161",
   "browserExecutable": "/usr/bin/chromium",
   "browserVersion": "144.0.7559.96",
   "result": {

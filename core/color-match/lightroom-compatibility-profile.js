@@ -20,12 +20,13 @@ export function buildLightroomCompatibilityProfile({ fileName = '', mimeType = '
   }
   const raw = sourceClass === 'RAW';
   const parameterSupport = {
-    whiteBalance: raw ? 'CAMERA_RAW_RELATIVE' : 'RENDERED_FILE_APPROXIMATE',
+    whiteBalance: raw ? 'ABSOLUTE_FROM_TARGET_BASE_REQUIRED' : 'PRESERVE_AS_SHOT_OR_USER_BASE',
     basicTone: 'LIGHTROOM_2012_APPROXIMATE_PREVIEW',
     hsl: 'DIRECT_PARAMETER_COMPATIBLE',
     colorGrading: 'DIRECT_PARAMETER_APPROXIMATE_RENDER',
     toneCurve: 'DIRECT_PARAMETER_APPROXIMATE_RENDER',
-    calibration: 'NOT_USED_BY_CANDIDATE',
+    calibration: 'SUBTLE_DIRECT_PARAMETER_COMPATIBLE',
+    cameraProfile: 'PRESERVE_TARGET_PROFILE_BY_OMISSION',
   };
   const warningCodes = [];
   if (!raw) warningCodes.push('RENDERED_FILE_WHITE_BALANCE_DIFFERS_FROM_RAW');

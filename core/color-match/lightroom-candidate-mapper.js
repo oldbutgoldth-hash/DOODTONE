@@ -6,9 +6,10 @@
  * an in-memory candidate XMP for fidelity testing, but cannot mutate the main
  * Production preset, activate Controlled V2, or write Production state.
  */
-import { defaultCurveSet } from '../curve-engine/index.js';
 import { quickSafetyClamp } from '../xmp-validator/index.js';
-import { serializeXMP } from '../preset-engine/index.js';
+import { serializeCandidateXMP, verifyCandidateXmpReadback } from './candidate-xmp-codec.js';
+import { evaluateColorMatchDirection } from './color-match-direction-gate.js';
+import { buildXmpDataLineage } from './xmp-data-lineage.js';
 import {
   PHOTOGRAPHIC_COMPENSATION_KIND,
   COMPENSATION_STATES,
@@ -16,7 +17,7 @@ import {
 import { buildLightroomCompatibilityProfile } from './lightroom-compatibility-profile.js';
 
 export const LIGHTROOM_CANDIDATE_KIND = 'LUMIXA_LIGHTROOM_COLOR_MATCH_CANDIDATE';
-export const LIGHTROOM_CANDIDATE_SCHEMA_VERSION = 2;
+export const LIGHTROOM_CANDIDATE_SCHEMA_VERSION = 3;
 const CHANNELS = ['red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta'];
 const round = (value, digits = 0) => {
   const n = Number(value);
@@ -32,13 +33,87 @@ function validate(compensation) {
   }
 }
 
-function buildToneCurve(intent) {
-  const span = clamp(intent.tone.tonalSpan, -18, 18);
-  const contrast = clamp(intent.tone.contrast, -28, 28);
-  const shadows = clamp(5 - span * 0.2 - Math.max(0, contrast) * 0.08, 2, 12);
-  const mid = clamp(128 + intent.tone.exposureEv * 8, 118, 138);
-  const highlights = clamp(248 + span * 0.2 + Math.max(0, contrast) * 0.08, 242, 253);
-  return { crv_sh: round(shadows), crv_mid: round(mid), crv_hi: round(highlights) };
+function monotonicCurve(points) {
+  const sorted = points.map(p => ({ x: round(clamp(p.x, 0, 255)), y: round(clamp(p.y, 0, 255)) }));
+  for (let i = 1; i < sorted.length; i += 1) sorted[i].y = Math.max(sorted[i - 1].y, sorted[i].y);
+  return sorted;
+}
+
+function buildToneCurves(intent) {
+  const t = intent.tone;
+  const exposureLift = clamp(t.exposureEv * 18, -24, 24);
+  const contrast = clamp(t.contrast, -28, 28);
+  const master = monotonicCurve([
+    { x: 0, y: clamp(t.blacks * 0.28, 0, 18) },
+    { x: 48, y: 48 + t.shadows * 0.28 - contrast * 0.10 },
+    { x: 128, y: 128 + exposureLift },
+    { x: 208, y: 208 + t.highlights * 0.20 + contrast * 0.10 },
+    { x: 255, y: 255 + Math.min(0, t.whites * 0.18) },
+  ]);
+  const warmth = clamp(intent.whiteBalance.warmth, -45, 45);
+  const tint = clamp(intent.whiteBalance.tint, -30, 30);
+  const redMid = clamp(warmth * 0.18 - tint * 0.06, -8, 8);
+  const greenMid = clamp(tint * 0.10, -6, 6);
+  const blueMid = clamp(-warmth * 0.18 - tint * 0.04, -8, 8);
+  const channel = mid => monotonicCurve([{ x: 0, y: 0 }, { x: 128, y: 128 + mid }, { x: 255, y: 255 }]);
+  return { master, red: channel(redMid), green: channel(greenMid), blue: channel(blueMid) };
+}
+
+
+function validCurveSet(curves) {
+  return ['master', 'red', 'green', 'blue'].every(ch => Array.isArray(curves?.[ch]) && curves[ch].length >= 2);
+}
+function blendCurveToIdentity(points, scale = 1) {
+  const factor = clamp(scale, 0, 1);
+  return monotonicCurve((points || []).map(p => ({ x: p.x, y: p.x + (p.y - p.x) * factor })));
+}
+function protectPixelTransferCurves(curves, compensation) {
+  if (!validCurveSet(curves)) return curves;
+  const neutral = compensation.targetProtection?.neutralWhite;
+  const matchNeed = Number(compensation.evidence?.matchNeedScore) || 0;
+  // CDF matching is powerful; scale it by actual pairwise need and target
+  // protection so a high-key wedding target cannot be crushed to mimic a
+  // low-key Reference distribution.
+  let baseScale = clamp(matchNeed / 24, 0.32, 0.78);
+  if (neutral?.active) baseScale *= clamp(1 - neutral.strength * 0.42, 0.48, 1);
+  const master = curves.master.map(p => {
+    const highWeight = clamp((p.x - 150) / 105, 0, 1);
+    const shadowWeight = clamp((95 - p.x) / 95, 0, 1);
+    const endpointProtection = 1 - Math.max(highWeight, shadowWeight) * (neutral?.active ? 0.25 : 0.12);
+    return { x: p.x, y: p.x + (p.y - p.x) * baseScale * endpointProtection };
+  });
+  const channelScale = clamp(baseScale * 0.55, 0.18, 0.52);
+  return {
+    master: monotonicCurve(master),
+    red: blendCurveToIdentity(curves.red, channelScale),
+    green: blendCurveToIdentity(curves.green, channelScale),
+    blue: blendCurveToIdentity(curves.blue, channelScale),
+  };
+}
+function mergeHslIntent(semantic, gaussian) {
+  if (!gaussian || (gaussian.confidence || 0) < 0.08) return semantic;
+  const confidence = clamp(gaussian.confidence, 0, 1);
+  const pixelWeight = 0.35 + confidence * 0.35;
+  const semanticWeight = 1 - pixelWeight;
+  return {
+    hue: semantic.hue * semanticWeight + gaussian.hue * pixelWeight,
+    saturation: semantic.saturation * semanticWeight + gaussian.saturation * pixelWeight,
+    luminance: semantic.luminance * semanticWeight + gaussian.luminance * pixelWeight,
+    source: 'SEMANTIC_PLUS_GAUSSIAN_PALETTE',
+    gaussianConfidence: confidence,
+  };
+}
+
+function buildCalibration(compensation) {
+  const h = compensation.semanticIntents.hsl;
+  return {
+    cal_red_h: round(clamp(-((h.red?.hue || 0) + (h.orange?.hue || 0)) * 0.16, -8, 8)),
+    cal_red_s: round(clamp(((h.red?.saturation || 0) + (h.orange?.saturation || 0)) * 0.09, -6, 6)),
+    cal_green_h: round(clamp(((h.green?.hue || 0) - (h.aqua?.hue || 0)) * 0.12, -8, 8)),
+    cal_green_s: round(clamp((h.green?.saturation || 0) * 0.08, -6, 6)),
+    cal_blue_h: round(clamp(((h.blue?.hue || 0) + (h.aqua?.hue || 0)) * 0.12, -8, 8)),
+    cal_blue_s: round(clamp(((h.blue?.saturation || 0) + (h.aqua?.saturation || 0)) * 0.07, -6, 6)),
+  };
 }
 
 function buildGrading(compensation) {
@@ -48,7 +123,9 @@ function buildGrading(compensation) {
   const wbMagnitude = Math.hypot(wb.warmth, wb.tint);
   const neutralScale = compensation.targetProtection?.neutralWhite?.highlightGradingScale ?? 1;
   const skinScale = compensation.targetProtection?.skin?.gradingScale ?? 1;
-  const sat = round(clamp(wbMagnitude * 0.22 * skinScale, 0, 12));
+  const rawSat = wbMagnitude * 0.34 * skinScale;
+  const minimumVisibleGrade = wbMagnitude >= 4 ? (compensation.targetProtection?.skin?.targetAlreadySaturated ? 1 : 2) : 0;
+  const sat = round(clamp(Math.max(rawSat, minimumVisibleGrade), 0, 12));
   return {
     grd_sh_h: wb.warmth >= 0 ? 215 : warmHue,
     grd_sh_s: round(sat * 0.55),
@@ -146,22 +223,31 @@ function buildReasonTrace(compensation, rawPreset, safePreset, adjustments) {
       ? ['SKIN_PROTECTION_APPLIED'] : compensation.reasonCodes,
     compensation.semanticIntents.hsl[channel]);
   }
+  push('ToneCurves', safePreset.curves, ['PERCEPTUAL_TONE_HISTOGRAM_TRANSFER'], {
+    curveSource: safePreset.transferDiagnostics?.curveSource || rawPreset.transferDiagnostics?.curveSource || 'SEMANTIC_FALLBACK',
+    curveMagnitude: rawPreset.transferDiagnostics?.curveMagnitude || 0,
+  });
   if (adjustments.length) trace.push({ parameter: 'PRE_XMP_SAFETY', value: adjustments.length, sourceCodes: ['QUICK_SAFETY_CLAMP'], evidence: adjustments, safety: 'CLAMPED' });
   return trace;
 }
 
-export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMIXA-Core-Color-Match-Candidate', targetMediaContext = null } = {}) {
+export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMIXA-Core-Color-Match-Candidate', targetMediaContext = null, pixelTransfer = null, gaussianHsl = null } = {}) {
   validate(compensation);
   const blocked = compensation.state === COMPENSATION_STATES.BLOCKED_INSUFFICIENT_EVIDENCE;
   const intent = compensation.semanticIntents;
   const hsl = {};
+  const hslTransferTrace = {};
   for (const channel of CHANNELS) {
-    const c = intent.hsl[channel];
+    const c = mergeHslIntent(intent.hsl[channel], gaussianHsl?.channels?.[channel]);
     hsl[`hsl_h_${channel}`] = blocked ? 0 : round(clamp(c.hue, -18, 18));
     hsl[`hsl_s_${channel}`] = blocked ? 0 : round(clamp(c.saturation, -28, 28));
     hsl[`hsl_l_${channel}`] = blocked ? 0 : round(clamp(c.luminance, -22, 22));
+    hslTransferTrace[channel] = c;
   }
-  const curve = buildToneCurve(intent);
+  const curves = protectPixelTransferCurves(
+    validCurveSet(pixelTransfer?.curves) ? pixelTransfer.curves : buildToneCurves(intent),
+    compensation,
+  );
   const rawPreset = {
     name,
     exp: blocked ? 0 : round(clamp(intent.tone.exposureEv * 100, -135, 135)),
@@ -179,7 +265,7 @@ export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMI
     sat: blocked ? 0 : round(intent.presence.saturation),
     sharp: 0,
     noise: 0,
-    ...curve,
+    crv_sh: 0, crv_mid: 0, crv_hi: 0,
     hsl,
     grade: blocked ? {
       grd_sh_h: 0, grd_sh_s: 0, grd_sh_l: 0,
@@ -187,16 +273,34 @@ export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMI
       grd_hi_h: 0, grd_hi_s: 0, grd_hi_l: 0,
       grd_blend: 50,
     } : buildGrading(compensation),
-    cal: { cal_red_h: 0, cal_red_s: 0, cal_green_h: 0, cal_green_s: 0, cal_blue_h: 0, cal_blue_s: 0 },
-    curves: defaultCurveSet(),
+    cal: blocked ? { cal_red_h: 0, cal_red_s: 0, cal_green_h: 0, cal_green_s: 0, cal_blue_h: 0, cal_blue_s: 0 } : buildCalibration(compensation),
+    curves,
+    transferDiagnostics: {
+      curveSource: validCurveSet(pixelTransfer?.curves) ? 'PERCEPTUAL_CDF_TONE_MERGE' : 'SEMANTIC_FALLBACK',
+      curveMagnitude: pixelTransfer?.curveMagnitude ?? 0,
+      gaussianHslConfidence: gaussianHsl?.confidence ?? 0,
+      gaussianSupportedChannelCount: gaussianHsl?.supportedChannelCount ?? 0,
+      hslTransferTrace,
+    },
   };
   const targetSafety = applyTargetAwareCandidateSafety(rawPreset, compensation);
   const { preset: safePreset, adjustments: validatorAdjustments } = quickSafetyClamp(targetSafety.preset);
   const adjustments = [...targetSafety.adjustments, ...validatorAdjustments];
-  const xmp = serializeXMP(safePreset);
+  const codecResult = serializeCandidateXMP({ preset: safePreset, targetMediaContext, candidateName: name });
+  const readback = verifyCandidateXmpReadback({ preset: safePreset, codecResult });
+  const directionGate = evaluateColorMatchDirection({
+    analysis: compensation.analysis,
+    compensation,
+    preset: safePreset,
+    wbContext: codecResult.wb,
+  });
+  const dataLineage = buildXmpDataLineage({ analysis: compensation.analysis, compensation, rawPreset, safePreset, codecResult, readback, directionGate, safetyAdjustments: adjustments });
   const compatibilityProfile = buildLightroomCompatibilityProfile(targetMediaContext || {});
   const reasonTrace = buildReasonTrace(compensation, rawPreset, safePreset, adjustments);
-  const candidateState = blocked ? 'BLOCKED' : compensation.state === COMPENSATION_STATES.SAFE_IDENTITY ? 'IDENTITY_CANDIDATE' : 'MAPPED_CANDIDATE';
+  let candidateState = blocked ? 'BLOCKED' : compensation.state === COMPENSATION_STATES.SAFE_IDENTITY ? 'IDENTITY_CANDIDATE' : 'MAPPED_CANDIDATE';
+  if (!blocked && readback.decision !== 'PASS') candidateState = 'XMP_PARAMETER_PIPELINE_MISMATCH';
+  else if (!blocked && directionGate.decision !== 'PASS') candidateState = directionGate.code;
+  const exportReady = ['MAPPED_CANDIDATE', 'IDENTITY_CANDIDATE'].includes(candidateState) && codecResult.wb.exportReady && readback.decision === 'PASS' && directionGate.decision === 'PASS';
 
   return {
     kind: LIGHTROOM_CANDIDATE_KIND,
@@ -206,14 +310,23 @@ export function mapCompensationToLightroomCandidate({ compensation, name = 'LUMI
     analysisGenerationId: compensation.analysisGenerationId,
     rawPreset,
     safePreset,
-    candidateXmp: xmp,
-    candidateXmpLength: xmp.length,
+    candidateXmp: exportReady ? codecResult.xmp : null,
+    candidateXmpLength: exportReady ? codecResult.xmp.length : 0,
+    exportReady,
+    serializerPreset: safePreset,
+    xmpCodec: codecResult,
+    xmpReadback: readback,
+    directionGate,
+    dataLineage,
     safetyAdjustments: adjustments,
+    transferEvidence: { pixelTransfer, gaussianHsl, hslTransferTrace },
     reasonTrace,
     fidelityContract: {
       previewUsesSafePreset: true,
       xmpUsesSafePreset: true,
-      presetAndXmpSingleSourceOfTruth: true,
+      presetAndXmpSingleSourceOfTruth: readback.decision === 'PASS',
+      structuralReadbackVerified: readback.decision === 'PASS',
+      directionGatePassed: directionGate.decision === 'PASS',
       browserPreviewIsAdobeRawRender: false,
       lightroomRoundTripRequired: true,
     },

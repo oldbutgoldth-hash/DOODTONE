@@ -20,6 +20,7 @@ import {
 import { createColorMatchEvaluationStore } from '../core/color-match/evaluation-store.js';
 import { downloadXMP } from '../core/preset-engine/index.js';
 import { evaluateLightroomRoundTrip } from '../core/color-match/lightroom-roundtrip-fidelity-engine.js';
+import { buildPerceptualPixelTransfer } from '../core/color-match/perceptual-pixel-transfer-engine.js';
 
 const MODES = Object.freeze({ Natural: 1, Cinematic: 1.08, Vintage: 0.92, Soft: 0.78, Bold: 1.15 });
 const DECISIONS = Object.freeze([
@@ -45,6 +46,9 @@ const rcm = {
   targetImg: null,
   targetFile: null,
   targetMediaOverride: 'AUTO',
+  targetBaseTemperatureK: null,
+  targetBaseTint: null,
+  targetProfileName: '',
   lightroomResultImg: null,
   referenceEvidence: null,
   targetEvidence: null,
@@ -63,6 +67,8 @@ const rcm = {
   candidateReadyForDownload: false,
   store: null,
   storedRecordCount: 0,
+  pixelTransfer: null,
+  pixelTransferKey: null,
 };
 
 function $(id) { return document.getElementById(id); }
@@ -211,6 +217,8 @@ function _renderCoreMatchInspector() {
   el.dataset.candidateXmpInMemoryOnly = 'true';
   el.dataset.evaluationStatus = evaluation?.status ?? 'PENDING';
   el.dataset.roundTripStatus = rcm.roundTripFidelity?.status ?? 'NOT_TESTED';
+  el.dataset.pixelTransferState = pipeline.transferEvidence?.pixelTransfer?.state ?? 'NOT_AVAILABLE';
+  el.dataset.gaussianHslConfidence = String(pipeline.transferEvidence?.gaussianHsl?.confidence ?? 0);
   const chip = (label, value) => `<span style="padding:5px 9px;border:1px solid var(--border);border-radius:3px;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">${label}: <b style="color:var(--text)">${escapeHtml(value)}</b></span>`;
   const p = candidate.safePreset;
   el.innerHTML = `
@@ -223,11 +231,14 @@ function _renderCoreMatchInspector() {
     <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Match Need', `${delta.matchNeedScore.toFixed(1)}/100`)}${chip('Evidence', `${Math.round(delta.evidence.combinedConfidence * 100)}%`)}${chip('WB Δ', signed(delta.whiteBalance.warmth))}${chip('Tint Δ', signed(delta.whiteBalance.tint))}${chip('Palette', delta.color.paletteDistance.toFixed(2))}</div>
     <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent);margin:11px 0 6px">N2 · PHOTOGRAPHIC COMPENSATION</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Illuminant', `${Math.round(compensation.illuminant.illuminantConfidence * 100)}%`)}${chip('Object Bias', `${Math.round(compensation.objectColorBias.score * 100)}%`)}${chip('Skin Protect', compensation.skinProtection.active ? `${Math.round(compensation.skinProtection.protectionStrength * 100)}%` : 'ไม่พบผิว')}${chip('Highlight Risk', `${Math.round(compensation.dynamicRange.highlightRisk * 100)}%`)}${chip('White Protect', `${Math.round((compensation.targetProtection?.neutralWhite?.strength || 0) * 100)}%`)}${chip('Scene Channels', `${compensation.targetProtection?.sceneColor?.sharedCount || 0} shared`)}</div>
+    <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent);margin:11px 0 6px">O8 · PERCEPTUAL TRANSFER</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Curve Source', candidate.rawPreset.transferDiagnostics?.curveSource || 'SEMANTIC_FALLBACK')}${chip('Curve Magnitude', candidate.rawPreset.transferDiagnostics?.curveMagnitude || 0)}${chip('Gaussian HSL', `${Math.round((pipeline.transferEvidence?.gaussianHsl?.confidence || 0) * 100)}%`)}${chip('Shared Channels', pipeline.transferEvidence?.gaussianHsl?.supportedChannelCount || 0)}${chip('Mean ΔE00', pipeline.transferEvidence?.gaussianHsl?.meanSharedDeltaE2000 || 0)}</div>
     <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent);margin:11px 0 6px">N3 · LIGHTROOM CANDIDATE</div>
-    <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Temp', signed(p.temp, 0))}${chip('Tint', signed(p.tint, 0))}${chip('Exposure', `${signed(p.exp / 100, 2)} EV`)}${chip('Contrast', signed(p.con, 0))}${chip('Vibrance', signed(p.vib, 0))}${chip('Safety', candidate.safetyAdjustments.length ? `Clamp ${candidate.safetyAdjustments.length}` : 'ผ่าน')}</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Temp Δ', `${signed(candidate.xmpCodec.wb.deltaTemperatureK, 0)} K`)}${chip('Final Temp', candidate.xmpCodec.wb.finalTemperatureK ? `${candidate.xmpCodec.wb.finalTemperatureK} K` : 'ต้องใส่ค่า Target')}${chip('Tint Δ', signed(candidate.xmpCodec.wb.deltaTint, 0))}${chip('Exposure', `${signed(p.exp / 100, 2)} EV`)}${chip('Active Params', candidate.directionGate.activeParameterCount)}${chip('Direction', candidate.directionGate.code)}${chip('XMP Readback', candidate.xmpReadback.decision)}</div>
     <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent);margin:11px 0 6px">N4/N5 · PREVIEW & EVALUATION</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap">${chip('Pixel Changed', rcm.previewMetrics ? `${rcm.previewMetrics.changedPixelPct.toFixed(1)}%` : 'รอ Preview')}${chip('Fidelity', evaluation ? `${evaluation.improvement.fidelityScore.toFixed(1)}/100` : 'รอวิเคราะห์ After')}${chip('Need Before→After', evaluation ? `${evaluation.before.matchNeedScore.toFixed(1)} → ${evaluation.after.matchNeedScore.toFixed(1)}` : '—')}${chip('Records', rcm.storedRecordCount)}${chip('LR Round-trip', rcm.roundTripFidelity ? `${rcm.roundTripFidelity.fidelityScore.toFixed(1)}/100` : 'ยังไม่ทดสอบ')}</div>
-    <div style="font-size:11px;line-height:1.55;color:var(--text-dim);margin-top:11px">ทุกค่ามาจาก Reference − Target Delta ผ่านการแยกสีของแสง/สีวัตถุ ป้องกันผิวและ Dynamic Range แล้ว Preview กับ Candidate XMP ใช้ Safe Preset ชุดเดียวกัน</div>`;
+    <div style="font-size:11px;line-height:1.55;color:var(--text-dim);margin-top:11px">Preview ที่ถูกต้องคือ Reference → Target Original → Target Matched เท่านั้น ทุกค่าต้องผ่าน Data Lineage, Direction Gate และ XMP Structural Readback ก่อนดาวน์โหลด</div>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-family:var(--font-mono);font-size:10px;color:var(--accent)">XMP DATA LINEAGE (${candidate.dataLineage.decision})</summary><div style="overflow:auto;margin-top:7px"><table style="width:100%;border-collapse:collapse;font-size:9.5px;color:var(--text-dim)"><thead><tr><th style="text-align:left">Parameter</th><th>Delta</th><th>Intent</th><th>Safe</th><th>XML Readback</th><th>Status</th></tr></thead><tbody>${candidate.dataLineage.rows.slice(0,13).map(row=>`<tr><td>${escapeHtml(row.parameter)}</td><td style="text-align:center">${escapeHtml(row.referenceTargetDelta ?? '—')}</td><td style="text-align:center">${escapeHtml(row.compensatedIntent ?? '—')}</td><td style="text-align:center">${escapeHtml(row.safeCandidate ?? '—')}</td><td style="text-align:center">${escapeHtml(row.readback ?? '—')}</td><td style="text-align:center">${escapeHtml(row.status)}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 
 function _renderReasons() {
@@ -268,6 +279,16 @@ function _ensureEvaluationHarness() {
       <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--accent);margin-bottom:7px">2E-O · LIGHTROOM ROUND-TRIP FIDELITY</div>
       <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px">ชนิดไฟล์เป้าหมายที่นำ XMP ไปใช้</label>
       <select id="rcmTargetMediaType" style="width:100%;padding:8px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);margin-bottom:8px"><option value="AUTO">ตรวจอัตโนมัติ</option><option value="RAW">RAW เช่น CR2/CR3/NEF/ARW</option><option value="RENDERED">JPEG/TIFF/PNG</option></select>
+      <div style="padding:10px;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);margin-bottom:9px">
+        <div style="font-family:var(--font-mono);font-size:9.5px;font-weight:700;color:var(--accent);margin-bottom:7px">TARGET LIGHTROOM BASE VALUES</div>
+        <div style="font-size:10.5px;line-height:1.5;color:var(--text-dim);margin-bottom:7px">สำหรับ RAW ให้ใส่ค่า Temp/Tint เดิมที่ Lightroom แสดงก่อนใช้ XMP ระบบจะคำนวณ Delta จากฐานนี้ และจะไม่เดาค่า 5500K เอง</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px">
+          <label style="font-size:10px;color:var(--text-dim)">Temperature (K)<input id="rcmTargetBaseTemp" type="number" min="2000" max="50000" step="50" placeholder="เช่น 5200" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px;background:var(--surface-1);color:var(--text);border:1px solid var(--border)"></label>
+          <label style="font-size:10px;color:var(--text-dim)">Tint<input id="rcmTargetBaseTint" type="number" min="-150" max="150" step="1" placeholder="เช่น +3" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px;background:var(--surface-1);color:var(--text);border:1px solid var(--border)"></label>
+          <label style="font-size:10px;color:var(--text-dim)">Target Profile (ข้อมูลกำกับ)<input id="rcmTargetProfileName" type="text" placeholder="เช่น Camera Standard" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px;background:var(--surface-1);color:var(--text);border:1px solid var(--border)"></label>
+        </div>
+        <div style="font-size:9.5px;color:var(--text-faint);margin-top:6px">Candidate XMP จะไม่เขียน Camera Profile จึงรักษา Profile ของ Target ไว้</div>
+      </div>
       <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px">นำ JPEG/TIFF ที่ Export จาก Lightroom หลังใช้ Candidate XMP กลับมาตรวจ</label>
       <input type="file" id="rcmLightroomResultFileIn" accept="image/jpeg,image/png,image/tiff,image/webp" style="width:100%;font-size:11px;color:var(--text-dim);margin-bottom:8px">
       <canvas id="rcmLightroomResultCanvas" style="width:100%;max-height:260px;object-fit:contain;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);display:none"></canvas>
@@ -278,6 +299,16 @@ function _ensureEvaluationHarness() {
   $('rcmSaveEvaluationBtn')?.addEventListener('click', _saveEvaluation);
   $('rcmExportEvaluationBtn')?.addEventListener('click', _exportEvaluations);
   $('rcmTargetMediaType')?.addEventListener('change', async event => { rcm.targetMediaOverride = event.target.value; await _rebuildAndPreview(); });
+  const updateTargetBase = async () => {
+    const temp = Number($('rcmTargetBaseTemp')?.value); const tint = Number($('rcmTargetBaseTint')?.value);
+    rcm.targetBaseTemperatureK = Number.isFinite(temp) && temp >= 2000 ? temp : null;
+    rcm.targetBaseTint = Number.isFinite(tint) ? tint : null;
+    rcm.targetProfileName = $('rcmTargetProfileName')?.value?.trim() || '';
+    await _rebuildAndPreview();
+  };
+  $('rcmTargetBaseTemp')?.addEventListener('change', updateTargetBase);
+  $('rcmTargetBaseTint')?.addEventListener('change', updateTargetBase);
+  $('rcmTargetProfileName')?.addEventListener('change', updateTargetBase);
   $('rcmLightroomResultFileIn')?.addEventListener('change', _handleLightroomResultFile);
   return el;
 }
@@ -411,6 +442,17 @@ async function _rebuildAndPreview() {
   _setStatus('กำลังวิเคราะห์ Target และสร้าง Core Color Match N1–N5…');
 
   if (!rcm.targetEvidence) rcm.targetEvidence = await _analyzeEvidence(rcm.targetImg);
+  const transferKey = `${rcm.generationId}|${Math.round(_effectiveIntensity())}|${rcm.mode}`;
+  if (!rcm.pixelTransfer || rcm.pixelTransferKey !== transferKey) {
+    _setStatus('กำลังคำนวณ LAB/Gaussian HSL, Tone Curve และ Histogram Matching…');
+    rcm.pixelTransfer = await buildPerceptualPixelTransfer({
+      referenceImg: rcm.referenceImg,
+      targetImg: rcm.targetImg,
+      intensity: _effectiveIntensity(),
+      mode: rcm.mode,
+    });
+    rcm.pixelTransferKey = transferKey;
+  }
   rcm.corePipeline = buildCoreColorMatchPipeline({
     reference: rcm.referenceEvidence,
     target: rcm.targetEvidence,
@@ -418,10 +460,14 @@ async function _rebuildAndPreview() {
     intensity: _effectiveIntensity(),
     candidateName: 'LUMIXA-Core-Color-Match-Candidate',
     protectionOptions: { ...rcm.toggles },
+    pixelTransfer: rcm.pixelTransfer,
     targetMediaContext: {
       fileName: rcm.targetFile?.name || '',
       mimeType: rcm.targetFile?.type || '',
       mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride,
+      baseTemperatureK: rcm.targetBaseTemperatureK,
+      baseTint: rcm.targetBaseTint,
+      profileName: rcm.targetProfileName,
     },
   });
   _drawOriginal(rcm.targetImg, 'rcmBeforeCanvas');
@@ -451,19 +497,19 @@ async function _rebuildAndPreview() {
   _renderReasons();
   _renderEvaluationHarness();
   if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '0';
-  const blocked = rcm.corePipeline.candidate.candidateState === 'BLOCKED';
+  const blocked = !rcm.corePipeline.candidate.exportReady;
   if (!blocked) {
     $('rcmGenerateBtn')?.removeAttribute('disabled');
     $('rcmSaveAfterBtn')?.removeAttribute('disabled');
   }
   _setStatus(blocked
-    ? 'ระบบบล็อก Candidate เพราะหลักฐานไม่เพียงพอ — ไม่สร้าง XMP'
+    ? `ระบบบล็อก Candidate: ${rcm.corePipeline.candidate.candidateState} — ตรวจ Target WB Base / Direction / XMP Readback`
     : `✓ Core Color Match พร้อมตรวจ · Fidelity ${rcm.evaluation.improvement.fidelityScore.toFixed(1)}/100 · Production ยังเป็น Legacy`);
 }
 
 function generateXMP() {
   const candidate = rcm.corePipeline?.candidate;
-  if (!candidate || candidate.candidateState === 'BLOCKED') { _setStatus('Candidate ยังไม่พร้อมสร้าง XMP'); return; }
+  if (!candidate || !candidate.exportReady) { _setStatus(`Candidate ยังส่งออกไม่ได้: ${candidate?.candidateState || 'NOT_READY'}`); return; }
   rcm.candidateReadyForDownload = true;
   $('rcmDownloadBtn')?.removeAttribute('disabled');
   $('rcmDownloadBtn').dataset.ready = '1';
@@ -471,7 +517,7 @@ function generateXMP() {
 }
 function downloadXMPFile() {
   const candidate = rcm.corePipeline?.candidate;
-  if (!candidate || !rcm.candidateReadyForDownload) { _setStatus('กรุณากดสร้าง Candidate XMP ก่อน'); return; }
+  if (!candidate || !candidate.exportReady || !candidate.candidateXmp || !rcm.candidateReadyForDownload) { _setStatus(`ดาวน์โหลดไม่ได้: ${candidate?.candidateState || 'NOT_READY'}`); return; }
   downloadXMP(candidate.candidateXmp, 'LUMIXA-Core-Color-Match-Candidate');
   _setStatus('✓ ดาวน์โหลด Candidate XMP แล้ว · Production Pipeline ยังใช้ Legacy');
 }
@@ -499,6 +545,8 @@ function _resetPairState() {
   rcm.evaluation = null;
   rcm.previewMetrics = null;
   rcm.candidateReadyForDownload = false;
+  rcm.pixelTransfer = null;
+  rcm.pixelTransferKey = null;
   _renderCoreMatchInspector();
   _renderEvaluationHarness();
 }

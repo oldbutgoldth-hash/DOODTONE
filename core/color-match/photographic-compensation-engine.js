@@ -201,10 +201,22 @@ function buildSemanticIntents(delta, illuminant, dynamicRange, skin, targetProte
   const highlightScale = rawHighlights > 0 ? neutral.positiveHighlightScale : 1;
   const whitesScale = rawWhites > 0 ? neutral.positiveWhitesScale : 1;
 
+  const rawWarmthIntent = delta.whiteBalance.warmth * wbStrength * neutral.whiteBalanceScale * targetSkin.globalWarmthScale;
+  const consistentIlluminant = illuminant.zoneConsistency >= 0.72 && illuminant.illuminantConfidence >= 0.55;
+  const warmthFloorScale = targetSkin.targetAlreadyWarm ? 0.18 : 0.30;
+  const warmthFloor = consistentIlluminant && Math.abs(delta.whiteBalance.warmth) >= 8
+    ? delta.whiteBalance.warmth * amount * warmthFloorScale
+    : 0;
+  const finalWarmthIntent = Math.abs(rawWarmthIntent) < Math.abs(warmthFloor) && Math.sign(rawWarmthIntent || warmthFloor) === Math.sign(warmthFloor)
+    ? warmthFloor
+    : rawWarmthIntent;
+  const rawTintIntent = delta.whiteBalance.tint * wbStrength * neutral.tintScale * targetSkin.globalTintScale;
+
   return {
     whiteBalance: {
-      warmth: round(clamp(delta.whiteBalance.warmth * wbStrength * neutral.whiteBalanceScale * targetSkin.globalWarmthScale, -45, 45), 3),
-      tint: round(clamp(delta.whiteBalance.tint * wbStrength * neutral.tintScale * targetSkin.globalTintScale, -30, 30), 3),
+      warmth: round(clamp(finalWarmthIntent, -45, 45), 3),
+      tint: round(clamp(rawTintIntent, -30, 30), 3),
+      transferFloorApplied: Math.abs(finalWarmthIntent) > Math.abs(rawWarmthIntent) + 0.001,
     },
     tone: {
       exposureEv: round(clamp(rawExposure * exposureScale, -1.35, 1.35), 4),
@@ -269,6 +281,7 @@ export function buildPhotographicCompensation({ analysis, intensity = 70, protec
     stage: 'N2_PHOTOGRAPHIC_COMPENSATION',
     state,
     analysisGenerationId: reference.analysisGenerationId,
+    analysis,
     intensity: clamp(intensity, 0, 100),
     illuminant,
     objectColorBias: {

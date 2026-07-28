@@ -7,8 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const RESULT_PATH = path.join(ROOT, 'qa/epic-2e-o-release-gate-results.json');
-const BROWSER_RESULT_PATH = path.join(ROOT, 'qa/epic-2e-o-target-aware-roundtrip-browser-results.json');
+const RESULT_PATH = path.join(ROOT, 'qa/epic-2e-o8-release-gate-results.json');
+const BROWSER_RESULT_PATH = path.join(ROOT, 'qa/epic-2e-o8-best-of-both-browser-results.json');
 const PRODUCTION_MANIFEST = 'qa/baselines/epic-2e-n-production-invariant.json';
 const startedAt = new Date().toISOString();
 const runId = randomUUID();
@@ -28,6 +28,11 @@ const BROWSER_HASH_FILES = [
   'core/color-match/candidate-xmp-codec.js',
   'core/color-match/color-match-direction-gate.js',
   'core/color-match/xmp-data-lineage.js',
+  'core/color-match/perceptual-color-science.js',
+  'core/color-match/gaussian-hsl-transfer-engine.js',
+  'core/color-match/tone-curve-transfer-engine.js',
+  'core/color-match/histogram-matching-engine.js',
+  'core/color-match/perceptual-pixel-transfer-engine.js',
 ];
 const RELEASE_HASH_FILES = [
   ...BROWSER_HASH_FILES,
@@ -36,8 +41,9 @@ const RELEASE_HASH_FILES = [
   'index.html',
   'package.json',
   'qa/epic-2e-o-target-aware-roundtrip-static-test.mjs',
-  'qa/epic-2e-o-target-aware-roundtrip-browser-test.mjs',
+  'qa/epic-2e-o8-best-of-both-browser-test.mjs',
   'qa/epic-2e-o3-o7-xmp-lineage-static-test.mjs',
+  'qa/epic-2e-o8-best-of-both-color-match-static-test.mjs',
 ];
 
 function run(label, rel, timeout = 300000) {
@@ -85,6 +91,7 @@ async function verifyBrowserEvidence() {
   try { result = JSON.parse(await fs.readFile(BROWSER_RESULT_PATH, 'utf8')); } catch {}
   const checks = result?.result?.checks || {};
   const requiredChecks = [
+    'perceptualPixelTransfer', 'gaussianHsl', 'pointCurvesApplied', 'curveReadback',
     'candidateMapped', 'xmpSerialized', 'xmpReadback', 'directionValid', 'dataLineage', 'targetWbBase', 'profilePreserved', 'meaningfulXmp', 'previewChanged', 'afterAnalysed',
     'evaluationComplete', 'recordSaved', 'neutralWhiteProtection',
     'highKeyDetected', 'skinProtection', 'sceneTransferDampened',
@@ -136,11 +143,11 @@ const steps = [
   run('ESM Syntax', 'tools/esm-syntax-gate.mjs'),
   run('Full Static Suites', 'qa/run-static-suites.mjs'),
   run('2E-O3..O7 XMP Lineage', 'qa/epic-2e-o3-o7-xmp-lineage-static-test.mjs'),
-  run('2E-O Target-aware Browser Runtime', 'qa/epic-2e-o-target-aware-roundtrip-browser-test.mjs'),
+  run('2E-O Target-aware Browser Runtime', 'qa/epic-2e-o8-best-of-both-browser-test.mjs'),
 ];
 const browserEvidence = await verifyBrowserEvidence();
 steps.push({
-  label: 'Fresh Browser Evidence', rel: 'qa/epic-2e-o-target-aware-roundtrip-browser-results.json',
+  label: 'Fresh Browser Evidence', rel: 'qa/epic-2e-o8-best-of-both-browser-results.json',
   exitCode: browserEvidence.status === 'PASS' ? 0 : browserEvidence.status === 'NOT_VERIFIED' ? 2 : 1,
   status: browserEvidence.status, stdoutTail: JSON.stringify(browserEvidence), stderrTail: '',
 });
@@ -153,7 +160,7 @@ let decision = 'FINAL_PASS';
 if (steps.some(step => step.status === 'FAIL')) decision = 'FAIL';
 else if (steps.some(step => step.status === 'NOT_VERIFIED')) decision = 'NOT_VERIFIED';
 const output = {
-  epic: '2E-O', suite: 'TARGET_AWARE_LIGHTROOM_ROUNDTRIP_RELEASE_GATE', decision, completed: true,
+  epic: '2E-O8', suite: 'BEST_OF_BOTH_TRUE_COLOR_MATCH_RELEASE_GATE', decision, completed: true,
   runId, startedAt, completedAt: new Date().toISOString(), sourceHash: await hashSet(RELEASE_HASH_FILES),
   steps, browserEvidence, productionInvariant, packageCleanliness,
   releaseBoundary: {
@@ -173,5 +180,5 @@ const output = {
 };
 await fs.writeFile(RESULT_PATH, JSON.stringify(output, null, 2) + '\n');
 console.log(`\nEPIC 2E-O RELEASE DECISION: ${decision}`);
-console.log('Evidence: qa/epic-2e-o-release-gate-results.json');
+console.log('Evidence: qa/epic-2e-o8-release-gate-results.json');
 process.exit(decision === 'FINAL_PASS' ? 0 : decision === 'NOT_VERIFIED' ? 2 : 1);

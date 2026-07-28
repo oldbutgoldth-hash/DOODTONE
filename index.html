@@ -795,12 +795,13 @@
             <span style="font-family:var(--font-mono);font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em">Beta</span>
           </div>
 
+          <div id="rcmPairwisePreviewHeading" data-pairwise-preview="true" style="margin-bottom:10px;padding:10px 12px;border:1px solid var(--accent);background:var(--surface-1);font-size:11px;color:var(--text-dim)"><b style="color:var(--accent)">TRUE PAIRWISE PREVIEW</b> — ภาพต้นแบบ (Reference) → ภาพเป้าหมายเดิม (Target Original) → ภาพเป้าหมายหลัง Match (Target Matched)</div>
           <!-- Upload row -->
           <div class="lx-2col-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
             <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:18px;display:flex;flex-direction:column">
               <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);margin-bottom:10px" data-i18n-key="appShell.referenceImage">Reference Image</div>
               <input type="file" id="rcmRefFileIn" accept="image/*" style="font-size:12px;color:var(--text-dim);margin-bottom:10px">
-              <div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">Original</div>
+              <div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">1 · REFERENCE</div>
               <canvas id="rcmRefCanvas" style="width:100%;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);display:block"></canvas>
               <button id="rcmAnalyzeBtn" style="margin-top:auto;padding-top:10px;width:100%;padding:10px;border-radius:2px;font-family:var(--font-mono);font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border-strong);background:var(--accent);color:var(--on-accent)" data-i18n-key="appShell.analyzeReference">Analyze Reference</button>
             </div>
@@ -808,9 +809,9 @@
               <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);margin-bottom:10px" data-i18n-key="appShell.targetImage">Target Image</div>
               <input type="file" id="rcmTargetFileIn" accept="image/*" style="font-size:12px;color:var(--text-dim);margin-bottom:10px">
               <div style="display:grid;grid-template-columns:1fr;gap:8px;flex:1">
-                <div><div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">Before</div><canvas id="rcmBeforeCanvas" style="width:100%;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);display:block"></canvas></div>
+                <div><div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">2 · TARGET ORIGINAL</div><canvas id="rcmBeforeCanvas" style="width:100%;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);display:block"></canvas></div>
                 <div>
-                  <div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">After <span id="rcmAfterUpdating" style="color:var(--accent);text-transform:none;font-weight:400;opacity:0;transition:opacity .15s"><span data-i18n-key="appShell.updating">— updating…</span></span></div>
+                  <div style="font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">3 · TARGET MATCHED PREVIEW <span id="rcmAfterUpdating" style="color:var(--accent);text-transform:none;font-weight:400;opacity:0;transition:opacity .15s"><span data-i18n-key="appShell.updating">— updating…</span></span></div>
                   <canvas id="rcmAfterCanvas" style="width:100%;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);display:block"></canvas>
                   <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:8.5px;color:var(--text-faint);text-transform:uppercase;margin:8px 0 3px"><span>Intensity</span><span id="rcmAfterIntensityValue">60</span></div>
                   <input type="range" id="rcmAfterIntensitySlider" min="0" max="100" value="60" style="width:100%;margin-bottom:6px">

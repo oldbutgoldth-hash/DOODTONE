@@ -6,12 +6,23 @@
  * HSL and grading from one candidate source of truth and reports metrics.
  */
 
+import { buildLUT, defaultCurveSet } from '../curve-engine/index.js';
+
 const clamp8 = value => Math.max(0, Math.min(255, value));
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 const round = (value, digits = 3) => {
   const p = 10 ** digits;
   return Math.round((Number(value) || 0) * p) / p;
 };
+
+
+function isIdentityCurve(points) {
+  return Array.isArray(points) && points.length >= 2 && points.every(p => Math.round(p.x) === Math.round(p.y));
+}
+function candidateCurveLut(points) {
+  if (isIdentityCurve(points)) return Uint8Array.from({ length: 256 }, (_, i) => i);
+  return buildLUT(points);
+}
 
 function rgbToHsl(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -95,6 +106,14 @@ export function applyColorMatchCandidateToImageData(imageData, preset) {
   const exposureFactor = 2 ** ((preset.exp || 0) / 100);
   const contrastFactor = 1 + (preset.con || 0) / 100;
   const wbGains = buildWhiteBalanceGains(preset.temp || 0, preset.tint || 0);
+  const curves = preset.curves || defaultCurveSet();
+  const curveLuts = {
+    master: candidateCurveLut(curves.master || defaultCurveSet().master),
+    red: candidateCurveLut(curves.red || defaultCurveSet().red),
+    green: candidateCurveLut(curves.green || defaultCurveSet().green),
+    blue: candidateCurveLut(curves.blue || defaultCurveSet().blue),
+  };
+  const curveMagnitude = ['master','red','green','blue'].reduce((sum,ch)=>sum+(curves[ch]||[]).reduce((s,p)=>s+Math.abs((p.y||0)-(p.x||0)),0),0);
   let changedPixels = 0;
   let absoluteDifference = 0;
   let clippedHighlights = 0;
@@ -133,6 +152,14 @@ export function applyColorMatchCandidateToImageData(imageData, preset) {
     const zoneLift = shadowWeight * ((preset.sh || 0) * 0.42 + (preset.bl || 0) * 0.2)
       + highlightWeight * ((preset.hi || 0) * 0.42 + (preset.wh || 0) * 0.2);
     r += zoneLift; g += zoneLift; b += zoneLift;
+
+    // Apply the exact candidate point curves that are serialized into XMP.
+    // Per-channel curve first, then master luminance curve. This is an
+    // approximation of Adobe's processing order, but the curve source of
+    // truth is identical between Preview and Candidate XMP.
+    r = curveLuts.master[curveLuts.red[Math.round(clamp8(r))]];
+    g = curveLuts.master[curveLuts.green[Math.round(clamp8(g))]];
+    b = curveLuts.master[curveLuts.blue[Math.round(clamp8(b))]];
 
     let hsl = rgbToHsl(r, g, b);
     const channel = channelForHue(hsl.h);
@@ -192,6 +219,8 @@ export function applyColorMatchCandidateToImageData(imageData, preset) {
       recoveredHighlightPct: round(recoveredHighlights / Math.max(1, pixelCount) * 100, 3),
       recoveredShadowPct: round(recoveredShadows / Math.max(1, pixelCount) * 100, 3),
       identity: changedPixels === 0,
+      pointCurvesApplied: curveMagnitude >= 1,
+      pointCurveMagnitude: round(curveMagnitude, 2),
     },
   };
 }

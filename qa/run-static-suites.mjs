@@ -161,6 +161,10 @@ const STATIC_SUITES = [
   'qa/epic-2e-n1-n5-integration-static-test.mjs',
   // EPIC 2E-O — target-aware neutral/skin/highlight protection and Lightroom round-trip fidelity.
   'qa/epic-2e-o-target-aware-roundtrip-static-test.mjs',
+  // EPIC 2E-O3..O7 — Candidate XMP data lineage, structural readback, direction gate and true pairwise preview.
+  'qa/epic-2e-o3-o7-xmp-lineage-static-test.mjs',
+  // EPIC 2E-O8 — perceptual LAB/CIEDE2000, Gaussian HSL and real tone/histogram curve integration.
+  'qa/epic-2e-o8-best-of-both-color-match-static-test.mjs',
 ];
 
 let anyFailed = false;

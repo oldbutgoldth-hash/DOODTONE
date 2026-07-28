@@ -1,11 +1,10 @@
-# Current development status — v1.6.0 / EPIC 2E-O
+# Current development status — v1.8.0 / EPIC 2E-O8
 
-The active development focus is the offline Reference-to-Target Color Match candidate engine. EPIC 2E-O adds target-aware high-key/neutral-white protection, skin protection, scene-object transfer guards, and a Lightroom round-trip fidelity inspector.
+The active branch combines the strongest OpenCode transfer ideas with LUMIXA’s pairwise XMP safety pipeline: LAB/CIEDE2000 diagnostics, Gaussian HSL transfer, 13-point Tone Curves and CDF Histogram Matching now reach the actual Candidate Preview and Candidate XMP.
 
-**Do not deploy this package as Production yet.** Production remains Legacy and Candidate XMP is memory-only. A real Lightroom-exported JPEG/TIFF must be imported back into LUMIXA to calibrate Preview-to-Lightroom drift before Reference Color Match Beta or Production. See `README_EPIC_2E_O.txt`.
+**Do not deploy as Production yet.** Production remains Legacy. Validate Candidate XMP files in Lightroom and return the exported JPEG/TIFF for real round-trip calibration. See `EPIC_2E_O8_RELEASE_NOTES.md` and `EPIC_2E_O8_QA_REPORT.md`.
 
 ---
-
 # LUMIXA AI — Handoff Package
 
 This is a **drop-in replacement** for your original `PresetForge AI` static site — not a mockup. All 30 analysis engines in `core/` are byte-for-byte unchanged from your codebase (verified via diff — Stage 2.4.2B.1); `ui/app.js` and `ui/ui-engine.js` are your original controller logic with only the styling mechanism swapped (inline CSS custom properties instead of `styles.css`); every canvas renderer (`ui/*-renderer.js`) is untouched.

@@ -1,0 +1,70 @@
+{
+  "epic": "2E-O8",
+  "version": "v1.8.0",
+  "files": {
+    "core/color-match/perceptual-color-science.js": {
+      "sha256": "77efc2961c5817371845a8041917cdfd1a61c6f426065f7c6ce7c3d6215e6826",
+      "bytes": 4408
+    },
+    "core/color-match/gaussian-hsl-transfer-engine.js": {
+      "sha256": "7bead93eba35b56388c98d5014b67adaed72a729fdbeee5c2d1d1fcc20739df2",
+      "bytes": 3711
+    },
+    "core/color-match/tone-curve-transfer-engine.js": {
+      "sha256": "9da84d8babcec3dff4d51d7b45daf361eb8f16eb2af91600d408cd57c6d840ae",
+      "bytes": 12368
+    },
+    "core/color-match/histogram-matching-engine.js": {
+      "sha256": "3d6f0822a430365863e461ebc0a203396d2ad23227628623339d513248f6f8bc",
+      "bytes": 10565
+    },
+    "core/color-match/perceptual-pixel-transfer-engine.js": {
+      "sha256": "8c0ad4ad28de6c0f3b0d716fc2cc1c4288e4942a3a45957a0dab84f5f2809fe6",
+      "bytes": 2742
+    },
+    "core/color-match/core-color-match-pipeline.js": {
+      "sha256": "f6c2673dde903bd92d35a183a1741e0ec4ef23cdecc5234fec1df8c6a7c1ec1b",
+      "bytes": 1654
+    },
+    "core/color-match/lightroom-candidate-mapper.js": {
+      "sha256": "fb91f37ce4f2bd72c728d2709375203f0a4fb63d198ceaa0cbcf3525fe60865e",
+      "bytes": 16175
+    },
+    "core/color-match/candidate-preview-renderer.js": {
+      "sha256": "855e90d857a9ad53a60feb7a4197d5e62c1edf21e7cebb40efc1cee9f4ef1cae",
+      "bytes": 10909
+    },
+    "ui/reference-color-match-panel.js": {
+      "sha256": "d83289dcf44bccb230180365ff00d43eb0f6ff5455ab1998f1727f73459c3c05",
+      "bytes": 40836
+    },
+    "core/project-version.js": {
+      "sha256": "0c4ae904047064d59d09e2f0070c47d3e050c1dc070cd091a4af73cdefa78df5",
+      "bytes": 3699
+    },
+    "package.json": {
+      "sha256": "b4f6d6fd5ee731ccb72f719e53bf488af789ffde63d0b292aa9a1ba7529c3895",
+      "bytes": 3725
+    },
+    "qa/epic-2e-o8-best-of-both-color-match-static-test.mjs": {
+      "sha256": "afe1899c0cb185a9572577f4ac61fca6b18ea86ccc63b6ce6d4ba86026cfa1c1",
+      "bytes": 4573
+    },
+    "qa/epic-2e-o8-best-of-both-browser-test.mjs": {
+      "sha256": "8e879edfd992d796666595ff3cda821c9b8f48de82bb414b8bd8f405331cf6b9",
+      "bytes": 13644
+    },
+    "qa/epic-2e-o8-release-gate.mjs": {
+      "sha256": "ac6260f4decd7856550fa6e1c3a0e901ea5249d5d1d7f2dc7421d84f1ba7fdab",
+      "bytes": 9488
+    },
+    "qa/epic-2e-o8-best-of-both-browser-results.json": {
+      "sha256": "e1d572677d0b05bdaf31bebeca9870e7d23af0dc5efbdf09d0d9dab1f901f8be",
+      "bytes": 42545
+    },
+    "qa/epic-2e-o8-release-gate-results.json": {
+      "sha256": "ec9a907fffbba0547b7102f2ba82e19a45fbccfe64843d2d9ead6cfe60a72b75",
+      "bytes": 58708
+    }
+  }
+}
