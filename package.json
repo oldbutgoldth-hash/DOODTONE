@@ -1,7 +1,7 @@
 {
-  "name": "lumixa-ai-preview-analysis-watchdog",
-  "version": "2.0.1",
-  "description": "LUMIXA AI EPIC 2E-P0.1 staged core analysis, timeout watchdog, and Target Matched Preview unfreeze repair.",
+  "name": "lumixa-ai-skin-analysis-unfreeze",
+  "version": "2.0.2",
+  "description": "LUMIXA AI EPIC 2E-P0.2 chunked Skin Tone Detection Pro and non-blocking Target Matched Preview repair.",
   "main": "index.js",
   "directories": {
     "doc": "docs"

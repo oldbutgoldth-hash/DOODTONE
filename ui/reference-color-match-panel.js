@@ -179,7 +179,7 @@ function _nextPaint() {
   return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 }
 
-async function _runCoreAnalysisStep({ phase, label, task, required = true, fallback = null }) {
+async function _runCoreAnalysisStep({ phase, label, task, required = true, fallback = null, timeoutMs = CORE_ANALYSIS_TIMEOUT_MS }) {
   _setStatus(`${phase}: ${label}…`);
   _setMatchedPreviewState(
     phase === 'REFERENCE' ? 'REFERENCE_ANALYSIS_PENDING' :
@@ -192,9 +192,9 @@ async function _runCoreAnalysisStep({ phase, label, task, required = true, fallb
     const result = await Promise.race([
       Promise.resolve().then(task),
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(Object.assign(new Error(`${label} ใช้เวลานานเกิน ${CORE_ANALYSIS_TIMEOUT_MS / 1000} วินาที`), {
+        timer = setTimeout(() => reject(Object.assign(new Error(`${label} ใช้เวลานานเกิน ${timeoutMs / 1000} วินาที`), {
           code: `CORE_TIMEOUT_${label.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
-        })), CORE_ANALYSIS_TIMEOUT_MS);
+        })), timeoutMs);
       }),
     ]);
     return result;
@@ -224,7 +224,7 @@ async function _analyzeEvidence(img, { phase = 'ANALYSIS' } = {}) {
   const grading = await _runCoreAnalysisStep({ phase, label: 'Color Grading AI', task: () => analyzeColorGrading(img,{category}), required: false, fallback: {} });
   const calibration = await _runCoreAnalysisStep({ phase, label: 'Calibration Engine', task: () => analyzeCalibration(img,{category,skinPct:skinAnalysis?.coveragePct || 0}), required: false, fallback: {} });
   const imageCore = await _runCoreAnalysisStep({ phase, label: 'Image Analysis Core', task: () => analyzeImageCore(img), required: false, fallback: {} });
-  const skinTone = await _runCoreAnalysisStep({ phase, label: 'Skin Tone Detection Pro', task: () => analyzeSkinTone(img), required: false, fallback: {} });
+  const skinTone = await _runCoreAnalysisStep({ phase, label: 'Skin Tone Detection Pro', task: () => analyzeSkinTone(img, { budgetMs: 8000 }), required: false, fallback: { detected:false, confidence:0, warnings:['Skin analysis skipped after watchdog fallback'] }, timeoutMs: 12000 });
 
   const basic = generateBasicPanel(histogram);
   const coreOutputs = {

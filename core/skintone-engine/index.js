@@ -65,8 +65,10 @@ import { rgbToHsl, luminance, clamp } from '../color-engine/index.js';
 
 // ─── Sampling config ──────────────────────────────────────────────────────────
 
-const MAX_DIM          = 400;    // downsample long edge
-const SAMPLE_STEP      = 2;      // analyse every Nth pixel
+const MAX_DIM          = 256;    // bounded preview-analysis long edge
+const SAMPLE_STEP      = 3;      // analyse every Nth pixel
+const CHUNK_SAMPLES    = 4096;   // yield to the browser between chunks
+const INTERNAL_BUDGET_MS = 8000; // fail soft before the outer watchdog
 const MIN_COVERAGE_PCT = 2.0;    // threshold to declare "detected"
 const CONSENSUS_MIN    = 2;      // models that must agree
 
@@ -115,145 +117,135 @@ const FITZPATRICK_TABLE = [
  * @param {HTMLImageElement} img
  * @returns {Promise<SkinToneResult>}
  */
-export function analyzeSkinTone(img) {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      try { resolve(_analyze(img)); }
-      catch (e) { reject(e); }
-    }, 0);
-  });
+export function analyzeSkinTone(img, options = {}) {
+  return _analyzeAsync(img, options);
+}
+
+function _yieldToBrowser() {
+  return new Promise(resolve => setTimeout(resolve, 0));
 }
 
 // ─── Core ─────────────────────────────────────────────────────────────────────
 
-function _analyze(img) {
-  if (!img.naturalWidth || !img.naturalHeight)
-    throw new Error('Image not ready for skin tone analysis');
+async function _analyzeAsync(img, { budgetMs = INTERNAL_BUDGET_MS } = {}) {
+  if (!img?.naturalWidth || !img?.naturalHeight)
+    throw Object.assign(new Error('Image not ready for skin tone analysis'), { code: 'SKIN_IMAGE_NOT_READY' });
 
-  const { pixels, total } = _sample(img);
+  const startedAt = performance.now();
+  const { data, width, height } = _sampleCanvas(img);
+  const pixelTotal = width * height;
 
-  // Per-pixel model votes
-  let rgbCount = 0, hsvCount = 0, ycbcrCount = 0, consensusCount = 0;
-
-  // Accumulators for consensus pixels
+  let rgbCount = 0, hsvCount = 0, ycbcrCount = 0, consensusCount = 0, sampledCount = 0;
   let rSum = 0, gSum = 0, bSum = 0;
   let hSum = 0, sSum = 0, lSum = 0;
   let ySum = 0, cbSum = 0, crSum = 0;
 
-  // Hue histogram (32 buckets × 11.25° each, only 0–90° range used)
   const hueHist = new Float32Array(32);
-  // Luminance histogram (16 buckets)
   const lumHist = new Float32Array(16);
 
-  for (const [r, g, b] of pixels) {
+  let chunkCount = 0;
+  for (let i = 0; i < pixelTotal; i += SAMPLE_STEP) {
+    const o = i * 4;
+    if (data[o + 3] < 128) continue;
+    const r = data[o], g = data[o + 1], b = data[o + 2];
+    sampledCount++;
+
     const rgb   = _testRGB(r, g, b);
     const hsv   = _testHSV(r, g, b);
     const ycbcr = _testYCbCr(r, g, b);
 
-    if (rgb)   rgbCount++;
-    if (hsv)   hsvCount++;
+    if (rgb) rgbCount++;
+    if (hsv) hsvCount++;
     if (ycbcr) ycbcrCount++;
 
     const votes = (rgb ? 1 : 0) + (hsv ? 1 : 0) + (ycbcr ? 1 : 0);
-    if (votes < CONSENSUS_MIN) continue;
+    if (votes >= CONSENSUS_MIN) {
+      consensusCount++;
+      rSum += r; gSum += g; bSum += b;
 
-    // Confirmed skin pixel
-    consensusCount++;
-    rSum += r; gSum += g; bSum += b;
+      const hsl = rgbToHsl(r, g, b);
+      hSum += hsl.h; sSum += hsl.s; lSum += hsl.l;
 
-    const hsl = rgbToHsl(r, g, b);
-    hSum += hsl.h; sSum += hsl.s; lSum += hsl.l;
+      const lum = luminance(r, g, b) / 255;
+      const ycc = _rgbToYCbCr(r, g, b);
+      ySum += ycc.y; cbSum += ycc.cb; crSum += ycc.cr;
 
-    const lum = luminance(r, g, b) / 255;
-    const { y, cb, cr } = _rgbToYCbCr(r, g, b);
-    ySum += y; cbSum += cb; crSum += cr;
+      hueHist[Math.min(31, Math.floor(hsl.h / (360 / 32)))]++;
+      lumHist[Math.min(15, Math.floor(lum * 16))]++;
+    }
 
-    // Histograms
-    const hBucket = Math.min(31, Math.floor(hsl.h / (360 / 32)));
-    hueHist[hBucket]++;
-    const lBucket = Math.min(15, Math.floor(lum * 16));
-    lumHist[lBucket]++;
+    if (++chunkCount >= CHUNK_SAMPLES) {
+      chunkCount = 0;
+      if (performance.now() - startedAt > budgetMs) {
+        throw Object.assign(new Error(`Skin analysis exceeded ${budgetMs} ms budget`), {
+          code: 'SKIN_ANALYSIS_BUDGET_EXCEEDED',
+          sampledCount,
+          width,
+          height,
+        });
+      }
+      await _yieldToBrowser();
+    }
   }
 
-  const n           = consensusCount;
+  const total = Math.max(1, sampledCount);
+  const n = consensusCount;
   const coveragePct = +((n / total) * 100).toFixed(2);
-  const detected    = coveragePct >= MIN_COVERAGE_PCT;
+  const detected = coveragePct >= MIN_COVERAGE_PCT;
 
-  if (n === 0) return _emptyResult(total, rgbCount, hsvCount, ycbcrCount);
+  if (n === 0) return { ..._emptyResult(total, rgbCount, hsvCount, ycbcrCount), analysisMs: +(performance.now() - startedAt).toFixed(1), sampledCount, sampleSize: { width, height } };
 
   const avgHSL = {
     h: Math.round(hSum / n),
     s: Math.round((sSum / n) * 100),
     l: Math.round((lSum / n) * 100),
   };
-  const avgRGB = {
-    r: Math.round(rSum / n),
-    g: Math.round(gSum / n),
-    b: Math.round(bSum / n),
-  };
-  const avgYCbCr = {
-    y:  Math.round(ySum  / n),
-    cb: Math.round(cbSum / n),
-    cr: Math.round(crSum / n),
-  };
-
-  // Fitzpatrick scale from average lightness
+  const avgRGB = { r: Math.round(rSum / n), g: Math.round(gSum / n), b: Math.round(bSum / n) };
+  const avgYCbCr = { y: Math.round(ySum / n), cb: Math.round(cbSum / n), cr: Math.round(crSum / n) };
   const { fitz, label } = _fitzpatrick(lSum / n);
 
-  // ── Confidence score ──────────────────────────────────────────────────────
-  // Based on: model agreement ratio, pixel count, coverage spread
-  const rgbPct    = (rgbCount   / total);
-  const hsvPct    = (hsvCount   / total);
-  const ycbcrPct  = (ycbcrCount / total);
-  const agreement = (rgbPct + hsvPct + ycbcrPct) / 3;  // avg model vote fraction
+  const rgbPct = rgbCount / total;
+  const hsvPct = hsvCount / total;
+  const ycbcrPct = ycbcrCount / total;
+  const agreement = (rgbPct + hsvPct + ycbcrPct) / 3;
   const confidence = +Math.max(0.05, Math.min(1,
     agreement * 0.6 +
-    (coveragePct > 5 ? 0.2 : coveragePct / 25) +  // enough coverage
-    (n > 100 ? 0.2 : n / 500)                      // enough confirmed pixels
+    (coveragePct > 5 ? 0.2 : coveragePct / 25) +
+    (n > 100 ? 0.2 : n / 500)
   )).toFixed(3);
 
-  // ── Warnings ──────────────────────────────────────────────────────────────
   const warnings = [];
-  if (!detected)
-    warnings.push('No skin detected — scene may be landscape, food, or object photography');
-  if (detected && coveragePct > 70)
-    warnings.push(`Very high skin coverage (${coveragePct}%) — may include false positives from warm-coloured objects`);
-  if (detected && n < 50)
-    warnings.push(`Only ${n} confirmed skin pixels — measurement may be unreliable`);
-  if (detected && Math.max(rgbPct, hsvPct, ycbcrPct) - Math.min(rgbPct, hsvPct, ycbcrPct) > 0.15)
-    warnings.push('Models disagree significantly — lighting conditions may be challenging for skin detection');
-  if (avgHSL.l < 25)
-    warnings.push('Detected skin tone is very dark — Fitzpatrick VI or under-exposed image');
-  if (avgHSL.l > 85)
-    warnings.push('Detected skin tone is very bright — possible overexposure in skin region');
+  if (!detected) warnings.push('No skin detected — scene may be landscape, food, or object photography');
+  if (detected && coveragePct > 70) warnings.push(`Very high skin coverage (${coveragePct}%) — may include false positives from warm-coloured objects`);
+  if (detected && n < 50) warnings.push(`Only ${n} confirmed skin pixels — measurement may be unreliable`);
+  if (detected && Math.max(rgbPct, hsvPct, ycbcrPct) - Math.min(rgbPct, hsvPct, ycbcrPct) > 0.15) warnings.push('Models disagree significantly — lighting conditions may be challenging for skin detection');
+  if (avgHSL.l < 25) warnings.push('Detected skin tone is very dark — Fitzpatrick VI or under-exposed image');
+  if (avgHSL.l > 85) warnings.push('Detected skin tone is very bright — possible overexposure in skin region');
 
   return {
-    pixelCount:   n,
+    pixelCount: n,
     coveragePct,
     detected,
-    toneLabel:    label,
+    toneLabel: label,
     fitzpatrickScale: fitz,
-
     avgHSL,
     avgRGB,
     avgYCbCr,
-
     modelAgreement: {
-      rgb:       +((rgbCount   / total) * 100).toFixed(2),
-      hsv:       +((hsvCount   / total) * 100).toFixed(2),
-      ycbcr:     +((ycbcrCount / total) * 100).toFixed(2),
+      rgb: +((rgbCount / total) * 100).toFixed(2),
+      hsv: +((hsvCount / total) * 100).toFixed(2),
+      ycbcr: +((ycbcrCount / total) * 100).toFixed(2),
       consensus: coveragePct,
     },
-
-    hueHistogram:       _normaliseHist(hueHist,  n),
-    luminanceHistogram: _normaliseHist(lumHist,  n),
-
+    hueHistogram: _normaliseHist(hueHist, n),
+    luminanceHistogram: _normaliseHist(lumHist, n),
     recommendation: _recommend(avgHSL, avgRGB, coveragePct),
     hex: _toHex(avgRGB.r, avgRGB.g, avgRGB.b),
-
-    // Phase 1 additions
     confidence,
     warnings,
+    analysisMs: +(performance.now() - startedAt).toFixed(1),
+    sampledCount,
+    sampleSize: { width, height },
   };
 }
 
@@ -324,20 +316,17 @@ function _rgbToYCbCr(r, g, b) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function _sample(img) {
+function _sampleCanvas(img) {
   const scale = Math.min(1, MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight));
-  const w = Math.max(1, Math.round(img.naturalWidth  * scale));
-  const h = Math.max(1, Math.round(img.naturalHeight * scale));
-  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-  const data = ctx.getImageData(0, 0, w, h).data;
-  const pixels = [];
-  for (let i = 0; i < w * h; i += SAMPLE_STEP) {
-    const o = i * 4;
-    if (data[o + 3] < 128) continue;
-    pixels.push([data[o], data[o + 1], data[o + 2]]);
-  }
-  return { pixels, total: pixels.length };
+  const width = Math.max(1, Math.round(img.naturalWidth * scale));
+  const height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw Object.assign(new Error('Canvas 2D unavailable for skin analysis'), { code: 'SKIN_CANVAS_UNAVAILABLE' });
+  ctx.drawImage(img, 0, 0, width, height);
+  return { data: ctx.getImageData(0, 0, width, height).data, width, height };
 }
 
 function _fitzpatrick(avgL) {
