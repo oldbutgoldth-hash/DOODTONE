@@ -1,7 +1,7 @@
 {
-  "name": "lumixa-ai-dual-workflow-preview-repair",
-  "version": "2.0.0",
-  "description": "LUMIXA AI EPIC 2E-P0 dual-workflow separation foundation and deterministic Target Matched Preview repair.",
+  "name": "lumixa-ai-preview-analysis-watchdog",
+  "version": "2.0.1",
+  "description": "LUMIXA AI EPIC 2E-P0.1 staged core analysis, timeout watchdog, and Target Matched Preview unfreeze repair.",
   "main": "index.js",
   "directories": {
     "doc": "docs"

@@ -1,6 +1,6 @@
 {
   "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
-  "generatedAt": "2026-07-28T10:20:52.567Z",
+  "generatedAt": "2026-07-28T10:47:51.339Z",
   "summary": {
     "total": 92,
     "pass": 92,
@@ -11,12 +11,12 @@
     {
       "test": "generateRunId() returns a non-empty string",
       "result": "PASS",
-      "evidence": "idA=c25ea587-27fa-4c87-b1ab-d7088cb785b9"
+      "evidence": "idA=21ed0834-e486-4442-bafc-42e7b3789504"
     },
     {
       "test": "generateRunId() returns a fresh value on each call (never reused)",
       "result": "PASS",
-      "evidence": "idA=c25ea587-27fa-4c87-b1ab-d7088cb785b9, idB=da957ddd-2ac0-4bee-a4bb-4c09612f7d88"
+      "evidence": "idA=21ed0834-e486-4442-bafc-42e7b3789504, idB=77939157-2254-426d-816a-3ad257438f1e"
     },
     {
       "test": "computeSourceHash() is deterministic for identical inputs",
@@ -131,7 +131,7 @@
     {
       "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
       "result": "PASS",
-      "evidence": "oldRunId=bddaa051-8aea-445d-afe4-566dccfea88f, newRunId=7131d1ad-5b5e-4a28-bd57-1430656020b1"
+      "evidence": "oldRunId=324c6ab9-15e3-4ab6-b9b3-882bd5d9a5ce, newRunId=971677f8-b3a9-4832-bf57-a652d274becb"
     },
     {
       "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",
@@ -456,7 +456,7 @@
     {
       "test": "R3-12: qa/baselines/lufa42-production-lock-manifest.json is present and parses as JSON (checked-in, portable — never a machine-specific sibling directory)",
       "result": "PASS",
-      "evidence": "/mnt/data/lumixa_o9/qa/baselines/lufa42-production-lock-manifest.json"
+      "evidence": "/mnt/data/p0_fix/qa/baselines/lufa42-production-lock-manifest.json"
     },
     {
       "test": "R3-12: Production-lock manifest declares a non-empty locked-file set",

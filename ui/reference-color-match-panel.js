@@ -173,20 +173,59 @@ function _adaptGrading(result) {
     blending:_sliderValue(result?.blending ?? 50),
   };
 }
-async function _analyzeEvidence(img) {
-  const [palette, toneZones, skinAnalysis, histogram] = await Promise.all([
-    extractReferencePalette(img), analyzeToneZones(img), classifySkin(img), analyzeImage(img),
-  ]);
+const CORE_ANALYSIS_TIMEOUT_MS = 45000;
+
+function _nextPaint() {
+  return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+}
+
+async function _runCoreAnalysisStep({ phase, label, task, required = true, fallback = null }) {
+  _setStatus(`${phase}: ${label}…`);
+  _setMatchedPreviewState(
+    phase === 'REFERENCE' ? 'REFERENCE_ANALYSIS_PENDING' :
+    phase === 'TARGET' ? 'TARGET_ANALYSIS_PENDING' : 'PAIRWISE_FUSION_PENDING',
+    `${label} · ระบบกำลังประมวลผลทีละโมดูลเพื่อไม่ให้หน้าเว็บค้าง`
+  );
+  await _nextPaint();
+  let timer;
+  try {
+    const result = await Promise.race([
+      Promise.resolve().then(task),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error(`${label} ใช้เวลานานเกิน ${CORE_ANALYSIS_TIMEOUT_MS / 1000} วินาที`), {
+          code: `CORE_TIMEOUT_${label.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
+        })), CORE_ANALYSIS_TIMEOUT_MS);
+      }),
+    ]);
+    return result;
+  } catch (error) {
+    console.error(`[LUMIXA][${phase}][${label}]`, error);
+    if (required) throw error;
+    return fallback;
+  } finally {
+    clearTimeout(timer);
+    await _nextPaint();
+  }
+}
+
+async function _analyzeEvidence(img, { phase = 'ANALYSIS' } = {}) {
+  // Run canvas-heavy engines in controlled stages. Running all 11 engines in one
+  // Promise.all can starve the browser main thread and leave the preview overlay
+  // permanently stuck at “analysing reference”.
+  const palette = await _runCoreAnalysisStep({ phase, label: 'Colour Palette · K-Means', task: () => extractReferencePalette(img) });
+  const toneZones = await _runCoreAnalysisStep({ phase, label: 'Tone Zone Analyzer', task: () => analyzeToneZones(img) });
+  const skinAnalysis = await _runCoreAnalysisStep({ phase, label: 'Skin Classification', task: () => classifySkin(img), required: false, fallback: { detected: false, coveragePct: 0 } });
+  const histogram = await _runCoreAnalysisStep({ phase, label: 'Histogram & Metrics', task: () => analyzeImage(img) });
+
   const category = skinAnalysis?.detected ? 'Portrait' : 'General';
-  const [whiteBalance, toneCurve, hsl, grading, calibration, imageCore, skinTone] = await Promise.all([
-    analyzeWhiteBalance(img,{category,skinPct:skinAnalysis?.coveragePct || 0}),
-    generateToneCurves(img,histogram),
-    analyzeHSL(img,{category}),
-    analyzeColorGrading(img,{category}),
-    analyzeCalibration(img,{category,skinPct:skinAnalysis?.coveragePct || 0}),
-    analyzeImageCore(img),
-    analyzeSkinTone(img),
-  ]);
+  const whiteBalance = await _runCoreAnalysisStep({ phase, label: 'White Balance Pro', task: () => analyzeWhiteBalance(img,{category,skinPct:skinAnalysis?.coveragePct || 0}), required: false, fallback: {} });
+  const toneCurve = await _runCoreAnalysisStep({ phase, label: 'Tone Curve AI', task: () => generateToneCurves(img,histogram), required: false, fallback: {} });
+  const hsl = await _runCoreAnalysisStep({ phase, label: 'HSL Analyzer Pro', task: () => analyzeHSL(img,{category}), required: false, fallback: {} });
+  const grading = await _runCoreAnalysisStep({ phase, label: 'Color Grading AI', task: () => analyzeColorGrading(img,{category}), required: false, fallback: {} });
+  const calibration = await _runCoreAnalysisStep({ phase, label: 'Calibration Engine', task: () => analyzeCalibration(img,{category,skinPct:skinAnalysis?.coveragePct || 0}), required: false, fallback: {} });
+  const imageCore = await _runCoreAnalysisStep({ phase, label: 'Image Analysis Core', task: () => analyzeImageCore(img), required: false, fallback: {} });
+  const skinTone = await _runCoreAnalysisStep({ phase, label: 'Skin Tone Detection Pro', task: () => analyzeSkinTone(img), required: false, fallback: {} });
+
   const basic = generateBasicPanel(histogram);
   const coreOutputs = {
     whiteBalancePro:{confidence:whiteBalance?.consensus?.confidence ?? .5,recommendedAdjustments:{temperature:whiteBalance?.consensus?.temperature ?? 0,tint:whiteBalance?.consensus?.tint ?? 0},evidence:whiteBalance},
@@ -429,7 +468,7 @@ async function _handleLightroomResultFile(event) {
       rcm.lightroomResultImg = img;
       _drawOriginal(img, 'rcmLightroomResultCanvas');
       const canvas = $('rcmLightroomResultCanvas'); if (canvas) canvas.style.display = 'block';
-      rcm.lightroomResultEvidence = await _analyzeEvidence(img);
+      rcm.lightroomResultEvidence = await _analyzeEvidence(img, { phase: 'LIGHTROOM RESULT' });
       const lightroomSignature = buildMatchedSignatureFromAnalysis({
         ...rcm.lightroomResultEvidence,
         analysisGenerationId: rcm.generationId,
@@ -504,7 +543,7 @@ async function analyzeReference() {
   if (!rcm.referenceImg) { _setStatus('กรุณาอัปโหลดภาพต้นแบบก่อน'); _setMatchedPreviewState('WAITING_FOR_IMAGES'); return; }
   _setStatus('กำลังวิเคราะห์ภาพต้นแบบ…');
   _setMatchedPreviewState('REFERENCE_ANALYSIS_PENDING', 'Reference Color Match Beta ใช้การวิเคราะห์คนละสถานะกับ AI Tone Extractor');
-  rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg);
+  rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg, { phase: 'REFERENCE' });
   _renderPalette(rcm.referenceEvidence.palette);
   _renderToneZones(rcm.referenceEvidence.toneZones);
   _drawOriginal(rcm.referenceImg, 'rcmRefCanvas');
@@ -540,7 +579,7 @@ async function _rebuildAndPreview() {
   try {
     if (!rcm.referenceEvidence) {
       _setMatchedPreviewState('REFERENCE_ANALYSIS_PENDING', 'กำลังเรียก Core Analysis สำหรับ Reference โดยอัตโนมัติ');
-      rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg);
+      rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg, { phase: 'REFERENCE' });
       if (runGenerationId !== rcm.generationId) throw Object.assign(new Error('Generation changed during reference analysis.'), { code: 'STALE_GENERATION' });
       _renderPalette(rcm.referenceEvidence.palette);
       _renderToneZones(rcm.referenceEvidence.toneZones);
@@ -548,7 +587,7 @@ async function _rebuildAndPreview() {
 
     _setStatus('กำลังวิเคราะห์ Target และสร้าง Pairwise Color Match…');
     _setMatchedPreviewState('TARGET_ANALYSIS_PENDING', 'กำลังเรียก Core ชุดเดียวกับ Reference สำหรับ Target');
-    if (!rcm.targetEvidence) rcm.targetEvidence = await _analyzeEvidence(rcm.targetImg);
+    if (!rcm.targetEvidence) rcm.targetEvidence = await _analyzeEvidence(rcm.targetImg, { phase: 'TARGET' });
     if (runGenerationId !== rcm.generationId) throw Object.assign(new Error('Generation changed during target analysis.'), { code: 'STALE_GENERATION' });
 
     const transferKey = `${rcm.generationId}|${Math.round(_effectiveIntensity())}|${rcm.mode}`;
@@ -591,7 +630,7 @@ async function _rebuildAndPreview() {
     if (!afterCanvas.width || !afterCanvas.height) throw Object.assign(new Error('Matched preview rendered with invalid geometry.'), { code: 'TARGET_RENDER_EMPTY' });
 
     const matchedImg = await _canvasToImage(afterCanvas);
-    rcm.matchedEvidence = await _analyzeEvidence(matchedImg);
+    rcm.matchedEvidence = await _analyzeEvidence(matchedImg, { phase: 'MATCHED PREVIEW' });
     const matchedSignature = buildMatchedSignatureFromAnalysis({ ...rcm.matchedEvidence, analysisGenerationId: rcm.generationId });
     rcm.previewMatchedSignature = matchedSignature;
     rcm.evaluation = evaluateMatchedSignature({
