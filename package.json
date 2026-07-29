@@ -1,7 +1,7 @@
 {
-  "name": "lumixa-ai-skin-analysis-deferred-preview",
-  "version": "2.0.3",
-  "description": "LUMIXA AI EPIC 2E-P0.3 removes Skin Tone Detection Pro from the critical Reference Color Match preview path.",
+  "name": "lumixa-ai-fast-preview-critical-path",
+  "version": "2.0.4",
+  "description": "LUMIXA AI EPIC 2E-P0.4 removes heavyweight reporting engines from the critical Reference Color Match preview path.",
   "main": "index.js",
   "directories": {
     "doc": "docs"

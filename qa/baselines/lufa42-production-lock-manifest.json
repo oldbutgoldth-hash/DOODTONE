@@ -1,6 +1,6 @@
 {
   "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
-  "generatedAt": "2026-07-29T04:00:53.303Z",
+  "generatedAt": "2026-07-29T04:31:15.492Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
@@ -94,7 +94,7 @@
     "core/preset-engine/index.js": "42f3bb83bf850bed3dd4d2a5b66019264c0a0e5561ff07c2e7e3d644c00dedde",
     "core/preview-rendering/controlled-v2-preview-adjustment-translator.js": "c87ebc0e3b8835f93993ebc62c36da76cbfdd0256f5cf5496ddbe513c7d3979a",
     "core/processing-log/index.js": "582c4b6bd6144c7daedda1d554197d9bae278fcc2451c2af91987a558c0ecd53",
-    "core/project-version.js": "d88a9cf0f1818391594b4eaa0b9f42d9e6176bdd13b042eee9757c51ca5ed394",
+    "core/project-version.js": "6c5989d55a2adff4e027c6e858e926caa9003fc80271261184d3a40c8cf11185",
     "core/reference-transfer-engine/index.js": "9a73cb7e155b280d14ad6f22529100024e43e172ac25c5f7aff43b38d007c3ef",
     "core/scene-classifier/index.js": "8f27307e3425c270b7379008f6e9329d03a60f8d50dd0d0218209526b707347d",
     "core/skin-classifier/index.js": "b7563fcbbf39e20cae19b1df3e8ff6d8d5dc50d6e48c889563d3331fd52482d3",
@@ -123,7 +123,7 @@
     "ui/image-analysis-renderer.js": "4061c83bd316981bc46bde4fad95a16679e1c2d663ad74d298d0089c528dc790",
     "ui/interactive-preview-observation-session-v2.js": "aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9",
     "ui/palette-renderer.js": "d31aab02d6842cbf53733c14c8ebaa1ac7eda2b28508c9df1854ef458a0069d0",
-    "ui/reference-color-match-panel.js": "6a4f32fb76ffac31f7a91bc5e9fc4a9f91273ff2044b7eb9fa1e9a8c3f00031a",
+    "ui/reference-color-match-panel.js": "f13a4f1b0597553ea18acaf771db2357b3f5817cb9db095b5078ebc068a1525a",
     "ui/review-console-controller.js": "d65aeb334ca1b4513585bc2b0185f16efa4882225c7595fb539e0ea000a80aa1",
     "ui/review-console-renderer.js": "069892dec93b380969c4ecd24531edc65244b8cf9cd2ac3cdae399ec065ef8bb",
     "ui/side-by-side-comparison-renderer.js": "86cf70cb540b800b5e09832db917ba15f9cf5f293da04e68abd3bda7f19201b4",

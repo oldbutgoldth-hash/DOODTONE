@@ -223,7 +223,17 @@ async function _analyzeEvidence(img, { phase = 'ANALYSIS' } = {}) {
   const hsl = await _runCoreAnalysisStep({ phase, label: 'HSL Analyzer Pro', task: () => analyzeHSL(img,{category}), required: false, fallback: {} });
   const grading = await _runCoreAnalysisStep({ phase, label: 'Color Grading AI', task: () => analyzeColorGrading(img,{category}), required: false, fallback: {} });
   const calibration = await _runCoreAnalysisStep({ phase, label: 'Calibration Engine', task: () => analyzeCalibration(img,{category,skinPct:skinAnalysis?.coveragePct || 0}), required: false, fallback: {} });
-  const imageCore = await _runCoreAnalysisStep({ phase, label: 'Image Analysis Core', task: () => analyzeImageCore(img), required: false, fallback: {} });
+  // Image Analysis Core is intentionally excluded from the critical preview path.
+  // It is a comprehensive reporting engine and can monopolise the browser main thread
+  // on large photographs. Pairwise preview already has the fast evidence required from
+  // palette, tone zones, histogram, WB, tone curve, HSL, grading and calibration.
+  // Keep an explicit deferred record so the contribution ledger stays honest.
+  const imageCore = {
+    deferred: true,
+    source: 'REFERENCE_COLOR_MATCH_FAST_PATH',
+    confidence: 0,
+    warnings: ['Image Analysis Core deferred; it does not block Target Matched Preview.'],
+  };
   // Skin Tone Detection Pro is intentionally NOT awaited in the critical preview path.
   // The fast Skin Classification result already supplies the safety constraint required
   // for pairwise fusion. A slow/buggy optional skin profiler must never block Reference,
