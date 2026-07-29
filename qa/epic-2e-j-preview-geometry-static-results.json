@@ -1,11 +1,11 @@
 {
   "suite": "DEPLOY GEOMETRY R1 — Preview Geometry Static test",
-  "runId": "e053a177-2b0c-4783-abed-f03c84eb9fe2",
-  "startedAt": "2026-07-29T03:48:34.741Z",
-  "completedAt": "2026-07-29T03:48:34.768Z",
+  "runId": "3b037013-a9bc-4267-879b-bcdca3b86d21",
+  "startedAt": "2026-07-29T04:01:09.058Z",
+  "completedAt": "2026-07-29T04:01:09.083Z",
   "completed": true,
   "sourceHash": "53c62baa1e93df98e9dcacef7321f4eae73a211080f75fb39ba42f83ac778bb6",
-  "generatedAt": "2026-07-29T03:48:34.768Z",
+  "generatedAt": "2026-07-29T04:01:09.083Z",
   "summary": {
     "total": 36,
     "pass": 36,
@@ -16,7 +16,7 @@
     {
       "test": "manifest.json is present and parses as JSON",
       "result": "PASS",
-      "evidence": "/mnt/data/p01_fix2/qa/fixtures/preview-geometry/manifest.json"
+      "evidence": "/mnt/data/p02_debug/qa/fixtures/preview-geometry/manifest.json"
     },
     {
       "test": "manifest declares exactly the 6 required fixtures",
@@ -186,12 +186,12 @@
     {
       "test": "epic-2e-j-preview-geometry-decoder-render-test.mjs passes a real ESM parse-goal check",
       "result": "PASS",
-      "evidence": "/mnt/data/p01_fix2/qa/epic-2e-j-preview-geometry-decoder-render-test.mjs"
+      "evidence": "/mnt/data/p02_debug/qa/epic-2e-j-preview-geometry-decoder-render-test.mjs"
     },
     {
       "test": "epic-2e-j-preview-geometry-full-app-eligible-test.mjs passes a real ESM parse-goal check",
       "result": "PASS",
-      "evidence": "/mnt/data/p01_fix2/qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs"
+      "evidence": "/mnt/data/p02_debug/qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs"
     }
   ],
   "decision": "PASS",

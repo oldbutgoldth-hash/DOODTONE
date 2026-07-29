@@ -224,7 +224,18 @@ async function _analyzeEvidence(img, { phase = 'ANALYSIS' } = {}) {
   const grading = await _runCoreAnalysisStep({ phase, label: 'Color Grading AI', task: () => analyzeColorGrading(img,{category}), required: false, fallback: {} });
   const calibration = await _runCoreAnalysisStep({ phase, label: 'Calibration Engine', task: () => analyzeCalibration(img,{category,skinPct:skinAnalysis?.coveragePct || 0}), required: false, fallback: {} });
   const imageCore = await _runCoreAnalysisStep({ phase, label: 'Image Analysis Core', task: () => analyzeImageCore(img), required: false, fallback: {} });
-  const skinTone = await _runCoreAnalysisStep({ phase, label: 'Skin Tone Detection Pro', task: () => analyzeSkinTone(img, { budgetMs: 8000 }), required: false, fallback: { detected:false, confidence:0, warnings:['Skin analysis skipped after watchdog fallback'] }, timeoutMs: 12000 });
+  // Skin Tone Detection Pro is intentionally NOT awaited in the critical preview path.
+  // The fast Skin Classification result already supplies the safety constraint required
+  // for pairwise fusion. A slow/buggy optional skin profiler must never block Reference,
+  // Target, or Matched Preview generation.
+  const skinTone = {
+    detected: Boolean(skinAnalysis?.detected),
+    coveragePct: Number(skinAnalysis?.coveragePct || 0),
+    confidence: Number(skinAnalysis?.confidence || (skinAnalysis?.detected ? 0.55 : 0.2)),
+    deferred: true,
+    source: 'FAST_SKIN_CLASSIFICATION_FALLBACK',
+    warnings: ['Skin Tone Detection Pro deferred; preview uses fast skin classification safety evidence.'],
+  };
 
   const basic = generateBasicPanel(histogram);
   const coreOutputs = {

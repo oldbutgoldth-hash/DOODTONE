@@ -1,7 +1,7 @@
 {
-  "name": "lumixa-ai-skin-analysis-unfreeze",
-  "version": "2.0.2",
-  "description": "LUMIXA AI EPIC 2E-P0.2 chunked Skin Tone Detection Pro and non-blocking Target Matched Preview repair.",
+  "name": "lumixa-ai-skin-analysis-deferred-preview",
+  "version": "2.0.3",
+  "description": "LUMIXA AI EPIC 2E-P0.3 removes Skin Tone Detection Pro from the critical Reference Color Match preview path.",
   "main": "index.js",
   "directories": {
     "doc": "docs"
