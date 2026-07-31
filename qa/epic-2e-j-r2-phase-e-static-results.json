@@ -1,22 +1,22 @@
 {
   "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
-  "generatedAt": "2026-07-29T04:31:19.708Z",
+  "generatedAt": "2026-07-31T10:43:03.778Z",
   "summary": {
     "total": 92,
-    "pass": 92,
-    "fail": 0,
+    "pass": 91,
+    "fail": 1,
     "notTested": 0
   },
   "results": [
     {
       "test": "generateRunId() returns a non-empty string",
       "result": "PASS",
-      "evidence": "idA=9b6223a2-7e94-448d-b1cf-3dbcb347053e"
+      "evidence": "idA=65c5c2d6-60ff-4f67-b6fd-10c17a9a3caf"
     },
     {
       "test": "generateRunId() returns a fresh value on each call (never reused)",
       "result": "PASS",
-      "evidence": "idA=9b6223a2-7e94-448d-b1cf-3dbcb347053e, idB=d1fc6198-78ab-45d5-a1e9-3158a16d1bfa"
+      "evidence": "idA=65c5c2d6-60ff-4f67-b6fd-10c17a9a3caf, idB=d2745ec7-bb1f-4097-97c3-2abb1cc3e5f0"
     },
     {
       "test": "computeSourceHash() is deterministic for identical inputs",
@@ -131,7 +131,7 @@
     {
       "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
       "result": "PASS",
-      "evidence": "oldRunId=73deacfd-93ce-4b38-ae0c-be0f818b6a72, newRunId=9ddc363a-0aab-4bb2-b49b-e87a6eda6bf1"
+      "evidence": "oldRunId=683f24b8-74e3-4588-b530-667cb8476ef0, newRunId=6780b29d-d414-4acb-9734-626fc588903d"
     },
     {
       "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",
@@ -456,7 +456,7 @@
     {
       "test": "R3-12: qa/baselines/lufa42-production-lock-manifest.json is present and parses as JSON (checked-in, portable — never a machine-specific sibling directory)",
       "result": "PASS",
-      "evidence": "/mnt/data/p04_work/qa/baselines/lufa42-production-lock-manifest.json"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_p07_r5/r3_baseline/qa/baselines/lufa42-production-lock-manifest.json"
     },
     {
       "test": "R3-12: Production-lock manifest declares a non-empty locked-file set",
@@ -465,8 +465,8 @@
     },
     {
       "test": "R3-12: every LOCKED core/ui/index.html file is byte-for-byte identical to the checked-in Production-lock manifest (118 files, SHA-256)",
-      "result": "PASS",
-      "evidence": "match"
+      "result": "FAIL",
+      "evidence": "MISMATCH DETECTED: [\"core/color-harmony-engine/index.js\",\"ui/reference-color-match-panel.js\"] (mismatched=2, missing=0)"
     }
   ],
   "disclaimer": "This suite proves the Phase E toolkit (generateRunId, computeSourceHash, writeResultAtomic, buildRunIdentity, buildRuntimeCrashRow, validateResultFreshness, writeBrowserUnavailableResult) via real functional calls in a throwaway temp directory, plus source-text audits proving all four real Browser suites are actually wired to use it. It does not launch a Browser and does not prove real end-to-end crash-handler behavior under an actual Playwright runtime exception — that remains the job of the real Browser suites themselves (which, in this sandbox, can only be exercised along the Browser-unavailable path, confirmed separately by actually running each suite)."

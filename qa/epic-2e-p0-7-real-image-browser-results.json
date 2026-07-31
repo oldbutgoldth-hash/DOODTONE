@@ -1,0 +1,426 @@
+{
+  "epic": "2E-P0.7",
+  "suite": "REAL_IMAGE_BROWSER",
+  "completed": true,
+  "runId": "p0-7-real-1785348536574",
+  "pass": 20,
+  "fail": 0,
+  "total": 20,
+  "psmWarnings": [],
+  "logs": [
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516583, runId: 8, stage: Image Analysis Core, status: COMPLETE, phase: REFERENCE}",
+      "time": 1785348516585
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516584, runId: 8, stage: Skin Tone Detection Pro, status: START, phase: REFERENCE}",
+      "time": 1785348516585
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516606, runId: 8, stage: Skin Tone Detection Pro, status: COMPLETE, phase: REFERENCE}",
+      "time": 1785348516607
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516615, runId: 8, stage: CORE_ANALYSIS, status: COMPLETE, phase: REFERENCE}",
+      "time": 1785348516616
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516619, runId: 9, stage: PIPELINE, status: START, reason: DIRECT}",
+      "time": 1785348516621
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516619, runId: 9, stage: REFERENCE_CACHE, status: HIT}",
+      "time": 1785348516622
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516620, runId: 9, stage: TARGET_CACHE, status: HIT}",
+      "time": 1785348516622
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516620, runId: 9, stage: PIXEL_TRANSFER, status: CACHE_HIT}",
+      "time": 1785348516623
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516621, runId: 9, stage: FUSION, status: START}",
+      "time": 1785348516623
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516634, runId: 9, stage: FUSION, status: COMPLETE}",
+      "time": 1785348516636
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516634, runId: 9, stage: RENDER, status: START}",
+      "time": 1785348516636
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516928, runId: 9, stage: RENDER, status: COMPLETE, width: 640}",
+      "time": 1785348516928
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516965, runId: 9, stage: ANALYSIS_PROXY, status: READY, phase: MATCHED PREVIEW}",
+      "time": 1785348516966
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516965, runId: 9, stage: Colour Palette · K-Means, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348516966
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516994, runId: 9, stage: Colour Palette · K-Means, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348516994
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348516998, runId: 9, stage: Tone Zone Analyzer, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348516999
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517134, runId: 9, stage: Tone Zone Analyzer, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348517134
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517135, runId: 9, stage: Skin Classification, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348517137
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517149, runId: 9, stage: Skin Classification, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348517150
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517167, runId: 9, stage: Histogram & Metrics, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348517171
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517306, runId: 9, stage: Histogram & Metrics, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348517307
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517307, runId: 9, stage: White Balance Pro, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348517308
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517338, runId: 9, stage: White Balance Pro, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348517339
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517339, runId: 9, stage: Tone Curve AI, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348517339
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517353, runId: 9, stage: Tone Curve AI, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348517354
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517364, runId: 9, stage: HSL Analyzer Pro, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348517365
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517400, runId: 9, stage: HSL Analyzer Pro, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348517401
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517401, runId: 9, stage: CORE_ANALYSIS, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348517402
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348517404, runId: 9, stage: PIPELINE, status: COMPLETE, fidelity: 0}",
+      "time": 1785348517405
+    },
+    {
+      "type": "warning",
+      "text": "[LUMIXA][P0.7][HEARTBEAT] STALL detected: STOPPED idle for 3029ms",
+      "time": 1785348520434
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348521943, runId: 10, stage: PIPELINE, status: START, reason: DIRECT}",
+      "time": 1785348521944
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348521943, runId: 10, stage: REFERENCE_CACHE, status: HIT}",
+      "time": 1785348521944
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348521981, runId: 10, stage: ANALYSIS_PROXY, status: READY, phase: TARGET}",
+      "time": 1785348521982
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348521982, runId: 10, stage: Colour Palette · K-Means, status: START, phase: TARGET}",
+      "time": 1785348521982
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522022, runId: 10, stage: Colour Palette · K-Means, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522022
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522031, runId: 10, stage: Tone Zone Analyzer, status: START, phase: TARGET}",
+      "time": 1785348522032
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522172, runId: 10, stage: Tone Zone Analyzer, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522174
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522173, runId: 10, stage: Skin Classification, status: START, phase: TARGET}",
+      "time": 1785348522174
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522183, runId: 10, stage: Skin Classification, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522185
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522197, runId: 10, stage: Histogram & Metrics, status: START, phase: TARGET}",
+      "time": 1785348522198
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522330, runId: 10, stage: Histogram & Metrics, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522331
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522331, runId: 10, stage: White Balance Pro, status: START, phase: TARGET}",
+      "time": 1785348522333
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522370, runId: 10, stage: White Balance Pro, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522371
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522370, runId: 10, stage: Tone Curve AI, status: START, phase: TARGET}",
+      "time": 1785348522371
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522389, runId: 10, stage: Tone Curve AI, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522391
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522398, runId: 10, stage: HSL Analyzer Pro, status: START, phase: TARGET}",
+      "time": 1785348522399
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522434, runId: 10, stage: HSL Analyzer Pro, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522435
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522435, runId: 10, stage: Color Grading AI, status: START, phase: TARGET}",
+      "time": 1785348522436
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522456, runId: 10, stage: Color Grading AI, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522457
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522465, runId: 10, stage: Calibration Engine, status: START, phase: TARGET}",
+      "time": 1785348522466
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522490, runId: 10, stage: Calibration Engine, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522491
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522497, runId: 10, stage: Image Analysis Core, status: START, phase: TARGET}",
+      "time": 1785348522498
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522589, runId: 10, stage: Image Analysis Core, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522590
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522590, runId: 10, stage: Skin Tone Detection Pro, status: START, phase: TARGET}",
+      "time": 1785348522591
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522604, runId: 10, stage: Skin Tone Detection Pro, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522605
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522614, runId: 10, stage: CORE_ANALYSIS, status: COMPLETE, phase: TARGET}",
+      "time": 1785348522614
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522614, runId: 10, stage: PIXEL_TRANSFER, status: START, intensity: 57.599999999999994}",
+      "time": 1785348522614
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522644, runId: 10, stage: PIXEL_TRANSFER, status: COMPLETE}",
+      "time": 1785348522645
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522644, runId: 10, stage: FUSION, status: START}",
+      "time": 1785348522645
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522650, runId: 10, stage: FUSION, status: COMPLETE}",
+      "time": 1785348522651
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522650, runId: 10, stage: RENDER, status: START}",
+      "time": 1785348522651
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522806, runId: 10, stage: RENDER, status: COMPLETE, width: 640}",
+      "time": 1785348522807
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522848, runId: 10, stage: ANALYSIS_PROXY, status: READY, phase: MATCHED PREVIEW}",
+      "time": 1785348522848
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522848, runId: 10, stage: Colour Palette · K-Means, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348522849
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522880, runId: 10, stage: Colour Palette · K-Means, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348522881
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348522898, runId: 10, stage: Tone Zone Analyzer, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348522898
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523040, runId: 10, stage: Tone Zone Analyzer, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348523041
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523047, runId: 10, stage: Skin Classification, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348523050
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523066, runId: 10, stage: Skin Classification, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348523067
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523081, runId: 10, stage: Histogram & Metrics, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348523083
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523214, runId: 10, stage: Histogram & Metrics, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348523215
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523215, runId: 10, stage: White Balance Pro, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348523217
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523273, runId: 10, stage: White Balance Pro, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348523274
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523283, runId: 10, stage: Tone Curve AI, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348523284
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523307, runId: 10, stage: Tone Curve AI, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348523308
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523315, runId: 10, stage: HSL Analyzer Pro, status: START, phase: MATCHED PREVIEW}",
+      "time": 1785348523316
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523343, runId: 10, stage: HSL Analyzer Pro, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348523344
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523349, runId: 10, stage: CORE_ANALYSIS, status: COMPLETE, phase: MATCHED PREVIEW}",
+      "time": 1785348523351
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348523353, runId: 10, stage: PIPELINE, status: COMPLETE, fidelity: 100}",
+      "time": 1785348523353
+    },
+    {
+      "type": "warning",
+      "text": "[LUMIXA][P0.7][HEARTBEAT] STALL detected: STOPPED idle for 3087ms",
+      "time": 1785348526442
+    }
+  ],
+  "sourceHashes": {
+    "analysis-cache.js": "fa21843854e9097d6ba586f765ab64f2017951af6fa48f172f32fbd90176d24f",
+    "candidate-schema.js": "b2fa20aa473a13dc03446bcbf774b7a02ca90093bd60966ad7a3ac1c7ff5b210",
+    "contribution-ledger.js": "2c49de0b8a8cdb4c2e8ade82b4495e01ef99fec66b6acc5010df3443aeea4765",
+    "core-runner.js": "b9acb2a33c0eb27ad139ba2b6b11f78c4885ee95e0c431ccee5ec248cac10253",
+    "error-handler.js": "014c6f09fc7a478c12a1b3bff53f66177b4e8fed5e81fe334d4ff41e7fc0b90e",
+    "export-manager.js": "6f7d2f5fa158ea95e070960c9960dc5a9aa7c142202747e9e65ad6cf222fc1e0",
+    "generation-control.js": "e54f2345ce07aaa3641e05ef73c1e4fe2c5037dc2886ebed6e65bd9a1995be8c",
+    "highres-loader.js": "3f6d602898ace080986871e745969aa1f681b5fe0cd3ce82e7d7d983eec58b1d",
+    "pipeline-heartbeat.js": "ef8db815e42fc1c242de40e5411e47f6afcf3decfb4ba78de35b976f5f4c0dc3",
+    "pipeline-tracer.js": "8df27d48e36832b4f2af7a2df1067ebf0c69ee3d29ca41a008246b68e8d6cf72",
+    "preview-state-machine.js": "404d726695191b51ae7f9a977799c606d646cd62f595fa05df985f8380663544",
+    "project-version.js": "050705f40d34375391f8970540ec0caa808507633a9c47a41cceeb323617033e"
+  }
+}

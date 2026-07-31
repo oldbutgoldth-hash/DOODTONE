@@ -121,8 +121,16 @@ export function buildUnifiedCoreFusion({ matrix, compensation, basePreset = null
 }
 
 export function applyUnifiedFusionToPreset(preset, fusion) {
-  if (!fusion) return JSON.parse(JSON.stringify(preset));
-  const out = JSON.parse(JSON.stringify(preset));
+  const out = JSON.parse(JSON.stringify(preset || {}));
+  // P0.4.1 — Intensity changes rebuild the pairwise candidate. Some fusion
+  // combinations can legitimately have no values for a nested group yet.
+  // Normalize every Lightroom group before consuming ledger entries so the
+  // slider can never crash on `out.hsl`, `out.grade`, or `out.cal`.
+  out.hsl = out.hsl && typeof out.hsl === 'object' ? out.hsl : {};
+  out.grade = out.grade && typeof out.grade === 'object' ? out.grade : {};
+  out.cal = out.cal && typeof out.cal === 'object' ? out.cal : {};
+  out.curves = out.curves && typeof out.curves === 'object' ? out.curves : null;
+  if (!fusion) return out;
   const blend = 0.65;
   const direct = ['temp','tint','exp','con','hi','sh','wh','bl','clarity','dehaze','texture','vib','sat'];
   for (const p of direct) if (Number.isFinite(fusion.fusedAdjustments[p])) out[p] = round((out[p] || 0) * (1-blend) + fusion.fusedAdjustments[p] * blend);

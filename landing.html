@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LUMIXA — Transfer Any Look. From Any Photo.</title>
+<meta name="description" content="LUMIXA analyzes reference photos and transfers their color, tone, and mood onto your images. Export professional Lightroom presets in seconds.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #15110c; --surface-1: #1c1712; --surface-2: #241d16; --surface-3: #332a1c;
+    --border: #3a2f22; --border-strong: #55432d;
+    --text: #f2e8d8; --text-dim: #b9a582; --text-faint: #7d6c52;
+    --accent: #c9a24b; --accent-soft: rgba(201,162,75,.14); --accent-strong: #e0bd6e; --on-accent: #241a0a;
+    --success: #93ac84; --danger: #c17361;
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-body: 'Public Sans', system-ui, sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { font-family: var(--font-body); background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-strong); }
+
+  /* ── Navigation ──────────────────────────────────────────────────── */
+  .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; background: rgba(21,17,12,.85); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
+  .nav-logo { font-family: var(--font-display); font-size: 26px; font-weight: 700; color: var(--accent); letter-spacing: 2px; }
+  .nav-links { display: flex; gap: 32px; align-items: center; }
+  .nav-links a { font-size: 14px; font-weight: 500; color: var(--text-dim); transition: color .2s; }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta { background: var(--accent); color: var(--on-accent); padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; transition: background .2s, transform .1s; }
+  .nav-cta:hover { background: var(--accent-strong); color: var(--on-accent); transform: translateY(-1px); }
+
+  /* ── Hero ────────────────────────────────────────────────────────── */
+  .hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 120px 24px 80px; position: relative; overflow: hidden; }
+  .hero::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(ellipse at 50% 30%, rgba(201,162,75,.08) 0%, transparent 60%); pointer-events: none; }
+  .hero-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 100px; border: 1px solid var(--border); background: var(--surface-1); font-size: 13px; color: var(--text-dim); margin-bottom: 32px; }
+  .hero-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+  .hero h1 { font-family: var(--font-display); font-size: clamp(42px, 7vw, 80px); font-weight: 700; line-height: 1.1; max-width: 800px; margin-bottom: 24px; }
+  .hero h1 .accent { color: var(--accent); }
+  .hero p { font-size: clamp(16px, 2vw, 20px); color: var(--text-dim); max-width: 560px; margin-bottom: 40px; }
+  .hero-buttons { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .btn-primary { background: var(--accent); color: var(--on-accent); padding: 16px 36px; border-radius: 12px; font-weight: 700; font-size: 16px; border: none; cursor: pointer; transition: all .2s; }
+  .btn-primary:hover { background: var(--accent-strong); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(201,162,75,.3); }
+  .btn-secondary { background: transparent; color: var(--text); padding: 16px 36px; border-radius: 12px; font-weight: 600; font-size: 16px; border: 1px solid var(--border-strong); cursor: pointer; transition: all .2s; }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Hero Visual (Before/After mockup) ──────────────────────────── */
+  .hero-visual { margin-top: 60px; width: 100%; max-width: 900px; position: relative; }
+  .hero-visual-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); }
+  .hero-visual-side { position: relative; aspect-ratio: 4/3; background: var(--surface-2); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .hero-visual-side .label { position: absolute; bottom: 16px; left: 16px; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .hero-visual-side.before .label { background: rgba(0,0,0,.6); color: #fff; }
+  .hero-visual-side.after .label { background: var(--accent); color: var(--on-accent); }
+  .hero-visual-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+  .hero-visual-placeholder .icon { font-size: 48px; opacity: .3; }
+  .hero-visual-placeholder .text { font-size: 13px; color: var(--text-faint); }
+  .hero-visual-divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: var(--accent); z-index: 2; transform: translateX(-50%); }
+  .hero-visual-divider::after { content: '↔'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--accent); color: var(--on-accent); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+
+  /* ── Section shared ──────────────────────────────────────────────── */
+  .section { padding: 100px 24px; max-width: 1200px; margin: 0 auto; }
+  .section-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--accent); margin-bottom: 12px; }
+  .section-title { font-family: var(--font-display); font-size: clamp(32px, 4vw, 48px); font-weight: 700; margin-bottom: 16px; }
+  .section-desc { font-size: 17px; color: var(--text-dim); max-width: 600px; margin-bottom: 48px; }
+
+  /* ── Features Grid ──────────────────────────────────────────────── */
+  .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+  .feature-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px; padding: 32px; transition: border-color .2s, transform .2s; }
+  .feature-card:hover { border-color: var(--accent); transform: translateY(-4px); }
+  .feature-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 20px; }
+  .feature-card h3 { font-family: var(--font-display); font-size: 22px; font-weight: 600; margin-bottom: 10px; }
+  .feature-card p { font-size: 15px; color: var(--text-dim); line-height: 1.6; }
+
+  /* ── How It Works ───────────────────────────────────────────────── */
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 32px; counter-reset: step; }
+  .step { position: relative; padding: 32px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px; counter-increment: step; }
+  .step::before { content: counter(step); position: absolute; top: -16px; left: 32px; width: 32px; height: 32px; background: var(--accent); color: var(--on-accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+  .step h3 { font-family: var(--font-display); font-size: 20px; font-weight: 600; margin: 8px 0 10px; }
+  .step p { font-size: 15px; color: var(--text-dim); }
+
+  /* ── Gallery ────────────────────────────────────────────────────── */
+  .gallery-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  .gallery-item { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: var(--surface-2); aspect-ratio: 3/2; display: flex; align-items: center; justify-content: center; }
+  .gallery-item .placeholder { text-align: center; color: var(--text-faint); }
+  .gallery-item .placeholder .icon { font-size: 36px; margin-bottom: 8px; display: block; }
+  .gallery-item .placeholder .text { font-size: 13px; }
+
+  /* ── Tech Specs ─────────────────────────────────────────────────── */
+  .specs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+  .spec { text-align: center; padding: 32px 20px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+  .spec-value { font-family: var(--font-display); font-size: 36px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+  .spec-label { font-size: 14px; color: var(--text-dim); }
+
+  /* ── Pricing ────────────────────────────────────────────────────── */
+  .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; max-width: 900px; margin: 0 auto; }
+  .price-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px; padding: 40px 32px; text-align: center; transition: border-color .2s; }
+  .price-card.featured { border-color: var(--accent); position: relative; }
+  .price-card.featured::before { content: 'MOST POPULAR'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--on-accent); padding: 4px 16px; border-radius: 100px; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
+  .price-card h3 { font-family: var(--font-display); font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+  .price-card .price { font-family: var(--font-display); font-size: 48px; font-weight: 700; color: var(--accent); margin: 16px 0; }
+  .price-card .price span { font-size: 16px; color: var(--text-dim); font-family: var(--font-body); font-weight: 400; }
+  .price-card ul { list-style: none; text-align: left; margin: 24px 0; }
+  .price-card ul li { padding: 8px 0; font-size: 15px; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+  .price-card ul li::before { content: '✓ '; color: var(--success); font-weight: 700; }
+  .price-card .btn-primary { width: 100%; margin-top: 8px; }
+
+  /* ── Footer ─────────────────────────────────────────────────────── */
+  .footer { padding: 60px 24px 40px; border-top: 1px solid var(--border); text-align: center; }
+  .footer-logo { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--accent); margin-bottom: 12px; }
+  .footer p { font-size: 13px; color: var(--text-faint); }
+  .footer-links { display: flex; gap: 24px; justify-content: center; margin-top: 16px; }
+  .footer-links a { font-size: 13px; color: var(--text-faint); }
+  .footer-links a:hover { color: var(--accent); }
+
+  /* ── Responsive ─────────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .nav { padding: 12px 20px; }
+    .nav-links a:not(.nav-cta) { display: none; }
+    .hero { padding: 100px 20px 60px; }
+    .hero-visual-inner { grid-template-columns: 1fr; }
+    .hero-visual-divider { display: none; }
+    .section { padding: 60px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav-logo">LUMIXA</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#pricing">Pricing</a>
+    <a href="index.html" class="nav-cta">Open App →</a>
+  </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="dot"></span>
+    AI-Powered Color Transfer
+  </div>
+  <h1>Transfer <span class="accent">Any Look</span> From Any Photo</h1>
+  <p>Upload a reference image. LUMIXA analyzes its color, tone, and mood — then generates a professional Lightroom preset that matches it. In seconds.</p>
+  <div class="hero-buttons">
+    <a href="index.html" class="btn-primary">Start Free →</a>
+    <a href="#how-it-works" class="btn-secondary">See How It Works</a>
+  </div>
+
+  <!-- Before/After Mockup -->
+  <div class="hero-visual">
+    <div class="hero-visual-inner">
+      <div class="hero-visual-side before">
+        <div class="hero-visual-placeholder">
+          <span class="icon">📷</span>
+          <span class="text">Your Photo</span>
+        </div>
+        <span class="label">Before</span>
+      </div>
+      <div class="hero-visual-side after">
+        <div class="hero-visual-placeholder">
+          <span class="icon">✨</span>
+          <span class="text">After LUMIXA Transfer</span>
+        </div>
+        <span class="label">After</span>
+      </div>
+    </div>
+    <div class="hero-visual-divider"></div>
+  </div>
+</section>
+
+<!-- ── Features ───────────────────────────────────────────────────── -->
+<section class="section" id="features">
+  <span class="section-label">Why LUMIXA</span>
+  <h2 class="section-title">Color Science, Not Guesswork</h2>
+  <p class="section-desc">12 specialized AI engines work together to analyze, transfer, and validate — so your presets look exactly like the reference.</p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🎯</div>
+      <h3>Reference-Based Transfer</h3>
+      <p>Upload any photo as a reference. LUMIXA extracts its exact color palette, tone curve, and mood — then applies it to your image.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔬</div>
+      <h3>LAB Color Science</h3>
+      <p>Built on CIEDE2000 perceptual color difference and Oklab color space — the same math used by professional color scientists.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <h3>13-Point Tone Curves</h3>
+      <p>Precise tonal mapping with 13 control points instead of the usual 5. Captures shadow lift, highlight roll-off, and S-curve character.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🎨</div>
+      <h3>5 Transfer Modes</h3>
+      <p>Natural, Cinematic, Vintage, Soft, Bold — each mode applies a different photographic approach, not just different intensity.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🛡️</div>
+      <h3>Smart Skin Protection</h3>
+      <p>Adaptive skin detection preserves natural skin tones. Confidence-based — more skin detected, more protection applied.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📦</div>
+      <h3>Lightroom-Ready XMP</h3>
+      <p>Export as .xmp files compatible with Lightroom, Camera Raw, and Capture One. Drag, drop, done.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── How It Works ───────────────────────────────────────────────── -->
+<section class="section" id="how-it-works">
+  <span class="section-label">Workflow</span>
+  <h2 class="section-title">Three Steps. Seconds.</h2>
+  <p class="section-desc">No manual adjustments. No preset hunting. Just upload, select, and export.</p>
+
+  <div class="steps">
+    <div class="step">
+      <h3>Upload Reference</h3>
+      <p>Drop in a photo whose look you love — from Instagram, a magazine, or your own portfolio. LUMIXA analyzes it instantly.</p>
+    </div>
+    <div class="step">
+      <h3>Upload Your Photo</h3>
+      <p>Add the photo you want to transform. LUMIXA compares both images and calculates the exact adjustments needed.</p>
+    </div>
+    <div class="step">
+      <h3>Export Preset</h3>
+      <p>Download a professional .xmp preset. Import into Lightroom and apply to any photo. One click.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Technical Specs ────────────────────────────────────────────── -->
+<section class="section">
+  <span class="section-label">Under the Hood</span>
+  <h2 class="section-title">Built for Professionals</h2>
+  <p class="section-desc">Enterprise-grade color science, running entirely in your browser. No uploads. No servers. Your photos stay yours.</p>
+
+  <div class="specs">
+    <div class="spec">
+      <div class="spec-value">12</div>
+      <div class="spec-label">AI Analysis Engines</div>
+    </div>
+    <div class="spec">
+      <div class="spec-value">13</div>
+      <div class="spec-label">Tone Curve Control Points</div>
+    </div>
+    <div class="spec">
+      <div class="spec-value">8</div>
+      <div class="spec-label">HSL Channel Precision</div>
+    </div>
+    <div class="spec">
+      <div class="spec-value">0</div>
+      <div class="spec-label">Server Uploads</div>
+    </div>
+    <div class="spec">
+      <div class="spec-value">100%</div>
+      <div class="spec-label">Client-Side Processing</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Gallery ────────────────────────────────────────────────────── -->
+<section class="section" id="gallery">
+  <span class="section-label">Gallery</span>
+  <h2 class="section-title">See the Difference</h2>
+  <p class="section-desc">Real results from the LUMIXA color transfer engine.</p>
+
+  <div class="gallery-grid">
+    <div class="gallery-item">
+      <div class="placeholder">
+        <span class="icon">🌅</span>
+        <span class="text">Golden Hour Transfer</span>
+      </div>
+    </div>
+    <div class="gallery-item">
+      <div class="placeholder">
+        <span class="icon">🎞️</span>
+        <span class="text">Film Emulation</span>
+      </div>
+    </div>
+    <div class="gallery-item">
+      <div class="placeholder">
+        <span class="icon">🏙️</span>
+        <span class="text">Cinematic Grade</span>
+      </div>
+    </div>
+    <div class="gallery-item">
+      <div class="placeholder">
+        <span class="icon">🌿</span>
+        <span class="text">Moody Nature</span>
+      </div>
+    </div>
+    <div class="gallery-item">
+      <div class="placeholder">
+        <span class="icon">📸</span>
+        <span class="text">Portrait Skin Tone</span>
+      </div>
+    </div>
+    <div class="gallery-item">
+      <div class="placeholder">
+        <span class="icon">🏔️</span>
+        <span class="text">Landscape Drama</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Pricing ────────────────────────────────────────────────────── -->
+<section class="section" id="pricing">
+  <span class="section-label">Pricing</span>
+  <h2 class="section-title">Start Free. Go Pro.</h2>
+  <p class="section-desc">Try LUMIXA with no limits. Upgrade for batch processing and preset library.</p>
+
+  <div class="pricing-grid">
+    <div class="price-card">
+      <h3>Free</h3>
+      <div class="price">$0 <span>/ forever</span></div>
+      <ul>
+        <li>Unlimited single-image transfers</li>
+        <li>All 5 transfer modes</li>
+        <li>XMP export for Lightroom</li>
+        <li>LAB color science engine</li>
+        <li>Smart skin protection</li>
+      </ul>
+      <a href="index.html" class="btn-primary" style="background:var(--surface-3);color:var(--text);">Get Started Free</a>
+    </div>
+    <div class="price-card featured">
+      <h3>Pro</h3>
+      <div class="price">$9 <span>/ month</span></div>
+      <ul>
+        <li>Everything in Free</li>
+        <li>Batch processing (unlimited images)</li>
+        <li>Preset library & collections</li>
+        <li>Before/After comparison viewer</li>
+        <li>Priority color engine updates</li>
+        <li>Commercial license</li>
+      </ul>
+      <a href="index.html" class="btn-primary">Start Pro Trial →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ────────────────────────────────────────────────────────── -->
+<section class="section" style="text-align:center;">
+  <h2 class="section-title" style="margin-bottom:12px;">Ready to Transform Your Photos?</h2>
+  <p class="section-desc" style="margin:0 auto 32px; text-align:center;">Join photographers who use LUMIXA to match any look in seconds.</p>
+  <a href="index.html" class="btn-primary" style="font-size:18px; padding:18px 48px;">Launch LUMIXA →</a>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="footer-logo">LUMIXA</div>
+  <p>AI-Powered Reference Color Intelligence</p>
+  <div class="footer-links">
+    <a href="#features">Features</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#pricing">Pricing</a>
+    <a href="index.html">App</a>
+  </div>
+  <p style="margin-top:24px; font-size:12px;">100% client-side. No photos leave your browser.</p>
+</footer>
+
+</body>
+</html>

@@ -31,6 +31,15 @@ import { analyzeImageCore } from '../core/image-analysis-core/index.js';
 import { analyzeSkinTone } from '../core/skintone-engine/index.js';
 import { generateHarmonies } from '../core/color-harmony-engine/index.js';
 
+/* P0.7 — Pipeline Runtime Architecture */
+import { createGeneration, getActiveGenerationId, isStale, createGenerationGuard } from '../core/generation-control.js';
+import { getCachedReferenceAnalysis, setCachedReferenceAnalysis, getCachedTargetAnalysis, setCachedTargetAnalysis, getCacheStats } from '../core/analysis-cache.js';
+import { createHeartbeat } from '../core/pipeline-heartbeat.js';
+import { PreviewStateMachine, PREVIEW_STATE } from '../core/preview-state-machine.js';
+import { ContributionLedger } from '../core/contribution-ledger.js';
+import { normalizeCandidate, getLayer1Subset, getLayer2Subset, markLayer } from '../core/candidate-schema.js';
+import { createTrace, recordTrace, closeTrace, getTrace, formatTraceSummary } from '../core/pipeline-tracer.js';
+import { runModule, MODULE_STATUS, LAYER } from '../core/core-runner.js';
 
 const MODES = Object.freeze({ Natural: 1, Cinematic: 1.08, Vintage: 0.92, Soft: 0.78, Bold: 1.15 });
 const DECISIONS = Object.freeze([
@@ -80,6 +89,13 @@ const rcm = {
   pixelTransfer: null,
   pixelTransferKey: null,
   workflow: { id: 'REFERENCE_COLOR_MATCH_BETA', previewState: 'WAITING_FOR_IMAGES', previewError: null },
+  runtime: { runSeq: 0, activeRunId: 0, trace: [], lastProgressAt: 0, rebuildTimer: null, rebuildQueued: false, queuedReason: null, running: false,
+    generationId: null, signal: null, guard: null, psm: null, heartbeat: null, ledger: null, tracer: null,
+    layer1Complete: false, cacheUsed: false, _l2Abort: null,
+    /* EPIC 2E-P0.7 R5 — explicit counters so tests can prove Reference/Target
+     * Core analysis never reruns on Intensity changes, only the cached
+     * candidate rebuild does. */
+    counters: { referenceAnalysisCount: 0, targetAnalysisCount: 0, intensityRenderCount: 0 } },
 };
 
 function $(id) { return document.getElementById(id); }
@@ -174,31 +190,95 @@ function _adaptGrading(result) {
   };
 }
 const CORE_ANALYSIS_TIMEOUT_MS = 45000;
+const ANALYSIS_PROXY_MAX_EDGE = 512;
+
+function _trace(stage, status, detail = {}) {
+  const entry = { at: Date.now(), runId: rcm.runtime.activeRunId, stage, status, ...detail };
+  rcm.runtime.trace.push(entry);
+  if (rcm.runtime.trace.length > 160) rcm.runtime.trace.splice(0, rcm.runtime.trace.length - 160);
+  rcm.runtime.lastProgressAt = entry.at;
+  // P0.7: update heartbeat on every real progress event (never in interval tick)
+  if (rcm.runtime.heartbeat) rcm.runtime.heartbeat.update(`${stage}:${status}`);
+  console.info('[LUMIXA][RCM_TRACE]', entry);
+  return entry;
+}
+
+function _assertActiveRun(runId) {
+  if (runId !== rcm.runtime.activeRunId) {
+    throw Object.assign(new Error('Pipeline generation was superseded by a newer request.'), { code: 'STALE_GENERATION_ABORTED' });
+  }
+}
 
 function _nextPaint() {
   return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 }
 
-async function _runCoreAnalysisStep({ phase, label, task, required = true, fallback = null, timeoutMs = CORE_ANALYSIS_TIMEOUT_MS }) {
+async function _createAnalysisProxy(img, maxEdge = ANALYSIS_PROXY_MAX_EDGE) {
+  const w = Number(img?.naturalWidth || img?.videoWidth || img?.width || 0);
+  const h = Number(img?.naturalHeight || img?.videoHeight || img?.height || 0);
+  if (!w || !h) throw Object.assign(new Error('Invalid image geometry for analysis.'), { code: 'ANALYSIS_IMAGE_INVALID' });
+
+  const scale = Math.min(1, maxEdge / Math.max(w, h));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(w * scale));
+  canvas.height = Math.max(1, Math.round(h * scale));
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw Object.assign(new Error('Could not create analysis canvas context.'), { code: 'ANALYSIS_CANVAS_CONTEXT_FAILED' });
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  // Core engines expect an HTMLImageElement and read naturalWidth/naturalHeight.
+  // Passing the canvas directly made every engine see naturalWidth === undefined.
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(value => value ? resolve(value) : reject(Object.assign(
+      new Error('Could not encode analysis proxy.'),
+      { code: 'ANALYSIS_PROXY_ENCODE_FAILED' }
+    )), 'image/png');
+  });
+  const url = URL.createObjectURL(blob);
+  try {
+    const proxyImage = new Image();
+    proxyImage.decoding = 'async';
+    proxyImage.src = url;
+    if (typeof proxyImage.decode === 'function') await proxyImage.decode();
+    else await new Promise((resolve, reject) => {
+      proxyImage.onload = resolve;
+      proxyImage.onerror = () => reject(Object.assign(new Error('Could not decode analysis proxy.'), { code: 'ANALYSIS_PROXY_DECODE_FAILED' }));
+    });
+    if (!proxyImage.naturalWidth || !proxyImage.naturalHeight) {
+      throw Object.assign(new Error('Analysis proxy decoded without natural dimensions.'), { code: 'ANALYSIS_PROXY_DIMENSIONS_INVALID' });
+    }
+    await _nextPaint();
+    return proxyImage;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function _runCoreAnalysisStep({ phase, label, task, runId, required = true, fallback = null, timeoutMs = CORE_ANALYSIS_TIMEOUT_MS }) {
+  _assertActiveRun(runId);
+  _trace(label, 'START', { phase });
   _setStatus(`${phase}: ${label}…`);
   _setMatchedPreviewState(
     phase === 'REFERENCE' ? 'REFERENCE_ANALYSIS_PENDING' :
     phase === 'TARGET' ? 'TARGET_ANALYSIS_PENDING' : 'PAIRWISE_FUSION_PENDING',
-    `${label} · ระบบกำลังประมวลผลทีละโมดูลเพื่อไม่ให้หน้าเว็บค้าง`
+    `${label} · วิเคราะห์จากภาพ Proxy ${ANALYSIS_PROXY_MAX_EDGE}px เพื่อรักษาคุณภาพโดยไม่ล็อกหน้าเว็บ`
   );
   await _nextPaint();
   let timer;
   try {
     const result = await Promise.race([
-      Promise.resolve().then(task),
+      Promise.resolve().then(() => { _assertActiveRun(runId); return task(); }),
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error(`${label} ใช้เวลานานเกิน ${timeoutMs / 1000} วินาที`), {
           code: `CORE_TIMEOUT_${label.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
         })), timeoutMs);
       }),
     ]);
+    _assertActiveRun(runId);
+    _trace(label, 'COMPLETE', { phase });
     return result;
   } catch (error) {
+    _trace(label, 'FAILED', { phase, code: error?.code || 'CORE_FAILED', message: error?.message || String(error) });
     console.error(`[LUMIXA][${phase}][${label}]`, error);
     if (required) throw error;
     return fallback;
@@ -208,44 +288,34 @@ async function _runCoreAnalysisStep({ phase, label, task, required = true, fallb
   }
 }
 
-async function _analyzeEvidence(img, { phase = 'ANALYSIS' } = {}) {
-  // Run canvas-heavy engines in controlled stages. Running all 11 engines in one
-  // Promise.all can starve the browser main thread and leave the preview overlay
-  // permanently stuck at “analysing reference”.
-  const palette = await _runCoreAnalysisStep({ phase, label: 'Colour Palette · K-Means', task: () => extractReferencePalette(img) });
-  const toneZones = await _runCoreAnalysisStep({ phase, label: 'Tone Zone Analyzer', task: () => analyzeToneZones(img) });
-  const skinAnalysis = await _runCoreAnalysisStep({ phase, label: 'Skin Classification', task: () => classifySkin(img), required: false, fallback: { detected: false, coveragePct: 0 } });
-  const histogram = await _runCoreAnalysisStep({ phase, label: 'Histogram & Metrics', task: () => analyzeImage(img) });
+async function _analyzeEvidence(img, { phase = 'ANALYSIS', profile = 'PAIRWISE_FULL', runId = rcm.runtime.activeRunId } = {}) {
+  _assertActiveRun(runId);
+  /* EPIC 2E-P0.7 R5 — count real Core analysis runs only. Intensity
+   * rerenders never call this function, so these counters must stay
+   * flat across any number of Intensity changes. */
+  if (phase === 'REFERENCE') rcm.runtime.counters.referenceAnalysisCount++;
+  if (phase === 'TARGET') rcm.runtime.counters.targetAnalysisCount++;
+  const proxy = await _createAnalysisProxy(img, profile === 'EVALUATION_MINIMAL' ? 320 : ANALYSIS_PROXY_MAX_EDGE);
+  _trace('ANALYSIS_PROXY', 'READY', { phase, width: proxy.width, height: proxy.height, profile });
+
+  const step = (label, task, options = {}) => _runCoreAnalysisStep({ phase, label, task, runId, ...options });
+  const palette = await step('Colour Palette · K-Means', () => extractReferencePalette(proxy));
+  const toneZones = await step('Tone Zone Analyzer', () => analyzeToneZones(proxy));
+  const skinAnalysis = await step('Skin Classification', () => classifySkin(proxy), { required: false, fallback: { detected: false, coveragePct: 0 } });
+  const histogram = await step('Histogram & Metrics', () => analyzeImage(proxy));
 
   const category = skinAnalysis?.detected ? 'Portrait' : 'General';
-  const whiteBalance = await _runCoreAnalysisStep({ phase, label: 'White Balance Pro', task: () => analyzeWhiteBalance(img,{category,skinPct:skinAnalysis?.coveragePct || 0}), required: false, fallback: {} });
-  const toneCurve = await _runCoreAnalysisStep({ phase, label: 'Tone Curve AI', task: () => generateToneCurves(img,histogram), required: false, fallback: {} });
-  const hsl = await _runCoreAnalysisStep({ phase, label: 'HSL Analyzer Pro', task: () => analyzeHSL(img,{category}), required: false, fallback: {} });
-  const grading = await _runCoreAnalysisStep({ phase, label: 'Color Grading AI', task: () => analyzeColorGrading(img,{category}), required: false, fallback: {} });
-  const calibration = await _runCoreAnalysisStep({ phase, label: 'Calibration Engine', task: () => analyzeCalibration(img,{category,skinPct:skinAnalysis?.coveragePct || 0}), required: false, fallback: {} });
-  // Image Analysis Core is intentionally excluded from the critical preview path.
-  // It is a comprehensive reporting engine and can monopolise the browser main thread
-  // on large photographs. Pairwise preview already has the fast evidence required from
-  // palette, tone zones, histogram, WB, tone curve, HSL, grading and calibration.
-  // Keep an explicit deferred record so the contribution ledger stays honest.
-  const imageCore = {
-    deferred: true,
-    source: 'REFERENCE_COLOR_MATCH_FAST_PATH',
-    confidence: 0,
-    warnings: ['Image Analysis Core deferred; it does not block Target Matched Preview.'],
-  };
-  // Skin Tone Detection Pro is intentionally NOT awaited in the critical preview path.
-  // The fast Skin Classification result already supplies the safety constraint required
-  // for pairwise fusion. A slow/buggy optional skin profiler must never block Reference,
-  // Target, or Matched Preview generation.
-  const skinTone = {
-    detected: Boolean(skinAnalysis?.detected),
-    coveragePct: Number(skinAnalysis?.coveragePct || 0),
-    confidence: Number(skinAnalysis?.confidence || (skinAnalysis?.detected ? 0.55 : 0.2)),
-    deferred: true,
-    source: 'FAST_SKIN_CLASSIFICATION_FALLBACK',
-    warnings: ['Skin Tone Detection Pro deferred; preview uses fast skin classification safety evidence.'],
-  };
+  const whiteBalance = await step('White Balance Pro', () => analyzeWhiteBalance(proxy,{category,skinPct:skinAnalysis?.coveragePct || 0}), { required: false, fallback: {} });
+  const toneCurve = await step('Tone Curve AI', () => generateToneCurves(proxy,histogram), { required: false, fallback: {} });
+  const hsl = await step('HSL Analyzer Pro', () => analyzeHSL(proxy,{category}), { required: false, fallback: {} });
+
+  let grading = {}, calibration = {}, imageCore = {}, skinTone = {};
+  if (profile !== 'EVALUATION_MINIMAL') {
+    grading = await step('Color Grading AI', () => analyzeColorGrading(proxy,{category}), { required: false, fallback: {} });
+    calibration = await step('Calibration Engine', () => analyzeCalibration(proxy,{category}), { required: false, fallback: {} });
+    imageCore = await step('Image Analysis Core', () => analyzeImageCore(proxy,{category}), { required: false, fallback: {} });
+    skinTone = await step('Skin Tone Detection Pro', () => analyzeSkinTone(proxy,{category}), { required: false, fallback: {} });
+  }
 
   const basic = generateBasicPanel(histogram);
   const coreOutputs = {
@@ -257,9 +327,10 @@ async function _analyzeEvidence(img, { phase = 'ANALYSIS' } = {}) {
     calibrationEngine:{confidence:calibration?.confidence ?? .5,recommendedAdjustments:{red:{hue:_sliderValue(calibration?.red?.hue),saturation:_sliderValue(calibration?.red?.sat)},green:{hue:_sliderValue(calibration?.green?.hue),saturation:_sliderValue(calibration?.green?.sat)},blue:{hue:_sliderValue(calibration?.blue?.hue),saturation:_sliderValue(calibration?.blue?.sat)}},evidence:calibration},
     imageAnalysisCore:{confidence:imageCore?.confidence ?? .6,evidence:imageCore},
     colourPaletteKMeans:{confidence:.8,evidence:palette}, histogramMetrics:{confidence:.8,evidence:histogram}, toneZoneAnalyzer:{confidence:.8,evidence:toneZones},
-    colorHarmony:{confidence:.6,evidence:generateHarmonies(palette?.colors || [])}, skinToneDetectionPro:{confidence:skinTone?.confidence ?? .5,evidence:skinTone,constraints:{detected:skinAnalysis?.detected}},
+    colorHarmony:{confidence:.6,evidence:palette?.dominant ? generateHarmonies(palette) : { confidence: 0, schemes: {} }}, skinToneDetectionPro:{confidence:skinTone?.confidence ?? .5,evidence:skinTone,constraints:{detected:skinAnalysis?.detected}},
     featureFusionEngine:{confidence:.75,evidence:{source:'reference-color-match-panel'}}, decisionEngine:{confidence:.75,evidence:{category}}, xmpValidator:{confidence:1,evidence:{enabled:true}},
   };
+  _trace('CORE_ANALYSIS', 'COMPLETE', { phase, profile, coreCount: Object.keys(coreOutputs).length });
   return { palette, toneZones, skinAnalysis, histogram, coreOutputs };
 }
 
@@ -585,12 +656,209 @@ function _effectiveIntensity() {
   return Math.max(0, Math.min(100, rcm.intensity * (MODES[rcm.mode] || 1) * preserveFactor * skinFactor));
 }
 
-async function _rebuildAndPreview() {
+function _cancelLayer2() {
+  if (rcm.runtime._l2Abort) {
+    rcm.runtime._l2Abort.abort();
+    rcm.runtime._l2Abort = null;
+  }
+}
+
+function _resetPsmToWaiting() {
+  const psm = rcm.runtime.psm;
+  if (!psm) return;
+  if (psm.state === PREVIEW_STATE.WAITING) return;
+  if (psm.canTransition(PREVIEW_STATE.WAITING)) {
+    psm.transition(PREVIEW_STATE.WAITING);
+  } else if (psm.canTransition(PREVIEW_STATE.STALE)) {
+    psm.transition(PREVIEW_STATE.STALE);
+    psm.transition(PREVIEW_STATE.WAITING);
+  } else {
+    psm.reset();
+    psm.transition(PREVIEW_STATE.WAITING);
+  }
+}
+
+/**
+ * EPIC 2E-P0.7 R5 — cached Intensity-only rebuild.
+ *
+ * Required flow (never calls _analyzeEvidence — Reference/Target Core
+ * analysis must NOT rerun):
+ *   reuse cached Reference/Target evidence
+ *   -> rebuild pairwise fusion/candidate for the new Intensity
+ *   -> normalize/render Target Matched Preview
+ *   -> keep Save After Image enabled
+ *
+ * PSM: FAST_PREVIEW_READY | ANALYZING_LAYER_2 | REFINED_READY
+ *      -> INTENSITY_RERENDERING -> FAST_PREVIEW_READY
+ * Every transition() return value is checked — a false return fails
+ * this operation closed rather than silently continuing in a
+ * corrupted/unknown PSM state.
+ */
+async function _rebuildIntensityFromCache() {
   if (!rcm.referenceImg || !rcm.targetImg) {
     _setMatchedPreviewState('WAITING_FOR_IMAGES', !rcm.referenceImg ? 'กรุณาเลือกภาพ Reference' : 'กรุณาเลือกภาพ Target');
     return;
   }
-  const runGenerationId = rcm.generationId;
+  if (!rcm.referenceEvidence || !rcm.targetEvidence) {
+    /* No cached evidence yet (e.g. first-ever pair) — fall back to the
+     * full pipeline, which itself performs the initial Core analysis
+     * and caches it for every subsequent Intensity change. */
+    _trace('INTENSITY', 'CACHE_MISS', { value: rcm.intensity });
+    return _rebuildAndPreview({ reason: 'INTENSITY' });
+  }
+  if (rcm.runtime.running) {
+    rcm.runtime.rebuildQueued = true;
+    rcm.runtime.queuedReason = 'INTENSITY_CACHED';
+    _trace('INTENSITY', 'QUEUED', { value: rcm.intensity });
+    return;
+  }
+
+  /* Cancel any in-flight deferred Layer 2 — its output must never
+   * overwrite the Preview this Intensity change is about to render. */
+  _cancelLayer2();
+
+  /* New run token within the SAME generation (Reference/Target are
+   * unchanged) so a stale Layer 2 task from before this Intensity
+   * change can recognise it has been superseded. */
+  const runId = ++rcm.runtime.runSeq;
+  rcm.runtime.activeRunId = runId;
+  const generationId = rcm.runtime.generationId;
+  const guard = rcm.runtime.guard;
+
+  const fromState = rcm.runtime.psm?.state;
+  const transitionedIn = rcm.runtime.psm ? rcm.runtime.psm.transition(PREVIEW_STATE.INTENSITY_RERENDERING) : false;
+  if (rcm.runtime.psm && !transitionedIn) {
+    _trace('INTENSITY', 'STATE_TRANSITION_FAILED', { from: fromState, to: PREVIEW_STATE.INTENSITY_RERENDERING });
+    _setStatus(`Intensity update failed: invalid state transition ${fromState} -> ${PREVIEW_STATE.INTENSITY_RERENDERING}`);
+    return;
+  }
+
+  rcm.runtime.running = true;
+  rcm.runtime.rebuildQueued = false;
+  $('rcmGenerateBtn')?.setAttribute('disabled', 'true');
+  if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '1';
+
+  try {
+    _trace('INTENSITY', 'CACHE_REUSED', { reference: true, target: true });
+
+    const intensityKey = `${generationId}|${Math.round(_effectiveIntensity())}|${rcm.mode}`;
+    if (!rcm.pixelTransfer || rcm.pixelTransferKey !== intensityKey) {
+      _setMatchedPreviewState('PAIRWISE_FUSION_PENDING', 'ปรับ Intensity จาก Analysis Cache โดยไม่วิเคราะห์ Core ใหม่');
+      await _nextPaint();
+      rcm.pixelTransfer = await buildPerceptualPixelTransfer({ referenceImg: rcm.referenceImg, targetImg: rcm.targetImg, intensity: _effectiveIntensity(), mode: rcm.mode });
+      rcm.pixelTransferKey = intensityKey;
+    }
+    if (runId !== rcm.runtime.activeRunId || guard?.().stale) return;
+
+    const pipeline = buildCoreColorMatchPipeline({
+      reference: rcm.referenceEvidence,
+      target: rcm.targetEvidence,
+      analysisGenerationId: generationId,
+      intensity: _effectiveIntensity(),
+      candidateName: 'LUMIXA-Core-Color-Match-Candidate',
+      protectionOptions: { ...rcm.toggles },
+      pixelTransfer: rcm.pixelTransfer,
+      targetMediaContext: { fileName: rcm.targetFile?.name || '', mimeType: rcm.targetFile?.type || '', mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride, baseTemperatureK: rcm.targetBaseTemperatureK, baseTint: rcm.targetBaseTint, profileName: rcm.targetProfileName },
+    });
+    if (!pipeline?.candidate?.safePreset) throw Object.assign(new Error('Cached Intensity rebuild did not produce a preview preset.'), { code: 'MATCH_CANDIDATE_UNAVAILABLE' });
+    if (runId !== rcm.runtime.activeRunId || guard?.().stale) return;
+    rcm.corePipeline = pipeline;
+    _trace('INTENSITY', 'CANDIDATE_REBUILT', { value: rcm.intensity });
+
+    const afterCanvas = $('rcmAfterCanvas');
+    if (!afterCanvas) throw Object.assign(new Error('Matched preview canvas is missing.'), { code: 'TARGET_RENDER_SURFACE_MISSING' });
+    _setMatchedPreviewState('RENDERING', 'ปรับ Intensity จาก Analysis Cache โดยไม่วิเคราะห์ Core ใหม่');
+    rcm.previewMetrics = await renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: pipeline.candidate.safePreset });
+    if (!afterCanvas.width || !afterCanvas.height) throw Object.assign(new Error('Intensity Preview rendered with invalid geometry.'), { code: 'TARGET_RENDER_EMPTY' });
+    if (runId !== rcm.runtime.activeRunId || guard?.().stale) return;
+
+    const transitionedOut = rcm.runtime.psm ? rcm.runtime.psm.transition(PREVIEW_STATE.FAST_PREVIEW_READY) : false;
+    if (rcm.runtime.psm && !transitionedOut) {
+      _trace('INTENSITY', 'STATE_TRANSITION_FAILED', { from: PREVIEW_STATE.INTENSITY_RERENDERING, to: PREVIEW_STATE.FAST_PREVIEW_READY });
+      _setStatus('Intensity update failed: invalid state transition out of INTENSITY_RERENDERING');
+      return;
+    }
+    rcm.runtime.layer1Complete = true;
+    rcm.runtime.counters.intensityRenderCount++;
+    $('rcmSaveAfterBtn')?.removeAttribute('disabled');
+    const blocked = !rcm.corePipeline.candidate.exportReady;
+    if (!blocked) $('rcmGenerateBtn')?.removeAttribute('disabled');
+    _renderCoreMatchInspector();
+    _setMatchedPreviewState('READY');
+    _setStatus(`Fast Preview · ใช้ Cache (Intensity ${rcm.intensity}) · Save After Image พร้อม`);
+    _trace('INTENSITY', 'PREVIEW_RERENDERED', { value: rcm.intensity });
+
+    /* Optionally restart refinement (Layer 2) from cached evidence
+     * after the new Fast Preview — _runLayer2 already verifies
+     * generation/run-token ownership before every state commit, so a
+     * stale Layer 2 task from a superseded Intensity value can never
+     * overwrite this render. */
+    _runLayer2({ runId, generationId, guard: guard ?? (() => ({ stale: false })) });
+  } catch (error) {
+    if (error?.code === 'STALE_GENERATION_ABORTED' || guard?.().stale) return;
+    console.error('[LUMIXA][INTENSITY]', error);
+    _trace('INTENSITY', 'FAILED', { code: error?.code || 'INTENSITY_REBUILD_FAILED', message: error?.message });
+    const code = error?.code || 'INTENSITY_REBUILD_FAILED';
+    const transitionedErr = rcm.runtime.psm ? rcm.runtime.psm.transition(PREVIEW_STATE.ERROR) : false;
+    if (rcm.runtime.psm && !transitionedErr) {
+      _trace('INTENSITY', 'STATE_TRANSITION_FAILED', { from: rcm.runtime.psm.state, to: PREVIEW_STATE.ERROR });
+    }
+    _setMatchedPreviewState('ERROR', error?.message || 'ไม่สามารถสร้างภาพ Preview ได้', code);
+    _setStatus(`Target Matched Preview ไม่ขึ้น: ${code}`);
+    _renderCoreMatchInspector();
+  } finally {
+    rcm.runtime.running = false;
+    if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '0';
+    if (rcm.runtime.rebuildQueued) {
+      rcm.runtime.rebuildQueued = false;
+      const queuedReason = rcm.runtime.queuedReason;
+      rcm.runtime.queuedReason = null;
+      if (queuedReason === 'INTENSITY_CACHED') {
+        queueMicrotask(() => _rebuildIntensityFromCache());
+      } else {
+        queueMicrotask(() => _rebuildAndPreview({ reason: queuedReason || 'QUEUED' }));
+      }
+    }
+  }
+}
+
+async function _rebuildAndPreview({ reason = 'DIRECT' } = {}) {
+  if (!rcm.referenceImg || !rcm.targetImg) {
+    _setMatchedPreviewState('WAITING_FOR_IMAGES', !rcm.referenceImg ? 'กรุณาเลือกภาพ Reference' : 'กรุณาเลือกภาพ Target');
+    return;
+  }
+  if (rcm.runtime.running) {
+    rcm.runtime.rebuildQueued = true;
+    rcm.runtime.queuedReason = reason;
+    _trace('PIPELINE', 'REBUILD_QUEUED', { reason });
+    return;
+  }
+
+  /* P0.7: Cancel any in-flight Layer 2 before creating new generation */
+  _cancelLayer2();
+
+  /* P0.7: Create generation token (aborts any prior in-flight work) */
+  const { generationId, signal } = createGeneration();
+  const guard = createGenerationGuard(generationId);
+  rcm.runtime.generationId = generationId;
+  rcm.runtime.signal = signal;
+  rcm.runtime.guard = guard;
+  rcm.runtime.layer1Complete = false;
+  rcm.runtime.cacheUsed = false;
+
+  /* P0.7: Reset PSM to WAITING (valid from any state) → ANALYZING_LAYER_1 */
+  _resetPsmToWaiting();
+  rcm.runtime.psm?.transition(PREVIEW_STATE.ANALYZING_LAYER_1);
+  rcm.runtime.heartbeat?.start();
+  rcm.runtime.ledger?.clear();
+  rcm.runtime.tracer = createTrace(generationId);
+  recordTrace({ generationId, stageId: 'PIPELINE', moduleId: 'rebuild', status: 'STARTED', detail: reason });
+
+  const runId = ++rcm.runtime.runSeq;
+  rcm.runtime.activeRunId = runId;
+  rcm.runtime.running = true;
+  rcm.runtime.rebuildQueued = false;
+  _trace('PIPELINE', 'START', { reason, generationId });
   rcm.candidateReadyForDownload = false;
   $('rcmGenerateBtn')?.setAttribute('disabled', 'true');
   $('rcmDownloadBtn')?.setAttribute('disabled', 'true');
@@ -598,61 +866,153 @@ async function _rebuildAndPreview() {
   if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '1';
 
   try {
+    /* ── LAYER 1: Cached reference/target evidence + fast pipeline → show preview ── */
     if (!rcm.referenceEvidence) {
-      _setMatchedPreviewState('REFERENCE_ANALYSIS_PENDING', 'กำลังเรียก Core Analysis สำหรับ Reference โดยอัตโนมัติ');
-      rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg, { phase: 'REFERENCE' });
-      if (runGenerationId !== rcm.generationId) throw Object.assign(new Error('Generation changed during reference analysis.'), { code: 'STALE_GENERATION' });
+      _setMatchedPreviewState('REFERENCE_ANALYSIS_PENDING', 'กำลังวิเคราะห์ Reference ครั้งเดียวและบันทึก Cache');
+      rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg, { phase: 'REFERENCE', profile: 'PAIRWISE_FULL', runId });
+      if (guard().stale) throw Object.assign(new Error('Pipeline generation was superseded by a newer request.'), { code: 'STALE_GENERATION_ABORTED' });
       _renderPalette(rcm.referenceEvidence.palette);
       _renderToneZones(rcm.referenceEvidence.toneZones);
+      const cacheKey = { filePath: 'reference', imageId: rcm.generationId || 'ref', dimensions: `${rcm.referenceImg.naturalWidth}x${rcm.referenceImg.naturalHeight}`, profileVersion: 'v1' };
+      setCachedReferenceAnalysis(cacheKey, rcm.referenceEvidence);
+      recordTrace({ generationId, stageId: 'REFERENCE', moduleId: 'analyzeEvidence', status: 'COMPLETED' });
+    } else {
+      _trace('REFERENCE_CACHE', 'HIT');
+      rcm.runtime.cacheUsed = true;
+      recordTrace({ generationId, stageId: 'REFERENCE', moduleId: 'analyzeEvidence', status: 'CACHED' });
     }
 
-    _setStatus('กำลังวิเคราะห์ Target และสร้าง Pairwise Color Match…');
-    _setMatchedPreviewState('TARGET_ANALYSIS_PENDING', 'กำลังเรียก Core ชุดเดียวกับ Reference สำหรับ Target');
-    if (!rcm.targetEvidence) rcm.targetEvidence = await _analyzeEvidence(rcm.targetImg, { phase: 'TARGET' });
-    if (runGenerationId !== rcm.generationId) throw Object.assign(new Error('Generation changed during target analysis.'), { code: 'STALE_GENERATION' });
-
-    const transferKey = `${rcm.generationId}|${Math.round(_effectiveIntensity())}|${rcm.mode}`;
-    if (!rcm.pixelTransfer || rcm.pixelTransferKey !== transferKey) {
-      _setStatus('กำลังคำนวณ LAB/Gaussian HSL, Tone Curve และ Histogram Matching…');
-      _setMatchedPreviewState('PAIRWISE_FUSION_PENDING', 'Reference − Target → Fusion → Candidate');
-      rcm.pixelTransfer = await buildPerceptualPixelTransfer({
-        referenceImg: rcm.referenceImg,
-        targetImg: rcm.targetImg,
-        intensity: _effectiveIntensity(),
-        mode: rcm.mode,
-      });
-      rcm.pixelTransferKey = transferKey;
+    if (!rcm.targetEvidence) {
+      _setMatchedPreviewState('TARGET_ANALYSIS_PENDING', 'กำลังวิเคราะห์ Target ครั้งเดียวและบันทึก Cache');
+      rcm.targetEvidence = await _analyzeEvidence(rcm.targetImg, { phase: 'TARGET', profile: 'PAIRWISE_FULL', runId });
+      if (guard().stale) throw Object.assign(new Error('Pipeline generation was superseded by a newer request.'), { code: 'STALE_GENERATION_ABORTED' });
+      const cacheKey = { filePath: rcm.targetFile?.name || 'target', imageId: rcm.generationId || 'tgt', dimensions: `${rcm.targetImg.naturalWidth}x${rcm.targetImg.naturalHeight}`, profileVersion: 'v1' };
+      setCachedTargetAnalysis(cacheKey, rcm.targetEvidence);
+      recordTrace({ generationId, stageId: 'TARGET', moduleId: 'analyzeEvidence', status: 'COMPLETED' });
+    } else {
+      _trace('TARGET_CACHE', 'HIT');
+      rcm.runtime.cacheUsed = true;
+      recordTrace({ generationId, stageId: 'TARGET', moduleId: 'analyzeEvidence', status: 'CACHED' });
     }
 
-    rcm.corePipeline = buildCoreColorMatchPipeline({
+    const intensityKey = `${rcm.generationId}|${Math.round(_effectiveIntensity())}|${rcm.mode}`;
+    if (!rcm.pixelTransfer || rcm.pixelTransferKey !== intensityKey) {
+      _setMatchedPreviewState('PAIRWISE_FUSION_PENDING', 'ใช้ LAB/Gaussian HSL/Tone/Histogram → Candidate');
+      _trace('PIXEL_TRANSFER', 'START', { intensity: _effectiveIntensity(), mode: rcm.mode });
+      recordTrace({ generationId, stageId: 'TRANSFER', moduleId: 'perceptualPixelTransfer', status: 'STARTED' });
+      await _nextPaint();
+      rcm.pixelTransfer = await buildPerceptualPixelTransfer({ referenceImg: rcm.referenceImg, targetImg: rcm.targetImg, intensity: _effectiveIntensity(), mode: rcm.mode });
+      if (guard().stale) throw Object.assign(new Error('Pipeline generation was superseded by a newer request.'), { code: 'STALE_GENERATION_ABORTED' });
+      rcm.pixelTransferKey = intensityKey;
+      _trace('PIXEL_TRANSFER', 'COMPLETE');
+      recordTrace({ generationId, stageId: 'TRANSFER', moduleId: 'perceptualPixelTransfer', status: 'COMPLETED' });
+    } else {
+      _trace('PIXEL_TRANSFER', 'CACHE_HIT');
+      recordTrace({ generationId, stageId: 'TRANSFER', moduleId: 'perceptualPixelTransfer', status: 'CACHED' });
+    }
+
+    _trace('FUSION', 'START');
+    recordTrace({ generationId, stageId: 'FUSION', moduleId: 'buildCoreColorMatchPipeline', status: 'STARTED' });
+    const pipeline = buildCoreColorMatchPipeline({
       reference: rcm.referenceEvidence,
       target: rcm.targetEvidence,
-      analysisGenerationId: rcm.generationId,
+      analysisGenerationId: generationId,
       intensity: _effectiveIntensity(),
       candidateName: 'LUMIXA-Core-Color-Match-Candidate',
       protectionOptions: { ...rcm.toggles },
       pixelTransfer: rcm.pixelTransfer,
-      targetMediaContext: {
-        fileName: rcm.targetFile?.name || '',
-        mimeType: rcm.targetFile?.type || '',
-        mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride,
-        baseTemperatureK: rcm.targetBaseTemperatureK,
-        baseTint: rcm.targetBaseTint,
-        profileName: rcm.targetProfileName,
-      },
+      targetMediaContext: { fileName: rcm.targetFile?.name || '', mimeType: rcm.targetFile?.type || '', mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride, baseTemperatureK: rcm.targetBaseTemperatureK, baseTint: rcm.targetBaseTint, profileName: rcm.targetProfileName },
     });
+    if (guard().stale) throw Object.assign(new Error('Pipeline generation was superseded by a newer request.'), { code: 'STALE_GENERATION_ABORTED' });
+    rcm.corePipeline = pipeline;
+    recordTrace({ generationId, stageId: 'FUSION', moduleId: 'buildCoreColorMatchPipeline', status: 'COMPLETED' });
+    _trace('FUSION', 'COMPLETE');
     if (!rcm.corePipeline?.candidate?.safePreset) throw Object.assign(new Error('Pairwise fusion did not produce a preview preset.'), { code: 'MATCH_CANDIDATE_UNAVAILABLE' });
 
     _drawOriginal(rcm.targetImg, 'rcmBeforeCanvas');
     const afterCanvas = $('rcmAfterCanvas');
     if (!afterCanvas) throw Object.assign(new Error('Matched preview canvas is missing.'), { code: 'TARGET_RENDER_SURFACE_MISSING' });
-    _setMatchedPreviewState('RENDERING', 'Preview ใช้ Unified Candidate ชุดเดียวกับ Candidate XMP');
-    rcm.previewMetrics = renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: rcm.corePipeline.candidate.safePreset });
+    _setMatchedPreviewState('RENDERING', reason === 'INTENSITY' ? 'ปรับ Intensity จาก Analysis Cache โดยไม่วิเคราะห์ Core ใหม่' : 'Preview ใช้ Unified Candidate ชุดเดียวกันกับ Candidate XMP');
+    _trace('RENDER', 'START');
+    recordTrace({ generationId, stageId: 'RENDER', moduleId: 'renderColorMatchCandidateToCanvas', status: 'STARTED' });
+    rcm.previewMetrics = await renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: rcm.corePipeline.candidate.safePreset });
     if (!afterCanvas.width || !afterCanvas.height) throw Object.assign(new Error('Matched preview rendered with invalid geometry.'), { code: 'TARGET_RENDER_EMPTY' });
+    _trace('RENDER', 'COMPLETE', { width: afterCanvas.width, height: afterCanvas.height });
+    recordTrace({ generationId, stageId: 'RENDER', moduleId: 'renderColorMatchCandidateToCanvas', status: 'COMPLETED' });
 
+    /* ── LAYER 1 COMPLETE: Enable Save After Image immediately ── */
+    rcm.runtime.layer1Complete = true;
+    rcm.runtime.psm?.transition(PREVIEW_STATE.FAST_PREVIEW_READY);
+    $('rcmSaveAfterBtn')?.removeAttribute('disabled');
+    const blocked = !rcm.corePipeline.candidate.exportReady;
+    if (!blocked) $('rcmGenerateBtn')?.removeAttribute('disabled');
+    _renderCoreMatchInspector();
+    const layer2Pending = reason !== 'INTENSITY';
+    _setStatus(layer2Pending
+      ? `Fast Preview · Save After Image พร้อม · กำลังวิเคราะห์ After…`
+      : `Fast Preview · ใช้ Cache (Intensity ${rcm.intensity}) · Save After Image พร้อม`);
+
+    /* ── Release main runtime — allow new calls (e.g. Intensity) ── */
+    rcm.runtime.running = false;
+
+    /* ── LAYER 2: Deferred matched analysis + evaluation (async, own guard) ── */
+    if (layer2Pending) {
+      _runLayer2({ runId, generationId, guard });
+    } else {
+      rcm.runtime.heartbeat?.stop();
+      closeTrace(generationId);
+    }
+  } catch (error) {
+    if (error?.code === 'STALE_GENERATION_ABORTED' || guard().stale) return;
+    console.error('[LUMIXA][REFERENCE_MATCH_PREVIEW]', error);
+    _trace('PIPELINE', 'FAILED', { code: error?.code || 'TARGET_RENDER_FAILED', message: error?.message });
+    recordTrace({ generationId, stageId: 'PIPELINE', moduleId: 'rebuild', status: 'FAILED', error: error?.message });
+    const code = error?.code || 'TARGET_RENDER_FAILED';
+    _clearMatchedCanvas();
+    rcm.runtime.psm?.transition(PREVIEW_STATE.ERROR);
+    _setMatchedPreviewState('ERROR', error?.message || 'ไม่สามารถสร้างภาพ Preview ได้', code);
+    _setStatus(`Target Matched Preview ไม่ขึ้น: ${code}`);
+    _renderCoreMatchInspector();
+    rcm.runtime.heartbeat?.stop();
+    if (rcm.runtime.tracer) closeTrace(generationId);
+  } finally {
+    if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '0';
+    if (rcm.runtime.rebuildQueued) {
+      rcm.runtime.rebuildQueued = false;
+      const queuedReason = rcm.runtime.queuedReason;
+      rcm.runtime.queuedReason = null;
+      if (queuedReason === 'INTENSITY_CACHED') {
+        queueMicrotask(() => _rebuildIntensityFromCache());
+      } else {
+        queueMicrotask(() => _rebuildAndPreview({ reason: queuedReason || 'QUEUED' }));
+      }
+    }
+  }
+}
+
+async function _runLayer2({ runId, generationId, guard }) {
+  const l2Abort = new AbortController();
+  rcm.runtime._l2Abort = l2Abort;
+  const l2Signal = l2Abort.signal;
+
+  const isObsolete = () => {
+    return l2Signal.aborted || isStale(generationId) || runId !== rcm.runtime.activeRunId || guard().stale;
+  };
+
+  try {
+    rcm.runtime.psm?.transition(PREVIEW_STATE.ANALYZING_LAYER_2);
+    recordTrace({ generationId, stageId: 'MATCHED_ANALYSIS', moduleId: 'analyzeEvidence', status: 'STARTED' });
+
+    const afterCanvas = $('rcmAfterCanvas');
+    if (!afterCanvas) throw new Error('After canvas missing for Layer 2');
     const matchedImg = await _canvasToImage(afterCanvas);
-    rcm.matchedEvidence = await _analyzeEvidence(matchedImg, { phase: 'MATCHED PREVIEW' });
-    const matchedSignature = buildMatchedSignatureFromAnalysis({ ...rcm.matchedEvidence, analysisGenerationId: rcm.generationId });
+    if (isObsolete()) return;
+
+    rcm.matchedEvidence = await _analyzeEvidence(matchedImg, { phase: 'MATCHED PREVIEW', profile: 'EVALUATION_MINIMAL', runId });
+    if (isObsolete()) return;
+    recordTrace({ generationId, stageId: 'MATCHED_ANALYSIS', moduleId: 'analyzeEvidence', status: 'COMPLETED' });
+
+    const matchedSignature = buildMatchedSignatureFromAnalysis({ ...rcm.matchedEvidence, analysisGenerationId: generationId });
     rcm.previewMatchedSignature = matchedSignature;
     rcm.evaluation = evaluateMatchedSignature({
       referenceSignature: rcm.corePipeline.analysis.referenceSignature,
@@ -661,28 +1021,29 @@ async function _rebuildAndPreview() {
       previewMetrics: rcm.previewMetrics,
       candidate: rcm.corePipeline.candidate,
     });
+    recordTrace({ generationId, stageId: 'EVALUATION', moduleId: 'evaluateMatchedSignature', status: 'COMPLETED', detail: rcm.evaluation?.status });
 
+    if (isObsolete()) return;
+    rcm.runtime.psm?.transition(PREVIEW_STATE.REFINED_READY);
     _renderCoreMatchInspector();
     _renderReasons();
     _renderEvaluationHarness();
     _setMatchedPreviewState('READY');
-    const blocked = !rcm.corePipeline.candidate.exportReady;
-    if (!blocked) {
-      $('rcmGenerateBtn')?.removeAttribute('disabled');
-      $('rcmSaveAfterBtn')?.removeAttribute('disabled');
-    }
-    _setStatus(blocked
-      ? `Preview พร้อม แต่ Candidate XMP ถูกบล็อก: ${rcm.corePipeline.candidate.candidateState}`
-      : `✓ Target Matched Preview พร้อม · Fidelity ${rcm.evaluation.improvement.fidelityScore.toFixed(1)}/100 · Production ยังเป็น Legacy`);
+    $('rcmSaveAfterBtn')?.removeAttribute('disabled');
+    _trace('PIPELINE', 'COMPLETE', { fidelity: rcm.evaluation?.improvement?.fidelityScore });
+    recordTrace({ generationId, stageId: 'PIPELINE', moduleId: 'rebuild', status: 'COMPLETED' });
+    _setStatus(
+      `Target Matched Preview พร้อม · Fidelity ${rcm.evaluation.improvement.fidelityScore.toFixed(1)}/100${rcm.runtime.cacheUsed ? ' · ใช้ Cache' : ''}`
+    );
   } catch (error) {
-    console.error('[LUMIXA][REFERENCE_MATCH_PREVIEW]', error);
-    const code = error?.code || 'TARGET_RENDER_FAILED';
-    _clearMatchedCanvas();
-    _setMatchedPreviewState('ERROR', error?.message || 'ไม่สามารถสร้างภาพ Preview ได้', code);
-    _setStatus(`Target Matched Preview ไม่ขึ้น: ${code}`);
-    _renderCoreMatchInspector();
+    if (error?.code === 'STALE_GENERATION_ABORTED' || isObsolete()) return;
+    console.error('[LUMIXA][LAYER_2]', error);
+    _trace('LAYER_2', 'FAILED', { message: error.message });
+    recordTrace({ generationId, stageId: 'LAYER_2', moduleId: '_runLayer2', status: 'FAILED', error: error.message });
   } finally {
-    if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '0';
+    rcm.runtime._l2Abort = null;
+    rcm.runtime.heartbeat?.stop();
+    if (rcm.runtime.tracer) closeTrace(generationId);
   }
 }
 
@@ -738,6 +1099,11 @@ export async function initReferenceColorMatchPanel() {
   if (!refInput || !tgtInput) return;
   rcm.store = await createColorMatchEvaluationStore();
   rcm.storedRecordCount = (await rcm.store.list()).length;
+  rcm.runtime.psm = new PreviewStateMachine();
+  rcm.runtime.heartbeat = createHeartbeat('rcm-pipeline', (module, elapsed) => {
+    console.warn(`[LUMIXA][P0.7][HEARTBEAT] STALL detected: ${module} idle for ${elapsed}ms`);
+  });
+  rcm.runtime.ledger = new ContributionLedger();
   _renderCoreMatchInspector();
   _renderEvaluationHarness();
   if ($('rcmTargetMediaType')) $('rcmTargetMediaType').value = rcm.targetMediaOverride;
@@ -780,7 +1146,19 @@ export async function initReferenceColorMatchPanel() {
     if ($('rcmIntensitySlider')) $('rcmIntensitySlider').value = value;
     if ($('rcmAfterIntensitySlider')) $('rcmAfterIntensitySlider').value = value;
   };
-  const onIntensity = async event => { rcm.intensity = +event.target.value; syncIntensity(rcm.intensity); await _rebuildAndPreview(); };
+  const onIntensity = event => {
+    rcm.intensity = +event.target.value;
+    syncIntensity(rcm.intensity);
+    _trace('INTENSITY', 'CHANGE', { value: rcm.intensity });
+    /* 140ms debounce (within the required 120-180ms window): cancel the
+     * previous timer on every input event so only the LAST value
+     * committed before the pause actually triggers a rebuild. */
+    clearTimeout(rcm.runtime.rebuildTimer);
+    rcm.runtime.rebuildTimer = setTimeout(() => {
+      _trace('INTENSITY', 'DEBOUNCED', { value: rcm.intensity });
+      _rebuildIntensityFromCache();
+    }, 140);
+  };
   $('rcmIntensitySlider')?.addEventListener('input', onIntensity);
   $('rcmAfterIntensitySlider')?.addEventListener('input', onIntensity);
   $('rcmModeSelect')?.addEventListener('change', async event => { rcm.mode = event.target.value; await _rebuildAndPreview(); });
@@ -791,4 +1169,14 @@ export async function initReferenceColorMatchPanel() {
   $('rcmGenerateBtn')?.setAttribute('disabled', 'true');
   $('rcmDownloadBtn')?.setAttribute('disabled', 'true');
   $('rcmSaveAfterBtn')?.setAttribute('disabled', 'true');
+}
+
+/* P0.7 test hooks */
+if (typeof window !== 'undefined') {
+  window.__LUMIXA_TEST = {
+    get rcm() { return rcm; },
+    get counters() { return { ...rcm.runtime.counters }; },
+    getCacheStats, getTrace, formatTraceSummary, closeTrace,
+    PREVIEW_STATE,
+  };
 }

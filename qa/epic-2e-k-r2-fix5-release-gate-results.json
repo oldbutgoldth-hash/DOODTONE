@@ -1,19 +1,19 @@
 {
   "epic": "2E-K-R2-FIX5",
   "suite": "RELEASE_GATE",
-  "decision": "NOT_VERIFIED",
+  "decision": "FINAL_PASS",
   "completed": true,
-  "runId": "6cde0714-f0fa-45e5-a6ee-4bf17d797a6b",
-  "startedAt": "2026-07-27T12:23:22.236Z",
-  "completedAt": "2026-07-27T12:23:32.420Z",
-  "sourceHash": "37a95ea59f335a58b734941730fe7658e752a94d81b5854586ede55eaa704418",
+  "runId": "37b46c5b-60ed-447b-8a58-34cdb9540c91",
+  "startedAt": "2026-07-27T15:49:30.194Z",
+  "completedAt": "2026-07-27T15:50:57.784Z",
+  "sourceHash": "f8082efaba363ac0112239724bdec8a0ee7306e8ab29294cba639f3455726898",
   "steps": [
     {
       "label": "ESM Syntax",
       "rel": "tools/esm-syntax-gate.mjs",
       "exitCode": 0,
       "status": "PASS",
-      "stdoutTail": "[esm-syntax-gate] PASS -- 185/185 files parsed cleanly as ES modules.\n",
+      "stdoutTail": "",
       "stderrTail": ""
     },
     {
@@ -22,14 +22,14 @@
       "exitCode": 0,
       "status": "PASS",
       "stdoutTail": "\"}\n✓ [PASS] SHA-256 known vector (input length 56): sha256PureJsHex() matches Node crypto exactly (genuine implementation, not a fake checksum) — {\"pure\":\"248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1\",\"node\":\"248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1\"}\n✓ [PASS] HOSTILE: a forged 64-hex-char hash does NOT coincidentally match the real known-vector hash (sanity check that this test can actually fail) — {\"fakeHash\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"realEmptyHash\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}\n✓ [PASS] HOSTILE: a naive byte-sum \"checksum substitute\" (not real SHA-256) fails the known-vector comparison, proving these known-vector tests would actually catch a fake implementation — {\"fakeImpl\":\"0000000000000000000000000000000000000000000000000000000000000126\",\"real\":\"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\"}\n✓ [PASS] HOSTILE (Section 5): deriveUiBlockerReasonCode() ignores a hard-coded {v2RenderPlanAvailable:true} second argument -- output is identical with or without it — {\"withoutOverride\":\"CALIBRATION_V2_PLAN_BLOCKED\",\"withFakeOverride\":\"CALIBRATION_V2_PLAN_BLOCKED\"}\n✓ [PASS] HOSTILE (Section 5): the real evidence-derived blocker code is CALIBRATION_V2_PLAN_BLOCKED, not a hard-coded pass-through — {\"withoutOverride\":\"CALIBRATION_V2_PLAN_BLOCKED\"}\n\n14 PASS, 0 FAIL\n\n=== qa/epic-2e-k-r2-fix4-preview-before-review-static-test.mjs ===\n✓ [PASS] Preview Sandbox exists without prior Human Review — {}\n✓ [PASS] Preview generation is independent of Candidate Review — {\"canGeneratePreview\":true}\n✓ [PASS] Controlled V2 Render Plan is renderable before Candidate Review — {\"renderable\":true}\n✓ [PASS] Initial Candidate Review is not auto-approved — {\"candidateReviewStatus\":\"in-progress\",\"approvalState\":\"in-progress\"}\n✓ [PASS] Review guidance explicitly says preview does not depend on review — {\"visualRequired\":6,\"visualPassed\":0,\"systemRequired\":4,\"systemVerified\":4,\"overallRequired\":10,\"overallPassed\":4,\"readyToBuildV2\":false,\"candidateReviewComplete\":false,\"previewGenerationDependsOnReview\":false,\"steps\":[\"1. Generate and inspect the Legacy / Controlled V2 visual preview.\",\"2. Review the six visual items after pixel evidence is ready.\",\"3. Candidate Review never enables Production, export, or XMP write.\"],\"primaryGuidance\":\"The preview is generated independently. Review the remaining visual item(s) (6 of 6 left).\",\"primaryGuidanceCode\":\"PREVIEW_READY_REVIEW_REMAINING\",\"primaryGuidanceParams\":{\"remaining\":6,\"total\":6}}\n✓ [PASS] Review state hard-locks Production source to Legacy — {}\n✓ [PASS] Review state cannot write Production/XMP or export preview — {\"productionWrite\":false,\"controlledV2Apply\":false,\"previewExport\":false,\"productionActivationAllowed\":false}\n✓ [PASS] Direct Candidate Review update is blocked before pixel evidence — {\"lastActionError\":\"PREVIEW_EVIDENCE_REQUIRED\"}\n✓ [PASS] Blocked pre-evidence update does not mark item passed — {}\n✓ [PASS] Candidate Review becomes available only after both previews render — {}\n✓ [PASS] Candidate Review update still cannot enable Production/XMP — {}\n✓ [PASS] All six visual checks complete Candidate Review only — {\"candidateReviewStatus\":\"approved\",\"visualPassed\":6}\n✓ [PASS] Even fully-approved Candidate Review keeps Legacy Production and XMP/write paths locked — {\"productionSource\":\"legacy\",\"productionWrite\":false,\"controlledV2Apply\":false,\"previewExport\":false}\n✓ [PASS] Authoritative Preview Sandbox disables only the Human Review preview gate — {}\n✓ [PASS] View Preview control never re-runs Analysis — {}\n✓ [PASS] App re-renders Candidate Review when pixel render settles — {}\n✓ [PASS] Controller blocks Candidate Review before evidence — {}\n✓ [PASS] Renderer disables Candidate Review controls and note fields before evidence — {}\n✓ [PASS] New analysis generation archives and invalidates prior Candidate Review — {}\n\n19/19 PASS, 0 FAIL\n\nAll static suites PASSED.\n",
-      "stderrTail": "(node:21375) ExperimentalWarning: VM Modules is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      "stderrTail": ""
     },
     {
       "label": "FIX5 Storage Contract",
       "rel": "qa/epic-2e-k-r2-fix5-storage-contract-test.mjs",
       "exitCode": 0,
       "status": "PASS",
-      "stdoutTail": "✓ [PASS] QA harness selects the IndexedDB backend rather than memory fallback — {\"persistenceMode\":\"INDEXEDDB\",\"verificationMode\":\"DETERMINISTIC_IDB_CONTRACT\"}\n✓ [PASS] Session save/list round-trip — {}\n✓ [PASS] Image record save/load round-trip — {\"loaded\":1}\n✓ [PASS] Invalid session fails closed — {}\n✓ [PASS] Invalid image record fails closed — {}\n✓ [PASS] Corrupt session row never crashes listSessions() — {}\n✓ [PASS] Corrupt session row is quarantined — {}\n✓ [PASS] Corrupt image row never crashes loadImageRecordsForSession() — {}\n✓ [PASS] Corrupt image row is quarantined — {}\n✓ [PASS] Usage summary counts corrupt rows exactly once per scan — {\"usageA\":{\"sessionCount\":1,\"imageRecordCount\":1,\"approxBytes\":1637,\"corruptRecordCount\":2,\"quotaEstimate\":null}}\n✓ [PASS] Usage summary is idempotent — {}\n✓ [PASS] Image-per-session limit fails closed — {\"imageLimitCode\":\"IMAGE_LIMIT_REACHED\",\"max\":500}\n✓ [PASS] Stored-session limit fails closed — {\"sessionLimitCode\":\"SESSION_LIMIT_REACHED\",\"max\":20}\n✓ [PASS] deleteSession removes the selected session — {}\n✓ [PASS] deleteSession cascades to its image records — {}\n✓ [PASS] clearAll removes all sessions and records — {\"usageAfterClear\":{\"sessionCount\":0,\"imageRecordCount\":0,\"approxBytes\":0,\"corruptRecordCount\":0,\"quotaEstimate\":null}}\n✓ [PASS] V1 session migrates to schema v2 — {\"migratedSession\":{\"sessionId\":\"cal-session-fix5-v1\",\"createdAt\":\"2026-07-27T12:23:31.681Z\",\"updatedAt\":\"2026-07-27T12:23:31.681Z\",\"locale\":\"th\",\"appVersion\":\"v1\",\"calibrationSchemaVersion\":2,\"imageCount\":1,\"reviewedCount\":1,\"legacyWins\":0,\"v2Wins\":1,\"ties\":0,\"bothRejected\":0,\"pendingCount\":0,\"legacyAuditOnlyCount\":0}}\n✓ [PASS] V1 image gains NOT_RENDERED preview evidence — {}\n✓ [PASS] V1 decision and notes are preserved for audit — {}\n✓ [PASS] Migrated V1 decision requires visual re-review — {}\n✓ [PASS] Migration is idempotent — {}\n✓ [PASS] Backup-before-migrate preserves the untouched V1 row — {\"backupCount\":1}\n✓ [PASS] Unavailable IndexedDB selects explicit bounded memory fallback — {\"persistenceMode\":\"IN_MEMORY_FALLBACK\"}\n✓ [PASS] Memory fallback remains usable and explicit — {}\n\n24/24 PASS, 0 FAIL\n",
+      "stdoutTail": "✓ [PASS] QA harness selects the IndexedDB backend rather than memory fallback — {\"persistenceMode\":\"INDEXEDDB\",\"verificationMode\":\"DETERMINISTIC_IDB_CONTRACT\"}\n✓ [PASS] Session save/list round-trip — {}\n✓ [PASS] Image record save/load round-trip — {\"loaded\":1}\n✓ [PASS] Invalid session fails closed — {}\n✓ [PASS] Invalid image record fails closed — {}\n✓ [PASS] Corrupt session row never crashes listSessions() — {}\n✓ [PASS] Corrupt session row is quarantined — {}\n✓ [PASS] Corrupt image row never crashes loadImageRecordsForSession() — {}\n✓ [PASS] Corrupt image row is quarantined — {}\n✓ [PASS] Usage summary counts corrupt rows exactly once per scan — {\"usageA\":{\"sessionCount\":1,\"imageRecordCount\":1,\"approxBytes\":1637,\"corruptRecordCount\":2,\"quotaEstimate\":null}}\n✓ [PASS] Usage summary is idempotent — {}\n✓ [PASS] Image-per-session limit fails closed — {\"imageLimitCode\":\"IMAGE_LIMIT_REACHED\",\"max\":500}\n✓ [PASS] Stored-session limit fails closed — {\"sessionLimitCode\":\"SESSION_LIMIT_REACHED\",\"max\":20}\n✓ [PASS] deleteSession removes the selected session — {}\n✓ [PASS] deleteSession cascades to its image records — {}\n✓ [PASS] clearAll removes all sessions and records — {\"usageAfterClear\":{\"sessionCount\":0,\"imageRecordCount\":0,\"approxBytes\":0,\"corruptRecordCount\":0,\"quotaEstimate\":null}}\n✓ [PASS] V1 session migrates to schema v2 — {\"migratedSession\":{\"sessionId\":\"cal-session-fix5-v1\",\"createdAt\":\"2026-07-27T15:50:39.645Z\",\"updatedAt\":\"2026-07-27T15:50:39.645Z\",\"locale\":\"th\",\"appVersion\":\"v1\",\"calibrationSchemaVersion\":2,\"imageCount\":1,\"reviewedCount\":1,\"legacyWins\":0,\"v2Wins\":1,\"ties\":0,\"bothRejected\":0,\"pendingCount\":0,\"legacyAuditOnlyCount\":0}}\n✓ [PASS] V1 image gains NOT_RENDERED preview evidence — {}\n✓ [PASS] V1 decision and notes are preserved for audit — {}\n✓ [PASS] Migrated V1 decision requires visual re-review — {}\n✓ [PASS] Migration is idempotent — {}\n✓ [PASS] Backup-before-migrate preserves the untouched V1 row — {\"backupCount\":1}\n✓ [PASS] Unavailable IndexedDB selects explicit bounded memory fallback — {\"persistenceMode\":\"IN_MEMORY_FALLBACK\"}\n✓ [PASS] Memory fallback remains usable and explicit — {}\n\n24/24 PASS, 0 FAIL\n",
       "stderrTail": ""
     },
     {
@@ -43,9 +43,9 @@
     {
       "label": "Native Browser IndexedDB",
       "rel": "qa/epic-2e-k-r2-fix5-native-indexeddb-browser-test.mjs",
-      "exitCode": 2,
-      "status": "NOT_VERIFIED",
-      "stdoutTail": "{\n  \"epic\": \"2E-K-R2-FIX5\",\n  \"suite\": \"NATIVE_BROWSER_INDEXEDDB\",\n  \"decision\": \"NOT_VERIFIED\",\n  \"reason\": \"BROWSER_ORIGIN_BLOCKED_BY_POLICY\",\n  \"navigationError\": \"net::ERR_BLOCKED_BY_ADMINISTRATOR\",\n  \"completed\": true,\n  \"runId\": \"e6936702-987c-4565-84b7-dd1fe277f236\",\n  \"startedAt\": \"2026-07-27T12:23:31.804Z\",\n  \"completedAt\": \"2026-07-27T12:23:32.098Z\",\n  \"sourceHash\": \"956d436e22c8bf7e672dc951e1861ae8f61df8b112c517566e2d001a64c605b5\",\n  \"browserExecutable\": \"/usr/bin/chromium\",\n  \"browserVersion\": \"Chromium 144.0.7559.96 built on Debian GNU/Linux 13 (trixie)\",\n  \"pageErrors\": [],\n  \"consoleErrors\": []\n}\n",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutTail": "{\n  \"epic\": \"2E-K-R2-FIX5\",\n  \"suite\": \"NATIVE_BROWSER_INDEXEDDB\",\n  \"decision\": \"PASS\",\n  \"completed\": true,\n  \"runId\": \"b727ee77-e14c-44c6-98bf-18d0c12c7939\",\n  \"startedAt\": \"2026-07-27T15:50:39.927Z\",\n  \"completedAt\": \"2026-07-27T15:50:57.413Z\",\n  \"sourceHash\": \"701081934c695b783090a4745d0061f18b8fa7c09839cfc1cdf589a49acbd410\",\n  \"browserExecutable\": \"C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe\",\n  \"browserVersion\": \"150.0.4078.99\",\n  \"origin\": \"http://127.0.0.1:49883\",\n  \"seed\": {\n    \"completed\": true,\n    \"phase\": \"seed\",\n    \"decision\": \"PASS\",\n    \"persistenceMode\": \"INDEXEDDB\",\n    \"sessionId\": \"cal-session-15da8fda-daa9-4da0-af3c-72c7e169e01b\",\n    \"imageId\": \"cal-image-3a94a9d3-940f-480d-8c75-3e221b0546fd\",\n    \"sessionRoundTrip\": true,\n    \"imageRoundTrip\": true\n  },\n  \"reload\": {\n    \"completed\": true,\n    \"phase\": \"reload\",\n    \"decision\": \"PASS\",\n    \"persistenceMode\": \"INDEXEDDB\",\n    \"persistedAcrossReload\": true,\n    \"deletedSession\": true,\n    \"deletedRecords\": true,\n    \"usage\": {\n      \"sessionCount\": 0,\n      \"imageRecordCount\": 0,\n      \"approxBytes\": 0,\n      \"corruptRecordCount\": 0,\n      \"quotaEstimate\": {\n        \"usage\": 9374,\n        \"quota\": 10737427614\n      }\n    }\n  },\n  \"pageErrors\": [],\n  \"consoleErrors\": []\n}\n",
       "stderrTail": ""
     }
   ],
@@ -54,14 +54,13 @@
     "verificationMode": "DETERMINISTIC_IDB_CONTRACT",
     "passCount": 24,
     "failCount": 0,
-    "nativeBrowserIndexedDbVerified": false
+    "nativeBrowserIndexedDbVerified": true
   },
   "nativeBrowserEvidenceSummary": {
-    "decision": "NOT_VERIFIED",
-    "reason": "BROWSER_ORIGIN_BLOCKED_BY_POLICY",
-    "browserExecutable": "/usr/bin/chromium",
-    "browserVersion": "Chromium 144.0.7559.96 built on Debian GNU/Linux 13 (trixie)",
-    "sourceHash": "956d436e22c8bf7e672dc951e1861ae8f61df8b112c517566e2d001a64c605b5"
+    "decision": "PASS",
+    "browserExecutable": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "browserVersion": "150.0.4078.99",
+    "sourceHash": "701081934c695b783090a4745d0061f18b8fa7c09839cfc1cdf589a49acbd410"
   },
   "fix4XmpInvariant": {
     "lengthBefore": 2964,
@@ -80,7 +79,16 @@
     "packageClean": true,
     "zipFiles": [],
     "forbiddenDirectories": [],
-    "forbiddenDirectoryCount": 0
+    "forbiddenDirectoryCount": 0,
+    "workspaceNodeModulesPresent": true,
+    "releaseExclusions": [
+      "node_modules",
+      ".git",
+      "*.zip",
+      "Browser Cache",
+      "User Sessions"
+    ],
+    "nodeModulesExcludedFromRelease": true
   },
-  "boundary": "Do not start EPIC 2E-L until Native Browser IndexedDB is verified in an environment that permits a persistent web origin."
+  "boundary": "Eligible to plan EPIC 2E-L Candidate Review Pilot; Production remains locked."
 }

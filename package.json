@@ -1,7 +1,7 @@
 {
-  "name": "lumixa-ai-fast-preview-critical-path",
-  "version": "2.0.4",
-  "description": "LUMIXA AI EPIC 2E-P0.4 removes heavyweight reporting engines from the critical Reference Color Match preview path.",
+  "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
+  "version": "2.0.7.3",
+  "description": "LUMIXA AI P0.7 R3 — Pipeline Runtime Architecture: generation control, cache, heartbeat, PSM, ledger, tracer, core runner, two-layer pipeline with deferred Layer 2.",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -45,12 +45,16 @@
     "test:2e-o8:browser": "node qa/epic-2e-o8-best-of-both-browser-test.mjs",
     "test:2e-o8:static": "node qa/epic-2e-o8-best-of-both-color-match-static-test.mjs",
     "test:2e-o9:static": "node qa/epic-2e-o9-unified-core-fusion-static-test.mjs",
-    "test:2e-o9": "node qa/epic-2e-o9-release-gate.mjs"
+    "test:2e-o9": "node qa/epic-2e-o9-release-gate.mjs",
+    "test:p0-7-r5:psm": "node qa/epic-2e-p0-7-r5-preview-state-machine-static-test.mjs",
+    "test:p0-7-r5:static": "node qa/epic-2e-p0-7-r5-intensity-cache-repair-static-test.mjs",
+    "test:p0-7-r5:browser": "node qa/epic-2e-p0-7-r5-intensity-cache-repair-browser-test.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "archiver": "^8.0.0",
     "fake-indexeddb": "^6.2.5",
     "playwright": "^1.61.1"
   },

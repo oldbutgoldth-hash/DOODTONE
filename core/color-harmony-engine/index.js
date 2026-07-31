@@ -172,6 +172,7 @@ export function tetradic(h, s, l) {
  * @returns {ColorHarmonyResult}
  */
 export function generateHarmonies(palette) {
+  if (!palette?.dominant?.hsl) return { confidence: 0, schemes: {}, error: 'no dominant color' };
   // Use dominant colour as base
   const dom  = palette.dominant;
   const { h, s, l } = dom.hsl;

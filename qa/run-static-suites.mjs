@@ -165,6 +165,11 @@ const STATIC_SUITES = [
   'qa/epic-2e-o3-o7-xmp-lineage-static-test.mjs',
   // EPIC 2E-O8 — perceptual LAB/CIEDE2000, Gaussian HSL and real tone/histogram curve integration.
   'qa/epic-2e-o8-best-of-both-color-match-static-test.mjs',
+  // EPIC 2E-P0.7 — Pipeline Runtime Architecture (generation control, cache, heartbeat, state machine, ledger, schema, tracer, core runner).
+  'qa/epic-2e-p0-7-pipeline-runtime-static-test.mjs',
+  // EPIC 2E-P0.7 R5 — Intensity Cached Preview Repair + State Machine Closure.
+  'qa/epic-2e-p0-7-r5-preview-state-machine-static-test.mjs',
+  'qa/epic-2e-p0-7-r5-intensity-cache-repair-static-test.mjs',
 ];
 
 let anyFailed = false;

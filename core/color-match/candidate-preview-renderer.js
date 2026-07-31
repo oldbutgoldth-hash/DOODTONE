@@ -102,6 +102,16 @@ function buildWhiteBalanceGains(tempSlider, tintSlider) {
 
 export function applyColorMatchCandidateToImageData(imageData, preset) {
   if (!imageData?.data || !preset) throw new TypeError('Preview renderer requires ImageData and a candidate preset.');
+  // Defensive normalization for live Intensity rebuilds. The renderer must
+  // accept a valid partial candidate while optional colour groups are empty.
+  const normalizedPreset = {
+    ...preset,
+    hsl: preset.hsl && typeof preset.hsl === 'object' ? preset.hsl : {},
+    grade: preset.grade && typeof preset.grade === 'object' ? preset.grade : {},
+    cal: preset.cal && typeof preset.cal === 'object' ? preset.cal : {},
+    curves: preset.curves && typeof preset.curves === 'object' ? preset.curves : defaultCurveSet(),
+  };
+  preset = normalizedPreset;
   const output = new Uint8ClampedArray(imageData.data);
   const exposureFactor = 2 ** ((preset.exp || 0) / 100);
   const contrastFactor = 1 + (preset.con || 0) / 100;

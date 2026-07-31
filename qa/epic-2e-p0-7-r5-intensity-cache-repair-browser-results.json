@@ -1,0 +1,10 @@
+{
+  "suite": "EPIC 2E-P0.7 R5 — Intensity Cached Preview Repair Browser Test",
+  "completed": false,
+  "decision": "BROWSER_BINARY_UNAVAILABLE",
+  "reason": "No real Chromium/Chrome/Edge executable found (bundled Playwright Chromium not downloaded — network-blocked in this environment — and no system browser binary detected).",
+  "pass": 0,
+  "fail": 0,
+  "total": 0,
+  "generatedAt": "2026-07-31T10:41:28.788Z"
+}

@@ -1,0 +1,275 @@
+{
+  "epic": "2E-P0.7",
+  "suite": "PIPELINE_RUNTIME_BROWSER",
+  "completed": true,
+  "runId": "p0-7-1785348209501",
+  "pass": 21,
+  "fail": 0,
+  "total": 21,
+  "logs": [
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201480, runId: 3, stage: PIXEL_TRANSFER, status: COMPLETE}",
+      "time": 1785348201481
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201481, runId: 3, stage: FUSION, status: START}",
+      "time": 1785348201481
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201486, runId: 3, stage: FUSION, status: COMPLETE}",
+      "time": 1785348201487
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201487, runId: 3, stage: RENDER, status: START}",
+      "time": 1785348201488
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201711, runId: 3, stage: RENDER, status: COMPLETE, width: 640}",
+      "time": 1785348201712
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201860, runId: 4, stage: PIPELINE, status: START, reason: INTENSITY}",
+      "time": 1785348201865
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201862, runId: 4, stage: REFERENCE_CACHE, status: HIT}",
+      "time": 1785348201866
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201862, runId: 4, stage: TARGET_CACHE, status: HIT}",
+      "time": 1785348201867
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201863, runId: 4, stage: PIXEL_TRANSFER, status: START, intensity: 48}",
+      "time": 1785348201867
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201899, runId: 4, stage: PIXEL_TRANSFER, status: COMPLETE}",
+      "time": 1785348201900
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201899, runId: 4, stage: FUSION, status: START}",
+      "time": 1785348201900
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201908, runId: 4, stage: FUSION, status: COMPLETE}",
+      "time": 1785348201908
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348201908, runId: 4, stage: RENDER, status: START}",
+      "time": 1785348201908
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202291, runId: 4, stage: RENDER, status: COMPLETE, width: 640}",
+      "time": 1785348202292
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202444, runId: 5, stage: PIPELINE, status: START, reason: INTENSITY}",
+      "time": 1785348202445
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202445, runId: 5, stage: REFERENCE_CACHE, status: HIT}",
+      "time": 1785348202445
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202445, runId: 5, stage: TARGET_CACHE, status: HIT}",
+      "time": 1785348202448
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202445, runId: 5, stage: PIXEL_TRANSFER, status: START, intensity: 57.599999999999994}",
+      "time": 1785348202449
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202480, runId: 5, stage: PIXEL_TRANSFER, status: COMPLETE}",
+      "time": 1785348202480
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202480, runId: 5, stage: FUSION, status: START}",
+      "time": 1785348202480
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202486, runId: 5, stage: FUSION, status: COMPLETE}",
+      "time": 1785348202486
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202487, runId: 5, stage: RENDER, status: START}",
+      "time": 1785348202487
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202752, runId: 5, stage: RENDER, status: COMPLETE, width: 640}",
+      "time": 1785348202752
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202913, runId: 6, stage: PIPELINE, status: START, reason: INTENSITY}",
+      "time": 1785348202913
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202914, runId: 6, stage: REFERENCE_CACHE, status: HIT}",
+      "time": 1785348202913
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202914, runId: 6, stage: TARGET_CACHE, status: HIT}",
+      "time": 1785348202914
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202914, runId: 6, stage: PIXEL_TRANSFER, status: START, intensity: 72}",
+      "time": 1785348202914
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202945, runId: 6, stage: PIXEL_TRANSFER, status: COMPLETE}",
+      "time": 1785348202944
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202945, runId: 6, stage: FUSION, status: START}",
+      "time": 1785348202945
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202947, runId: 6, stage: FUSION, status: COMPLETE}",
+      "time": 1785348202948
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348202948, runId: 6, stage: RENDER, status: START}",
+      "time": 1785348202948
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348203187, runId: 6, stage: RENDER, status: COMPLETE, width: 640}",
+      "time": 1785348203186
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348203348, runId: 7, stage: PIPELINE, status: START, reason: INTENSITY}",
+      "time": 1785348203348
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348203348, runId: 7, stage: REFERENCE_CACHE, status: HIT}",
+      "time": 1785348203348
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348203348, runId: 7, stage: TARGET_CACHE, status: HIT}",
+      "time": 1785348203348
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348203348, runId: 7, stage: PIXEL_TRANSFER, status: START, intensity: 96}",
+      "time": 1785348203348
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348203381, runId: 7, stage: PIXEL_TRANSFER, status: COMPLETE}",
+      "time": 1785348203381
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348203382, runId: 7, stage: FUSION, status: START}",
+      "time": 1785348203382
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348203384, runId: 7, stage: FUSION, status: COMPLETE}",
+      "time": 1785348203385
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348203385, runId: 7, stage: RENDER, status: START}",
+      "time": 1785348203385
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348203649, runId: 7, stage: RENDER, status: COMPLETE, width: 640}",
+      "time": 1785348203648
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348206580, runId: 8, stage: PIPELINE, status: START, reason: INTENSITY}",
+      "time": 1785348206580
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348206581, runId: 8, stage: REFERENCE_CACHE, status: HIT}",
+      "time": 1785348206580
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348206581, runId: 8, stage: TARGET_CACHE, status: HIT}",
+      "time": 1785348206581
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348206581, runId: 8, stage: PIXEL_TRANSFER, status: START, intensity: 93.11999999999999}",
+      "time": 1785348206581
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348206595, runId: 8, stage: PIXEL_TRANSFER, status: COMPLETE}",
+      "time": 1785348206595
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348206595, runId: 8, stage: FUSION, status: START}",
+      "time": 1785348206595
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348206600, runId: 8, stage: FUSION, status: COMPLETE}",
+      "time": 1785348206599
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348206600, runId: 8, stage: RENDER, status: START}",
+      "time": 1785348206600
+    },
+    {
+      "type": "info",
+      "text": "[LUMIXA][RCM_TRACE] {at: 1785348206814, runId: 8, stage: RENDER, status: COMPLETE, width: 640}",
+      "time": 1785348206816
+    }
+  ],
+  "sourceHashes": {
+    "analysis-cache.js": "fa21843854e9097d6ba586f765ab64f2017951af6fa48f172f32fbd90176d24f",
+    "candidate-schema.js": "b2fa20aa473a13dc03446bcbf774b7a02ca90093bd60966ad7a3ac1c7ff5b210",
+    "contribution-ledger.js": "2c49de0b8a8cdb4c2e8ade82b4495e01ef99fec66b6acc5010df3443aeea4765",
+    "core-runner.js": "b9acb2a33c0eb27ad139ba2b6b11f78c4885ee95e0c431ccee5ec248cac10253",
+    "error-handler.js": "014c6f09fc7a478c12a1b3bff53f66177b4e8fed5e81fe334d4ff41e7fc0b90e",
+    "export-manager.js": "6f7d2f5fa158ea95e070960c9960dc5a9aa7c142202747e9e65ad6cf222fc1e0",
+    "generation-control.js": "e54f2345ce07aaa3641e05ef73c1e4fe2c5037dc2886ebed6e65bd9a1995be8c",
+    "highres-loader.js": "3f6d602898ace080986871e745969aa1f681b5fe0cd3ce82e7d7d983eec58b1d",
+    "pipeline-heartbeat.js": "ef8db815e42fc1c242de40e5411e47f6afcf3decfb4ba78de35b976f5f4c0dc3",
+    "pipeline-tracer.js": "8df27d48e36832b4f2af7a2df1067ebf0c69ee3d29ca41a008246b68e8d6cf72",
+    "preview-state-machine.js": "404d726695191b51ae7f9a977799c606d646cd62f595fa05df985f8380663544",
+    "project-version.js": "050705f40d34375391f8970540ec0caa808507633a9c47a41cceeb323617033e"
+  }
+}

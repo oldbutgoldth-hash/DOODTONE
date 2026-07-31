@@ -1,16 +1,44 @@
 {
   "epic": "2E-K-R2-FIX5",
   "suite": "NATIVE_BROWSER_INDEXEDDB",
-  "decision": "NOT_VERIFIED",
-  "reason": "BROWSER_ORIGIN_BLOCKED_BY_POLICY",
-  "navigationError": "net::ERR_BLOCKED_BY_ADMINISTRATOR",
+  "decision": "PASS",
   "completed": true,
-  "runId": "e6936702-987c-4565-84b7-dd1fe277f236",
-  "startedAt": "2026-07-27T12:23:31.804Z",
-  "completedAt": "2026-07-27T12:23:32.098Z",
-  "sourceHash": "956d436e22c8bf7e672dc951e1861ae8f61df8b112c517566e2d001a64c605b5",
-  "browserExecutable": "/usr/bin/chromium",
-  "browserVersion": "Chromium 144.0.7559.96 built on Debian GNU/Linux 13 (trixie)",
+  "runId": "b727ee77-e14c-44c6-98bf-18d0c12c7939",
+  "startedAt": "2026-07-27T15:50:39.927Z",
+  "completedAt": "2026-07-27T15:50:57.413Z",
+  "sourceHash": "701081934c695b783090a4745d0061f18b8fa7c09839cfc1cdf589a49acbd410",
+  "browserExecutable": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  "browserVersion": "150.0.4078.99",
+  "origin": "http://127.0.0.1:49883",
+  "seed": {
+    "completed": true,
+    "phase": "seed",
+    "decision": "PASS",
+    "persistenceMode": "INDEXEDDB",
+    "sessionId": "cal-session-15da8fda-daa9-4da0-af3c-72c7e169e01b",
+    "imageId": "cal-image-3a94a9d3-940f-480d-8c75-3e221b0546fd",
+    "sessionRoundTrip": true,
+    "imageRoundTrip": true
+  },
+  "reload": {
+    "completed": true,
+    "phase": "reload",
+    "decision": "PASS",
+    "persistenceMode": "INDEXEDDB",
+    "persistedAcrossReload": true,
+    "deletedSession": true,
+    "deletedRecords": true,
+    "usage": {
+      "sessionCount": 0,
+      "imageRecordCount": 0,
+      "approxBytes": 0,
+      "corruptRecordCount": 0,
+      "quotaEstimate": {
+        "usage": 9374,
+        "quota": 10737427614
+      }
+    }
+  },
   "pageErrors": [],
   "consoleErrors": []
 }
