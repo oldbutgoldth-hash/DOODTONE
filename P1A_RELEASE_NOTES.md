@@ -7,6 +7,26 @@ Legacy Compatibility Control
 **Baseline:** EPIC 2E-P0.8A (`LU2DCD~1.ZIP`)
 **Version:** `2.0.7.3` → `2.1.0`
 
+## R3 — critical upload-lifecycle fix (real browser regression)
+
+Real browser testing on the R2 build found a deterministic bug: every
+image upload got permanently stuck showing "กำลังโหลดรูปภาพ..." (loading
+image...) — not an image-size or performance issue. Root cause:
+`loadFile()` created the new upload's Session (`beginUpload()`) and
+*then* called `handleReset()`, which unconditionally aborts and clears
+whatever Session is active — destroying the one just created. Fixed by
+reordering to reset-then-create, plus a related hardening where each
+upload's Session ticket is now captured locally rather than read from
+a shared, reassignable variable, closing a narrower race where a slow
+prior image's callback could fire after a newer upload started. Full
+root-cause writeup: `P1A_UPLOAD_LIFECYCLE_FIX.md`. A new 16-case
+integration test (`qa/epic-2e-p1a-r3-upload-lifecycle-integration-test.mjs`)
+reproduces the real defect using the real orchestrator functions and is
+verified to fail against the broken ordering and pass against the fix.
+No Session architecture, Core formula, Candidate/XMP behavior,
+Reference Color Match, or Production lock changed — see
+`P1A_QA_REPORT.md` §4 for the re-verification.
+
 ## Summary
 
 P1A introduces one canonical Single Image Analysis Session per uploaded

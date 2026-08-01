@@ -177,6 +177,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p0-8a-preview-artifact-repair-static-test.mjs',
   // EPIC 2E-P1A — Single Image Analysis Session Foundation + Central Analysis Orchestrator.
   'qa/epic-2e-p1a-single-image-session-test.mjs',
+  // EPIC 2E-P1A R3 — Upload lifecycle ordering regression (real loadFile()/handleReset()/beginUpload() sequencing).
+  'qa/epic-2e-p1a-r3-upload-lifecycle-integration-test.mjs',
 ];
 
 let anyFailed = false;

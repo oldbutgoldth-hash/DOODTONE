@@ -1,0 +1,18 @@
+✓ [PASS] 1. BROKEN ordering (R2 regression) reproduces the stuck-loading defect — sessionAfterBrokenReset=null, decodedApplied=false, analysisStarted=false — this is EXPECTED to demonstrate the bug this suite catches
+✓ [PASS] 2. FIXED ordering: new active Session still exists after reset preparation
+✓ [PASS] 3. Upload ticket is not null before decode completion
+✓ [PASS] 4. img.onload uses the correct ticket and decode is recorded
+✓ [PASS] 5. startAnalysisTicket() is called exactly once (second call rejected)
+✓ [PASS] 6. Session progresses beyond IMAGE_READY to ANALYZING
+✓ [PASS] 7. Loading state is cleared (Session leaves the loading-driving statuses) — finalStatus=COMPLETED
+✓ [PASS] 8. Analysis terminates as COMPLETED, PARTIAL, FAILED or ABORTED — finalStatus=COMPLETED
+✓ [PASS] 9a. Uploading Image B while Image A is analyzing aborts Image A
+✓ [PASS] 9b. Image A's stale onload cannot overwrite Image B's Session
+✓ [PASS] 9c. Image A's stale evidence commit is rejected (STALE_GENERATION)
+✓ [PASS] 9d. Image A's stale callback cannot start analysis for Image B
+✓ [PASS] 9e. Image B's own Session remains active and its analysis starts/completes
+✓ [PASS] 10. Shipped ui/app.js loadFile() calls handleReset() before beginUpload() (comment-stripped source) — resetIdx=137, beginUploadIdx=209
+✓ [PASS] 11. img.onload/onerror use the per-call captured uploadTicket (not shared activeUploadTicket)
+✓ [PASS] 12. runAnalysis() supports a caller-supplied ticket while Re-analyze keeps using the current active ticket
+
+16/16 PASS, 0 FAIL

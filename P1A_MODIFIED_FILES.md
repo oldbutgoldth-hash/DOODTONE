@@ -5,7 +5,62 @@ except `ui/app.js`, `qa/run-static-suites.mjs`, and
 `qa/baselines/epic-2e-n1-production-invariant.json`, all three of which
 are minimal, targeted edits.
 
-## R2 correction (this revision)
+## R3 correction (this revision) — real browser-verified regression
+
+Real browser testing found a deterministic bug: every image upload got
+permanently stuck on the loading indicator. Root cause (see
+`P1A_UPLOAD_LIFECYCLE_FIX.md` for the full writeup): `ui/app.js`'s
+`loadFile()` called `singleImageOrchestrator.beginUpload(file)` BEFORE
+`handleReset()`, but `handleReset()` unconditionally calls
+`singleImageOrchestrator.resetActiveSession(state)`, which aborts and
+clears the active Session — destroying the Session `beginUpload()` had
+just created and nulling `activeUploadTicket`. Every subsequent
+`img.onload -> runAnalysis()` call then found no ticket and returned
+immediately, with no code path to move the UI out of "loading".
+
+Fixed in R3:
+
+- **Edited:** `ui/app.js` — `loadFile()` reordered to call
+  `handleReset()` first, then `beginUpload()`, per the required fix.
+  Additionally, the new upload's ticket is now captured into a local
+  `const uploadTicket` that `img.onload`/`img.onerror` reference
+  directly (instead of the shared, reassignable `activeUploadTicket`
+  module variable), closing a narrower related race where a
+  slow-resolving prior image's callback could fire after a newer
+  upload had already reassigned the shared ticket. `runAnalysis()` was
+  extended to accept an optional `callerTicket` parameter (default
+  `null`, falling back to `activeUploadTicket`) so `loadFile()`'s
+  `img.onload` can pass its own captured ticket while
+  `handleReanalyze()`'s existing no-arg call site is unchanged in
+  behavior.
+- **New file:** `qa/epic-2e-p1a-r3-upload-lifecycle-integration-test.mjs`
+  (16 cases) — reproduces the real bug using the real orchestrator
+  functions in both the broken and fixed call orders, and statically
+  confirms the shipped `ui/app.js` source uses the fixed order.
+  Verified to FAIL (13/16, exit 1) against the actual R2 `ui/app.js`
+  and PASS (16/16, exit 0) against the R3 fix.
+- **New file:** `P1A_UPLOAD_LIFECYCLE_FIX.md` — root-cause writeup.
+- **Edited:** `qa/run-static-suites.mjs` — registers the new test.
+- **Edited:** `qa/baselines/epic-2e-n1-production-invariant.json` —
+  `ui/app.js` hash updated again to
+  `92dbc5d406eef59254aaa29c2a5b5767cb7709e044bef1199adbcba37cd57472`
+  (was `443998f10d132a5736986838c938e93ba915cc222654ef84e4841e60a812c78b`
+  in R2), reflecting this intentional, in-scope change. The other 5
+  pinned files re-verified byte-identical to the P0.8A baseline before
+  this update — see `P1A_QA_REPORT.md` §4.
+- **Regenerated:** `qa/baselines/lufa42-production-lock-manifest.json`
+  (still 139 files locked — no files added or removed, only content
+  hashes for the changed file).
+- **Edited:** `P1A_QA_REPORT.md`, `P1A_RELEASE_NOTES.md` — updated to
+  describe this fix and its verification.
+
+No Session architecture, Core formula, Candidate/XMP behavior,
+Reference Color Match source, P0.8A preview renderer, or Production
+lock changed in R3 — confirmed by the same regression suites that
+verified R1/R2, all still passing, plus the new test's explicit
+Production Lock re-check (§4 of the QA report).
+
+## R2 correction (prior revision)
 
 R1's `qa/epic-2e-p1a-single-image-session-test.mjs` test 25 depended on
 an external directory (`../../lumixa_p08a/r1_work`) that existed in the
@@ -44,24 +99,27 @@ locks are untouched — confirmed by re-running test 25 itself (which now
 proves RCM's 8 exclusive files are unchanged) plus a diff of every
 other file against the R1 package.
 
-## Fresh-extraction verification (R2)
+## Fresh-extraction verification (R3)
 
 ```
-$ unzip -q LUMIXA_EPIC_2E_P1A_SINGLE_IMAGE_SESSION_R2.zip -d /tmp/fresh_r2_check
-$ cd /tmp/fresh_r2_check/LUMIXA_EPIC_2E_P1A
+$ unzip -q LUMIXA_EPIC_2E_P1A_SINGLE_IMAGE_SESSION_R3.zip -d /tmp/isolated_verify_r3
+$ cd /tmp/isolated_verify_r3/LUMIXA_EPIC_2E_P1A
 $ node qa/epic-2e-p1a-single-image-session-test.mjs; echo "exit: $?"
 ... 25/25 PASS, 0 FAIL
 exit: 0
 $ node qa/run-static-suites.mjs; echo "exit: $?"
-... 62/62 suites PASSED, 0 FAILED
+... 16/16 PASS, 0 FAIL   (qa/epic-2e-p1a-r3-upload-lifecycle-integration-test.mjs, the new suite)
 All static suites PASSED.
+exit: 0
+$ node qa/epic-2e-p1a-r3-upload-lifecycle-integration-test.mjs; echo "exit: $?"
+... 16/16 PASS, 0 FAIL
 exit: 0
 ```
 
 Run from a directory containing nothing but the extracted ZIP contents
-— no `lumixa_p08a`, `lumixa_r1`, or any other sibling project folder
-anywhere on the filesystem the test could have accidentally resolved
-against.
+— no `lumixa_p08a`, `lumixa_r1`/`r2`, or any other sibling project
+folder anywhere on the filesystem the test could have accidentally
+resolved against. All three commands exit 0.
 
 ## New files (7) — `core/single-image/`
 

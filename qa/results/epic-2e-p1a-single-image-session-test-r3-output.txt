@@ -1,0 +1,27 @@
+✓ [PASS] 1. Session schema completeness — errors=[]
+✓ [PASS] 2. Unique sessionId for each new upload
+✓ [PASS] 3. Unique generationId for each analysis generation — generationId is Session-scoped (assigned once at beginUpload); Re-analyze of the SAME Session intentionally reuses it — the pre-existing analysisRenderGeneration counter in ui/app.js already covers per-render-call staleness within one Session, documented in P1A_SINGLE_IMAGE_SESSION_ARCHITECTURE.md
+✓ [PASS] 4. New upload aborts old Session — c1late.reason=STALE_GENERATION
+✓ [PASS] 5. Stale Session cannot update active Session
+✓ [PASS] 6. Duplicate Analyze calls do not duplicate Core execution
+✓ [PASS] 7. Each Core runs at most once per Session — 23 module descriptors, 23 unique moduleIds — combined with test 6's duplicate-Analyze block, no module can be re-committed by a second concurrent run
+✓ [PASS] 8. Decode occurs once per Session
+✓ [PASS] 9. Analysis proxy is created once per Session
+✓ [PASS] 10. Optional Core failure produces normalized null evidence
+✓ [PASS] 11. Required decode failure produces FAILED Session
+✓ [PASS] 12. Reset aborts active work
+✓ [PASS] 13. Legacy compatibility mirrors Session evidence correctly — legacy.lastStats={"avgLum":42}
+✓ [PASS] 14. Legacy state cannot overwrite Session
+✓ [PASS] 15. UI tab changes do not trigger analysis — switchTab() call sites never call runAnalysis() (grepped real source)
+✓ [PASS] 16. Candidate generation does not trigger analysis — handleDownload() body has no analysis call
+✓ [PASS] 17. XMP generation does not trigger analysis
+✓ [PASS] 18. XMP download does not trigger analysis
+✓ [PASS] 19. Compatible cache key reuses evidence
+✓ [PASS] 20. Different fingerprint does not reuse evidence
+✓ [PASS] 21. Engine/profile change invalidates cache
+✓ [PASS] 22. Session lifecycle always terminates — s1=COMPLETED, pathB=FAILED, pathC=ABORTED
+✓ [PASS] 23. Production locks remain unchanged — all 5 locked fields found with their required values (productionSource=legacy, productionWrite=false, controlledV2Apply=false, xmpWriteAllowed=false, productionActivationAllowed=false)
+✓ [PASS] 24. P0.8A regression tests remain passing — 22/22 PASS (subprocess exit 0)
+✓ [PASS] 25. Reference Color Match behavior remains unchanged — 8/8 files match pinned P0.8A SHA-256 baseline (self-contained, qa/baselines/p0-8a-reference-color-match-invariant.json)
+
+25/25 PASS, 0 FAIL

@@ -1174,31 +1174,41 @@ function setupFileHandlers() {
 async function loadFile(file) {
   if (!file?.type.startsWith('image/')) return;
 
-  // EPIC 2E-P1A: create the canonical Session for this upload BEFORE
-  // any decode/reset work happens. beginUpload() internally aborts
-  // whatever Session was previously active (a prior image still
-  // mid-analysis) — this is the real fix for the audit-confirmed race
-  // where uploading image B while image A was still analyzing let
-  // image A's late-resolving Core calls corrupt image B's state
-  // (P1A_SOURCE_LINEAGE_AUDIT.md §13). Awaited here so every step
-  // below (including the pre-existing handleReset() call) runs against
-  // a Session that already exists.
-  activeUploadTicket = await singleImageOrchestrator.beginUpload(file);
-
-  // Fix (requested): clear all previous analysis state BEFORE starting a
-  // new one, every time a file is selected — not just on the very first
-  // upload. Without this, selecting a second/third image while the
-  // previous image's state.last* values (WB, HSL, basic panel, style
-  // fingerprint, etc.) are still populated can let stale results flash
-  // or mix with the new analysis while each pipeline stage resolves
-  // asynchronously, causing visible display glitches. handleReset()
-  // already clears every state.last* field and hides all analysis
-  // panels — safe to call unconditionally here since the code below
-  // immediately re-shows the correct "loading" UI afterward. It also
-  // clears the PREVIOUS image's retained File/canonical-decode
-  // resources (DEPLOY GEOMETRY R1 — Phase B1/B4); this line then
-  // retains the NEW file, exactly once.
+  // EPIC 2E-P1A R3 FIX: handleReset() MUST run BEFORE beginUpload().
+  // R2's ordering (beginUpload() then handleReset()) created the new
+  // Session first, but handleReset() unconditionally calls
+  // singleImageOrchestrator.resetActiveSession(state) — which ABORTS
+  // and CLEARS whatever Session is currently active, including the one
+  // beginUpload() had just created one line earlier, and also nulls
+  // activeUploadTicket. Every subsequent img.onload -> runAnalysis()
+  // call then found no active ticket and returned immediately,
+  // stranding the UI on "loading" permanently. See
+  // P1A_UPLOAD_LIFECYCLE_FIX.md for the full root-cause writeup.
+  //
+  // The correct order: reset/abort whatever was previously active
+  // FIRST, THEN create the new Session. beginUpload() itself also
+  // calls abortActiveSession() internally as a defensive first step,
+  // so a prior in-flight analysis is aborted exactly once either way
+  // — handleReset() here additionally clears the DOM/legacy state that
+  // beginUpload() intentionally does not touch (it owns Session
+  // lifecycle only, not UI).
   handleReset();
+
+  // Create the new upload Session and capture its ticket into a LOCAL
+  // constant that this call's own reader/img closures reference
+  // directly — never the shared, reassignable `activeUploadTicket`
+  // module variable — so a slow-resolving PRIOR image's img.onload
+  // (fired after a newer upload has already reassigned
+  // activeUploadTicket) can never be misattributed to the newer
+  // Session. `activeUploadTicket` is still updated for
+  // handleReanalyze()/runAnalysis()'s own no-arg call sites, which
+  // intentionally want "whatever Session is current right now".
+  const uploadTicket = await singleImageOrchestrator.beginUpload(file);
+  activeUploadTicket = uploadTicket;
+
+  // Clears the PREVIOUS image's retained File/canonical-decode
+  // resources (DEPLOY GEOMETRY R1 — Phase B1/B4) via handleReset()
+  // above; this line then retains the NEW file, exactly once.
   state.currentRetainedFile = file;
 
   const reader = new FileReader();
@@ -1216,14 +1226,19 @@ async function loadFile(file) {
     img.onload = () => {
       state.imageLoaded = true;
       // EPIC 2E-P1A: record decode completion on the Session BEFORE
-      // analysis starts. No-ops safely if a newer upload has since
-      // superseded this ticket (see markImageDecoded's staleness
-      // check) — analysisProxy stays null in this round: the real
+      // analysis starts, using THIS call's captured uploadTicket (not
+      // the current activeUploadTicket — see the note above). If a
+      // newer upload has since superseded uploadTicket, both
+      // markImageDecoded() and startAnalysisTicket() (inside
+      // runAnalysis()) independently no-op via the same generation-
+      // ownership check in single-image-session-store.js — this stale
+      // callback can never mutate or start analysis for the newer
+      // Session. analysisProxy stays null in this round: the real
       // pipeline has no distinct downscaled-proxy object today, each
       // engine downsamples internally (documented in
       // P1A_SINGLE_IMAGE_SESSION_ARCHITECTURE.md "Known limitations").
-      if (activeUploadTicket) {
-        singleImageOrchestrator.markImageDecoded(activeUploadTicket, {
+      if (uploadTicket) {
+        singleImageOrchestrator.markImageDecoded(uploadTicket, {
           width: img.naturalWidth,
           height: img.naturalHeight,
           decodedSource: img,
@@ -1231,11 +1246,11 @@ async function loadFile(file) {
           analysisProxy: null,
         });
       }
-      runAnalysis();
+      runAnalysis(uploadTicket);
     };
     img.onerror = () => {
       setAnalysisBox('error', t('analysisBox.imageLoadFailed', null, state.lang));
-      if (activeUploadTicket) singleImageOrchestrator.markImageDecodeFailed(activeUploadTicket, new Error('Image decode failed'));
+      if (uploadTicket) singleImageOrchestrator.markImageDecodeFailed(uploadTicket, new Error('Image decode failed'));
     };
     img.src = e.target.result;
   };
@@ -2077,24 +2092,36 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
   }
 }
 
-async function runAnalysis() {
+async function runAnalysis(callerTicket = null) {
   const img = document.getElementById('previewImg');
   if (!img || !img.naturalWidth || !img.naturalHeight) {
     setAnalysisBox('error', t('analysisBox.imageNotReady', null, state.lang));
     return;
   }
 
+  // EPIC 2E-P1A R3: prefer the ticket the CALLER explicitly captured
+  // (loadFile()'s img.onload passes its own upload-local `uploadTicket`
+  // so a slow/stale image decode can never be attributed to a newer
+  // Session — see loadFile()'s comments). Callers that don't have a
+  // specific ticket of their own (handleReanalyze(), the legacy
+  // `state.imageLoaded && ...` guard) fall back to whatever Session is
+  // CURRENTLY active, which is the correct behavior for "re-run
+  // analysis on the image that's on screen right now".
+  const ticket = callerTicket || activeUploadTicket;
+
   // EPIC 2E-P1A: acquire this run's analysis ticket. Returns null (and
   // this function returns immediately, doing nothing further) if:
   //  - there is no active Session (shouldn't happen in the normal
   //    upload flow, but defensive),
-  //  - this ticket is stale (a newer upload has superseded it), or
+  //  - this ticket is stale (a newer upload has superseded it) — this
+  //    is also how a stale, superseded image's img.onload callback is
+  //    prevented from starting analysis for a newer upload, or
   //  - analysis is ALREADY in progress for this exact Session — this
   //    is the real fix for "clicking Re-analyze twice quickly starts
   //    two concurrent runAnalysis() invocations" confirmed in
   //    P1A_SOURCE_LINEAGE_AUDIT.md §13.
-  const analysisTicket = activeUploadTicket
-    ? singleImageOrchestrator.startAnalysisTicket(activeUploadTicket.sessionId, activeUploadTicket.generationId)
+  const analysisTicket = ticket
+    ? singleImageOrchestrator.startAnalysisTicket(ticket.sessionId, ticket.generationId)
     : null;
   if (!analysisTicket) return;
 
