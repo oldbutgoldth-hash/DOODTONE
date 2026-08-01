@@ -1033,4 +1033,163 @@ export const en = {
     observationSession: 'Observation session',
     inMemoryOnly: 'In-memory only',
   },
+  report: {
+    title: 'AI Image Analysis Report',
+    waitingForAnalysis: 'Waiting for analysis to complete.',
+    partialAnalysisNotice: 'Some optional analysis modules did not complete for this image -- the sections below show what is available and mark the rest as unavailable.',
+    analysisUnavailableNotice: 'The report could not be built from this analysis run.',
+    technicalIssuesTitle: 'Technical issues ({{count}})',
+    advancedDiagnosticsTitle: 'Advanced diagnostics',
+    summary: { shortDescription: '{{exposure}} exposure · {{scene}} scene' },
+    label: {
+      observations: 'Observations', recommendations: 'Recommendations', warnings: 'Warnings',
+      overallConfidence: 'Overall confidence',
+    },
+    confidence: {
+      unavailable: 'Confidence unavailable',
+      withScore: '{{level}} ({{score}}%)',
+      level: { HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low', UNAVAILABLE: 'Unavailable' },
+    },
+    sectionStatus: {
+      AVAILABLE: 'Available', PARTIAL: 'Partial', LOW_CONFIDENCE: 'Low confidence',
+      UNAVAILABLE: 'Unavailable', FAILED: 'Failed',
+    },
+    section: {
+      unavailable: 'This section is unavailable -- the underlying analysis module did not produce usable evidence for this image.',
+      exposure: 'Exposure', dynamicRange: 'Dynamic Range', whiteBalance: 'White Balance',
+      tone: 'Tone and Contrast', color: 'Color', skin: 'Skin', scene: 'Scene',
+    },
+    field: {
+      meanLuminance: 'Mean luminance', clippedHighlightsPercent: 'Highlight clipping %', crushedShadowsPercent: 'Shadow clipping %',
+      drStops: 'Dynamic range (EV)', shadowHeadroom: 'Shadow headroom', highlightHeadroom: 'Highlight headroom',
+      temperatureDirection: 'Temperature', tintDirection: 'Tint', neutralConfidence: 'Neutral-area confidence',
+      blackPoint: 'Black point', whitePoint: 'White point', contrastProfile: 'Contrast profile',
+      saturationProfile: 'Saturation', harmonyScheme: 'Color harmony', skinPercentage: 'Skin coverage %',
+      primaryType: 'Scene type',
+    },
+    direction: { warm: 'Warm', cool: 'Cool', neutral: 'Neutral', green: 'Green', magenta: 'Magenta' },
+    contrastProfile: { flat: 'Flat', harsh: 'Harsh', normal: 'Normal' },
+    saturationProfile: { low: 'Low', moderate: 'Moderate', vivid: 'Vivid' },
+    severity: { INFO: 'Info', CAUTION: 'Caution', WARNING: 'Warning', CRITICAL: 'Critical' },
+    creative: {
+      HIGH_KEY: 'High-key', LOW_KEY: 'Low-key', VIVID_COLOR: 'Vivid color', MUTED_COLOR: 'Muted color',
+      WARM_MOOD: 'Warm mood', COOL_MOOD: 'Cool mood', HARMONIOUS_PALETTE: '{{scheme}} harmony',
+    },
+    diagnostics: {
+      completedEvidence: 'Completed evidence', unavailableEvidence: 'Unavailable evidence',
+      softFailedModules: 'Soft-failed modules', lineageTitle: 'Field lineage',
+    },
+    observations: {
+      exposure: {
+        highlightsClipped: 'Highlights are clipped in {{pct}}% of the image.',
+        highKeyProtected: 'The image reads bright overall (avg. luminance {{avgLum}}) with highlights largely protected -- consistent with an intentional high-key treatment, not overexposure.',
+        highKeyPortraitContext: 'A bright, high-key look is common for portrait and wedding photography.',
+        highlightsMildClipping: 'A small amount of highlight clipping was found ({{pct}}%).',
+        shadowsClipped: 'Shadows are crushed in {{pct}}% of the image.',
+        lowKeyIntentional: 'The image reads dark overall (avg. luminance {{avgLum}}) without severe shadow crushing and with meaningful tonal range remaining -- consistent with an intentional low-key or silhouette treatment.',
+        shadowsMildClipping: 'A small amount of shadow crushing was found ({{pct}}%).',
+        balancedObservation: 'Overall exposure reads balanced (avg. luminance {{avgLum}}).',
+      },
+      dynamicRange: {
+        veryLow: 'Very low dynamic range ({{drStops}} EV) -- the image is close to a single tone.',
+        low: 'Low dynamic range ({{drStops}} EV).',
+        moderate: 'Moderate dynamic range ({{drStops}} EV).',
+        high: 'High dynamic range ({{drStops}} EV).',
+        veryHigh: 'Very high dynamic range ({{drStops}} EV) -- unusually wide; may indicate an HDR source or an artifact.',
+      },
+      whiteBalance: {
+        backgroundColorNotCast: 'The background reads {{label}}, but the subject area is close to neutral -- this looks like a background color, not a global white-balance cast.',
+        castDetected: 'A {{label}} color cast was found across the image.',
+        creativeMoodPreserved: 'The warm/cool character of this image looks intentional and has been preserved rather than treated as a defect.',
+        temperatureObservation: 'Temperature reads {{direction}} (magnitude {{value}}).',
+        tintObservation: 'Tint reads toward {{direction}} (magnitude {{value}}).',
+      },
+      tone: {
+        flatMidtones: 'Midtone contrast is flat (contrast {{contrast}}).',
+        harshContrast: 'Contrast is harsh (contrast {{contrast}}).',
+        normalContrast: 'Contrast reads in a normal range (contrast {{contrast}}).',
+      },
+      color: {
+        saturationProfile: 'Overall saturation is {{profile}} (avg. {{pct}}%).',
+        harmonyDetected: 'The dominant colors best match a {{scheme}} color scheme.',
+        castObservation: 'A {{label}} color cast is present in the overall palette.',
+      },
+      skin: {
+        notDetected: 'No skin was detected in this image.',
+        detected: 'Skin was detected, covering approximately {{pct}}% of the image.',
+      },
+      scene: {
+        primaryType: 'Scene classified as {{type}}.',
+      },
+    },
+    recommendations: {
+      exposure: {
+        recoverHighlights: 'Consider conservative highlight recovery -- avoid a strong Exposure increase.',
+        watchHighlights: 'Keep an eye on highlights if increasing Exposure or Contrast.',
+        liftShadowsCautiously: 'Consider lifting shadows cautiously to recover detail.',
+        watchShadows: 'Keep an eye on shadow detail if increasing Contrast.',
+      },
+      dynamicRange: { considerContrastBoost: 'A moderate contrast boost may help this image read with more depth.' },
+      tone: {
+        addContrast: 'Adding contrast may help the midtones read with more separation.',
+        softenContrast: 'Softening contrast slightly may reduce harshness.',
+      },
+      color: { moderateSaturation: 'Consider moderating saturation slightly.' },
+      whiteBalance: { reviewManually: 'White-balance confidence is limited here -- consider reviewing the color temperature manually.' },
+      skin: {
+        avoidExcessSaturation: 'Avoid excessive Orange/Red saturation on skin tones.',
+        carefulTextureClarity: 'Use Texture and Clarity carefully around skin.',
+        avoidStrongDehaze: 'Avoid strong Dehaze on skin.',
+        protectFaceHighlights: 'Protect highlights on the face.',
+      },
+    },
+    warnings: {
+      exposure: { bothEndsClipping: 'Both highlights and shadows show clipping -- this image has a wide range that may be hard to recover fully.' },
+      dynamicRange: {
+        nearUniformWarning: 'The image is close to a single tone -- measurements here are less reliable.',
+        unusuallyHighWarning: 'This dynamic range is unusually high for a typical photograph.',
+      },
+      whiteBalance: { lowNeutralConfidence: 'White-balance confidence is low because insufficient neutral areas were found.' },
+      skin: { lowConfidence: 'Skin detection confidence is low for this image.' },
+      scene: { fallbackToHistogramCategory: 'Scene type is estimated from brightness/color statistics only -- the dedicated scene classifier did not produce a result this run.' },
+    },
+    issues: {
+      HIGHLIGHT_CLIPPING: {
+        title: 'Highlight clipping', description: '{{pct}}% of the image shows clipped highlights.',
+        recommendation: 'Consider conservative highlight recovery.',
+      },
+      SHADOW_CRUSH: {
+        title: 'Shadow crushing', description: '{{pct}}% of the image shows crushed shadows.',
+        recommendation: 'Consider lifting shadows cautiously.',
+      },
+      LOW_DYNAMIC_RANGE: {
+        title: 'Low dynamic range', description: 'Dynamic range measures {{drStops}} EV, close to a single tone.',
+        recommendation: 'A moderate contrast boost may help.',
+      },
+      WB_LOW_CONFIDENCE: {
+        title: 'White-balance confidence is low', description: 'Only {{neutralPx}} neutral candidate pixels were found.',
+        recommendation: 'Review white balance manually.',
+      },
+      DOMINANT_COLOR_BIAS: {
+        title: 'Dominant color bias', description: 'A {{label}} cast was found across the image.',
+        recommendation: 'Review whether this reflects the lighting or is an intentional grade.',
+      },
+      EXCESSIVE_SATURATION: {
+        title: 'High overall saturation', description: 'Average saturation measures {{pct}}%.',
+        recommendation: 'Consider moderating saturation.',
+      },
+      LOW_SKIN_CONFIDENCE: {
+        title: 'Skin detection confidence is low', description: 'Skin was detected but with low confidence.',
+        recommendation: 'Review skin-related adjustments manually.',
+      },
+      HARSH_CONTRAST: {
+        title: 'Harsh contrast', description: 'Contrast measures {{contrast}}.',
+        recommendation: 'Consider softening contrast slightly.',
+      },
+      FLAT_MIDTONES: {
+        title: 'Flat midtones', description: 'Contrast measures {{contrast}}, reading flat.',
+        recommendation: 'Adding contrast may help the image read with more depth.',
+      },
+    },
+  },
 };

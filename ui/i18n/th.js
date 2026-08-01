@@ -1021,4 +1021,163 @@ export const th = {
     observationSession: 'เซสชันการสังเกต',
     inMemoryOnly: 'ในหน่วยความจำเท่านั้น',
   },
+  report: {
+    title: 'รายงานการวิเคราะห์ภาพด้วย AI',
+    waitingForAnalysis: 'กำลังรอผลการวิเคราะห์',
+    partialAnalysisNotice: 'บางโมดูลการวิเคราะห์เสริมไม่เสร็จสมบูรณ์สำหรับภาพนี้ -- ส่วนด้านล่างแสดงเฉพาะข้อมูลที่มี และระบุส่วนที่ไม่พร้อมใช้งาน',
+    analysisUnavailableNotice: 'ไม่สามารถสร้างรายงานจากการวิเคราะห์รอบนี้ได้',
+    technicalIssuesTitle: 'ประเด็นทางเทคนิค ({{count}})',
+    advancedDiagnosticsTitle: 'ข้อมูลวินิจฉัยขั้นสูง',
+    summary: { shortDescription: 'ภาพแนว {{scene}} · การเปิดรับแสงระดับ {{exposure}}' },
+    label: {
+      observations: 'สิ่งที่ตรวจพบ', recommendations: 'คำแนะนำ', warnings: 'คำเตือน',
+      overallConfidence: 'ความมั่นใจโดยรวม',
+    },
+    confidence: {
+      unavailable: 'ไม่มีข้อมูลความมั่นใจ',
+      withScore: '{{level}} ({{score}}%)',
+      level: { HIGH: 'สูง', MEDIUM: 'ปานกลาง', LOW: 'ต่ำ', UNAVAILABLE: 'ไม่พร้อมใช้งาน' },
+    },
+    sectionStatus: {
+      AVAILABLE: 'พร้อมใช้งาน', PARTIAL: 'ข้อมูลบางส่วน', LOW_CONFIDENCE: 'ความมั่นใจต่ำ',
+      UNAVAILABLE: 'ไม่พร้อมใช้งาน', FAILED: 'ล้มเหลว',
+    },
+    section: {
+      unavailable: 'ส่วนนี้ไม่พร้อมใช้งาน เนื่องจากโมดูลวิเคราะห์ที่เกี่ยวข้องไม่สามารถให้ผลลัพธ์ที่ใช้งานได้สำหรับภาพนี้',
+      exposure: 'การเปิดรับแสง', dynamicRange: 'ช่วงไดนามิก', whiteBalance: 'สมดุลแสงขาว',
+      tone: 'โทนและคอนทราสต์', color: 'สี', skin: 'ผิว', scene: 'ฉาก',
+    },
+    field: {
+      meanLuminance: 'ความสว่างเฉลี่ย', clippedHighlightsPercent: '% ไฮไลต์ที่ขาดรายละเอียด', crushedShadowsPercent: '% เงาที่ขาดรายละเอียด',
+      drStops: 'ช่วงไดนามิก (EV)', shadowHeadroom: 'พื้นที่เผื่อเงา', highlightHeadroom: 'พื้นที่เผื่อไฮไลต์',
+      temperatureDirection: 'อุณหภูมิสี', tintDirection: 'โทนสี (Tint)', neutralConfidence: 'ความมั่นใจของพื้นที่สีกลาง',
+      blackPoint: 'จุดดำ', whitePoint: 'จุดขาว', contrastProfile: 'ลักษณะคอนทราสต์',
+      saturationProfile: 'ความอิ่มตัวของสี', harmonyScheme: 'ความกลมกลืนของสี', skinPercentage: '% พื้นที่ผิวที่ตรวจพบ',
+      primaryType: 'ประเภทฉาก',
+    },
+    direction: { warm: 'อุ่น', cool: 'เย็น', neutral: 'กลาง', green: 'เขียว', magenta: 'ม่วงแดง' },
+    contrastProfile: { flat: 'แบน', harsh: 'จัดจ้าน', normal: 'ปกติ' },
+    saturationProfile: { low: 'ต่ำ', moderate: 'ปานกลาง', vivid: 'จัดจ้าน' },
+    severity: { INFO: 'ข้อมูล', CAUTION: 'ข้อควรระวัง', WARNING: 'คำเตือน', CRITICAL: 'วิกฤต' },
+    creative: {
+      HIGH_KEY: 'โทนไฮคีย์ (สว่าง)', LOW_KEY: 'โทนโลว์คีย์ (มืด)', VIVID_COLOR: 'สีจัดจ้าน', MUTED_COLOR: 'สีนุ่มนวล',
+      WARM_MOOD: 'อารมณ์อุ่น', COOL_MOOD: 'อารมณ์เย็น', HARMONIOUS_PALETTE: 'ความกลมกลืนแบบ {{scheme}}',
+    },
+    diagnostics: {
+      completedEvidence: 'หลักฐานที่วิเคราะห์เสร็จ', unavailableEvidence: 'หลักฐานที่ไม่พร้อมใช้งาน',
+      softFailedModules: 'โมดูลที่ล้มเหลวบางส่วน', lineageTitle: 'ที่มาของข้อมูลแต่ละส่วน',
+    },
+    observations: {
+      exposure: {
+        highlightsClipped: 'ไฮไลต์ขาดรายละเอียดใน {{pct}}% ของภาพ',
+        highKeyProtected: 'ภาพโดยรวมสว่าง (ความสว่างเฉลี่ย {{avgLum}}) และไฮไลต์ส่วนใหญ่ยังปลอดภัย ซึ่งสอดคล้องกับภาพแนวไฮคีย์ที่ตั้งใจถ่าย ไม่ใช่การเปิดรับแสงเกิน',
+        highKeyPortraitContext: 'โทนไฮคีย์ที่สว่างเป็นที่นิยมในภาพถ่ายบุคคลและงานแต่งงาน',
+        highlightsMildClipping: 'พบไฮไลต์ขาดรายละเอียดเล็กน้อย ({{pct}}%)',
+        shadowsClipped: 'เงาขาดรายละเอียดใน {{pct}}% ของภาพ',
+        lowKeyIntentional: 'ภาพโดยรวมมืด (ความสว่างเฉลี่ย {{avgLum}}) โดยเงาไม่ได้ขาดรายละเอียดรุนแรง และยังมีช่วงโทนที่ใช้งานได้ ซึ่งสอดคล้องกับภาพแนวโลว์คีย์หรือเงาดำที่ตั้งใจถ่าย',
+        shadowsMildClipping: 'พบเงาขาดรายละเอียดเล็กน้อย ({{pct}}%)',
+        balancedObservation: 'การเปิดรับแสงโดยรวมอยู่ในระดับสมดุล (ความสว่างเฉลี่ย {{avgLum}})',
+      },
+      dynamicRange: {
+        veryLow: 'ช่วงไดนามิกต่ำมาก ({{drStops}} EV) -- ภาพใกล้เคียงกับโทนเดียว',
+        low: 'ช่วงไดนามิกต่ำ ({{drStops}} EV)',
+        moderate: 'ช่วงไดนามิกปานกลาง ({{drStops}} EV)',
+        high: 'ช่วงไดนามิกสูง ({{drStops}} EV)',
+        veryHigh: 'ช่วงไดนามิกสูงมาก ({{drStops}} EV) -- ผิดปกติสำหรับภาพถ่ายทั่วไป อาจเป็นภาพ HDR หรือมีความคลาดเคลื่อน',
+      },
+      whiteBalance: {
+        backgroundColorNotCast: 'พื้นหลังมีโทนสี {{label}} แต่บริเวณตัวแบบใกล้เคียงกลาง ลักษณะนี้น่าจะเป็นสีของพื้นหลัง ไม่ใช่การเพี้ยนของสมดุลแสงขาวทั้งภาพ',
+        castDetected: 'พบโทนสีเพี้ยนไปทาง {{label}} ทั่วทั้งภาพ',
+        creativeMoodPreserved: 'โทนอุ่น/เย็นของภาพนี้ดูเหมือนตั้งใจถ่าย จึงคงไว้ตามเดิมแทนที่จะถือเป็นข้อบกพร่อง',
+        temperatureObservation: 'อุณหภูมิสีอยู่ในทิศทาง{{direction}} (ขนาด {{value}})',
+        tintObservation: 'โทนสี (Tint) เอียงไปทาง{{direction}} (ขนาด {{value}})',
+      },
+      tone: {
+        flatMidtones: 'คอนทราสต์กลางภาพแบน (ค่าคอนทราสต์ {{contrast}})',
+        harshContrast: 'คอนทราสต์จัดจ้าน (ค่าคอนทราสต์ {{contrast}})',
+        normalContrast: 'คอนทราสต์อยู่ในระดับปกติ (ค่าคอนทราสต์ {{contrast}})',
+      },
+      color: {
+        saturationProfile: 'ความอิ่มตัวของสีโดยรวมอยู่ในระดับ{{profile}} (เฉลี่ย {{pct}}%)',
+        harmonyDetected: 'สีเด่นในภาพเข้ากับโทนสีแบบ {{scheme}} มากที่สุด',
+        castObservation: 'พาเลตต์สีโดยรวมมีโทนเพี้ยนไปทาง {{label}}',
+      },
+      skin: {
+        notDetected: 'ไม่พบผิวหนังในภาพนี้',
+        detected: 'ตรวจพบผิวหนัง ครอบคลุมประมาณ {{pct}}% ของภาพ',
+      },
+      scene: {
+        primaryType: 'จัดประเภทฉากเป็น {{type}}',
+      },
+    },
+    recommendations: {
+      exposure: {
+        recoverHighlights: 'ควรใช้ Highlight Recovery แบบระมัดระวัง และหลีกเลี่ยงการเพิ่ม Exposure มาก',
+        watchHighlights: 'ควรระวังไฮไลต์หากจะเพิ่ม Exposure หรือ Contrast',
+        liftShadowsCautiously: 'ควรยกเงาขึ้นอย่างระมัดระวังเพื่อดึงรายละเอียดกลับมา',
+        watchShadows: 'ควรระวังรายละเอียดในเงาหากจะเพิ่ม Contrast',
+      },
+      dynamicRange: { considerContrastBoost: 'การเพิ่มคอนทราสต์เล็กน้อยอาจช่วยให้ภาพดูมีมิติมากขึ้น' },
+      tone: {
+        addContrast: 'การเพิ่มคอนทราสต์อาจช่วยให้โทนกลางภาพแยกชั้นได้ชัดขึ้น',
+        softenContrast: 'การลดคอนทราสต์ลงเล็กน้อยอาจช่วยลดความจัดจ้าน',
+      },
+      color: { moderateSaturation: 'ควรลดความอิ่มตัวของสีลงเล็กน้อย' },
+      whiteBalance: { reviewManually: 'ความมั่นใจในการประเมินสมดุลแสงขาวยังจำกัด ควรตรวจสอบอุณหภูมิสีด้วยตนเองอีกครั้ง' },
+      skin: {
+        avoidExcessSaturation: 'ควรหลีกเลี่ยงการเพิ่มความอิ่มตัวของสีส้ม/แดงมากเกินไปบนโทนผิว',
+        carefulTextureClarity: 'ควรใช้ Texture และ Clarity อย่างระมัดระวังบริเวณผิว',
+        avoidStrongDehaze: 'ควรหลีกเลี่ยงการใช้ Dehaze แรงเกินไปบนผิว',
+        protectFaceHighlights: 'ควรปกป้องไฮไลต์บริเวณใบหน้า',
+      },
+    },
+    warnings: {
+      exposure: { bothEndsClipping: 'ทั้งไฮไลต์และเงาขาดรายละเอียด -- ภาพนี้มีช่วงโทนกว้างซึ่งอาจกู้คืนได้ไม่สมบูรณ์' },
+      dynamicRange: {
+        nearUniformWarning: 'ภาพใกล้เคียงกับโทนเดียว -- การวัดค่านี้มีความน่าเชื่อถือลดลง',
+        unusuallyHighWarning: 'ช่วงไดนามิกนี้สูงผิดปกติสำหรับภาพถ่ายทั่วไป',
+      },
+      whiteBalance: { lowNeutralConfidence: 'ความมั่นใจในการประเมินสมดุลแสงขาวอยู่ในระดับต่ำ เนื่องจากไม่พบพื้นที่สีกลางที่เพียงพอ' },
+      skin: { lowConfidence: 'ความมั่นใจในการตรวจพบผิวสำหรับภาพนี้อยู่ในระดับต่ำ' },
+      scene: { fallbackToHistogramCategory: 'ประเภทฉากประมาณจากค่าสถิติความสว่าง/สีเท่านั้น -- ตัวจำแนกฉากโดยเฉพาะไม่ได้ให้ผลลัพธ์ในรอบนี้' },
+    },
+    issues: {
+      HIGHLIGHT_CLIPPING: {
+        title: 'ไฮไลต์ขาดรายละเอียด', description: 'ภาพ {{pct}}% แสดงไฮไลต์ที่ขาดรายละเอียด',
+        recommendation: 'ควรใช้ Highlight Recovery แบบระมัดระวัง',
+      },
+      SHADOW_CRUSH: {
+        title: 'เงาขาดรายละเอียด', description: 'ภาพ {{pct}}% แสดงเงาที่ขาดรายละเอียด',
+        recommendation: 'ควรยกเงาขึ้นอย่างระมัดระวัง',
+      },
+      LOW_DYNAMIC_RANGE: {
+        title: 'ช่วงไดนามิกต่ำ', description: 'ช่วงไดนามิกวัดได้ {{drStops}} EV ใกล้เคียงกับโทนเดียว',
+        recommendation: 'การเพิ่มคอนทราสต์เล็กน้อยอาจช่วยได้',
+      },
+      WB_LOW_CONFIDENCE: {
+        title: 'ความมั่นใจสมดุลแสงขาวต่ำ', description: 'พบพิกเซลตัวอย่างสีกลางเพียง {{neutralPx}} จุด',
+        recommendation: 'ควรตรวจสอบสมดุลแสงขาวด้วยตนเอง',
+      },
+      DOMINANT_COLOR_BIAS: {
+        title: 'สีเพี้ยนเด่นชัด', description: 'พบโทนสีเพี้ยนไปทาง {{label}} ทั่วทั้งภาพ',
+        recommendation: 'ควรพิจารณาว่าเป็นผลจากแสงจริงหรือเป็นการปรับโทนที่ตั้งใจ',
+      },
+      EXCESSIVE_SATURATION: {
+        title: 'ความอิ่มตัวของสีสูงโดยรวม', description: 'ความอิ่มตัวของสีเฉลี่ยวัดได้ {{pct}}%',
+        recommendation: 'ควรลดความอิ่มตัวของสีลง',
+      },
+      LOW_SKIN_CONFIDENCE: {
+        title: 'ความมั่นใจการตรวจพบผิวต่ำ', description: 'ตรวจพบผิวแต่ด้วยความมั่นใจต่ำ',
+        recommendation: 'ควรตรวจสอบการปรับที่เกี่ยวกับผิวด้วยตนเอง',
+      },
+      HARSH_CONTRAST: {
+        title: 'คอนทราสต์จัดจ้าน', description: 'ค่าคอนทราสต์วัดได้ {{contrast}}',
+        recommendation: 'ควรลดคอนทราสต์ลงเล็กน้อย',
+      },
+      FLAT_MIDTONES: {
+        title: 'โทนกลางภาพแบน', description: 'ค่าคอนทราสต์วัดได้ {{contrast}} ซึ่งดูแบน',
+        recommendation: 'การเพิ่มคอนทราสต์อาจช่วยให้ภาพดูมีมิติมากขึ้น',
+      },
+    },
+  },
 };

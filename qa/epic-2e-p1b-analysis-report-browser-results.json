@@ -1,0 +1,60 @@
+{
+  "suite": "EPIC 2E-P1B — AI Image Analysis Report Browser Test",
+  "completed": false,
+  "decision": "BROWSER_BINARY_UNAVAILABLE",
+  "reason": "Chromium failed to launch: browserType.launch: Executable doesn't exist at /sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell\n╔════════════════════════════════════════════════════════════╗\n║ Looks like Playwright was just installed or updated.       ║\n║ Please run the following command to download new browsers: ║\n║                                                            ║\n║     npx playwright install                                 ║\n║                                                            ║\n║ <3 Playwright Team                                         ║\n╚════════════════════════════════════════════════════════════╝. Run: npx playwright install chromium (requires network access to cdn.playwright.dev, which this session's sandbox blocks).",
+  "pass": 0,
+  "fail": 0,
+  "total": 8,
+  "scenarios": [
+    {
+      "id": 1,
+      "label": "Portrait image -- skin section available when supported, report completes, no analysis rerun from report interaction",
+      "result": "NOT_VERIFIED",
+      "detail": "Sandbox could not launch a real Chromium — see `decision`/`reason` above."
+    },
+    {
+      "id": 2,
+      "label": "High-key wedding image -- highlight info shown, not automatically classified overexposed, WB confidence reported honestly",
+      "result": "NOT_VERIFIED",
+      "detail": "Sandbox could not launch a real Chromium — see `decision`/`reason` above."
+    },
+    {
+      "id": 3,
+      "label": "Green outdoor image -- dominant green reported, no unsupported claim of green illuminant cast",
+      "result": "NOT_VERIFIED",
+      "detail": "Sandbox could not launch a real Chromium — see `decision`/`reason` above."
+    },
+    {
+      "id": 4,
+      "label": "Low-key image -- low-key scene recognized when evidence supports it, not automatically marked failed exposure",
+      "result": "NOT_VERIFIED",
+      "detail": "Sandbox could not launch a real Chromium — see `decision`/`reason` above."
+    },
+    {
+      "id": 5,
+      "label": "Image without a person -- skin section says not detected/unavailable, no invented skin recommendations",
+      "result": "NOT_VERIFIED",
+      "detail": "Sandbox could not launch a real Chromium — see `decision`/`reason` above."
+    },
+    {
+      "id": 6,
+      "label": "Upload Image B while Image A is analyzing -- Image A aborted, Image A report cannot render into Image B",
+      "result": "NOT_VERIFIED",
+      "detail": "Sandbox could not launch a real Chromium — see `decision`/`reason` above."
+    },
+    {
+      "id": 7,
+      "label": "Change language -- report text changes, analysis counter unchanged, reportBuildCount unchanged",
+      "result": "NOT_VERIFIED",
+      "detail": "Sandbox could not launch a real Chromium — see `decision`/`reason` above."
+    },
+    {
+      "id": 8,
+      "label": "Generate and download XMP -- no new analysis, existing behavior unchanged",
+      "result": "NOT_VERIFIED",
+      "detail": "Sandbox could not launch a real Chromium — see `decision`/`reason` above."
+    }
+  ],
+  "generatedAt": "2026-08-01T14:06:43.516Z"
+}

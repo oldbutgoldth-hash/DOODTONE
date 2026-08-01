@@ -427,6 +427,15 @@
           <!-- AI status box -->
           <div id="aiBox" style="display:none"></div>
 
+          <!-- EPIC 2E-P1B: AI Image Analysis Report -- normalized,
+               photographer-friendly report built from the completed
+               Session's evidence. Rendered by
+               ui/single-image-report-renderer.js from session.report
+               only; never rebuilt on tab switches or language change. -->
+          <div id="singleImageReportSection" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:4px;padding:16px;margin-bottom:16px">
+            <div id="singleImageReportInner"></div>
+          </div>
+
           <!-- ═══ ANALYSIS GROUPS ═══ -->
           <div id="analysisGroups" style="display:none">
             <div style="display:flex;gap:6px;margin-bottom:16px;background:var(--surface-1);border:1px solid var(--border);border-radius:3px;padding:5px;position:sticky;top:8px;z-index:20;flex-wrap:wrap">

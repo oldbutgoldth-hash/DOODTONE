@@ -70,6 +70,10 @@ import { detectColorCast }      from '../core/color-cast-detector/index.js';
 // the engines above — no Core formula imported here is duplicated or
 // altered, only the ownership of their outputs changes.
 import * as singleImageOrchestrator from '../core/single-image/single-image-orchestrator.js';
+// EPIC 2E-P1B — AI Image Analysis Report: pure renderer, reads only
+// session.report (built by the orchestrator from already-committed
+// evidence) -- never re-runs analysis, never reads DOM/slider state.
+import { renderSingleImageReport, clearSingleImageReportDisplay } from './single-image-report-renderer.js';
 
 // ─── Theme tokens (LUMIXA visual system) ───────────────────────────────────────
 const THEME = {
@@ -107,6 +111,7 @@ const state = {
   lastPalette: null,
   lastWB:      null,
   lastSkin:    null,
+  lastSingleImageReport: null, // EPIC 2E-P1B: last-built AI Image Analysis Report snapshot (UI mirror of session.report)
   lastBasic:   null,
   lastHSL:     null,
   lastGrading: null,
@@ -940,6 +945,16 @@ function rerenderCurrentUiForLocale() {
   try {
     if (state.lastAnalysisBoxSummaryData) setAnalysisBox('ok', _buildAnalysisBoxOkHtml(state.lastAnalysisBoxSummaryData, state.lang));
   } catch (err) { console.warn('Locale re-render: Analysis status box failed (other sections unaffected):', err); }
+
+  // EPIC 2E-P1B: AI Image Analysis Report -- re-renders from the
+  // already-built report snapshot only; never rebuilds the report,
+  // never touches session.evidence.
+  try {
+    const reportInner = document.getElementById('singleImageReportInner');
+    if (reportInner && reportInner.dataset.reportLayoutBuilt === '1' && state.lastSingleImageReport) {
+      renderSingleImageReport(reportInner, state.lastSingleImageReport, state.lang);
+    }
+  } catch (err) { console.warn('Locale re-render: AI Image Analysis Report failed (other sections unaffected):', err); }
 
   // Review Console (+ its own Build Controlled V2 Preview button
   // label/hint) -- already a pure function of state.lastPreviewSandbox
@@ -2240,6 +2255,18 @@ async function runAnalysis(callerTicket = null) {
 
   setAnalysisBox('loading', t('analysisBox.analyzingHistogram', null, state.lang));
 
+  // EPIC 2E-P1B: show the Report section immediately with a
+  // "building" placeholder and clear whatever report (if any) was
+  // showing for a PREVIOUS image/generation -- never leaves a stale
+  // report visible while a new analysis is in flight.
+  {
+    const reportSec = document.getElementById('singleImageReportSection');
+    const reportInner = document.getElementById('singleImageReportInner');
+    if (reportSec) reportSec.style.display = 'block';
+    if (reportInner) clearSingleImageReportDisplay(reportInner, state.lang);
+    state.lastSingleImageReport = null;
+  }
+
   try {
     setAnalysisBox('loading', t('analysisBox.analyzingHistogram', null, state.lang));
 
@@ -3021,7 +3048,24 @@ async function runAnalysis(callerTicket = null) {
     // no-op if this ticket is already stale (a newer Session already
     // owns "active"). This guarantees the Session lifecycle never gets
     // stuck in ANALYZING, per the spec's explicit requirement.
-    singleImageOrchestrator.completeAnalysis(analysisTicket);
+    const finalSessionStatus = singleImageOrchestrator.completeAnalysis(analysisTicket);
+
+    // EPIC 2E-P1B: build the canonical AI Image Analysis Report from
+    // the Session's now-final evidence and render it -- ONLY on
+    // COMPLETED/PARTIAL (never on FAILED/ABORTED), and only if this
+    // ticket is still the active generation (buildAndCommitReport()
+    // itself no-ops on a stale ticket, same guarantee every other
+    // commit* call in this function already relies on). This never
+    // re-runs any Core module -- it reads session.evidence, already
+    // fully populated by the commitEvidence() calls above.
+    if (finalSessionStatus === 'COMPLETED' || finalSessionStatus === 'PARTIAL') {
+      const built = singleImageOrchestrator.buildAndCommitReport(analysisTicket, { legacyState: state });
+      if (built.committed) {
+        state.lastSingleImageReport = built.report;
+        const reportInner = document.getElementById('singleImageReportInner');
+        if (reportInner) renderSingleImageReport(reportInner, built.report, state.lang);
+      }
+    }
 
   } catch (err) {
     setAnalysisBox('error', `<strong>⚠ ${t('analysisBox.failed', null, state.lang)}:</strong> ${err.message}`);
@@ -3030,6 +3074,13 @@ async function runAnalysis(callerTicket = null) {
     // a terminal FAILED state, not stuck in ANALYZING — same
     // no-op-if-stale guarantee as completeAnalysis() above.
     if (analysisTicket) singleImageOrchestrator.failAnalysis(analysisTicket, err);
+    // EPIC 2E-P1B: a failed analysis must never show a report (old or
+    // partially built) -- hide the section entirely.
+    {
+      const reportSec = document.getElementById('singleImageReportSection');
+      if (reportSec) reportSec.style.display = 'none';
+      state.lastSingleImageReport = null;
+    }
   }
 }
 
@@ -3116,6 +3167,17 @@ function handleReset() {
   // etc. — see P1A_LEGACY_COMPATIBILITY_MAP.md for the full split).
   singleImageOrchestrator.resetActiveSession(state);
   activeUploadTicket = null;
+
+  // EPIC 2E-P1B: clear the Report UI immediately -- session.report
+  // itself was already nulled by resetSessionData() inside
+  // singleImageOrchestrator.resetActiveSession() just above.
+  {
+    const reportSec = document.getElementById('singleImageReportSection');
+    const reportInner = document.getElementById('singleImageReportInner');
+    if (reportSec) reportSec.style.display = 'none';
+    if (reportInner) clearSingleImageReportDisplay(reportInner, state.lang);
+  }
+  state.lastSingleImageReport = null;
 
   state.imageLoaded = false; state.lastStats = null; state.lastPalette = null; state.lastWB = null;
   state.lastCurveSet = null;

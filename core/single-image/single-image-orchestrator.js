@@ -34,6 +34,8 @@ import { normalizeEvidence, normalizeFromSettled } from './evidence-normalizer.j
 import { SINGLE_IMAGE_FULL, PROFILE_VERSION, getModuleDescriptor, getRequiredModuleIds, getTotalModuleCount } from './single-image-analysis-profile.js';
 import { syncEvidenceKeyToLegacyState, clearLegacyMirrors } from './legacy-state-adapter.js';
 import { computeCacheKey, readCompatibleEvidence, writeCompletedEvidence } from './single-image-analysis-cache.js';
+import { buildAnalysisReportFromSession } from './report/analysis-report-builder.js';
+import { REPORT_STATUS } from './report/analysis-report-schema.js';
 
 export const ENGINE_VERSION = 'single-image-orchestrator@1.0.0';
 
@@ -353,6 +355,63 @@ export function completeAnalysis(ticket) {
     }
   });
   return finalStatus;
+}
+
+// ---------------------------------------------------------------------
+// Report build (EPIC 2E-P1B)
+// ---------------------------------------------------------------------
+
+/**
+ * Build the canonical AI Image Analysis Report from the ACTIVE
+ * Session's already-committed `evidence` and commit it to
+ * `session.report`. Must be called AFTER `completeAnalysis()` has
+ * left the Session COMPLETED or PARTIAL -- never runs, reruns, or
+ * waits on any Core module itself, and is a no-op (not an error) if
+ * the ticket is stale or the Session has not reached a terminal
+ * analysis status yet. `legacyState` is optional and used only for
+ * the documented evidence-key fallback described in
+ * analysis-report-builder.js.
+ *
+ * Idempotency: calling this again for the SAME Session (e.g. a bug
+ * that double-invokes it) increments `reportBuildCount` rather than
+ * silently no-op'ing, so a test can assert "built exactly once per
+ * completed analysis" by asserting the call site, not this function.
+ *
+ * @param {{sessionId,generationId}} ticket
+ * @returns {{committed: boolean, report: object|null, validation: object|null, reason: string|null}}
+ */
+export function buildAndCommitReport(ticket, { legacyState = null } = {}) {
+  if (!ticket || !isActiveGeneration(ticket.sessionId, ticket.generationId)) {
+    return { committed: false, report: null, validation: null, reason: 'STALE_GENERATION' };
+  }
+  const session = getActiveSession();
+  if (session.status !== SESSION_STATUS.COMPLETED && session.status !== SESSION_STATUS.PARTIAL) {
+    return { committed: false, report: null, validation: null, reason: 'SESSION_NOT_TERMINAL' };
+  }
+
+  _trace(session, 'REPORT_BUILD_STARTED', { sourceStatus: session.status });
+  const { report, validation } = buildAnalysisReportFromSession(session, { legacyState });
+  _trace(session, 'REPORT_VALIDATION_STARTED');
+  _trace(session, validation.valid ? 'REPORT_VALIDATION_PASSED' : 'REPORT_VALIDATION_FAILED', {
+    errorCount: validation.errors.length,
+  });
+  if (!validation.valid) {
+    report.status = REPORT_STATUS.FAILED;
+  }
+
+  let committed = false;
+  updateActiveSession(ticket.sessionId, ticket.generationId, (s) => {
+    committed = true;
+    s.report = report;
+    _trace(s, 'REPORT_COMMITTED', { reportId: report.reportId, status: report.status, reportBuildCount: report.reportBuildCount });
+  });
+
+  if (!committed) {
+    _trace(session, 'REPORT_STALE_REJECTED', { reportId: report.reportId });
+    return { committed: false, report: null, validation, reason: 'STALE_GENERATION_AT_COMMIT' };
+  }
+
+  return { committed: true, report, validation, reason: null };
 }
 
 export function failAnalysis(ticket, error) {

@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.1.0",
-  "description": "LUMIXA AI EPIC 2E-P1A — Single Image Analysis Session Foundation: canonical Session contract, central analysis orchestrator, generation-ownership evidence store, legacy compatibility adapter. Baseline: EPIC 2E-P0.8A preview artifact repair + posterization removal.",
+  "version": "2.2.0",
+  "description": "LUMIXA AI EPIC 2E-P1B — AI Image Analysis Report: normalized report contract, photographer-friendly interpretation engine, conservative confidence aggregation, Thai/English report UI. Baseline: EPIC 2E-P1A R3 Single Image Analysis Session Foundation.",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -53,7 +53,9 @@
     "test:p0-7-r6:static": "node qa/epic-2e-p0-7-r6-fast-refined-critical-path-static-test.mjs",
     "test:p0-7-r6:browser": "node qa/epic-2e-p0-7-r6-real-image-runtime-browser-test.mjs",
     "test:p0-8a:static": "node qa/epic-2e-p0-8a-preview-artifact-repair-static-test.mjs",
-    "test:p0-8a:browser": "node qa/epic-2e-p0-8a-real-image-artifact-browser-test.mjs"
+    "test:p0-8a:browser": "node qa/epic-2e-p0-8a-real-image-artifact-browser-test.mjs",
+    "test:p1b:static": "node qa/epic-2e-p1b-analysis-report-test.mjs",
+    "test:p1b:browser": "node qa/epic-2e-p1b-analysis-report-browser-test.mjs"
   },
   "keywords": [],
   "author": "",

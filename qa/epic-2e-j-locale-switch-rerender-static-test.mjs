@@ -177,6 +177,11 @@ if (rerenderFnSrc) {
     // a premature render, never re-runs analysis).
     'setAnalysisBox', '_buildAnalysisBoxOkHtml', 'renderAnalysisPanel',
     '_rerenderPersistentAnnouncementsForLocale', 't',
+    // EPIC 2E-P1B: the AI Image Analysis Report re-renders from the
+    // already-built report snapshot (state.lastSingleImageReport)
+    // only -- verified pure by its own dedicated P1B test suite
+    // (qa/epic-2e-p1b-analysis-report-test.mjs, cases 21-23).
+    'renderSingleImageReport',
   ]);
   const unexpectedCalls = [...new Set(calledFunctionNames)].filter((n) => !allowedFunctionNames.has(n) && n !== 'warn');
   record('Every function called inside rerenderCurrentUiForLocale() is one of the known pure re-render/lookup functions (no unexpected new call introduced)', unexpectedCalls.length === 0, { unexpectedCalls });
