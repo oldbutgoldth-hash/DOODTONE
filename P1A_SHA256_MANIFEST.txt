@@ -1,3 +1,7 @@
+# EPIC 2E-P1A R2 — SHA-256 manifest of every file in this package.
+# This manifest file itself is excluded from its own listing (self-reference is undefined).
+# Format: <relative path><TAB><sha256>
+
 .gitignore	1c7b8c176aaa7a635faf14f4d8f20b8f854f6bd251178f1b12072b2075505368
 AUDIT_NOTES_RAW.md	1d70f58043011814d598f6c370347dd38b3a2c3dfb79b2a8b3547d545ee72d19
 EPIC_2E_L_MODIFIED_FILES.md	b2c522f613c8e732aba45f54f2aafccf7c8678bfe2b08521b9dce673db00a3c2
@@ -65,8 +69,8 @@ FIX5_QA_REPORT.md	5396a60e0281d30614baa170b6d5c66fa3df081924f7f06c1f316feca4d17d
 FIX5_RELEASE_NOTES.md	e1a0f7c05b86354e2e94d3d36602b1f58f2df371aa130efb6bb052aee6235807
 LUMIXA_PROJECT_MEMORY_R5.md	0df222e87b411852842b66930dd55d67df84f8f3138ff190e22d88db779bd77a
 P1A_LEGACY_COMPATIBILITY_MAP.md	d86d544bd05c8492950da490ea0144a4da3e5ca3f933a5699a57e783dd116eda
-P1A_MODIFIED_FILES.md	20b6ac7478171776e4acc628592828281a3fae68d4e681b4d7445fcf9f0cfe31
-P1A_QA_REPORT.md	1c54b007428b3bf58926533d4e36eb03f9e8d8c800ba2502e1884e92c08b22a0
+P1A_MODIFIED_FILES.md	d27fcb27742bbe60db24c53e7a10ca1f415201b20edd9da9722e3a06c0de5b4f
+P1A_QA_REPORT.md	398a20a674adc41ce0c5d12e5962f5b5b904386f01caf9f20186c484ec0d61d5
 P1A_RELEASE_NOTES.md	855f6a680e944547782c93e479e78e09b23e4b04d8a9042a6cedf6adfe28ab08
 P1A_SINGLE_IMAGE_EVIDENCE_CONTRACT.md	18e2275c81022d2b67cb033d4da5320d51f4ad4af5f5ce8c029e5089f1aad5de
 P1A_SINGLE_IMAGE_SESSION_ARCHITECTURE.md	ea66bd19b03751100ee94214d84687e83e70222daf0de4d8eb8fc615c3a0a8c2
@@ -282,6 +286,7 @@ qa/baselines/epic-2e-n-production-invariant.json	97af4b4558977537a98bd3736c73ee7
 qa/baselines/epic-2e-n1-production-invariant.json	d76ead634bcd7ac1654109639aad4933d2a5bced4db306d3e4e487abffae93b6
 qa/baselines/generate-production-lock-manifest.mjs	8cdefabd44a85ea649d231fb7d1935fada00ff83ccee85cb0594b7c4c2eb4b67
 qa/baselines/lufa42-production-lock-manifest.json	b31e43dc6c19a25571435178cf361d2e284ad07e5b2459205250569c87f684ff
+qa/baselines/p0-8a-reference-color-match-invariant.json	e11e0af62d2358c6d85b99b9ff994659cf6cc41df428e0bb06e892952df03b94
 qa/calibration-full-suite.mjs	1b0b0a085dd41cb76d6f7bb3cd087e61a887d516984d0dd48510ede8b9959361
 qa/epic-2e-i-phase-c-results.json	503111ed73908d45b87b1c5ff797ea3c3e06515e8aef8e8f1a5c8d08699688b2
 qa/epic-2e-i-phase-c-smoke-test.mjs	ddc4bfcbc8ecdf3abff4774ab9e724e86d3f9877060653df8e0e51e610460477
@@ -295,7 +300,7 @@ qa/epic-2e-j-controlled-v2-translator-pixel-static-test.mjs	40508709f5defa4dab7d
 qa/epic-2e-j-controlled-v2-translator-static-test.mjs	f9f278490be11b873a0f6914a922d0426a2b6f3a864caa9722ff099d3fb915c4
 qa/epic-2e-j-deploy-preview-geometry-results.json	7ac8bc942d2497fde6742d54ba40a6dbe6369dee621cf88623ae7ddefc4eb761
 qa/epic-2e-j-deploy-preview-geometry-test.mjs	f63f98955b4343e05e67c4af3972e0c534c5d8f82bffeee9791a701dd46ffc24
-qa/epic-2e-j-env-b2-f1-static-results.json	1be9a279343f1943babef66ee1e3880967f3ff47fbf415d9728eca71c58d1882
+qa/epic-2e-j-env-b2-f1-static-results.json	678c4412eb9d0649bb77b02535a331eaea3b4a7de06617f25b9ba54c031eb5cd
 qa/epic-2e-j-env-b2-f1-static-test.mjs	bcc0d3714dd6b1fbdf1faf74edd2ea490bfe0db236ac5e4a4b08ea63250d25e4
 qa/epic-2e-j-esm-syntax-gate-static-test.mjs	3acf87ccbb346a0429d80c8a196c3142e115a934ce23a08a6fa93a09f54384b2
 qa/epic-2e-j-focused-core-smoke-results.json	0f1e5558d35937d465e3a3ff45e32da9619237dc4f75329519704e21dc0e02c9
@@ -303,7 +308,7 @@ qa/epic-2e-j-focused-core-smoke-test.mjs	ff64d1585fe37df89a26724a23fa506a3a9b792
 qa/epic-2e-j-full-system-i18n-browser-results.json	fb37146d5abd8267679a973fecbf9d0490430fca6500dd35ea8b5465cdec9aad
 qa/epic-2e-j-full-system-i18n-browser-test.mjs	1251da1d7aabc18eff0798fe09721f9976f2bde1dbc65ec06b9ea562d30b7a46
 qa/epic-2e-j-i18n-coverage-report-static-test.mjs	d362775ecf05fb2d1fa8cadb6c06b98de333e031f1610d5821704ff98920bec2
-qa/epic-2e-j-i18n-coverage-report.json	7c3d8f58327d6474c6c39004dc30b2f7b4ec7447325aab7681858a5b24921b9a
+qa/epic-2e-j-i18n-coverage-report.json	467c1c32e340b97d3b819c9aa31b3b22e9b064bd7f7565351e4d7a45a1ea40fc
 qa/epic-2e-j-i18n-module-static-test.mjs	905521f5db37f60948166bb4d76d5f409572c5b8002d7ec22682e3f787628500
 qa/epic-2e-j-i18n-visible-text-audit-static-test.mjs	78cbfa1a54a8f0cca8fab8c0a2490914ca2cd0ac8cbce4b5f86e6f57925f016e
 qa/epic-2e-j-local-display-static-test.mjs	7d5b185c4e20cff2af19923ba27ad05ee7baac32f8462abb58a6291a48834107
@@ -319,11 +324,11 @@ qa/epic-2e-j-phase-c-results.json	f57c5fd0ac3c11b389ff6fc466590099797dcb99a0ec66
 qa/epic-2e-j-phase-c-step7b-a-results.json	01dff3a0e34dafd0caaa3c0f94d791949b14cc798174285feda369cf981d98d4
 qa/epic-2e-j-phase-c-step7b-a-test.mjs	435fe2658652c501afa269bcac84057d233e12d6c5d53aceb7155bcd67e33451
 qa/epic-2e-j-phase-c-step7b-b-f1-decision.mjs	e572b693a8a1b7da7339ea75b70de4137e996173fc8a531b8b3ad502ade9d2a4
-qa/epic-2e-j-phase-c-step7b-b-f1-static-results.json	fcf88430124f0e86cb1b338768de08ede5163b1f16236156f618b6d390994acc
+qa/epic-2e-j-phase-c-step7b-b-f1-static-results.json	bb08d84d20b29284bb308b32786502e0bc39ad04a56cce40fd231510fcb08409
 qa/epic-2e-j-phase-c-step7b-b-f1-static-test.mjs	55a4350d76644e7fb296b0704fd89561acaa713478d0bfc382ba02d505236192
-qa/epic-2e-j-phase-c-step7b-b-f2-static-results.json	ad893abe8f85ea68b4a36a0df4c5b545dec3cd5a0d9c065fd2326ca90afe06fd
+qa/epic-2e-j-phase-c-step7b-b-f2-static-results.json	f2f8d75559c488329d283b1b42c10abe7d1701ce43a7201be10a1676664b1195
 qa/epic-2e-j-phase-c-step7b-b-f2-static-test.mjs	5b71606bc2e7e63e36a30e4272b8c007cf887e4db6db7014abeb822e7c7c6592
-qa/epic-2e-j-phase-c-step7b-b-f3-static-results.json	cc31c1ee0a1b1080a92c96dcf50c1922ef90000f8bd10c5aea1e36f90e51989b
+qa/epic-2e-j-phase-c-step7b-b-f3-static-results.json	0bf09bd317d9c390a9d170f34fa4ff5eb1b9d49e8dc95939cdce0d4bddecc0e0
 qa/epic-2e-j-phase-c-step7b-b-f3-static-test.mjs	ce846804b19a325ad70601fb831370f84179bd87af4f045a8d77ee209f4375d4
 qa/epic-2e-j-phase-c-step7b-b-results.json	012daa4ccf81ca8f93b456e9a213a6a4b60d79d3d3518094b2ff2b29e5d41b25
 qa/epic-2e-j-phase-c-step7b-b-test.mjs	6a43a469f86538d94f5818a241034b205b24014dcc0742de2ff85ce9649d4b50
@@ -331,16 +336,16 @@ qa/epic-2e-j-preview-geometry-decoder-render-results.json	b78d702c42d8a53ac5b853
 qa/epic-2e-j-preview-geometry-decoder-render-test.mjs	dcec5c37d1eafff0f1deccf8a6688a9808f452f86f565832624df47a334a2b6e
 qa/epic-2e-j-preview-geometry-full-app-eligible-results.json	02baa2abbd2a7847b27ed3fb74d373d680d088b9e563f9370c6b971c5eba593b
 qa/epic-2e-j-preview-geometry-full-app-eligible-test.mjs	86d7317ff090619b09dfefd3cc958e1344ebd02516f5ff69b8e7a8b733f16d8e
-qa/epic-2e-j-preview-geometry-static-results.json	0bcdffe6da9269a3a8402a314267fe8f0d93b11b4c5d626216d46f230f910b20
+qa/epic-2e-j-preview-geometry-static-results.json	a9a943c02f61924ebb4e406aad5debdae1242b2a28b28e2d841c1e67b57f4c8e
 qa/epic-2e-j-preview-geometry-static-test.mjs	6043b127019f901b1f7e3067479929b2ec03a57a0ccbd2259817f7b798372a9f
 qa/epic-2e-j-preview-source-geometry-normalizer-static-test.mjs	36b376ab8929a161548720e5688ab6ec81245e9b3c7604d02956f2ccad2388cf
 qa/epic-2e-j-qa-snapshot-controlled-v2-static-test.mjs	816ad078197b61a7d028f433b67f72a58e6a4920599a0ff67a45b134db129fef
-qa/epic-2e-j-r2-phase-e-static-results.json	1c3b499aa0f61e7cfad9deda602a16f8c3b32da2c2673d4978705474c710b174
+qa/epic-2e-j-r2-phase-e-static-results.json	3c8de2f01bd28dadfebc378bb7de2f95231c27df2e30932a100a98da9bf37e79
 qa/epic-2e-j-r2-phase-e-static-test.mjs	5685aac94fb08f24fddecca4bbc1cc28388151a50f191f3fb1d2527e16876832
 qa/epic-2e-j-r3-cookie-compat-browser-selftest-results.json	4f030d5815cecdc652bb67f43c59dfa5c7af37ba7e2dc1c2546c30b471771751
 qa/epic-2e-j-r3-qa-integrity-static-test.mjs	997623f1e4d87ec440018f71d6245855a27729d2dea6d295a1c63e6d3bb11df6
 qa/epic-2e-j-r4-locale-runtime-truth-static-test.mjs	46a1fcfb3c7744399dcbe94b274da2ec87670687a46ae124b00e5f8f4d3273f3
-qa/epic-2e-j-r5-semantic-presentation-static-results.json	8ea8dff4134aec9c80c824bb898724332f2ec1e219ef42a0f5766678fcbae37a
+qa/epic-2e-j-r5-semantic-presentation-static-results.json	a33102c9765192d9bd3f66090c58c4bd070b7aa28948b08628948270e35861e1
 qa/epic-2e-j-r5-semantic-presentation-static-test.mjs	91c17dd913266b53abdf097bd7ed797acf3bdfdc2fa6da4abcab504e0dabe4a7
 qa/epic-2e-j-review-console-ui-static-test.mjs	213f78b447745842701560e01180ac986a31a95d64b881903c2503e572b64d29
 qa/epic-2e-j-review-state-engine-static-test.mjs	034b484b6a7e7940e980ba6dce09e6c326b360025f2894d00716a25ca2e831fa
@@ -365,7 +370,7 @@ qa/epic-2e-k-r2-fix5-native-indexeddb-browser-results.json	97224bcf393e02527cca5
 qa/epic-2e-k-r2-fix5-native-indexeddb-browser-test.mjs	5912a2d921e2b0bc7876772c4d8ff32d6a0bcbb1db23c1b08e4f3fc0b2af0258
 qa/epic-2e-k-r2-fix5-release-gate-results.json	9312fc87d4f164d90f56c31cc27ecdd8b7257b40cd2c93d3ee6b7d97aa196812
 qa/epic-2e-k-r2-fix5-release-gate.mjs	f8b757a6301bc8b3597452c84a05f7c44dbfc3e637219f3c1d24d8b165b362a0
-qa/epic-2e-k-r2-fix5-storage-contract-results.json	bf4eaef92cce8d9d151215aba552869fe2249154aea162f6d0c568978567f09d
+qa/epic-2e-k-r2-fix5-storage-contract-results.json	d6c4ae436ee7268df662911b83db8f6e95729d918a51c930b1ccf18a7668c968
 qa/epic-2e-k-r2-fix5-storage-contract-test.mjs	db371693cf433e308c073d7ec1c05c1c09f233dd21a76800f99439be8b4b8294
 qa/epic-2e-k-r2-real-pixel-comparison-static-test.mjs	877db0839633c49ca311093b03d14e3d3d7025229f473c365800039a386f49fa
 qa/epic-2e-l-candidate-pilot-browser-results.json	1958d11043a3f973407dad44f8ce8304ae1d2009e0ff5328c9ccddfc55627b0d
@@ -434,7 +439,7 @@ qa/epic-2e-p0-8a-real-image-artifact-browser-test.mjs	c4d538990b39f134f690ec209a
 qa/epic-2e-p0-dual-workflow-preview-static-test.mjs	1e62b2ddbea6cb90804855b4d6ba5892df7deabceb51736c0a44dc972b629f78
 qa/epic-2e-p1a-single-image-session-browser-results.json	1c606054a53bb088500e03e26748beace6fa36c4d96fb6d2caddadca2a7ae0bc
 qa/epic-2e-p1a-single-image-session-browser-test.mjs	0228d5e7d72f46e0ca6871c4e418f497bffb31d5d75850d5b241c39f52ea3dac
-qa/epic-2e-p1a-single-image-session-test.mjs	9aa8f1b003a12f6c3c5dcd3a4d0da9200f46149e534b14f61b7a9e79c918f96e
+qa/epic-2e-p1a-single-image-session-test.mjs	eaadf14779063b0595ed5a3e5560750762e773d490ad6ff12aa6b40440483cd3
 qa/fixtures/core-color-match/base-scene.png	63df8f1278638d2ee0aa6c079b8ae882916673c0983034ddf7ec87a3e043acb8
 qa/fixtures/core-color-match/reference-warm-editorial.png	544bc98c3c486c807b8ffc545c6cc296df71e1de11b06408b9c652b60012946f
 qa/fixtures/core-color-match/target-cool-flat.png	e2ba75c7e828c59b52ebe27635b2260583631887de57087a0f31fd6e08088248
@@ -480,13 +485,15 @@ qa/i18n/visible-text-audit-allowlist.mjs	7b85c4d22121f02bcf86b926ca10cf5ff01c819
 qa/phase-c-suite-source-manifest.mjs	90e1366c22dfeea32ceb071830eedec3656417832c7c2491b2d247c254618cc8
 qa/playwright-in-memory-app-smoke-results.json	0fea3589a19df1f4dc40d3d9d716a1520de8b04179ef255ea5d1737187c10bf7
 qa/playwright-in-memory-app-smoke.mjs	35e0219b10019101f5d7d3215b84507b3b90efa543be5a530d33954bb4e6fbee
-qa/playwright-in-memory-app-static-results.json	5393000561290a57e799ee1c0d2371d05feda862cc81b44fd21937b01a0e98b8
+qa/playwright-in-memory-app-static-results.json	dd2efb0a34b0aedd79f0938005949bd5fb3ff2698deb216792f6e66b57c6017c
 qa/playwright-in-memory-app-static-test.mjs	73b85a84b05e5b6373c4137250d57e9a7f55cb780f3e87dcea8d09a80872f2e7
-qa/playwright-virtual-origin-helper-static-results.json	bfe1f22f9f2ebd9781c38ebdde68f88ef2d0bb9cffb449b0f74df7c49429da43
+qa/playwright-virtual-origin-helper-static-results.json	08d38190f832064a073fbdfe64f0003b5af5fd17de4250f9dc57be987276f5e7
 qa/playwright-virtual-origin-helper-static-test.mjs	4e2fac494e6e2997e9e1bcd8d3b5490c439b45fffee26b1282356f0c510e83f7
 qa/playwright-virtual-origin-smoke-results.json	3077074d3d95878593cd87d9356f60da130e055213643eb0466328c9afa0491d
 qa/playwright-virtual-origin-smoke.mjs	c61a72463bcd881d689fd5001bd30b8ed2234fc34fe687a7aab54a3e5bdace29
 qa/preflight.mjs	7a0b74810c08ad77d6684cab75a9c02815d2e937491b7b2fd05275399a4b3321
+qa/results/epic-2e-p1a-single-image-session-test-r2-output.txt	2268e46477b61962c612669338a1f05106c32c1b958a9847da60b2d4a2ded53c
+qa/results/run-static-suites-r2-output.txt	4f751d3bd1364a35174644288d0bcc37a239bbb8da3853abd3f6f51e10b2014e
 qa/run-browser-suites.mjs	ceddfd9a1e843a7280c08b01b2a307672a51589ae76b7eaefe665d4889fe8faf
 qa/run-static-suites.mjs	d8a2c95ebdd990664076deeebaab5af00a3673dffaa077c5a5930ef537916790
 qa/screenshots/epic-2e-j-step7b-b/01-ready-state.png	5bd12b9fe3f0c9c641038870349726561b3e04a8a88928debb98016b84b87910

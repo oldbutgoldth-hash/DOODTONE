@@ -15,10 +15,15 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const P08A_BASELINE = path.resolve(ROOT, '..', '..', 'lumixa_p08a', 'r1_work');
+const RCM_INVARIANT_BASELINE_PATH = path.join(ROOT, 'qa', 'baselines', 'p0-8a-reference-color-match-invariant.json');
+
+function sha256File(absPath) {
+  return createHash('sha256').update(readFileSync(absPath)).digest('hex');
+}
 
 let pass = 0, fail = 0;
 function check(name, cond, detail = '') {
@@ -283,30 +288,44 @@ function fakeFile(name, size = 1000, type = 'image/jpeg', lastModified = 1700000
 }
 
 // ─── 25. Reference Color Match behavior remains unchanged ───────────
+// Self-contained: compares current file hashes against a pinned SHA-256
+// baseline shipped inside this package (qa/baselines/p0-8a-reference-
+// color-match-invariant.json), NOT against an external extraction
+// directory. This must work correctly from a fresh, standalone
+// extraction of the delivered ZIP with nothing else on disk.
 {
-  const rcmFiles = [
-    'core/color-match/candidate-preview-renderer.js',
-    'core/curve-engine/index.js',
-    'ui/reference-color-match-panel.js',
-    'core/generation-control.js',
-    'core/analysis-cache.js',
-    'core/preview-state-machine.js',
-    'core/candidate-schema.js',
-    'core/core-runner.js',
-  ];
-  let allIdentical = true;
-  const diffs = [];
-  if (existsSync(P08A_BASELINE)) {
-    for (const rel of rcmFiles) {
-      const a = readFileSync(path.join(ROOT, rel), 'utf8');
-      const bPath = path.join(P08A_BASELINE, rel);
-      if (!existsSync(bPath)) { diffs.push(`${rel}: baseline missing`); allIdentical = false; continue; }
-      const b = readFileSync(bPath, 'utf8');
-      if (a !== b) { diffs.push(rel); allIdentical = false; }
-    }
-    check('25. Reference Color Match behavior remains unchanged', allIdentical, allIdentical ? `${rcmFiles.length}/${rcmFiles.length} files byte-identical to P0.8A baseline` : `changed: ${diffs.join(', ')}`);
+  if (!existsSync(RCM_INVARIANT_BASELINE_PATH)) {
+    check('25. Reference Color Match behavior remains unchanged', false,
+      `pinned baseline missing: ${path.relative(ROOT, RCM_INVARIANT_BASELINE_PATH)} — cannot verify`);
   } else {
-    check('25. Reference Color Match behavior remains unchanged', false, 'P0.8A baseline directory not found for comparison — cannot verify');
+    const baseline = JSON.parse(readFileSync(RCM_INVARIANT_BASELINE_PATH, 'utf8'));
+    const pinned = baseline.files || {};
+    const rcmFiles = Object.keys(pinned);
+    let allIdentical = rcmFiles.length > 0;
+    const diffs = [];
+
+    for (const rel of rcmFiles) {
+      const absPath = path.join(ROOT, rel);
+      const expected = pinned[rel];
+      if (!existsSync(absPath)) {
+        allIdentical = false;
+        diffs.push(`${rel}: MISSING (expected sha256=${expected})`);
+        continue;
+      }
+      const actual = sha256File(absPath);
+      if (actual !== expected) {
+        allIdentical = false;
+        diffs.push(`${rel}: MISMATCH (expected sha256=${expected}, actual sha256=${actual})`);
+      }
+    }
+
+    if (!allIdentical) {
+      for (const d of diffs) console.log(`    ! ${d}`);
+    }
+    check('25. Reference Color Match behavior remains unchanged', allIdentical,
+      allIdentical
+        ? `${rcmFiles.length}/${rcmFiles.length} files match pinned P0.8A SHA-256 baseline (self-contained, qa/baselines/p0-8a-reference-color-match-invariant.json)`
+        : `${diffs.length}/${rcmFiles.length} file(s) failed pinned-baseline check — see printed detail above`);
   }
 }
 

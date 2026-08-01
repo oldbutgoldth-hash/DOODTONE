@@ -1,0 +1,16 @@
+{
+  "epic": "2E-P0.8A",
+  "purpose": "Pin Reference Color Match's exclusive-dependency files (confirmed sole consumer: ui/reference-color-match-panel.js) so EPIC 2E-P1A's own test suite can verify, from inside the delivered package alone, that RCM was not touched. Self-contained \u2014 no external baseline directory required.",
+  "generatedFrom": "EPIC 2E-P0.8A verified working copy (LUMIXA_EPIC_2E_P0_8A_PREVIEW_ARTIFACT_REPAIR_R1.zip lineage), pinned at the start of EPIC 2E-P1A before any P1A source edit.",
+  "hashAlgorithm": "sha256",
+  "files": {
+    "core/generation-control.js": "38cf7d346d6739b3332c6d791d0ded947d676ff859ddec0aaaca2101ffe4a9f0",
+    "core/analysis-cache.js": "23577dc396adbe2803ee52c3472b0d55c880d0133433614f8fb7b923bb0fa154",
+    "core/preview-state-machine.js": "e7ee722efc923151ee45f719bea2f7d26d0f33208fec6935b92efa367b28d29f",
+    "core/candidate-schema.js": "b2fa20aa473a13dc03446bcbf774b7a02ca90093bd60966ad7a3ac1c7ff5b210",
+    "core/core-runner.js": "b9acb2a33c0eb27ad139ba2b6b11f78c4885ee95e0c431ccee5ec248cac10253",
+    "ui/reference-color-match-panel.js": "462a34d9cc53b3e1715210dfaedcde2e1d97a2d68448a671a5155264a37e1cd4",
+    "core/color-match/candidate-preview-renderer.js": "378265c0cc5ff7fa07cdc64f57e712670393aefe882e62f29cbdd143f93af970",
+    "core/curve-engine/index.js": "28c34d5fa9d3a81cd286c3b75f6cb83d26245f858c53ee202d2025c3ad2d54f4"
+  }
+}

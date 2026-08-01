@@ -1,10 +1,27 @@
 # EPIC 2E-P1A — QA Report
 
+**R2 correction notice:** R1's `P1A_QA_REPORT.md` claimed 25/25 and
+62/62 based on a test run inside the working repository, where test 25
+("Reference Color Match behavior remains unchanged") silently resolved
+an external directory (`../../lumixa_p08a/r1_work`) that existed on
+disk at the time but was never included in the shipped R1 ZIP. Anyone
+extracting the R1 ZIP standalone got `24/25 PASS, 1 FAIL` on that test,
+and `qa/run-static-suites.mjs` exited non-zero as a result — the R1
+report's claims did not hold for the delivered package itself. This was
+a real defect, not a flaky/environmental issue, and it has been fixed in
+R2: test 25 now compares against a SHA-256 baseline pinned inside
+`qa/baselines/p0-8a-reference-color-match-invariant.json`, which ships
+in the ZIP. See `P1A_MODIFIED_FILES.md` for the exact diff. The results
+below are from a run of the corrected test **against a fresh,
+standalone extraction of the R2 ZIP** — not the working repository —
+confirming the fix holds for the actual delivered package.
+
 ## 1. Automated tests (25 required cases) — `qa/epic-2e-p1a-single-image-session-test.mjs`
 
 Imports the real production modules directly (no fakes/mocks of Core
 formulas — a `fakeFile()` helper only stands in for a browser `File`
-object, since Node has no `File` global).
+object, since Node has no `File` global). Test 25 is now self-contained
+— see §1a below.
 
 ```
 1.  Session schema completeness .................. PASS
@@ -36,6 +53,47 @@ object, since Node has no `File` global).
 25/25 PASS, 0 FAIL
 ```
 
+## 1a. Self-contained Reference Color Match invariant (test 25 — R2 fix)
+
+Baseline: `qa/baselines/p0-8a-reference-color-match-invariant.json`,
+pinning SHA-256 hashes for the 8 files confirmed to be Reference Color
+Match's exclusive dependencies (sole consumer:
+`ui/reference-color-match-panel.js`), computed from the verified P0.8A
+source before any P1A edit:
+
+```
+core/generation-control.js
+core/analysis-cache.js
+core/preview-state-machine.js
+core/candidate-schema.js
+core/core-runner.js
+ui/reference-color-match-panel.js
+core/color-match/candidate-preview-renderer.js
+core/curve-engine/index.js
+```
+
+Test 25 hashes the current copy of each file with Node's `crypto`
+module and compares against the pinned value — no external directory,
+no dependency on anything outside the shipped ZIP. It:
+
+- **PASSes** when all 8 files match their pinned hash.
+- **FAILs** when any file's content differs, printing the exact
+  filename plus both the expected and actual SHA-256.
+- **FAILs** when a pinned file is missing, printing the filename and
+  the expected SHA-256 (no silent skip).
+- **FAILs** cleanly (not a crash) if the baseline JSON itself is
+  missing.
+
+Verified with three deliberate-failure drills in an isolated scratch
+copy before packaging: (1) appending a byte to
+`core/generation-control.js` → FAIL with printed
+`MISMATCH (expected sha256=..., actual sha256=...)`; (2) removing
+`core/candidate-schema.js` → FAIL with printed
+`MISSING (expected sha256=...)`; (3) removing the baseline JSON itself
+→ FAIL with `pinned baseline missing: ... — cannot verify`, exit
+non-zero, no crash. Restoring the original files brought the suite back
+to 25/25 in all three drills.
+
 ## 2. Full static/integration regression
 
 ```
@@ -43,8 +101,15 @@ object, since Node has no `File` global).
 ```
 
 Full per-suite breakdown available by running
-`node qa/run-static-suites.mjs`. Includes every EPIC 2E-J/K/L/M/N/O/P0
-suite from prior rounds plus the new P1A suite — none regressed.
+`node qa/run-static-suites.mjs`; a saved copy of this exact run's output
+is included at `qa/results/run-static-suites-r2-output.txt`, and the
+saved test-25/full-suite test output is at
+`qa/results/epic-2e-p1a-single-image-session-test-r2-output.txt`. This
+result was reproduced **twice**: once inside the working repository,
+and once again from a completely fresh, standalone extraction of this
+R2 ZIP into an empty directory with no `lumixa_p08a` or other sibling
+project folder present anywhere on disk — see §8 below. Both runs exit
+code 0.
 
 ## 3. Browser QA — honest scope
 
@@ -148,18 +213,36 @@ unmodified.
 
 ## 6. Reference Color Match regression verification
 
-Test 25 of the P1A suite byte-diffs 8 RCM-exclusive files against the
-P0.8A baseline (`core/generation-control.js`, `core/analysis-cache.js`,
+Test 25 of the P1A suite hashes 8 RCM-exclusive files
+(`core/generation-control.js`, `core/analysis-cache.js`,
 `core/preview-state-machine.js`, `core/candidate-schema.js`,
 `core/core-runner.js`, `ui/reference-color-match-panel.js`,
 `core/color-match/candidate-preview-renderer.js`,
-`core/curve-engine/index.js`) — all 8 confirmed byte-identical.
+`core/curve-engine/index.js`) and compares each against the pinned
+SHA-256 baseline in `qa/baselines/p0-8a-reference-color-match-invariant.json`
+(§1a) — all 8 confirmed matching. This check is self-contained: it
+requires nothing beyond the files already inside this ZIP, and was
+re-verified from a standalone extraction of the package (§8), not just
+the working repository.
 
 ## 7. Net verdict
 
 All static/integration evidence (62/62 suites, 25/25 P1A-specific
-cases) supports the full 18-item final acceptance checklist. The one
-item that could not be verified in this sandbox is live-browser visual
-confirmation — blocked by the network allowlist, not by any known or
-suspected defect in the implementation. No PASS was claimed for
-anything not actually executed.
+cases) supports the full 18-item final acceptance checklist, and — per
+the R2 correction — this evidence has now been reproduced from a fresh,
+standalone extraction of the delivered ZIP itself, not only from the
+working repository. The one item that could not be verified in this
+sandbox is live-browser visual confirmation — blocked by the network
+allowlist, not by any known or suspected defect in the implementation.
+No PASS is claimed for anything not actually executed.
+
+## 8. Fresh-extraction verification (R2)
+
+To catch exactly the class of defect reported against R1 (a test
+passing only because of an external directory that happened to still
+exist on the machine that built the ZIP), R2 was verified by: building
+the ZIP, extracting it into a brand-new empty directory with no sibling
+`lumixa_p08a`/`lumixa_r*` project folders anywhere on the filesystem,
+and running both required commands from inside that extracted copy
+only. See `P1A_MODIFIED_FILES.md` for the exact command transcript and
+exit codes from that run.

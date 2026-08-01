@@ -5,6 +5,64 @@ except `ui/app.js`, `qa/run-static-suites.mjs`, and
 `qa/baselines/epic-2e-n1-production-invariant.json`, all three of which
 are minimal, targeted edits.
 
+## R2 correction (this revision)
+
+R1's `qa/epic-2e-p1a-single-image-session-test.mjs` test 25 depended on
+an external directory (`../../lumixa_p08a/r1_work`) that existed in the
+working session but was **not included in the shipped R1 ZIP**. A fresh
+extraction of R1 therefore produced `24/25 PASS, 1 FAIL` and a
+non-zero exit from `qa/run-static-suites.mjs` — contradicting R1's own
+`P1A_QA_REPORT.md` claim of 25/25 and 62/62. This is fixed in R2:
+
+- **New file:** `qa/baselines/p0-8a-reference-color-match-invariant.json`
+  — a pinned SHA-256 baseline for the 8 RCM-exclusive files, generated
+  from the verified P0.8A source before any P1A edit, and shipped
+  inside the package.
+- **Edited:** `qa/epic-2e-p1a-single-image-session-test.mjs` — test 25
+  now hashes the current files with Node's `crypto` module and compares
+  against the pinned baseline above. No external directory dependency
+  remains anywhere in the test suite. Verified to PASS on match, FAIL
+  with the exact mismatched filename + expected/actual SHA-256 on a
+  content change, FAIL with the exact filename + expected SHA-256 on a
+  missing file, and FAIL cleanly (not crash) if the baseline itself is
+  missing — see `P1A_QA_REPORT.md` §1a for the three verification
+  drills.
+- **New files:** `qa/results/epic-2e-p1a-single-image-session-test-r2-output.txt`
+  and `qa/results/run-static-suites-r2-output.txt` — saved, real command
+  output from both required commands, run both inside the working
+  repository and (authoritative) from a standalone extraction of this
+  R2 ZIP into an empty directory with no sibling project folders
+  present — see §"Fresh-extraction verification" below.
+- **Edited:** `P1A_QA_REPORT.md` — corrected to describe the
+  self-contained mechanism and to stop claiming results that weren't
+  reproducible from the delivered package alone.
+
+No other file changed in R2. P1A Session architecture, `ui/app.js`
+integration behavior, Core formulas, Candidate/XMP behavior, Reference
+Color Match source, the P0.8A preview renderer, and all Production
+locks are untouched — confirmed by re-running test 25 itself (which now
+proves RCM's 8 exclusive files are unchanged) plus a diff of every
+other file against the R1 package.
+
+## Fresh-extraction verification (R2)
+
+```
+$ unzip -q LUMIXA_EPIC_2E_P1A_SINGLE_IMAGE_SESSION_R2.zip -d /tmp/fresh_r2_check
+$ cd /tmp/fresh_r2_check/LUMIXA_EPIC_2E_P1A
+$ node qa/epic-2e-p1a-single-image-session-test.mjs; echo "exit: $?"
+... 25/25 PASS, 0 FAIL
+exit: 0
+$ node qa/run-static-suites.mjs; echo "exit: $?"
+... 62/62 suites PASSED, 0 FAILED
+All static suites PASSED.
+exit: 0
+```
+
+Run from a directory containing nothing but the extracted ZIP contents
+— no `lumixa_p08a`, `lumixa_r1`, or any other sibling project folder
+anywhere on the filesystem the test could have accidentally resolved
+against.
+
 ## New files (7) — `core/single-image/`
 
 | File | Lines (approx) | Purpose |
