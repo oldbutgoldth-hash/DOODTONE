@@ -1,13 +1,13 @@
 {
   "suite": "LOCAL-FIRST GEOMETRY R3 -- Phase C2: Full-App Safety-Eligible Geometry suite",
-  "runId": "9fa6b26b-4637-4d11-9c76-5bec8b4f21eb",
-  "startedAt": "2026-07-27T14:58:13.528Z",
-  "completedAt": "2026-07-27T14:58:13.528Z",
+  "runId": "195288df-49e6-4ad1-ad0f-c72620554020",
+  "startedAt": "2026-08-01T08:00:17.243Z",
+  "completedAt": "2026-08-01T08:00:17.243Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-27T14:58:13.528Z",
+  "generatedAt": "2026-08-01T08:00:17.243Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -18,8 +18,8 @@
     {
       "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
+      "evidence": "[{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
     }
   ],
-  "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"
+  "decision": "BROWSER_BINARY_UNAVAILABLE"
 }

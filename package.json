@@ -51,7 +51,9 @@
     "test:p0-7-r5:browser": "node qa/epic-2e-p0-7-r5-intensity-cache-repair-browser-test.mjs",
     "test:p0-7-r6:psm": "node qa/epic-2e-p0-7-r6-preview-state-machine-static-test.mjs",
     "test:p0-7-r6:static": "node qa/epic-2e-p0-7-r6-fast-refined-critical-path-static-test.mjs",
-    "test:p0-7-r6:browser": "node qa/epic-2e-p0-7-r6-real-image-runtime-browser-test.mjs"
+    "test:p0-7-r6:browser": "node qa/epic-2e-p0-7-r6-real-image-runtime-browser-test.mjs",
+    "test:p0-8a:static": "node qa/epic-2e-p0-8a-preview-artifact-repair-static-test.mjs",
+    "test:p0-8a:browser": "node qa/epic-2e-p0-8a-real-image-artifact-browser-test.mjs"
   },
   "keywords": [],
   "author": "",

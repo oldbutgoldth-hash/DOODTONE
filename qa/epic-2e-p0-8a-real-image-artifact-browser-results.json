@@ -1,0 +1,10 @@
+{
+  "suite": "EPIC 2E-P0.8A — Preview Rendering Artifact Repair Browser Test",
+  "completed": false,
+  "decision": "REAL_IMAGES_UNAVAILABLE",
+  "reason": "Reference and Target real photograph file(s) not found. Supply via --ref=/path --target=/path, LUMIXA_P08A_REF_IMAGE/LUMIXA_P08A_TARGET_IMAGE env vars, or place them at qa/fixtures/epic-2e-p0-8a/reference.(jpg|jpeg|png) and target.(jpg|jpeg|png) (or the R6 fixtures dir, which this suite also checks). This suite refuses to substitute synthetic Canvas images for the real-image acceptance test the release spec requires.",
+  "pass": 0,
+  "fail": 0,
+  "total": 0,
+  "generatedAt": "2026-08-01T07:52:45.051Z"
+}

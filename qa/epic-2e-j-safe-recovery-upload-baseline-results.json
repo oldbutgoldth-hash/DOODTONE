@@ -1,13 +1,13 @@
 {
   "suite": "SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 1B: Baseline Upload Contract",
-  "runId": "7c5e2983-8e71-4efe-9571-d116f3dd71a0",
-  "startedAt": "2026-07-27T14:58:13.304Z",
-  "completedAt": "2026-07-27T14:58:13.304Z",
+  "runId": "80f538ff-ecf7-471d-8c01-e5a5ad589199",
+  "startedAt": "2026-08-01T08:00:13.708Z",
+  "completedAt": "2026-08-01T08:00:13.708Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-07-27T14:58:13.304Z",
+  "generatedAt": "2026-08-01T08:00:13.708Z",
   "summary": {
     "total": 1,
     "pass": 0,
@@ -18,8 +18,8 @@
     {
       "test": "Browser environment availability",
       "result": "NOT_TESTED",
-      "evidence": "Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/helpers/playwright-lumixa-test-runtime.mjs"
+      "evidence": "No usable Browser executable found among 6 candidates."
     }
   ],
-  "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"
+  "decision": "BROWSER_BINARY_UNAVAILABLE"
 }

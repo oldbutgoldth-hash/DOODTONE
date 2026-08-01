@@ -1,27 +1,27 @@
 {
   "suite": "EPIC 2E-J ENV-B1B — In-Memory App Harness smoke test",
-  "generatedAt": "2026-07-27T14:58:13.271Z",
+  "generatedAt": "2026-08-01T08:00:13.164Z",
   "completed": true,
-  "decision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE",
+  "decision": "BROWSER_BINARY_UNAVAILABLE",
   "summary": {
     "total": 2,
-    "pass": 0,
+    "pass": 1,
     "fail": 0,
-    "notTested": 2
+    "notTested": 1
   },
   "results": [
     {
       "test": "PART 1: Playwright Node package resolvability",
-      "result": "NOT_TESTED",
-      "evidence": "import(\"playwright\") failed: Cannot find package 'playwright' imported from /mnt/data/lumixa_fix5_1_work/lumixa_r9/qa/playwright-in-memory-app-smoke.mjs"
+      "result": "PASS",
+      "evidence": "import(\"playwright\") resolved"
     },
     {
-      "test": "Honest status: Playwright package unavailable — no Browser launch fabricated",
+      "test": "PART 2: Browser executable detection",
       "result": "NOT_TESTED",
-      "evidence": "The reusable helper (qa/helpers/playwright-in-memory-app.mjs) was still built and is statically verified separately (qa/playwright-in-memory-app-static-test.mjs); no Browser launch is attempted or claimed."
+      "evidence": "no usable Browser executable found among 6 candidates (never downloaded one): [{\"label\":\"Playwright bundled Chromium\",\"path\":\"/sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium\",\"path\":\"/usr/bin/chromium\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/chromium-browser\",\"path\":\"/usr/bin/chromium-browser\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome\",\"path\":\"/usr/bin/google-chrome\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/usr/bin/google-chrome-stable\",\"path\":\"/usr/bin/google-chrome-stable\",\"exists\":false,\"versionOutput\":null},{\"label\":\"/opt/google/chrome/chrome\",\"path\":\"/opt/google/chrome/chrome\",\"exists\":false,\"versionOutput\":null}]"
     }
   ],
-  "playwrightPackageStatus": "PLAYWRIGHT_PACKAGE_UNAVAILABLE",
+  "playwrightPackageStatus": "PLAYWRIGHT_PACKAGE_AVAILABLE",
   "browserExecutablePath": null,
   "browserVersion": null,
   "aboutBlankUrl": "about:blank?qa=1",
@@ -52,5 +52,5 @@
     "secondContextStartsEmpty": null,
     "appStorageKeysObserved": []
   },
-  "finalDecision": "PLAYWRIGHT_PACKAGE_UNAVAILABLE"
+  "finalDecision": "BROWSER_BINARY_UNAVAILABLE"
 }

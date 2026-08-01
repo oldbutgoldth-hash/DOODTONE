@@ -1,6 +1,6 @@
 {
   "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
-  "generatedAt": "2026-08-01T05:30:52.871Z",
+  "generatedAt": "2026-08-01T08:01:25.962Z",
   "summary": {
     "total": 92,
     "pass": 92,
@@ -11,12 +11,12 @@
     {
       "test": "generateRunId() returns a non-empty string",
       "result": "PASS",
-      "evidence": "idA=8b7ce57e-967f-44e4-bd30-32895deabdde"
+      "evidence": "idA=237fab63-e320-42c3-931f-20e8fbf7f282"
     },
     {
       "test": "generateRunId() returns a fresh value on each call (never reused)",
       "result": "PASS",
-      "evidence": "idA=8b7ce57e-967f-44e4-bd30-32895deabdde, idB=041f9808-4131-40ac-86cc-836665a53cbc"
+      "evidence": "idA=237fab63-e320-42c3-931f-20e8fbf7f282, idB=52c26664-d42a-47ba-b9de-f2f68a644b6e"
     },
     {
       "test": "computeSourceHash() is deterministic for identical inputs",
@@ -131,7 +131,7 @@
     {
       "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
       "result": "PASS",
-      "evidence": "oldRunId=4fc595a8-8250-451e-af90-add4d8de798d, newRunId=bb35d15b-0fb1-4736-84a9-b481dd5ae1c0"
+      "evidence": "oldRunId=d63ef0b1-fd23-4dda-8735-d4187fa0adc2, newRunId=8241430e-a2ea-4921-acbc-9a58aec182b0"
     },
     {
       "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",
@@ -456,7 +456,7 @@
     {
       "test": "R3-12: qa/baselines/lufa42-production-lock-manifest.json is present and parses as JSON (checked-in, portable — never a machine-specific sibling directory)",
       "result": "PASS",
-      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_p07_r6/r6_work/qa/baselines/lufa42-production-lock-manifest.json"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_p08a/r1_work/qa/baselines/lufa42-production-lock-manifest.json"
     },
     {
       "test": "R3-12: Production-lock manifest declares a non-empty locked-file set",

@@ -173,6 +173,8 @@ const STATIC_SUITES = [
   // EPIC 2E-P0.7 R6 — True Preview-Critical Path Separation + Deferred Heavy Core Execution.
   'qa/epic-2e-p0-7-r6-preview-state-machine-static-test.mjs',
   'qa/epic-2e-p0-7-r6-fast-refined-critical-path-static-test.mjs',
+  // EPIC 2E-P0.8A — Preview Rendering Artifact Repair + Posterization Removal + Candidate-to-Preview Fidelity.
+  'qa/epic-2e-p0-8a-preview-artifact-repair-static-test.mjs',
 ];
 
 let anyFailed = false;

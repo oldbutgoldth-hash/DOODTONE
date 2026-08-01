@@ -182,6 +182,24 @@ function _drawOriginal(img, canvasId, maxWidth = 640) {
   canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
 }
 
+/**
+ * EPIC 2E-P0.8A Step 8 — the Target Matched Preview's internal render
+ * resolution must track its actual on-screen CSS size (× devicePixelRatio),
+ * not a fixed small cap. The canvas is styled `width:100%` in index.html —
+ * rendering at a fixed 640px and letting that get CSS-upscaled to fill a
+ * wider container is exactly the "low-resolution proxy enlarged as the
+ * final Preview" pattern the spec calls out, and it visibly magnifies any
+ * residual pixel-level artifact. Bounded to [800, 2400] so a pathological
+ * layout (0-width during initial mount, or an ultra-wide monitor) can
+ * never make the render either degenerate or unbounded/slow.
+ */
+function _previewRenderWidthFor(canvas) {
+  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+  const cssWidth = canvas?.clientWidth || canvas?.parentElement?.clientWidth || 0;
+  const target = Math.round((cssWidth || 800) * dpr);
+  return Math.max(800, Math.min(2400, target));
+}
+
 function _canvasToImage(canvas) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -870,7 +888,7 @@ async function _rebuildIntensityFromCache() {
     const afterCanvas = $('rcmAfterCanvas');
     if (!afterCanvas) throw Object.assign(new Error('Matched preview canvas is missing.'), { code: 'TARGET_RENDER_SURFACE_MISSING' });
     _setMatchedPreviewState('RENDERING', 'ปรับ Intensity จาก Analysis Cache โดยไม่วิเคราะห์ Core ใหม่');
-    rcm.previewMetrics = await renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: pipeline.candidate.safePreset });
+    rcm.previewMetrics = await renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: pipeline.candidate.safePreset, maxWidth: _previewRenderWidthFor(afterCanvas) });
     if (!afterCanvas.width || !afterCanvas.height) throw Object.assign(new Error('Intensity Preview rendered with invalid geometry.'), { code: 'TARGET_RENDER_EMPTY' });
     if (runId !== rcm.runtime.activeRunId || guard?.().stale) return;
 
@@ -1070,7 +1088,7 @@ async function _rebuildAndPreview({ reason = 'DIRECT' } = {}) {
     _setMatchedPreviewState('RENDERING', reason === 'INTENSITY' ? 'ปรับ Intensity จาก Analysis Cache โดยไม่วิเคราะห์ Core ใหม่' : 'Fast Preview ใช้ Unified Candidate ชุดเดียวกันกับ Candidate XMP');
     _trace('RENDER', 'START');
     recordTrace({ generationId, stageId: 'RENDER', moduleId: 'renderColorMatchCandidateToCanvas', status: 'STARTED' });
-    rcm.previewMetrics = await renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: rcm.corePipeline.candidate.safePreset });
+    rcm.previewMetrics = await renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: rcm.corePipeline.candidate.safePreset, maxWidth: _previewRenderWidthFor(afterCanvas) });
     if (!afterCanvas.width || !afterCanvas.height) throw Object.assign(new Error('Matched preview rendered with invalid geometry.'), { code: 'TARGET_RENDER_EMPTY' });
     _trace('RENDER', 'COMPLETE', { width: afterCanvas.width, height: afterCanvas.height });
     recordTrace({ generationId, stageId: 'RENDER', moduleId: 'renderColorMatchCandidateToCanvas', status: 'COMPLETED' });
@@ -1219,7 +1237,7 @@ async function _runDeepAnalysis({ runId, generationId, guard }) {
 
     const afterCanvas = $('rcmAfterCanvas');
     if (afterCanvas) {
-      rcm.previewMetrics = await renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: pipeline.candidate.safePreset });
+      rcm.previewMetrics = await renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: pipeline.candidate.safePreset, maxWidth: _previewRenderWidthFor(afterCanvas) });
     }
     if (isObsolete()) return;
 
