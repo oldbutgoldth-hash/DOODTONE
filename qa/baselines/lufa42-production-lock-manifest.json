@@ -1,6 +1,6 @@
 {
   "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
-  "generatedAt": "2026-08-01T07:50:09.945Z",
+  "generatedAt": "2026-08-01T09:45:01.930Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
@@ -14,7 +14,7 @@
     "ui/visual-preview-comparison-controller-v2.js",
     "ui/visual-preview-comparison-renderer-v2.js"
   ],
-  "lockedFileCount": 132,
+  "lockedFileCount": 139,
   "files": {
     "core/analysis-cache.js": "23577dc396adbe2803ee52c3472b0d55c880d0133433614f8fb7b923bb0fa154",
     "core/basic-panel-engine/index.js": "82467e72711b3d98359e9a50543a8a9f2cc98b7f9a42c9e5e25afbec620aae5b",
@@ -111,6 +111,13 @@
     "core/project-version.js": "050705f40d34375391f8970540ec0caa808507633a9c47a41cceeb323617033e",
     "core/reference-transfer-engine/index.js": "9a73cb7e155b280d14ad6f22529100024e43e172ac25c5f7aff43b38d007c3ef",
     "core/scene-classifier/index.js": "8f27307e3425c270b7379008f6e9329d03a60f8d50dd0d0218209526b707347d",
+    "core/single-image/evidence-normalizer.js": "332b91788ad10ab35da2d42bac282bcc9cafb4a8e92eae0d0457644d4f6038a6",
+    "core/single-image/legacy-state-adapter.js": "2034beda9ab355b2ba37187e5cdca582c3430dcb5a568216da9dc7acef6d75e9",
+    "core/single-image/single-image-analysis-cache.js": "37bbee8f813c6e10bcd5e950fc3a07dca334e7d0f80d3714d31393b67ef82efa",
+    "core/single-image/single-image-analysis-profile.js": "fb30f540d8ee046997c9701e93202de9b404eadc1cca84dc4c927ec88aa9a5ba",
+    "core/single-image/single-image-orchestrator.js": "38caa8ade5a51ca8851bccd53a83ee26aeff77ed9e276b54a193507d5c7696df",
+    "core/single-image/single-image-session-store.js": "0ded959317608164c094a5e68045b4c59704fdc71f837cfb5115d59981d24e1d",
+    "core/single-image/single-image-session.js": "cb59256247b780700817efe51f90144a3aacfc9b8887c1885941fbb16ab2fdc3",
     "core/skin-classifier/index.js": "b7563fcbbf39e20cae19b1df3e8ff6d8d5dc50d6e48c889563d3331fd52482d3",
     "core/skintone-engine/index.js": "3e82203bbf95c12a0b4608b994275e4c1ea838f56a813b9b11ae45ce9dd2a83a",
     "core/style-benchmark-engine/index.js": "3f59130bad5075596f59562e16f29dcc98a7ad65d6d99bd08836fbabcaa30721",

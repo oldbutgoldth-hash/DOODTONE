@@ -1,13 +1,13 @@
 {
   "suite": "SAFE RECOVERY + DEPLOY GEOMETRY R2 — Phase 1B: Baseline Upload Contract",
-  "runId": "80f538ff-ecf7-471d-8c01-e5a5ad589199",
-  "startedAt": "2026-08-01T08:00:13.708Z",
-  "completedAt": "2026-08-01T08:00:13.708Z",
+  "runId": "a21f1295-fd1d-4891-8f08-23bd7071c6f7",
+  "startedAt": "2026-08-01T09:45:33.833Z",
+  "completedAt": "2026-08-01T09:45:33.833Z",
   "completed": true,
   "sourceHash": null,
   "browserExecutablePath": null,
   "browserVersion": null,
-  "generatedAt": "2026-08-01T08:00:13.708Z",
+  "generatedAt": "2026-08-01T09:45:33.833Z",
   "summary": {
     "total": 1,
     "pass": 0,

@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.0.7.3",
-  "description": "LUMIXA AI P0.7 R3 — Pipeline Runtime Architecture: generation control, cache, heartbeat, PSM, ledger, tracer, core runner, two-layer pipeline with deferred Layer 2.",
+  "version": "2.1.0",
+  "description": "LUMIXA AI EPIC 2E-P1A — Single Image Analysis Session Foundation: canonical Session contract, central analysis orchestrator, generation-ownership evidence store, legacy compatibility adapter. Baseline: EPIC 2E-P0.8A preview artifact repair + posterization removal.",
   "main": "index.js",
   "directories": {
     "doc": "docs"

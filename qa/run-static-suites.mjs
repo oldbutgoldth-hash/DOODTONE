@@ -175,6 +175,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p0-7-r6-fast-refined-critical-path-static-test.mjs',
   // EPIC 2E-P0.8A — Preview Rendering Artifact Repair + Posterization Removal + Candidate-to-Preview Fidelity.
   'qa/epic-2e-p0-8a-preview-artifact-repair-static-test.mjs',
+  // EPIC 2E-P1A — Single Image Analysis Session Foundation + Central Analysis Orchestrator.
+  'qa/epic-2e-p1a-single-image-session-test.mjs',
 ];
 
 let anyFailed = false;

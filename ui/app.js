@@ -64,6 +64,12 @@ import { createInteractivePreviewObservationSessionV2 } from './interactive-prev
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
+// EPIC 2E-P1A — Single Image Analysis Session Foundation: canonical
+// Session lifecycle for the single-image workflow (see
+// core/single-image/*.js). Wraps calls this file already makes into
+// the engines above — no Core formula imported here is duplicated or
+// altered, only the ownership of their outputs changes.
+import * as singleImageOrchestrator from '../core/single-image/single-image-orchestrator.js';
 
 // ─── Theme tokens (LUMIXA visual system) ───────────────────────────────────────
 const THEME = {
@@ -1165,8 +1171,19 @@ function setupFileHandlers() {
   document.getElementById('btnBuildControlledV2')?.addEventListener('click', handleBuildControlledV2Preview);
 }
 
-function loadFile(file) {
+async function loadFile(file) {
   if (!file?.type.startsWith('image/')) return;
+
+  // EPIC 2E-P1A: create the canonical Session for this upload BEFORE
+  // any decode/reset work happens. beginUpload() internally aborts
+  // whatever Session was previously active (a prior image still
+  // mid-analysis) — this is the real fix for the audit-confirmed race
+  // where uploading image B while image A was still analyzing let
+  // image A's late-resolving Core calls corrupt image B's state
+  // (P1A_SOURCE_LINEAGE_AUDIT.md §13). Awaited here so every step
+  // below (including the pre-existing handleReset() call) runs against
+  // a Session that already exists.
+  activeUploadTicket = await singleImageOrchestrator.beginUpload(file);
 
   // Fix (requested): clear all previous analysis state BEFORE starting a
   // new one, every time a file is selected — not just on the very first
@@ -1198,9 +1215,28 @@ function loadFile(file) {
     // Wait for image to fully decode before reading pixels
     img.onload = () => {
       state.imageLoaded = true;
+      // EPIC 2E-P1A: record decode completion on the Session BEFORE
+      // analysis starts. No-ops safely if a newer upload has since
+      // superseded this ticket (see markImageDecoded's staleness
+      // check) — analysisProxy stays null in this round: the real
+      // pipeline has no distinct downscaled-proxy object today, each
+      // engine downsamples internally (documented in
+      // P1A_SINGLE_IMAGE_SESSION_ARCHITECTURE.md "Known limitations").
+      if (activeUploadTicket) {
+        singleImageOrchestrator.markImageDecoded(activeUploadTicket, {
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          decodedSource: img,
+          displaySource: img,
+          analysisProxy: null,
+        });
+      }
       runAnalysis();
     };
-    img.onerror = () => setAnalysisBox('error', t('analysisBox.imageLoadFailed', null, state.lang));
+    img.onerror = () => {
+      setAnalysisBox('error', t('analysisBox.imageLoadFailed', null, state.lang));
+      if (activeUploadTicket) singleImageOrchestrator.markImageDecodeFailed(activeUploadTicket, new Error('Image decode failed'));
+    };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
@@ -1236,6 +1272,15 @@ function safeGetVisualPreviewProperty(object, key, fallback = undefined) {
 }
 
 let analysisRenderGeneration = 0;
+// EPIC 2E-P1A: the current Single Image Analysis Session's
+// {sessionId, generationId} ticket — the single-image workflow's
+// counterpart to `analysisRenderGeneration` above, but for STATE
+// WRITES (state.last*) and Candidate/XMP-adjacent commits rather than
+// DOM/canvas render callbacks (which `analysisRenderGeneration`
+// already protects — see P1A_SOURCE_LINEAGE_AUDIT.md §9/§13). Set by
+// loadFile() -> singleImageOrchestrator.beginUpload(), read by
+// runAnalysis()/handleReanalyze()/handleReset().
+let activeUploadTicket = null;
 // R4 Phase G: tracks the in-flight, fire-and-forget Visual Preview
 // Comparison render() promise for the CURRENT generation, so callers
 // outside runAnalysis() (e.g. handleBuildControlledV2Preview) can
@@ -2039,6 +2084,20 @@ async function runAnalysis() {
     return;
   }
 
+  // EPIC 2E-P1A: acquire this run's analysis ticket. Returns null (and
+  // this function returns immediately, doing nothing further) if:
+  //  - there is no active Session (shouldn't happen in the normal
+  //    upload flow, but defensive),
+  //  - this ticket is stale (a newer upload has superseded it), or
+  //  - analysis is ALREADY in progress for this exact Session — this
+  //    is the real fix for "clicking Re-analyze twice quickly starts
+  //    two concurrent runAnalysis() invocations" confirmed in
+  //    P1A_SOURCE_LINEAGE_AUDIT.md §13.
+  const analysisTicket = activeUploadTicket
+    ? singleImageOrchestrator.startAnalysisTicket(activeUploadTicket.sessionId, activeUploadTicket.generationId)
+    : null;
+  if (!analysisTicket) return;
+
   // COMBINED CLOSEOUT R1 — Phase B FIX B1: capture the Observation
   // Controller's PRIOR state and prior Generation ID BEFORE incrementing
   // analysisRenderGeneration — never after. The Controller's own
@@ -2165,7 +2224,12 @@ async function runAnalysis() {
     const logS1 = processingLog.startStage('HistogramEngine');
 
     const stats = await analyzeImage(img);
-    state.lastStats = stats;
+    // EPIC 2E-P1A: histogram is the first REQUIRED module — commit
+    // through the orchestrator (which also mirrors into state.lastStats
+    // via the legacy adapter, replacing the old direct assignment) and
+    // stop this run immediately if a newer Session has already
+    // superseded it, rather than continuing to do wasted/stale work.
+    if (!singleImageOrchestrator.commitEvidence(analysisTicket, 'histogram', { status: 'COMPLETED', result: stats, startedAt: Date.now(), completedAt: Date.now() }, state).committed) return;
 
     logS1.output({
       avgLum: stats.avgLum, median: stats.median,
@@ -2178,7 +2242,13 @@ async function runAnalysis() {
     logS1.end('ok');
 
     const imageAnalysisCorePromise = analyzeImageCore(img).then(coreResult => {
-      state.lastImageAnalysis = coreResult;
+      // EPIC 2E-P1A: this .then() may resolve well after a NEWER
+      // upload has superseded `analysisTicket` (it's fire-and-forget,
+      // Worker-backed, up to WORKER_TIMEOUT_MS=20s) — commitEvidence()
+      // silently no-ops the state.lastImageAnalysis write in that case
+      // instead of letting a stale image's Core result land on a
+      // different image's state (P1A_SOURCE_LINEAGE_AUDIT.md §13).
+      singleImageOrchestrator.commitEvidence(analysisTicket, 'imageAnalysisCore', { status: 'COMPLETED', result: coreResult, completedAt: Date.now() }, state);
       const iaSec = document.getElementById('imageAnalysisSection');
       const iac = document.getElementById('imageAnalysisCanvas');
       if (iaSec && iac) {
@@ -2197,7 +2267,8 @@ async function runAnalysis() {
     }).catch(err => { console.warn('ImageAnalysisCore:', err); return null; });
 
     const paletteHarmonyPromise = extractPalette(img).then(palette => {
-      state.lastPalette = palette;
+      // EPIC 2E-P1A: same staleness protection as imageAnalysisCore above.
+      singleImageOrchestrator.commitEvidence(analysisTicket, 'palette', { status: 'COMPLETED', result: palette, completedAt: Date.now() }, state);
       const palSec = document.getElementById('paletteSection');
       const pc = document.getElementById('paletteCanvas');
       if (palSec && pc) {
@@ -2212,7 +2283,7 @@ async function runAnalysis() {
       let harmony = null;
       try {
         harmony = generateHarmonies(palette);
-        state.lastHarmony = harmony;
+        singleImageOrchestrator.commitEvidence(analysisTicket, 'harmony', { status: 'COMPLETED', result: harmony, completedAt: Date.now() }, state);
         const harSec = document.getElementById('harmonySection');
         const hc = document.getElementById('harmonyCanvas');
         if (harSec && hc) {
@@ -2281,15 +2352,35 @@ async function runAnalysis() {
     const skinMerged = skinToneRes
       ? { ...skinToneRes, coveragePct: skinPctAccurate, isFaceCandidate: skinClassRes?.isFaceCandidate ?? true, confidence: skinClassRes?.confidence ?? 0.5 }
       : skinClassRes;
-    const skin       = state.lastSkin         = skinMerged;
-    const wb         = state.lastWB           = wbRes;
+    // EPIC 2E-P1A: every state.lastX assignment below now goes through
+    // commitEvidence() (Session evidence first, legacy `state` mirror
+    // second, both gated on this run's ticket still being current) —
+    // local `const`s below always get the freshly-computed value
+    // regardless of staleness, so downstream logic in THIS function
+    // invocation (fusionCtx, buildFinalPreset, etc.) is unaffected;
+    // only the SHARED `state.lastX` fields (which a different,
+    // superseding Session's own commits might already be about to
+    // overwrite) are protected from a stale write.
+    const skin       = skinMerged;
+    const wb         = wbRes;
     const cast       = castRes;
-    const hsl        = state.lastHSL          = hslRes;
-    const grading    = state.lastGrading      = gradingRes;
-    const toneCurves = state.lastToneCurves   = tcRes;
-    const calibration= state.lastCalibration  = calRes;
-    const basic      = state.lastBasic        = generateBasicPanel(stats);
-    const styleRecognition = state.lastStyleRecognition = styleRecRes;
+    const hsl        = hslRes;
+    const grading    = gradingRes;
+    const toneCurves = tcRes;
+    const calibration= calRes;
+    const basic      = generateBasicPanel(stats);
+    const styleRecognition = styleRecRes;
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'skinTone', { status: 'COMPLETED', result: skin, completedAt: Date.now() }, state);
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'whiteBalance', { status: wb ? 'COMPLETED' : 'SOFT_FAILED', result: wb, completedAt: Date.now() }, state);
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'hsl', { status: hsl ? 'COMPLETED' : 'SOFT_FAILED', result: hsl, completedAt: Date.now() }, state);
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'colorGrading', { status: grading ? 'COMPLETED' : 'SOFT_FAILED', result: grading, completedAt: Date.now() }, state);
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'toneCurves', { status: toneCurves ? 'COMPLETED' : 'SOFT_FAILED', result: toneCurves, completedAt: Date.now() }, state);
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'calibration', { status: calibration ? 'COMPLETED' : 'SOFT_FAILED', result: calibration, completedAt: Date.now() }, state);
+    // basicPanel is REQUIRED (buildFinalPreset() below reads `basic`
+    // unconditionally) — stop this run here if a newer Session has
+    // already superseded it.
+    if (!singleImageOrchestrator.commitEvidence(analysisTicket, 'basicPanel', { status: 'COMPLETED', result: basic, completedAt: Date.now() }, state).committed) return;
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'styleRecognition', { status: styleRecognition ? 'COMPLETED' : 'SOFT_FAILED', result: styleRecognition, completedAt: Date.now() }, state);
 
     logS3c.output({
       wb_temp: wb?.consensus?.temperature, wb_tint: wb?.consensus?.tint,
@@ -2326,7 +2417,7 @@ async function runAnalysis() {
     };
     const logFusion = processingLog.startStage('FeatureFusionEngine');
     const styleFeatureGraph = buildStyleFeatureGraph(fusionCtx);
-    state.lastStyleFeatureGraph = styleFeatureGraph;
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'styleFeatureGraph', { status: 'COMPLETED', result: styleFeatureGraph, completedAt: Date.now() }, state);
     logFusion.output({
       featureCount: styleFeatureGraph.features.length,
       conflictCount: styleFeatureGraph.conflicts.length,
@@ -2339,7 +2430,7 @@ async function runAnalysis() {
 
     const logFp = processingLog.startStage('StyleFingerprint');
     const styleFingerprint = buildStyleFingerprint({ ...fusionCtx, featureGraph: styleFeatureGraph });
-    state.lastStyleFingerprint = styleFingerprint;
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'styleFingerprint', { status: 'COMPLETED', result: styleFingerprint, completedAt: Date.now() }, state);
     logFp.output({
       mood: styleFingerprint.mood, warmth: styleFingerprint.warmth,
       colorCast: styleFingerprint.colorCast, contrastLevel: styleFingerprint.contrastLevel,
@@ -2377,7 +2468,9 @@ async function runAnalysis() {
     const { preset: validatedPreset, report: validationReport } = validateFinalPreset(rawPreset, styleFingerprint);
     validatedPreset._decision   = rawPreset._decision;
     validatedPreset._validation = validationReport;
-    state.lastValidationReport = validationReport;
+    // validationReport is REQUIRED (Candidate cannot be considered
+    // trustworthy without it) — stop this run here if superseded.
+    if (!singleImageOrchestrator.commitEvidence(analysisTicket, 'validation', { status: 'COMPLETED', result: validationReport, completedAt: Date.now() }, state).committed) return;
 
     const logBench = processingLog.startStage('StyleBenchmark');
     const benchmark = benchmarkStylePreservation({
@@ -2387,7 +2480,7 @@ async function runAnalysis() {
       finalPreset: validatedPreset,
       preXmpValidation: validationReport,
     });
-    state.lastBenchmark = benchmark;
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'benchmark', { status: 'COMPLETED', result: benchmark, completedAt: Date.now() }, state);
     logBench.output({
       overallStyleSimilarity: benchmark.overallStyleSimilarity,
       safetyScore: benchmark.safetyScore,
@@ -2407,6 +2500,13 @@ async function runAnalysis() {
     }
     logBench.end('ok');
 
+    // EPIC 2E-P1A: commit the Candidate to the Session, then only push
+    // it to the sliders if this run is still the current one. This is
+    // the direct fix for the spec's named "old callbacks overwriting a
+    // new image ... mismatched Report, sliders, Candidate and XMP"
+    // failure mode — a stale image A's finalPreset can no longer land
+    // on image B's sliders.
+    if (!singleImageOrchestrator.commitCandidate(analysisTicket, finalPreset).committed) return;
     applyPresetToSliders(finalPreset);
 
     const logVal = processingLog.startStage('PreXMPValidation', {
@@ -2452,7 +2552,7 @@ async function runAnalysis() {
       styleBenchmark: finalPreset._benchmark,
     });
     finalPreset._report = decisionReport;
-    state.lastDecisionReport = decisionReport;
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'decisionReport', { status: 'COMPLETED', result: decisionReport, completedAt: Date.now() }, state);
     logReport.output({
       summary: decisionReport.summary,
       topContributorCount: decisionReport.topContributors.length,
@@ -2472,7 +2572,7 @@ async function runAnalysis() {
       wb, cast: castRes, imageAnalysisCore: state.lastImageAnalysis,
     });
     finalPreset._transfer = referenceTransferReport;
-    state.lastReferenceTransfer = referenceTransferReport;
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'referenceTransfer', { status: 'COMPLETED', result: referenceTransferReport, completedAt: Date.now() }, state);
     logTransfer.output({
       referenceConfidence: referenceTransferReport.referenceConfidence.score,
       transferConfidence: referenceTransferReport.transferConfidence.score,
@@ -2485,7 +2585,7 @@ async function runAnalysis() {
     console.debug('[ReferenceTransfer]', referenceTransferReport);
 
     processingLog.setFinalPreset(finalPreset);
-    state.lastProcessingLog = processingLog.snapshot();
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'processingLog', { status: 'COMPLETED', result: processingLog.snapshot(), completedAt: Date.now() }, state);
     console.debug('[ProcessingLog]', state.lastProcessingLog);
 
     if (state.curveEditor) {
@@ -2888,9 +2988,21 @@ async function runAnalysis() {
       console.warn('VisualPreviewComparison boundary failed (analysis unaffected):', vprErr);
     }
 
+    // EPIC 2E-P1A: always resolve the Session to a terminal status —
+    // COMPLETED if every required module succeeded and no optional
+    // module degraded, PARTIAL if an optional module soft-failed. A
+    // no-op if this ticket is already stale (a newer Session already
+    // owns "active"). This guarantees the Session lifecycle never gets
+    // stuck in ANALYZING, per the spec's explicit requirement.
+    singleImageOrchestrator.completeAnalysis(analysisTicket);
+
   } catch (err) {
     setAnalysisBox('error', `<strong>⚠ ${t('analysisBox.failed', null, state.lang)}:</strong> ${err.message}`);
     console.error('runAnalysis error:', err);
+    // EPIC 2E-P1A: an unexpected error must still leave the Session in
+    // a terminal FAILED state, not stuck in ANALYZING — same
+    // no-op-if-stale guarantee as completeAnalysis() above.
+    if (analysisTicket) singleImageOrchestrator.failAnalysis(analysisTicket, err);
   }
 }
 
@@ -2968,6 +3080,15 @@ function handleReset() {
   // runAnalysis() directly), so an ordinary same-image Re-analyze
   // never clears this.
   if (reviewConsoleController) reviewConsoleController.resetTransientUiState();
+
+  // EPIC 2E-P1A: abort whatever Session is active, clear its data, and
+  // clear its legacy `state.last*` mirrors through the SAME adapter
+  // every analysis commit uses — additive to (not a replacement for)
+  // the explicit state.lastX = null lines below, which remain for the
+  // fields this adapter doesn't cover (lastPreviewSandbox, curveEditor,
+  // etc. — see P1A_LEGACY_COMPATIBILITY_MAP.md for the full split).
+  singleImageOrchestrator.resetActiveSession(state);
+  activeUploadTicket = null;
 
   state.imageLoaded = false; state.lastStats = null; state.lastPalette = null; state.lastWB = null;
   state.lastCurveSet = null;

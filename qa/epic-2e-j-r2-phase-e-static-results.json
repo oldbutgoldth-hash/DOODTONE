@@ -1,6 +1,6 @@
 {
   "suite": "COMBINED CLOSEOUT R2 — Phase E FIX E5: fail-closed result-artifact freshness static/functional self-test",
-  "generatedAt": "2026-08-01T08:01:25.962Z",
+  "generatedAt": "2026-08-01T09:55:50.997Z",
   "summary": {
     "total": 92,
     "pass": 92,
@@ -11,12 +11,12 @@
     {
       "test": "generateRunId() returns a non-empty string",
       "result": "PASS",
-      "evidence": "idA=237fab63-e320-42c3-931f-20e8fbf7f282"
+      "evidence": "idA=ec69c1fc-fb41-4dff-9ff4-f5fc470910ba"
     },
     {
       "test": "generateRunId() returns a fresh value on each call (never reused)",
       "result": "PASS",
-      "evidence": "idA=237fab63-e320-42c3-931f-20e8fbf7f282, idB=52c26664-d42a-47ba-b9de-f2f68a644b6e"
+      "evidence": "idA=ec69c1fc-fb41-4dff-9ff4-f5fc470910ba, idB=e862d1ad-1544-4919-bdb5-dd4cb7b4777b"
     },
     {
       "test": "computeSourceHash() is deterministic for identical inputs",
@@ -131,7 +131,7 @@
     {
       "test": "writeBrowserUnavailableResult() output carries a fresh runId distinct from the stale file's prior runId",
       "result": "PASS",
-      "evidence": "oldRunId=d63ef0b1-fd23-4dda-8735-d4187fa0adc2, newRunId=8241430e-a2ea-4921-acbc-9a58aec182b0"
+      "evidence": "oldRunId=ebf18abc-38ce-48ea-bbbd-9d0f569ffe8f, newRunId=8f027ef9-9264-4de9-8d25-e60373956329"
     },
     {
       "test": "writeBrowserUnavailableResult() decision is never PASS for any status value passed in",
@@ -456,15 +456,15 @@
     {
       "test": "R3-12: qa/baselines/lufa42-production-lock-manifest.json is present and parses as JSON (checked-in, portable — never a machine-specific sibling directory)",
       "result": "PASS",
-      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_p08a/r1_work/qa/baselines/lufa42-production-lock-manifest.json"
+      "evidence": "/sessions/focused-hopeful-goldberg/mnt/outputs/lumixa_p1a/work/qa/baselines/lufa42-production-lock-manifest.json"
     },
     {
       "test": "R3-12: Production-lock manifest declares a non-empty locked-file set",
       "result": "PASS",
-      "evidence": "lockedFileCount=132"
+      "evidence": "lockedFileCount=139"
     },
     {
-      "test": "R3-12: every LOCKED core/ui/index.html file is byte-for-byte identical to the checked-in Production-lock manifest (132 files, SHA-256)",
+      "test": "R3-12: every LOCKED core/ui/index.html file is byte-for-byte identical to the checked-in Production-lock manifest (139 files, SHA-256)",
       "result": "PASS",
       "evidence": "match"
     }

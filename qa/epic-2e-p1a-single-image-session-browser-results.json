@@ -1,0 +1,11 @@
+{
+  "suite": "EPIC 2E-P1A — Single Image Analysis Session Browser Test",
+  "completed": false,
+  "decision": "BROWSER_BINARY_UNAVAILABLE",
+  "reason": "Chromium failed to launch: browserType.launch: Executable doesn't exist at /sessions/focused-hopeful-goldberg/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell\n╔════════════════════════════════════════════════════════════╗\n║ Looks like Playwright was just installed or updated.       ║\n║ Please run the following command to download new browsers: ║\n║                                                            ║\n║     npx playwright install                                 ║\n║                                                            ║\n║ <3 Playwright Team                                         ║\n╚════════════════════════════════════════════════════════════╝. Run: npx playwright install chromium (requires network access to cdn.playwright.dev, which this session's sandbox blocks).",
+  "pass": 0,
+  "fail": 0,
+  "total": 12,
+  "scenarios": [],
+  "generatedAt": "2026-08-01T09:47:21.057Z"
+}
