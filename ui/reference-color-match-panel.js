@@ -32,8 +32,13 @@ import { analyzeSkinTone } from '../core/skintone-engine/index.js';
 import { generateHarmonies } from '../core/color-harmony-engine/index.js';
 
 /* P0.7 — Pipeline Runtime Architecture */
-import { createGeneration, getActiveGenerationId, isStale, createGenerationGuard } from '../core/generation-control.js';
-import { getCachedReferenceAnalysis, setCachedReferenceAnalysis, getCachedTargetAnalysis, setCachedTargetAnalysis, getCacheStats } from '../core/analysis-cache.js';
+import { createGeneration, getActiveGenerationId, isStale, createGenerationGuard,
+  createFastPreviewGeneration, isFastPreviewStale,
+  createRefinedAnalysisTask, isRefinedAnalysisStale,
+  createIntensityRenderGeneration, isIntensityRenderStale,
+  getNamedGenerationSnapshot } from '../core/generation-control.js';
+import { getCachedReferenceAnalysis, setCachedReferenceAnalysis, getCachedTargetAnalysis, setCachedTargetAnalysis, getCacheStats,
+  getEvidenceCache, setEvidenceCache, getEvidenceCacheStats } from '../core/analysis-cache.js';
 import { createHeartbeat } from '../core/pipeline-heartbeat.js';
 import { PreviewStateMachine, PREVIEW_STATE } from '../core/preview-state-machine.js';
 import { ContributionLedger } from '../core/contribution-ledger.js';
@@ -92,10 +97,28 @@ const rcm = {
   runtime: { runSeq: 0, activeRunId: 0, trace: [], lastProgressAt: 0, rebuildTimer: null, rebuildQueued: false, queuedReason: null, running: false,
     generationId: null, signal: null, guard: null, psm: null, heartbeat: null, ledger: null, tracer: null,
     layer1Complete: false, cacheUsed: false, _l2Abort: null,
+    /* EPIC 2E-P0.7 R6 — deferred heavy-analysis (Deep Analysis) has its
+     * own independent AbortController, cancelled exactly like Layer 2
+     * whenever a newer pair or Intensity change arrives. */
+    _deepAbort: null,
     /* EPIC 2E-P0.7 R5 — explicit counters so tests can prove Reference/Target
      * Core analysis never reruns on Intensity changes, only the cached
      * candidate rebuild does. */
-    counters: { referenceAnalysisCount: 0, targetAnalysisCount: 0, intensityRenderCount: 0 } },
+    counters: {
+      referenceAnalysisCount: 0, targetAnalysisCount: 0, intensityRenderCount: 0,
+      /* EPIC 2E-P0.7 R6 — fast vs. refined are counted separately so tests
+       * can prove the FIRST preview only ever paid for FAST modules, and
+       * that REFINED analysis is what runs in the background afterward. */
+      referenceFastAnalysisCount: 0, targetFastAnalysisCount: 0,
+      referenceRefinedAnalysisCount: 0, targetRefinedAnalysisCount: 0,
+      deepAnalysisRunCount: 0, deepAnalysisAbortedCount: 0,
+    } },
+  /* EPIC 2E-P0.7 R6 — which profile currently backs rcm.referenceEvidence /
+   * rcm.targetEvidence: 'FAST' until Deep Analysis has successfully
+   * enriched it to 'REFINED'. Lets Deep Analysis skip redundant work if
+   * a generation is already fully refined. */
+  referenceEvidenceProfile: null,
+  targetEvidenceProfile: null,
 };
 
 function $(id) { return document.getElementById(id); }
@@ -110,9 +133,15 @@ function _setMatchedPreviewState(state, message = '', errorCode = '') {
   if (!box) return;
   const labels = {
     WAITING_FOR_IMAGES: 'รอภาพ Reference และ Target',
-    REFERENCE_ANALYSIS_PENDING: 'กำลังวิเคราะห์ภาพต้นแบบ',
-    TARGET_ANALYSIS_PENDING: 'กำลังวิเคราะห์ภาพ Target',
-    PAIRWISE_FUSION_PENDING: 'กำลังรวมผล Core แบบ Pairwise',
+    /* EPIC 2E-P0.7 R6 — these three PENDING labels now only ever cover
+     * the FAST profile (cheap modules only, small proxy). The old
+     * PAIRWISE_FULL wording ("Image Analysis Core · กำลังประมวลผล...")
+     * that used to sit here for 10-12 chained heavy modules across both
+     * images is now DEEP_ANALYSIS_PENDING below, which never blocks this
+     * overlay — Deep Analysis runs after the box is already hidden. */
+    REFERENCE_ANALYSIS_PENDING: 'กำลังวิเคราะห์ภาพต้นแบบ (Fast Preview)',
+    TARGET_ANALYSIS_PENDING: 'กำลังวิเคราะห์ภาพ Target (Fast Preview)',
+    PAIRWISE_FUSION_PENDING: 'กำลังรวมผล Core แบบ Pairwise (Fast Preview)',
     RENDERING: 'กำลังสร้าง Target Matched Preview',
     READY: 'Target Matched Preview พร้อมแล้ว',
     ERROR: 'สร้าง Target Matched Preview ไม่สำเร็จ',
@@ -288,14 +317,35 @@ async function _runCoreAnalysisStep({ phase, label, task, runId, required = true
   }
 }
 
+/* EPIC 2E-P0.7 R6 — profiles that must complete BEFORE the user's first
+ * Preview paint. Deliberately excludes Color Grading AI, Calibration
+ * Engine, Image Analysis Core, and Skin Tone Detection Pro — the four
+ * heaviest modules, confirmed by direct inspection to be the ones
+ * chained serially (Reference then Target, no parallelism) before
+ * FAST_PREVIEW_READY used to be reachable. PAIRWISE_FAST also uses a
+ * smaller analysis proxy (320px, same as the pre-existing
+ * EVALUATION_MINIMAL profile) purely for speed, since a first Preview
+ * does not need the same precision as the refined candidate. */
+const FAST_PROFILES = new Set(['EVALUATION_MINIMAL', 'PAIRWISE_FAST']);
+
 async function _analyzeEvidence(img, { phase = 'ANALYSIS', profile = 'PAIRWISE_FULL', runId = rcm.runtime.activeRunId } = {}) {
   _assertActiveRun(runId);
-  /* EPIC 2E-P0.7 R5 — count real Core analysis runs only. Intensity
-   * rerenders never call this function, so these counters must stay
-   * flat across any number of Intensity changes. */
+  /* EPIC 2E-P0.7 R5/R6 — count real Core analysis runs only, split by
+   * profile so tests can prove the fast-preview-critical-path never
+   * pays for heavy modules, and that heavy modules only ever run in
+   * the deferred Deep Analysis phase. Intensity rerenders never call
+   * this function at all, so none of these counters move on Intensity
+   * changes — only on a genuinely new Reference/Target pair. */
   if (phase === 'REFERENCE') rcm.runtime.counters.referenceAnalysisCount++;
   if (phase === 'TARGET') rcm.runtime.counters.targetAnalysisCount++;
-  const proxy = await _createAnalysisProxy(img, profile === 'EVALUATION_MINIMAL' ? 320 : ANALYSIS_PROXY_MAX_EDGE);
+  /* R6 split counters — separate statements from the two R5 lines above
+   * on purpose (kept byte-for-byte, never modified) so the pre-existing
+   * R5 static-test regex that matches them stays valid unchanged. */
+  if (phase === 'REFERENCE' && FAST_PROFILES.has(profile)) rcm.runtime.counters.referenceFastAnalysisCount++;
+  if (phase === 'REFERENCE' && !FAST_PROFILES.has(profile)) rcm.runtime.counters.referenceRefinedAnalysisCount++;
+  if (phase === 'TARGET' && FAST_PROFILES.has(profile)) rcm.runtime.counters.targetFastAnalysisCount++;
+  if (phase === 'TARGET' && !FAST_PROFILES.has(profile)) rcm.runtime.counters.targetRefinedAnalysisCount++;
+  const proxy = await _createAnalysisProxy(img, FAST_PROFILES.has(profile) ? 320 : ANALYSIS_PROXY_MAX_EDGE);
   _trace('ANALYSIS_PROXY', 'READY', { phase, width: proxy.width, height: proxy.height, profile });
 
   const step = (label, task, options = {}) => _runCoreAnalysisStep({ phase, label, task, runId, ...options });
@@ -309,12 +359,25 @@ async function _analyzeEvidence(img, { phase = 'ANALYSIS', profile = 'PAIRWISE_F
   const toneCurve = await step('Tone Curve AI', () => generateToneCurves(proxy,histogram), { required: false, fallback: {} });
   const hsl = await step('HSL Analyzer Pro', () => analyzeHSL(proxy,{category}), { required: false, fallback: {} });
 
+  /* EPIC 2E-P0.7 R6 — the four heaviest modules (incl. Image Analysis
+   * Core, the module the real-photo runtime stall was observed stuck
+   * on) are the ones excluded from every FAST_PROFILES entry, so a
+   * first Preview is never gated behind them. PAIRWISE_FULL (legacy,
+   * still used by any caller that hasn't opted into the fast/refined
+   * split) and PAIRWISE_REFINED (the new deferred, off-critical-path
+   * profile) both still run them in full. */
   let grading = {}, calibration = {}, imageCore = {}, skinTone = {};
-  if (profile !== 'EVALUATION_MINIMAL') {
+  if (!FAST_PROFILES.has(profile)) {
     grading = await step('Color Grading AI', () => analyzeColorGrading(proxy,{category}), { required: false, fallback: {} });
     calibration = await step('Calibration Engine', () => analyzeCalibration(proxy,{category}), { required: false, fallback: {} });
     imageCore = await step('Image Analysis Core', () => analyzeImageCore(proxy,{category}), { required: false, fallback: {} });
     skinTone = await step('Skin Tone Detection Pro', () => analyzeSkinTone(proxy,{category}), { required: false, fallback: {} });
+    /* EPIC 2E-P0.7 R6 — QA-only visibility into the Image Analysis Core
+     * Worker-offload result (_meta: workerUsed/durationMs/dims), so a
+     * real-image Browser test can prove Fast Preview really did resolve
+     * before this heavy module finished. Purely additive; never read by
+     * any production code path. */
+    rcm.runtime.lastImageAnalysisCoreMeta = imageCore?._meta ?? null;
   }
 
   const basic = generateBasicPanel(histogram);
@@ -635,7 +698,12 @@ async function analyzeReference() {
   if (!rcm.referenceImg) { _setStatus('กรุณาอัปโหลดภาพต้นแบบก่อน'); _setMatchedPreviewState('WAITING_FOR_IMAGES'); return; }
   _setStatus('กำลังวิเคราะห์ภาพต้นแบบ…');
   _setMatchedPreviewState('REFERENCE_ANALYSIS_PENDING', 'Reference Color Match Beta ใช้การวิเคราะห์คนละสถานะกับ AI Tone Extractor');
-  rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg, { phase: 'REFERENCE' });
+  rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg, { phase: 'REFERENCE', profile: 'PAIRWISE_FULL' });
+  /* EPIC 2E-P0.7 R6 — manual ANALYZE REFERENCE already runs every heavy
+   * module (PAIRWISE_FULL), so tag it REFINED to spare Deep Analysis a
+   * redundant re-run of Reference once the pair's automatic Fast
+   * Preview flow reaches it. */
+  rcm.referenceEvidenceProfile = 'REFINED';
   _renderPalette(rcm.referenceEvidence.palette);
   _renderToneZones(rcm.referenceEvidence.toneZones);
   _drawOriginal(rcm.referenceImg, 'rcmRefCanvas');
@@ -661,6 +729,32 @@ function _cancelLayer2() {
     rcm.runtime._l2Abort.abort();
     rcm.runtime._l2Abort = null;
   }
+}
+
+/* EPIC 2E-P0.7 R6 — Deep Analysis gets the exact same cancel-on-supersede
+ * treatment Layer 2 already had: a new pair, or an Intensity change,
+ * must be able to abandon an in-flight heavy-module enrichment cleanly
+ * rather than let it race a newer Preview. */
+function _cancelDeepAnalysis() {
+  if (rcm.runtime._deepAbort) {
+    rcm.runtime._deepAbort.abort();
+    rcm.runtime._deepAbort = null;
+    rcm.runtime.counters.deepAnalysisAbortedCount++;
+  }
+}
+
+/* EPIC 2E-P0.7 R6 — every PSM transition on the fast-preview-critical
+ * path and the deep-analysis path is checked via this helper rather
+ * than fire-and-forget. A false return is traced and the caller is
+ * expected to abort the operation closed (never continue silently in
+ * an unknown/corrupted PSM state). */
+function _transitionOrTrace(to, stageLabel) {
+  const psm = rcm.runtime.psm;
+  if (!psm) return true;
+  const from = psm.state;
+  const ok = psm.transition(to);
+  if (!ok) _trace(stageLabel, 'STATE_TRANSITION_FAILED', { from, to });
+  return ok;
 }
 
 function _resetPsmToWaiting() {
@@ -713,15 +807,23 @@ async function _rebuildIntensityFromCache() {
     return;
   }
 
-  /* Cancel any in-flight deferred Layer 2 — its output must never
-   * overwrite the Preview this Intensity change is about to render. */
+  /* Cancel any in-flight deferred Layer 2 or Deep Analysis — neither's
+   * output may overwrite the Preview this Intensity change is about to
+   * render. Deep Analysis enriches Reference/Target evidence, which
+   * Intensity changes don't need — the cached Fast/Refined evidence
+   * (whichever is currently cached) is reused as-is either way. */
   _cancelLayer2();
+  _cancelDeepAnalysis();
 
   /* New run token within the SAME generation (Reference/Target are
    * unchanged) so a stale Layer 2 task from before this Intensity
-   * change can recognise it has been superseded. */
+   * change can recognise it has been superseded. Also mint a named
+   * intensityRenderGeneration token (EPIC 2E-P0.7 R6) purely for
+   * testability/QA visibility — the actual staleness check below still
+   * uses the pre-existing runId/activeRunId mechanism, unchanged. */
   const runId = ++rcm.runtime.runSeq;
   rcm.runtime.activeRunId = runId;
+  const intensityGenerationId = createIntensityRenderGeneration();
   const generationId = rcm.runtime.generationId;
   const guard = rcm.runtime.guard;
 
@@ -739,7 +841,7 @@ async function _rebuildIntensityFromCache() {
   if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '1';
 
   try {
-    _trace('INTENSITY', 'CACHE_REUSED', { reference: true, target: true });
+    _trace('INTENSITY', 'CACHE_REUSED', { reference: true, target: true, intensityRenderGeneration: intensityGenerationId });
 
     const intensityKey = `${generationId}|${Math.round(_effectiveIntensity())}|${rcm.mode}`;
     if (!rcm.pixelTransfer || rcm.pixelTransferKey !== intensityKey) {
@@ -834,8 +936,11 @@ async function _rebuildAndPreview({ reason = 'DIRECT' } = {}) {
     return;
   }
 
-  /* P0.7: Cancel any in-flight Layer 2 before creating new generation */
+  /* P0.7/R6: Cancel any in-flight Layer 2 AND Deep Analysis before
+   * creating a new generation — neither's output may land on top of
+   * the new pair's Preview. */
   _cancelLayer2();
+  _cancelDeepAnalysis();
 
   /* P0.7: Create generation token (aborts any prior in-flight work) */
   const { generationId, signal } = createGeneration();
@@ -846,9 +951,20 @@ async function _rebuildAndPreview({ reason = 'DIRECT' } = {}) {
   rcm.runtime.layer1Complete = false;
   rcm.runtime.cacheUsed = false;
 
-  /* P0.7: Reset PSM to WAITING (valid from any state) → ANALYZING_LAYER_1 */
+  /* R6: named fast-preview ownership token, independent of the
+   * whole-pipeline generation above — minted purely for QA/tracing
+   * visibility; the guard()/runId checks below remain the authoritative
+   * staleness mechanism, unchanged from R5. */
+  const fastPreviewGenerationId = createFastPreviewGeneration();
+
+  /* P0.7/R6: Reset PSM to WAITING (valid from any state), then drive it
+   * through the new granular fast-preview-critical-path states. Every
+   * transition is checked (see _transitionOrTrace) — a false return
+   * aborts this run closed rather than continuing in an unknown state. */
   _resetPsmToWaiting();
-  rcm.runtime.psm?.transition(PREVIEW_STATE.ANALYZING_LAYER_1);
+  if (!_transitionOrTrace(PREVIEW_STATE.ANALYZING_FAST_REFERENCE, 'FAST_PREVIEW')) {
+    throw Object.assign(new Error('Could not enter ANALYZING_FAST_REFERENCE from the current state.'), { code: 'PSM_TRANSITION_FAILED' });
+  }
   rcm.runtime.heartbeat?.start();
   rcm.runtime.ledger?.clear();
   rcm.runtime.tracer = createTrace(generationId);
@@ -858,7 +974,7 @@ async function _rebuildAndPreview({ reason = 'DIRECT' } = {}) {
   rcm.runtime.activeRunId = runId;
   rcm.runtime.running = true;
   rcm.runtime.rebuildQueued = false;
-  _trace('PIPELINE', 'START', { reason, generationId });
+  _trace('PIPELINE', 'START', { reason, generationId, fastPreviewGenerationId });
   rcm.candidateReadyForDownload = false;
   $('rcmGenerateBtn')?.setAttribute('disabled', 'true');
   $('rcmDownloadBtn')?.setAttribute('disabled', 'true');
@@ -866,33 +982,48 @@ async function _rebuildAndPreview({ reason = 'DIRECT' } = {}) {
   if ($('rcmAfterUpdating')) $('rcmAfterUpdating').style.opacity = '1';
 
   try {
-    /* ── LAYER 1: Cached reference/target evidence + fast pipeline → show preview ── */
+    /* ── FAST PREVIEW: PAIRWISE_FAST evidence (cheap modules only —
+     * Color Grading, Calibration, Image Analysis Core and Skin Tone are
+     * explicitly excluded here) + fast pipeline → show preview. Heavy
+     * modules run later, off this critical path, in _runDeepAnalysis. ── */
     if (!rcm.referenceEvidence) {
-      _setMatchedPreviewState('REFERENCE_ANALYSIS_PENDING', 'กำลังวิเคราะห์ Reference ครั้งเดียวและบันทึก Cache');
-      rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg, { phase: 'REFERENCE', profile: 'PAIRWISE_FULL', runId });
+      _setMatchedPreviewState('REFERENCE_ANALYSIS_PENDING', 'กำลังวิเคราะห์ Reference (Fast) ครั้งเดียวและบันทึก Cache');
+      rcm.referenceEvidence = await _analyzeEvidence(rcm.referenceImg, { phase: 'REFERENCE', profile: 'PAIRWISE_FAST', runId });
+      rcm.referenceEvidenceProfile = 'FAST';
       if (guard().stale) throw Object.assign(new Error('Pipeline generation was superseded by a newer request.'), { code: 'STALE_GENERATION_ABORTED' });
       _renderPalette(rcm.referenceEvidence.palette);
       _renderToneZones(rcm.referenceEvidence.toneZones);
       const cacheKey = { filePath: 'reference', imageId: rcm.generationId || 'ref', dimensions: `${rcm.referenceImg.naturalWidth}x${rcm.referenceImg.naturalHeight}`, profileVersion: 'v1' };
       setCachedReferenceAnalysis(cacheKey, rcm.referenceEvidence);
-      recordTrace({ generationId, stageId: 'REFERENCE', moduleId: 'analyzeEvidence', status: 'COMPLETED' });
+      setEvidenceCache('referenceFastEvidence', { fingerprint: rcm.generationId || 'ref', dimensions: `${rcm.referenceImg.naturalWidth}x${rcm.referenceImg.naturalHeight}`, proxyDimensions: '320', profile: 'PAIRWISE_FAST' }, rcm.referenceEvidence);
+      recordTrace({ generationId, stageId: 'REFERENCE', moduleId: 'analyzeEvidence', status: 'COMPLETED', detail: 'PAIRWISE_FAST' });
     } else {
-      _trace('REFERENCE_CACHE', 'HIT');
+      _trace('REFERENCE_CACHE', 'HIT', { profile: rcm.referenceEvidenceProfile });
       rcm.runtime.cacheUsed = true;
       recordTrace({ generationId, stageId: 'REFERENCE', moduleId: 'analyzeEvidence', status: 'CACHED' });
     }
 
+    if (!_transitionOrTrace(PREVIEW_STATE.ANALYZING_FAST_TARGET, 'FAST_PREVIEW')) {
+      throw Object.assign(new Error('Could not enter ANALYZING_FAST_TARGET from the current state.'), { code: 'PSM_TRANSITION_FAILED' });
+    }
+
     if (!rcm.targetEvidence) {
-      _setMatchedPreviewState('TARGET_ANALYSIS_PENDING', 'กำลังวิเคราะห์ Target ครั้งเดียวและบันทึก Cache');
-      rcm.targetEvidence = await _analyzeEvidence(rcm.targetImg, { phase: 'TARGET', profile: 'PAIRWISE_FULL', runId });
+      _setMatchedPreviewState('TARGET_ANALYSIS_PENDING', 'กำลังวิเคราะห์ Target (Fast) ครั้งเดียวและบันทึก Cache');
+      rcm.targetEvidence = await _analyzeEvidence(rcm.targetImg, { phase: 'TARGET', profile: 'PAIRWISE_FAST', runId });
+      rcm.targetEvidenceProfile = 'FAST';
       if (guard().stale) throw Object.assign(new Error('Pipeline generation was superseded by a newer request.'), { code: 'STALE_GENERATION_ABORTED' });
       const cacheKey = { filePath: rcm.targetFile?.name || 'target', imageId: rcm.generationId || 'tgt', dimensions: `${rcm.targetImg.naturalWidth}x${rcm.targetImg.naturalHeight}`, profileVersion: 'v1' };
       setCachedTargetAnalysis(cacheKey, rcm.targetEvidence);
-      recordTrace({ generationId, stageId: 'TARGET', moduleId: 'analyzeEvidence', status: 'COMPLETED' });
+      setEvidenceCache('targetFastEvidence', { fingerprint: rcm.targetFile?.name || rcm.generationId || 'tgt', dimensions: `${rcm.targetImg.naturalWidth}x${rcm.targetImg.naturalHeight}`, proxyDimensions: '320', profile: 'PAIRWISE_FAST' }, rcm.targetEvidence);
+      recordTrace({ generationId, stageId: 'TARGET', moduleId: 'analyzeEvidence', status: 'COMPLETED', detail: 'PAIRWISE_FAST' });
     } else {
-      _trace('TARGET_CACHE', 'HIT');
+      _trace('TARGET_CACHE', 'HIT', { profile: rcm.targetEvidenceProfile });
       rcm.runtime.cacheUsed = true;
       recordTrace({ generationId, stageId: 'TARGET', moduleId: 'analyzeEvidence', status: 'CACHED' });
+    }
+
+    if (!_transitionOrTrace(PREVIEW_STATE.FAST_FUSION, 'FAST_PREVIEW')) {
+      throw Object.assign(new Error('Could not enter FAST_FUSION from the current state.'), { code: 'PSM_TRANSITION_FAILED' });
     }
 
     const intensityKey = `${rcm.generationId}|${Math.round(_effectiveIntensity())}|${rcm.mode}`;
@@ -929,10 +1060,14 @@ async function _rebuildAndPreview({ reason = 'DIRECT' } = {}) {
     _trace('FUSION', 'COMPLETE');
     if (!rcm.corePipeline?.candidate?.safePreset) throw Object.assign(new Error('Pairwise fusion did not produce a preview preset.'), { code: 'MATCH_CANDIDATE_UNAVAILABLE' });
 
+    if (!_transitionOrTrace(PREVIEW_STATE.FAST_PREVIEW_RENDERING, 'FAST_PREVIEW')) {
+      throw Object.assign(new Error('Could not enter FAST_PREVIEW_RENDERING from the current state.'), { code: 'PSM_TRANSITION_FAILED' });
+    }
+
     _drawOriginal(rcm.targetImg, 'rcmBeforeCanvas');
     const afterCanvas = $('rcmAfterCanvas');
     if (!afterCanvas) throw Object.assign(new Error('Matched preview canvas is missing.'), { code: 'TARGET_RENDER_SURFACE_MISSING' });
-    _setMatchedPreviewState('RENDERING', reason === 'INTENSITY' ? 'ปรับ Intensity จาก Analysis Cache โดยไม่วิเคราะห์ Core ใหม่' : 'Preview ใช้ Unified Candidate ชุดเดียวกันกับ Candidate XMP');
+    _setMatchedPreviewState('RENDERING', reason === 'INTENSITY' ? 'ปรับ Intensity จาก Analysis Cache โดยไม่วิเคราะห์ Core ใหม่' : 'Fast Preview ใช้ Unified Candidate ชุดเดียวกันกับ Candidate XMP');
     _trace('RENDER', 'START');
     recordTrace({ generationId, stageId: 'RENDER', moduleId: 'renderColorMatchCandidateToCanvas', status: 'STARTED' });
     rcm.previewMetrics = await renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: rcm.corePipeline.candidate.safePreset });
@@ -940,24 +1075,30 @@ async function _rebuildAndPreview({ reason = 'DIRECT' } = {}) {
     _trace('RENDER', 'COMPLETE', { width: afterCanvas.width, height: afterCanvas.height });
     recordTrace({ generationId, stageId: 'RENDER', moduleId: 'renderColorMatchCandidateToCanvas', status: 'COMPLETED' });
 
-    /* ── LAYER 1 COMPLETE: Enable Save After Image immediately ── */
+    /* ── FAST PREVIEW COMPLETE: Enable Save After Image immediately.
+     * This is the acceptance-critical moment: FAST_PREVIEW_READY must
+     * be reached here, BEFORE Image Analysis Core or any other heavy
+     * REFINED module has run at all for this pair. ── */
+    if (!_transitionOrTrace(PREVIEW_STATE.FAST_PREVIEW_READY, 'FAST_PREVIEW')) {
+      throw Object.assign(new Error('Could not enter FAST_PREVIEW_READY from the current state.'), { code: 'PSM_TRANSITION_FAILED' });
+    }
     rcm.runtime.layer1Complete = true;
-    rcm.runtime.psm?.transition(PREVIEW_STATE.FAST_PREVIEW_READY);
     $('rcmSaveAfterBtn')?.removeAttribute('disabled');
     const blocked = !rcm.corePipeline.candidate.exportReady;
     if (!blocked) $('rcmGenerateBtn')?.removeAttribute('disabled');
     _renderCoreMatchInspector();
-    const layer2Pending = reason !== 'INTENSITY';
-    _setStatus(layer2Pending
-      ? `Fast Preview · Save After Image พร้อม · กำลังวิเคราะห์ After…`
+    const deepAnalysisPending = reason !== 'INTENSITY';
+    _setStatus(deepAnalysisPending
+      ? `Fast Preview พร้อม · Save After Image พร้อม · กำลังปรับปรุงคุณภาพเบื้องหลัง (Image Analysis Core ฯลฯ)…`
       : `Fast Preview · ใช้ Cache (Intensity ${rcm.intensity}) · Save After Image พร้อม`);
+    _trace('FAST_PREVIEW', 'READY', { fastPreviewGenerationId, width: afterCanvas.width, height: afterCanvas.height });
 
     /* ── Release main runtime — allow new calls (e.g. Intensity) ── */
     rcm.runtime.running = false;
 
-    /* ── LAYER 2: Deferred matched analysis + evaluation (async, own guard) ── */
-    if (layer2Pending) {
-      _runLayer2({ runId, generationId, guard });
+    /* ── DEEP ANALYSIS (deferred, off-critical-path) → then LAYER 2 ── */
+    if (deepAnalysisPending) {
+      _runDeepAnalysis({ runId, generationId, guard });
     } else {
       rcm.runtime.heartbeat?.stop();
       closeTrace(generationId);
@@ -990,6 +1131,125 @@ async function _rebuildAndPreview({ reason = 'DIRECT' } = {}) {
   }
 }
 
+/**
+ * EPIC 2E-P0.7 R6 — Deep Analysis: deferred, off-critical-path
+ * enrichment of Reference/Target evidence with the heavy modules
+ * (Color Grading AI, Calibration Engine, Image Analysis Core, Skin
+ * Tone Detection Pro) that PAIRWISE_FAST deliberately skipped.
+ *
+ * Runs strictly AFTER FAST_PREVIEW_READY — the user already has a
+ * visible, interactive Preview by the time this starts, so however
+ * long these heavy modules take, they can never reproduce the
+ * "stuck at Image Analysis Core" stall the R6 spec was opened against.
+ *
+ * Fire-and-forget with its own AbortController (rcm.runtime._deepAbort,
+ * cancelled by _cancelDeepAnalysis — called from both _rebuildAndPreview
+ * and _rebuildIntensityFromCache whenever a newer pair or Intensity
+ * change supersedes this task), and its own named ownership token
+ * (refinedAnalysisTask) so a late-arriving result from a superseded
+ * generation can never overwrite a newer Preview. On success, once
+ * REFINED_PREVIEW_READY is reached, the existing Layer 2 (after-image
+ * evaluation) pipeline runs exactly as it did in R5 — unchanged,
+ * merely sequenced to start after Deep Analysis instead of immediately
+ * after Fast Preview.
+ */
+async function _runDeepAnalysis({ runId, generationId, guard }) {
+  const deepAbort = new AbortController();
+  rcm.runtime._deepAbort = deepAbort;
+  const deepSignal = deepAbort.signal;
+  const refinedTaskId = createRefinedAnalysisTask();
+
+  const isObsolete = () => (
+    deepSignal.aborted || isStale(generationId) || runId !== rcm.runtime.activeRunId ||
+    guard?.().stale || isRefinedAnalysisStale(refinedTaskId)
+  );
+
+  if (!_transitionOrTrace(PREVIEW_STATE.DEEP_ANALYSIS_RUNNING, 'DEEP_ANALYSIS')) {
+    // Could not enter DEEP_ANALYSIS_RUNNING (e.g. a stale/unexpected PSM
+    // state) — fail this deferred task closed. The Fast Preview already
+    // rendered and remains fully usable; only the background
+    // enrichment is skipped this round.
+    return;
+  }
+  rcm.runtime.counters.deepAnalysisRunCount++;
+  _trace('DEEP_ANALYSIS', 'START', { refinedTaskId });
+  recordTrace({ generationId, stageId: 'DEEP_ANALYSIS', moduleId: 'runDeepAnalysis', status: 'STARTED' });
+
+  try {
+    if (rcm.referenceEvidenceProfile !== 'REFINED') {
+      _trace('DEEP_ANALYSIS', 'REFERENCE_START', { refinedTaskId });
+      const refined = await _analyzeEvidence(rcm.referenceImg, { phase: 'REFERENCE', profile: 'PAIRWISE_REFINED', runId });
+      if (isObsolete()) return;
+      rcm.referenceEvidence = refined;
+      rcm.referenceEvidenceProfile = 'REFINED';
+      const meta = refined?.coreOutputs?.imageAnalysisCore?.evidence?._meta;
+      setEvidenceCache('referenceRefinedEvidence', { fingerprint: rcm.generationId || 'ref', dimensions: `${rcm.referenceImg.naturalWidth}x${rcm.referenceImg.naturalHeight}`, proxyDimensions: String(ANALYSIS_PROXY_MAX_EDGE), profile: 'PAIRWISE_REFINED' }, refined);
+      _trace('DEEP_ANALYSIS', 'REFERENCE_COMPLETE', { refinedTaskId, imageAnalysisCoreWorkerUsed: meta?.workerUsed ?? null, imageAnalysisCoreDurationMs: meta?.durationMs ?? null });
+      recordTrace({ generationId, stageId: 'DEEP_ANALYSIS', moduleId: 'analyzeEvidence:reference', status: 'COMPLETED' });
+    }
+    if (isObsolete()) return;
+
+    if (rcm.targetEvidenceProfile !== 'REFINED') {
+      _trace('DEEP_ANALYSIS', 'TARGET_START', { refinedTaskId });
+      const refined = await _analyzeEvidence(rcm.targetImg, { phase: 'TARGET', profile: 'PAIRWISE_REFINED', runId });
+      if (isObsolete()) return;
+      rcm.targetEvidence = refined;
+      rcm.targetEvidenceProfile = 'REFINED';
+      const meta = refined?.coreOutputs?.imageAnalysisCore?.evidence?._meta;
+      setEvidenceCache('targetRefinedEvidence', { fingerprint: rcm.targetFile?.name || rcm.generationId || 'tgt', dimensions: `${rcm.targetImg.naturalWidth}x${rcm.targetImg.naturalHeight}`, proxyDimensions: String(ANALYSIS_PROXY_MAX_EDGE), profile: 'PAIRWISE_REFINED' }, refined);
+      _trace('DEEP_ANALYSIS', 'TARGET_COMPLETE', { refinedTaskId, imageAnalysisCoreWorkerUsed: meta?.workerUsed ?? null, imageAnalysisCoreDurationMs: meta?.durationMs ?? null });
+      recordTrace({ generationId, stageId: 'DEEP_ANALYSIS', moduleId: 'analyzeEvidence:target', status: 'COMPLETED' });
+    }
+    if (isObsolete()) return;
+
+    if (!_transitionOrTrace(PREVIEW_STATE.REFINED_PREVIEW_RENDERING, 'DEEP_ANALYSIS')) return;
+
+    const pipeline = buildCoreColorMatchPipeline({
+      reference: rcm.referenceEvidence,
+      target: rcm.targetEvidence,
+      analysisGenerationId: generationId,
+      intensity: _effectiveIntensity(),
+      candidateName: 'LUMIXA-Core-Color-Match-Candidate',
+      protectionOptions: { ...rcm.toggles },
+      pixelTransfer: rcm.pixelTransfer,
+      targetMediaContext: { fileName: rcm.targetFile?.name || '', mimeType: rcm.targetFile?.type || '', mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride, baseTemperatureK: rcm.targetBaseTemperatureK, baseTint: rcm.targetBaseTint, profileName: rcm.targetProfileName },
+    });
+    if (isObsolete() || !pipeline?.candidate?.safePreset) return;
+    rcm.corePipeline = pipeline;
+
+    const afterCanvas = $('rcmAfterCanvas');
+    if (afterCanvas) {
+      rcm.previewMetrics = await renderColorMatchCandidateToCanvas({ image: rcm.targetImg, canvas: afterCanvas, preset: pipeline.candidate.safePreset });
+    }
+    if (isObsolete()) return;
+
+    if (!_transitionOrTrace(PREVIEW_STATE.REFINED_PREVIEW_READY, 'DEEP_ANALYSIS')) return;
+    _renderCoreMatchInspector();
+    _trace('DEEP_ANALYSIS', 'COMPLETE', { refinedTaskId });
+    recordTrace({ generationId, stageId: 'DEEP_ANALYSIS', moduleId: 'runDeepAnalysis', status: 'COMPLETED' });
+    _setStatus(`Refined Preview พร้อม · ใช้ผล Image Analysis Core ฯลฯ ครบแล้ว · Save After Image พร้อม`);
+
+    /* ── Existing Layer 2 (after-image evaluation) — unchanged, just
+     * sequenced after Deep Analysis instead of immediately after Fast
+     * Preview. _runLayer2 performs its own REFINED_PREVIEW_READY ->
+     * ANALYZING_LAYER_2 transition internally (that edge is valid in
+     * the transition table exactly like the pre-existing
+     * FAST_PREVIEW_READY -> ANALYZING_LAYER_2 edge was), so it is not
+     * duplicated here. ── */
+    _runLayer2({ runId, generationId, guard });
+  } catch (error) {
+    if (error?.code === 'STALE_GENERATION_ABORTED' || isObsolete()) return;
+    console.error('[LUMIXA][DEEP_ANALYSIS]', error);
+    _trace('DEEP_ANALYSIS', 'FAILED', { message: error?.message });
+    recordTrace({ generationId, stageId: 'DEEP_ANALYSIS', moduleId: 'runDeepAnalysis', status: 'FAILED', error: error?.message });
+    // Soft failure: the Fast Preview the user already sees is untouched
+    // and remains fully usable. Deep Analysis simply didn't complete
+    // this round — never an unresolved Promise, never a UI-visible stall.
+  } finally {
+    rcm.runtime._deepAbort = null;
+  }
+}
+
 async function _runLayer2({ runId, generationId, guard }) {
   const l2Abort = new AbortController();
   rcm.runtime._l2Abort = l2Abort;
@@ -1000,7 +1260,12 @@ async function _runLayer2({ runId, generationId, guard }) {
   };
 
   try {
-    rcm.runtime.psm?.transition(PREVIEW_STATE.ANALYZING_LAYER_2);
+    /* EPIC 2E-P0.7 R6 — checked transition (was fire-and-forget in R5).
+     * Valid from both FAST_PREVIEW_READY (Intensity-only path, no Deep
+     * Analysis) and REFINED_PREVIEW_READY (normal path, after Deep
+     * Analysis) — a false return here fails Layer 2 closed rather than
+     * silently continuing to analyze/evaluate in an unknown state. */
+    if (!_transitionOrTrace(PREVIEW_STATE.ANALYZING_LAYER_2, 'LAYER_2')) return;
     recordTrace({ generationId, stageId: 'MATCHED_ANALYSIS', moduleId: 'analyzeEvidence', status: 'STARTED' });
 
     const afterCanvas = $('rcmAfterCanvas');
@@ -1076,6 +1341,10 @@ function saveAfterImage() {
 
 function _resetPairState() {
   rcm.targetEvidence = null;
+  /* EPIC 2E-P0.7 R6 — a fresh pair means any FAST or REFINED evidence
+   * tag from a previous pair is meaningless; Deep Analysis must always
+   * start from a clean 'not yet FAST' state for the new pair. */
+  rcm.targetEvidenceProfile = null;
   rcm.matchedEvidence = null;
   rcm.previewMatchedSignature = null;
   rcm.lightroomResultImg = null;
@@ -1113,6 +1382,7 @@ export async function initReferenceColorMatchPanel() {
     _loadImageFile(event.target.files[0], img => {
       rcm.referenceImg = img;
       rcm.referenceEvidence = null;
+      rcm.referenceEvidenceProfile = null;
       rcm.referenceColorIntelligence = null;
       rcm.generationId = `rcm-${Date.now()}`;
       _resetPairState();
@@ -1171,12 +1441,18 @@ export async function initReferenceColorMatchPanel() {
   $('rcmSaveAfterBtn')?.setAttribute('disabled', 'true');
 }
 
-/* P0.7 test hooks */
+/* P0.7/R6 test hooks */
 if (typeof window !== 'undefined') {
   window.__LUMIXA_TEST = {
     get rcm() { return rcm; },
     get counters() { return { ...rcm.runtime.counters }; },
     getCacheStats, getTrace, formatTraceSummary, closeTrace,
     PREVIEW_STATE,
+    /* EPIC 2E-P0.7 R6 — additional QA visibility, additive only: */
+    get evidenceProfiles() { return { reference: rcm.referenceEvidenceProfile, target: rcm.targetEvidenceProfile }; },
+    getEvidenceCacheStats,
+    getNamedGenerationSnapshot,
+    get psmState() { return rcm.runtime.psm?.state ?? null; },
+    get lastImageAnalysisCoreMeta() { return rcm.runtime.lastImageAnalysisCoreMeta ?? null; },
   };
 }

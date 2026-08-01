@@ -170,6 +170,9 @@ const STATIC_SUITES = [
   // EPIC 2E-P0.7 R5 — Intensity Cached Preview Repair + State Machine Closure.
   'qa/epic-2e-p0-7-r5-preview-state-machine-static-test.mjs',
   'qa/epic-2e-p0-7-r5-intensity-cache-repair-static-test.mjs',
+  // EPIC 2E-P0.7 R6 — True Preview-Critical Path Separation + Deferred Heavy Core Execution.
+  'qa/epic-2e-p0-7-r6-preview-state-machine-static-test.mjs',
+  'qa/epic-2e-p0-7-r6-fast-refined-critical-path-static-test.mjs',
 ];
 
 let anyFailed = false;

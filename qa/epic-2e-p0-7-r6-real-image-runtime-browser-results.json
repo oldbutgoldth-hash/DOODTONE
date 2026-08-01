@@ -1,0 +1,10 @@
+{
+  "suite": "EPIC 2E-P0.7 R6 — Real-Image Runtime Stall Repair Browser Test",
+  "completed": false,
+  "decision": "REAL_IMAGES_UNAVAILABLE",
+  "reason": "Reference and Target real photograph file(s) not found. Supply via --ref=/path --target=/path, LUMIXA_R6_REF_IMAGE/LUMIXA_R6_TARGET_IMAGE env vars, or place them at qa/fixtures/epic-2e-p0-7-r6/reference.(jpg|jpeg|png) and target.(jpg|jpeg|png). This suite refuses to substitute synthetic Canvas images for the real-image runtime requirement.",
+  "pass": 0,
+  "fail": 0,
+  "total": 0,
+  "generatedAt": "2026-08-01T05:24:04.978Z"
+}
