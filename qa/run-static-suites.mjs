@@ -183,6 +183,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1b-analysis-report-test.mjs',
   // EPIC 2E-P1C — Canonical Lightroom Auto-Tune Candidate + Candidate Store + Slider Synchronization + Candidate-Owned XMP Source.
   'qa/epic-2e-p1c-candidate-test.mjs',
+  // EPIC 2E-P1C R2 — Candidate Runtime Lifecycle Order fix (build only after completeAnalysis() reaches COMPLETED/PARTIAL).
+  'qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs',
 ];
 
 let anyFailed = false;

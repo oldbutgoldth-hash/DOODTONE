@@ -58,3 +58,36 @@ Several `qa/*-static-results.json` snapshot files and
 suites / `npm install` regenerates them with a fresh timestamp/run —
 their content reflects the current (passing) run, not an intentional
 edit.
+
+
+---
+
+# R2 — Candidate Runtime Lifecycle Order Fix
+
+## Edited files (R2)
+
+| File | What changed |
+|---|---|
+| `ui/app.js` | Moved the Candidate build/validate/store-commit/slider-sync block from immediately after `commitCandidate()` (while the Session was still `ANALYZING`) to immediately after `completeAnalysis()`, gated on the real `finalSessionStatus` it returns (`COMPLETED`/`PARTIAL` only) — the root-cause fix for the "Auto-Tune Candidate build failed" runtime bug. `commitCandidate()` itself was left in place. Added a `try/finally`-wrapped slider-sync guard (was previously a plain sequential set/render/unset). Added the required `console.error('[P1C Candidate Build Failed]', {...})` diagnostic with all 7 required fields, never image/binary data. Added explicit `candidateStore.clearActiveCandidate(...)` handling for both the "build attempted but failed on a terminal Session" and the "Session is FAILED/ABORTED/stale" branches. |
+| `qa/run-static-suites.mjs` | Registered the new `qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs` suite. |
+| `qa/baselines/epic-2e-n1-production-invariant.json` | Regenerated the `ui/app.js` hash entry only — the one file this manifest tracks that this fix legitimately changes; every other tracked file (the real serializer, validator, mapping engine) verified byte-identical. |
+| `package.json` | Version `2.3.0` → `2.3.1`; description updated for EPIC 2E-P1C R2. |
+
+## New files (R2)
+
+- `qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs`
+- `P1C_R2_RUNTIME_LIFECYCLE_FIX.md`
+
+## Not changed for R2
+
+`qa/baselines/lufa42-production-lock-manifest.json` — `ui/app.js` is
+listed under that manifest's `allowedGeometryFiles` (deliberately
+excluded from its locked-hash set), so no update was needed there.
+`core/single-image/single-image-orchestrator.js` — its
+`buildAndCommitCandidate()` terminal-status guard was read and
+confirmed correct, but was **not** edited; the defect was purely in its
+caller's ordering. No Core analysis formula, Candidate schema,
+Candidate-to-slider mapping, XMP serializer, Legacy Preset Adapter
+mapping, P1B Report calculation, P1A upload lifecycle, Reference Color
+Match file, P0.8A Preview renderer, or Production safety lock was
+touched.

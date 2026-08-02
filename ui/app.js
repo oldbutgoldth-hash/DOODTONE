@@ -2615,38 +2615,17 @@ async function runAnalysis(callerTicket = null) {
     // on image B's sliders.
     if (!singleImageOrchestrator.commitCandidate(analysisTicket, finalPreset).committed) return;
 
-    // EPIC 2E-P1C: build the canonical nested Candidate from the Session's
-    // evidence + the just-committed raw preset (session.candidateRaw), and
-    // make it the one source of Lightroom values from here on. The old
-    // applyPresetToSliders(finalPreset) direct-from-preset path is retired
-    // for this call site -- see P1C_CANDIDATE_ARCHITECTURE.md.
-    const candidateResult = singleImageOrchestrator.buildAndCommitCandidate(analysisTicket, {
-      legacyState: state,
-      engineVersion: singleImageOrchestrator.ENGINE_VERSION,
-    });
-    if (candidateResult && candidateResult.committed && candidateResult.candidate) {
-      // Guard flag so the boot-time slider 'input' listener (wired near
-      // bindSliders(document.body) below) can tell "the Candidate Store
-      // just wrote this slider" apart from "the user just edited this
-      // slider" -- setSlider() itself only assigns el.value (no input
-      // event fires from a JS property assignment), so this guard is a
-      // belt-and-braces measure per the spec's explicit
-      // "prevent feedback loops via a synchronization guard" rule.
-      state._candidateSliderSyncGuard = true;
-      renderCandidateToSliders(candidateResult.candidate, { setSlider });
-      state._candidateSliderSyncGuard = false;
-      const nameEl = document.getElementById('presetName');
-      if (nameEl) nameEl.value = candidateResult.candidate.profile?.name ?? finalPreset.name;
-      state.lastCandidateStatus = candidateResult.candidate.status;
-      updateCandidateStatusBadge(candidateResult.candidate.status);
-    } else {
-      // Candidate build failed or this run was superseded -- do not fall
-      // back to the old direct-DOM path (that would reintroduce exactly
-      // the "DOM as hidden source of truth" problem P1C removes). Leave
-      // sliders at their last known state and surface an INVALID badge.
-      state.lastCandidateStatus = CANDIDATE_STATUS.FAILED;
-      updateCandidateStatusBadge(CANDIDATE_STATUS.FAILED);
-    }
+    // EPIC 2E-P1C R2: the canonical Candidate build/validate/store-commit/
+    // slider-sync step used to happen right here -- while the Session was
+    // still ANALYZING. buildAndCommitCandidate() correctly refuses to run
+    // until the Session is terminal (COMPLETED/PARTIAL), so it always
+    // returned reason: SESSION_NOT_TERMINAL at this call site, and the UI
+    // showed the "Auto-Tune Candidate build failed" message on every real
+    // analysis run. That block now lives after completeAnalysis() below,
+    // gated on the real finalSessionStatus it returns -- see
+    // P1C_R2_RUNTIME_LIFECYCLE_FIX.md. commitCandidate() above still runs
+    // here so session.candidateRaw is available before Session
+    // finalization, per that fix's requirement #1.
 
     const logVal = processingLog.startStage('PreXMPValidation', {
       mood: styleFingerprint.mood, colorCast: styleFingerprint.colorCast,
@@ -3134,6 +3113,78 @@ async function runAnalysis(callerTicket = null) {
     // owns "active"). This guarantees the Session lifecycle never gets
     // stuck in ANALYZING, per the spec's explicit requirement.
     const finalSessionStatus = singleImageOrchestrator.completeAnalysis(analysisTicket);
+
+    // EPIC 2E-P1C R2: build the canonical nested Candidate ONLY now that
+    // the Session has reached a terminal status. This mirrors the
+    // buildAndCommitReport() gate immediately below -- both read only
+    // from session.evidence (never from Report text, DOM slider values,
+    // stale legacy state, or synthetic defaults) and are independent
+    // sibling outputs of the same evidence, per
+    // P1C_CANDIDATE_ARCHITECTURE.md. buildAndCommitCandidate() itself
+    // still carries its own terminal-status + isActiveGeneration guards
+    // (unchanged, not weakened) -- this call-site gate is an additional,
+    // not a replacement, safeguard. A stale ticket (Image A superseded
+    // by Image B) makes completeAnalysis() return null, which satisfies
+    // neither branch's equality check below, so a stale callback can
+    // never build or synchronize a Candidate after a newer image becomes
+    // active.
+    if (finalSessionStatus === 'COMPLETED' || finalSessionStatus === 'PARTIAL') {
+      const candidateResult = singleImageOrchestrator.buildAndCommitCandidate(analysisTicket, {
+        legacyState: state,
+        engineVersion: singleImageOrchestrator.ENGINE_VERSION,
+      });
+      if (candidateResult && candidateResult.committed && candidateResult.candidate) {
+        // Guard flag so the boot-time slider 'input' listener (wired near
+        // bindSliders(document.body) below) can tell "the Candidate Store
+        // just wrote this slider" apart from "the user just edited this
+        // slider" -- setSlider() itself only assigns el.value (no input
+        // event fires from a JS property assignment), so this guard is a
+        // belt-and-braces measure per the spec's explicit "prevent
+        // feedback loops via a synchronization guard" rule. Wrapped in
+        // try/finally so a thrown error mid-render can never leave the
+        // guard stuck true.
+        state._candidateSliderSyncGuard = true;
+        try {
+          renderCandidateToSliders(candidateResult.candidate, { setSlider });
+          const nameEl = document.getElementById('presetName');
+          if (nameEl) nameEl.value = candidateResult.candidate.profile?.name ?? finalPreset.name;
+        } finally {
+          state._candidateSliderSyncGuard = false;
+        }
+        state.lastCandidateStatus = candidateResult.candidate.status;
+        updateCandidateStatusBadge(candidateResult.candidate.status);
+      } else {
+        // Candidate build failed (or this run was superseded) even
+        // though the Session reached a terminal status -- do not fall
+        // back to applyPresetToSliders(finalPreset) (that would
+        // reintroduce exactly the "DOM as hidden source of truth"
+        // problem P1C removes). Leave sliders at their last known state,
+        // clear the Candidate Store so XMP export stays blocked, and
+        // surface a FAILED badge with full (non-image) diagnostics.
+        console.error('[P1C Candidate Build Failed]', {
+          reason: candidateResult?.reason,
+          sessionStatus: singleImageOrchestrator.getActiveSessionSnapshot()?.status,
+          sessionId: analysisTicket?.sessionId,
+          generationId: analysisTicket?.generationId,
+          candidateRawAvailable: !!singleImageOrchestrator.getActiveSessionSnapshot()?.candidateRaw,
+          validationErrors: candidateResult?.validation?.errors ?? [],
+          validationWarnings: candidateResult?.validation?.warnings ?? [],
+        });
+        candidateStore.clearActiveCandidate(analysisTicket.sessionId, analysisTicket.generationId);
+        state.lastCandidateStatus = CANDIDATE_STATUS.FAILED;
+        updateCandidateStatusBadge(CANDIDATE_STATUS.FAILED);
+      }
+    } else {
+      // finalSessionStatus is FAILED, ABORTED, or null (stale ticket --
+      // a newer image already became active). Never build a Candidate
+      // from a non-terminal or failed Session: clear the Candidate
+      // Store, clear the badge, and leave sliders exactly as they were
+      // so no stale/partial values are shown. XMP export stays blocked
+      // because candidateStore.getValidatedCandidate() now returns null.
+      candidateStore.clearActiveCandidate();
+      state.lastCandidateStatus = null;
+      updateCandidateStatusBadge(null);
+    }
 
     // EPIC 2E-P1B: build the canonical AI Image Analysis Report from
     // the Session's now-final evidence and render it -- ONLY on

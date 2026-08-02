@@ -79,3 +79,68 @@ round-trip-validated end-to-end.
   passes unmodified — 302/302 files parse as valid ES modules.
 - Browser QA: Chromium unavailable in this environment — see honest
   scope statement in `P1C_QA_REPORT.md`.
+
+
+---
+
+# R2 — Candidate Runtime Lifecycle Order Fix
+
+**Version:** 2.3.1
+**Title:** Candidate Runtime Lifecycle Order Fix
+**Baseline:** EPIC 2E-P1C R1 — v2.3.0
+
+## Summary
+
+Fixes a real, 100%-reproducible browser bug: every real analysis run
+showed **"สร้างค่า AUTO-TUNE ไม่สำเร็จ" / "Auto-Tune Candidate build
+failed"** because the canonical Candidate was being built while the
+Single Image Session was still `ANALYZING` — before `completeAnalysis()`
+had ever run. `buildAndCommitCandidate()`'s own terminal-status safety
+guard (preserved, not weakened) correctly rejected every one of these
+premature calls with `reason: SESSION_NOT_TERMINAL`, which is exactly
+what the UI then displayed as a failure.
+
+## What changed
+
+- The Candidate build/validate/store-commit/slider-sync step in
+  `ui/app.js` now runs immediately after
+  `completeAnalysis()` returns, gated on the real `finalSessionStatus`
+  value (`COMPLETED` or `PARTIAL` only) — mirroring the already-correct
+  pattern used for the AI Image Analysis Report build.
+- The slider-synchronization guard is now wrapped in `try/finally`, so
+  a thrown error mid-render can never leave it stuck `true`.
+- A new, exact-shape `console.error('[P1C Candidate Build Failed]',
+  {...})` diagnostic (7 fields: reason, sessionStatus, sessionId,
+  generationId, candidateRawAvailable, validationErrors,
+  validationWarnings — never image/binary data) fires on any build
+  failure.
+- FAILED, ABORTED, and stale-ticket Sessions now explicitly clear the
+  Candidate Store and badge rather than relying only on the outer
+  exception handler.
+
+## What's explicitly unchanged
+
+- `buildAndCommitCandidate()`'s terminal-status guard inside
+  `core/single-image/single-image-orchestrator.js` — preserved exactly
+  as-is, per explicit requirement. The fix is entirely in its caller's
+  call-site ordering.
+- The Candidate schema, Candidate Store ownership model,
+  Candidate-to-slider mapping, slider-to-Candidate manual editing, XMP
+  serializer, Legacy Preset Adapter mapping, P1B Report calculations,
+  P1A upload lifecycle, Reference Color Match, P0.8A Preview renderer,
+  and Production safety locks — all untouched, all re-verified passing.
+
+## Verification
+
+- New `qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs`: 19/19
+  PASS on the fixed source; independently confirmed to drop to 15/19
+  (4 FAIL, exactly the 4 checks that encode this fix) against a
+  reconstructed copy of the pre-fix source.
+- Existing P1C suite (86/86), P1B suite (39/39), P1A + P1A R3 suites
+  (25/25 + 16/16), P0.8A suite (22/22), full static suite (75 suite
+  files), Reference Color Match / Production-invariant hash suites, and
+  the 145-file Production Lock manifest — all pass, 0 FAIL.
+- Browser QA: Chromium remains unavailable in this environment (network
+  allowlist blocks the Playwright CDN download, no system binary) — see
+  the honest scope statement in `P1C_QA_REPORT.md` and full detail in
+  `P1C_R2_RUNTIME_LIFECYCLE_FIX.md`.
