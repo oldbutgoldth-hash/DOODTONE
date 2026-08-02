@@ -54,11 +54,28 @@ export function candidateToLegacyPreset(candidate) {
     crv_mid: candidate.curves.parametric.midtones ?? 0,
     crv_sh: candidate.curves.parametric.shadows ?? 0,
     hsl, grade, cal,
-    curves: {
-      master: candidate.curves.rgb ?? null,
-      red: candidate.curves.red ?? null,
-      green: candidate.curves.green ?? null,
-      blue: candidate.curves.blue ?? null,
-    },
+    // EPIC 2E-P1C R3: only emit a `curves` object when real point-curve
+    // data exists (candidate.curves.rgb is the master channel every
+    // other channel falls back to). Previously this always built a
+    // {master:null, red:null, green:null, blue:null} SHELL object even
+    // when no curve editor data existed -- that shell is truthy, so
+    // core/preset-engine/index.js's own `p.curves ?? defaultCurveSet()`
+    // fallback (unchanged, still in the untouched serializer) never
+    // triggered, and serializeCurvePoints(null) then threw inside
+    // serializeXMP() on every export with no curve data -- the actual,
+    // always-reproducible root cause of "Download XMP does nothing."
+    // Setting the whole field to `null` here (not a shell of nulls)
+    // restores the exact pre-P1C readSlidersAsPreset() contract
+    // (`curves: state.curveEditor ? state.curveEditor.getCurveSet() : null`)
+    // that the serializer's fallback was always written to expect. See
+    // P1C_R3_USER_EDIT_EXPORT_FIX.md.
+    curves: candidate.curves?.rgb != null
+      ? {
+          master: candidate.curves.rgb,
+          red: candidate.curves.red ?? null,
+          green: candidate.curves.green ?? null,
+          blue: candidate.curves.blue ?? null,
+        }
+      : null,
   };
 }

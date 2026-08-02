@@ -377,10 +377,18 @@ function freshTicketWithSession(session) {
     const body = stripped.slice(fnStart, fnEnd > 0 ? fnEnd : fnStart + 2000);
     return fnStart > -1 && !body.includes('readSlidersAsPreset()');
   })());
-  check('65. handleDownload() sources from candidateStore.getValidatedCandidate()', stripped.includes('candidateStore.getValidatedCandidate()'));
+  // EPIC 2E-P1C R3: handleDownload() now sources from the stronger
+  // getCandidateExportReadiness() diagnostic (session/generation
+  // ownership + status + full structural validation, with an exact
+  // failure reason) rather than calling getValidatedCandidate()
+  // directly at the call site -- getValidatedCandidate() itself is
+  // now a thin wrapper around the same readiness check (see
+  // P1C_R3_USER_EDIT_EXPORT_FIX.md), so this is a strengthening, not
+  // a removal, of the R1/R2 contract.
+  check('65. handleDownload() sources from candidateStore.getCandidateExportReadiness()', stripped.includes('candidateStore.getCandidateExportReadiness()'));
   check('66. handleDownload() converts the Candidate via candidateToLegacyPreset() before the existing serializer', stripped.includes('candidateToLegacyPreset(candidate)'));
   check('67. handleDownload() still calls the existing unmodified quickSafetyClamp() (final safety net preserved)', stripped.includes('quickSafetyClamp(preset)'));
-  check('68. handleDownload() blocks export with an explicit early return when no valid Candidate exists (never a silent stale-slider fallback)', /if\s*\(!candidate\)\s*\{[\s\S]{0,300}return;/.test(stripped));
+  check('68. handleDownload() blocks export with an explicit early return when no valid Candidate exists (never a silent stale-slider fallback)', /if\s*\(!readiness\.ready\)\s*\{[\s\S]{0,600}return;/.test(stripped));
   check('69. Candidate build/commit happens exactly once per runAnalysis() invocation (buildAndCommitCandidate call count)', (stripped.match(/singleImageOrchestrator\.buildAndCommitCandidate\(/g) || []).length === 1);
   check('70. Slider-edit -> Candidate listener is wired exactly once at boot (not re-wired on language change/panel re-render)', (stripped.match(/candidateStore\.updateCandidateParameter\(/g) || []).length === 1);
   check('71. The slider-edit listener is guarded against feedback loops from Candidate->Slider renders (_candidateSliderSyncGuard)', stripped.includes('_candidateSliderSyncGuard'));

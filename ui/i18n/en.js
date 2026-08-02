@@ -136,6 +136,7 @@ export const en = {
     downloadSuccess: 'Download complete!',
     downloadSafetyAdjustments: 'Download complete! {{count}} safety adjustment(s) were applied.',
     downloadBlockedNoCandidate: 'Download blocked: no valid Auto-Tune Candidate is available yet. Wait for analysis to finish, or fix any invalid values shown above.',
+    downloadExportFailed: 'Download failed: an unexpected error occurred while generating the XMP file. Please try again; if the problem continues, re-analyze the image.',
     supportDivider: 'Support the project',
     supportTitle: 'Support this project',
     supportIntro: 'LUMIXA AI analyzes light, colour, tone, and editing characteristics from a reference image and creates a Lightroom preset (.XMP) locally.',

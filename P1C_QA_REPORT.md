@@ -263,3 +263,113 @@ completion is **not** claimed to include confirmed real-browser
 Candidate creation — only that Candidate creation succeeds after
 `completeAnalysis()` in the real, unmodified production code path, as
 proven by direct execution of that code path in R2.4 above.
+
+
+---
+
+# R3 — User-Edit XMP Export Fix
+
+## R3.1 Investigation and reproduced root cause
+
+Per the explicit instruction for this round, the failure was
+reproduced by direct execution against real production modules before
+any code changed. A minimal Node script exercised the exact real
+sequence (`commitCandidate → completeAnalysis → buildAndCommitCandidate
+→ resolveSliderEdit → updateCandidateParameter → getValidatedCandidate
+→ candidateToLegacyPreset → quickSafetyClamp → serializeXMP`).
+
+Result: every hypothesis in the bug report's own list (edit not
+committed, Candidate becomes INVALID, USER_EDITED not preserved,
+Candidate disappears, generation ownership lost, validation rejects a
+valid edit, `getValidatedCandidate()` returns null unexpectedly) was
+individually checked and ruled out — the Candidate-edit layer worked
+correctly. The actual, always-reproducible (not edit-specific) defect
+was a `TypeError: Cannot read properties of null (reading 'map')`
+thrown inside `serializeXMP()` → `_curveStr()` →
+`serializeCurvePoints(null)`, caused by
+`legacy-preset-adapter.js`'s `candidateToLegacyPreset()` always
+emitting a truthy `{master:null,...}` curves shell object instead of a
+bare `null`, defeating `serializeXMP()`'s own `p.curves ??
+defaultCurveSet()` fallback. `handleDownload()` had no `try/catch`
+anywhere, so this exception failed completely silently — exactly the
+reported symptom. Full writeup: `P1C_R3_USER_EDIT_EXPORT_FIX.md`.
+
+## R3.2 Fix
+
+One-line-scoped fix in the P1C-owned adapter layer
+(`legacy-preset-adapter.js`) restores the pre-P1C `null`-vs-shell
+contract `serializeXMP()` (untouched) has always depended on. Verified
+by direct execution: both pre-edit and post-edit export attempts now
+succeed and the generated XMP string contains the correct value.
+
+Additional hardening implemented per this round's explicit
+requirements (transactional edits, export-readiness diagnostics,
+try/catch, decimal-safe slider parsing, narrow filename sanitization,
+bounded diagnostics) is detailed in `P1C_R3_USER_EDIT_EXPORT_FIX.md`
+§5.
+
+## R3.3 New static/integration test
+
+`qa/epic-2e-p1c-r3-user-edit-xmp-export-test.mjs` — **39/39 PASS, 0
+FAIL** (30 required cases + 9 supporting/bonus checks) against real
+production code.
+
+**Verified to fail on the pre-fix source**: the root-cause fix in
+`legacy-preset-adapter.js` was temporarily reverted to its exact
+pre-fix form and the same test file re-run unmodified — result **37/39
+PASS, 2 FAIL**, both failures being the exact `serializeXMP()`/XMP-
+content checks this fix resolves, with the identical exception message
+observed during investigation. The fix was then restored (39/39 PASS).
+This confirms the new test is a genuine, specific regression guard.
+
+## R3.4 Full regression re-verification
+
+- `qa/epic-2e-p1c-r3-user-edit-xmp-export-test.mjs` (new): **39/39
+  PASS, 0 FAIL**.
+- `qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs`: **19/19
+  PASS, 0 FAIL** (unchanged from R2).
+- `qa/epic-2e-p1c-candidate-test.mjs`: **84/86 PASS → 86/86 PASS**
+  after 2 check texts (65, 68) were updated to reflect the R3
+  `handleDownload()` contract (a legitimate architecture evolution,
+  not a weakening — see `P1C_MODIFIED_FILES.md`).
+- `qa/epic-2e-p1b-analysis-report-test.mjs`: **39/39 PASS, 0 FAIL**.
+- `qa/epic-2e-p1a-single-image-session-test.mjs`: **25/25 PASS, 0
+  FAIL**. `qa/epic-2e-p1a-r3-upload-lifecycle-integration-test.mjs`:
+  **16/16 PASS, 0 FAIL**.
+- `qa/epic-2e-p0-8a-preview-artifact-repair-static-test.mjs`: **22/22
+  PASS, 0 FAIL**.
+- Full static suite (`node qa/run-static-suites.mjs`, 76 registered
+  suite files): **PASS, 0 FAIL** across every suite.
+- `qa/epic-2e-n1-core-color-match-integration-static-test.mjs` +
+  `qa/epic-2e-n1-n5-integration-static-test.mjs`: **PASS, 0 FAIL**
+  after regenerating the `ui/app.js` hash entry in
+  `qa/baselines/epic-2e-n1-production-invariant.json` (the only file
+  that manifest tracks which R3 legitimately changes).
+- `qa/epic-2e-j-r2-phase-e-static-test.mjs` (Production Lock manifest,
+  145 files): **92/92 PASS, 0 FAIL, 0 NOT_TESTED** after regenerating
+  the `ui/i18n/en.js` and `ui/i18n/th.js` hash entries in
+  `qa/baselines/lufa42-production-lock-manifest.json` (the only two
+  locked files R3 legitimately changes; `ui/app.js` remains excluded
+  from this manifest as an `allowedGeometryFiles` entry, unchanged).
+
+## R3.5 Browser QA — honest scope statement
+
+**Chromium remains unavailable in this environment**, re-verified
+concretely for this R3 round: `npx playwright install chromium` failed
+again with `Download failed: server returned code 403 body 'Connection
+blocked by network allowlist'`; no system Chromium/Chrome binary
+exists on `PATH` or in common install locations. The 6 required
+real-image Browser QA scenarios for this fix were **NOT run and their
+real-browser outcomes are UNKNOWN.** The new 39-case test exercises
+the real underlying orchestrator/candidate-store/export-pipeline logic
+for the functional core of every scenario directly against real
+production code, and is proven (R3.3's fail-before/pass-after result)
+to genuinely catch the specific defect reported — but this is not a
+substitute for real pixel-level, real-DOM-event Browser verification.
+Per this round's explicit closing constraint: completion is not
+claimed merely because the Candidate becomes USER_EDITED — it is
+claimed because a real, valid XMP string was directly produced,
+end-to-end, by the real unmodified export pipeline, both before and
+after a real user edit, via direct execution of the same function
+sequence the browser's `handleDownload()` calls (see R3.1/R3.2/R3.3
+above and `P1C_R3_USER_EDIT_EXPORT_FIX.md` §7 for full detail).

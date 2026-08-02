@@ -144,3 +144,78 @@ what the UI then displayed as a failure.
   allowlist blocks the Playwright CDN download, no system binary) — see
   the honest scope statement in `P1C_QA_REPORT.md` and full detail in
   `P1C_R2_RUNTIME_LIFECYCLE_FIX.md`.
+
+
+---
+
+# R3 — User-Edit XMP Export Fix
+
+**Version:** 2.3.2
+**Title:** User-Edit XMP Export Fix
+**Baseline:** EPIC 2E-P1C R2 — v2.3.1
+
+## Summary
+
+Fixes a real browser bug: clicking **Download XMP** did nothing — no
+file, no error message — most noticeably after editing a slider.
+Direct execution against real production modules (per this round's
+explicit "do not guess, reproduce first" instruction) showed the
+Candidate-edit layer itself was working correctly; the actual,
+always-reproducible cause was one line in the P1C export adapter
+(`legacy-preset-adapter.js`) that defeated the existing, unmodified
+XMP serializer's own null-curve fallback, throwing an uncaught
+exception that `handleDownload()` had no `try/catch` to catch.
+
+## What changed
+
+- **Root-cause fix**: `candidateToLegacyPreset()` no longer builds a
+  truthy `{master:null,...}` curves shell object when no Tone Curve
+  editor data exists — it now passes a bare `null`, restoring the
+  exact contract the unmodified `serializeXMP()` has always depended
+  on for its own default-curve fallback.
+- **Transactional manual edits**: `updateCandidateParameter()` now
+  clones the active Candidate, applies the edit to the clone, validates
+  the clone, and only commits it on success — a rejected edit can no
+  longer corrupt or replace the last known-good Candidate.
+- **`getCandidateExportReadiness()`** (new): a full diagnostic
+  (session/generation ownership + status + structural validation) with
+  an exact reason on failure, backing a strengthened
+  `getValidatedCandidate()`.
+- **`handleDownload()` hardened**: sources from the new readiness
+  check, and the entire export pipeline is now wrapped in `try/catch`
+  with a real, bounded UI error message and console diagnostic — no
+  future export failure can be completely silent again.
+- **Decimal-safe slider parsing**: `resolveSliderEdit()` uses
+  `Number(...)` instead of `parseInt(...)`.
+- **Narrower filename sanitization**: only genuinely illegal filename
+  characters (`< > : " / \ | ? *`) are replaced.
+- **Bounded development diagnostics** at 5 required points (slider
+  input, edit commit, validation failure, download attempt, export
+  blocked/failed) — IDs, numbers, and status strings only, never image
+  data.
+
+## What's explicitly unchanged
+
+- The XMP serializer (`core/preset-engine/index.js`'s `serializeXMP()`)
+  and `core/curve-engine/index.js`'s curve-point serialization — read
+  in full, confirmed already correct, not touched.
+- `quickSafetyClamp()` formulas, Core analysis formulas, Auto-Tune
+  numerical recommendations, Candidate schema, P1B Report calculations,
+  Reference Color Match, P0.8A Preview, P1A upload lifecycle, the P1C
+  R2 terminal-session lifecycle gate, and Production safety locks.
+
+## Verification
+
+- New `qa/epic-2e-p1c-r3-user-edit-xmp-export-test.mjs`: 39/39 PASS on
+  the fixed source; independently confirmed to drop to 37/39 (the 2
+  checks that directly encode the export-pipeline fix) against the
+  reverted pre-fix adapter.
+- Existing P1C R1 suite (86/86 after 2 legitimately-updated check
+  texts), P1C R2 suite (19/19), P1B suite (39/39), P1A + Upload
+  Lifecycle suites (25/25 + 16/16), P0.8A suite (22/22), full static
+  suite (76 suite files), Reference Color Match / Production-invariant
+  hash suites, and the 145-file Production Lock manifest — all pass, 0
+  FAIL.
+- Browser QA: Chromium remains unavailable in this environment — see
+  the honest scope statement in `P1C_QA_REPORT.md` and full detail in
+  `P1C_R3_USER_EDIT_EXPORT_FIX.md`.

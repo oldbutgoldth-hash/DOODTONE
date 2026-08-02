@@ -99,7 +99,18 @@ export function renderCandidateToSliders(candidate, { setSlider }) {
 export function resolveSliderEdit(sliderId, rawValue) {
   const entry = SLIDER_PARAMETER_MAP[sliderId];
   if (!entry) return null;
-  const numeric = typeof rawValue === 'number' ? rawValue : parseInt(rawValue, 10);
+  // EPIC 2E-P1C R3: use Number(...), never parseInt(...) -- parseInt
+  // silently truncates any decimal value (e.g. "6.5" -> 6), which
+  // would corrupt a legitimately fractional edit on any slider whose
+  // DOM step is ever changed to allow decimals (Exposure, Temperature,
+  // Tint, HSL, Color Grading, Calibration, Sharpening, Noise
+  // Reduction all carry real Lightroom decimal precision upstream).
+  // Number("") is 0 (not NaN), so blank/missing input is rejected
+  // explicitly before conversion rather than relying on Number()'s
+  // own coercion, preserving the original "reject empty/garbage
+  // input" safety behavior.
+  if (rawValue === '' || rawValue === null || rawValue === undefined) return null;
+  const numeric = typeof rawValue === 'number' ? rawValue : Number(rawValue);
   if (!Number.isFinite(numeric)) return null;
   const { value: clampedValue, clamped: wasClamped } = entry.rangeKey
     ? clampToSliderRange(entry.rangeKey, numeric)

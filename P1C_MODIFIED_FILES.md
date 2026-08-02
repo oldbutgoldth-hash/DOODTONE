@@ -91,3 +91,43 @@ Candidate-to-slider mapping, XMP serializer, Legacy Preset Adapter
 mapping, P1B Report calculation, P1A upload lifecycle, Reference Color
 Match file, P0.8A Preview renderer, or Production safety lock was
 touched.
+
+
+---
+
+# R3 — User-Edit XMP Export Fix
+
+## Edited files (R3)
+
+| File | What changed |
+|---|---|
+| `core/single-image/candidate/legacy-preset-adapter.js` | **The real root-cause fix.** `candidateToLegacyPreset()` no longer emits a truthy `{master:null,red:null,green:null,blue:null}` curves SHELL object when no Tone Curve editor data exists — it now emits a bare `null` for the whole `curves` field in that case, restoring the exact contract `core/preset-engine/index.js`'s unmodified `serializeXMP()` has always depended on (`p.curves ?? defaultCurveSet()`). This was the actual, always-reproducible (not edit-specific) cause of "Download XMP does nothing." |
+| `core/single-image/candidate/candidate-store.js` | `updateCandidateParameter()` rewritten to be fully transactional (clone → mutate clone → validate clone → commit only on success; a failed edit never overwrites the previously-valid Candidate). Added `getCandidateExportReadiness()` (session/generation ownership + status + full structural validation, with an exact failure reason). `getValidatedCandidate()` is now a thin wrapper around it. Added the required `[P1C User Edit Validation Failed]` diagnostic on a rejected edit. |
+| `core/single-image/candidate/candidate-slider-adapter.js` | `resolveSliderEdit()` now uses `Number(...)` instead of `parseInt(...)` (no decimal truncation), with an explicit blank/null/undefined-input rejection preserved. |
+| `ui/app.js` | `handleDownload()` rewritten: sources from `candidateStore.getCandidateExportReadiness()`, logs the required `[P1C XMP Download Attempt]` / `[P1C XMP Export Blocked]` diagnostics, wraps the export pipeline in `try/catch` with the required `[P1C XMP Export Failed]` diagnostic and a real UI error message (was previously unguarded — any future export exception failed completely silently). Added `sanitizePresetFilename()` (narrow illegal-character-only filename sanitization). The boot-time slider-edit listener now logs the required `[P1C User Edit Input]` / `[P1C User Edit Commit]` diagnostics and re-reads the active Candidate after a commit attempt (so a rejected/transactional edit never shows a phantom badge state). |
+| `ui/i18n/en.js` / `ui/i18n/th.js` | Added `appShell.downloadExportFailed` (both languages) for the new XMP-export-failure UI message. |
+| `qa/epic-2e-p1c-candidate-test.mjs` | Checks 65 and 68 updated to match the R3 `handleDownload()` contract (`getCandidateExportReadiness()` / `if (!readiness.ready)`) — a legitimate architecture evolution from R1/R2's direct `getValidatedCandidate()` call, not a weakening; `getValidatedCandidate()` itself is unchanged in its public Candidate-or-null contract. |
+| `qa/run-static-suites.mjs` | Registered the new `qa/epic-2e-p1c-r3-user-edit-xmp-export-test.mjs` suite. |
+| `qa/baselines/epic-2e-n1-production-invariant.json` | Regenerated the `ui/app.js` hash entry only. |
+| `qa/baselines/lufa42-production-lock-manifest.json` | Regenerated the `ui/i18n/en.js` and `ui/i18n/th.js` hash entries only (the two locked files this round legitimately changes; `ui/app.js` remains excluded from this manifest's locked set as an `allowedGeometryFiles` entry, unchanged from R2). |
+| `package.json` | Version `2.3.1` → `2.3.2`; description updated for EPIC 2E-P1C R3. |
+
+## New files (R3)
+
+- `qa/epic-2e-p1c-r3-user-edit-xmp-export-test.mjs`
+- `P1C_R3_USER_EDIT_EXPORT_FIX.md`
+
+## Not changed for R3
+
+`core/preset-engine/index.js` (`serializeXMP()`, `downloadXMP()`'s own
+internal sanitize call) and `core/curve-engine/index.js`
+(`serializeCurvePoints()`, `defaultCurveSet()`) — the "XMP serializer
+rules" — were read in full during investigation and confirmed to
+already contain the correct fallback logic; the defect was entirely in
+what `legacy-preset-adapter.js` (P1C-owned) fed into them. Also
+unchanged: `core/xmp-validator/index.js`'s `quickSafetyClamp()`
+formulas, Core analysis formulas, Auto-Tune numerical recommendations,
+Candidate schema, P1B Report calculations, Reference Color Match,
+P0.8A Preview, P1A upload lifecycle, the P1C R2 terminal-session
+lifecycle gate (`buildAndCommitCandidate()`'s own terminal-status
+guard), and Production safety locks.

@@ -707,11 +707,34 @@ waitForRoot(() => {
     if (!el) continue;
     el.addEventListener('input', function () {
       if (state._candidateSliderSyncGuard) return;
-      const resolved = resolveSliderEdit(sliderId, this.value);
-      if (!resolved) return;
       const session = singleImageOrchestrator.getActiveSessionSnapshot();
+      const resolved = resolveSliderEdit(sliderId, this.value);
+      // EPIC 2E-P1C R3: bounded development diagnostic -- logs only
+      // IDs/numbers/status strings, never image data.
+      console.debug('[P1C User Edit Input]', {
+        sliderId,
+        rawValue: this.value,
+        resolved,
+        sessionId: session?.sessionId,
+        generationId: session?.generationId,
+        candidateStatusBefore: candidateStore.getActiveCandidate()?.status ?? null,
+      });
+      if (!resolved) return;
       if (!session) return;
-      candidateStore.updateCandidateParameter(session.sessionId, session.generationId, resolved.parameterPath, resolved.clampedValue);
+      const updateResult = candidateStore.updateCandidateParameter(session.sessionId, session.generationId, resolved.parameterPath, resolved.clampedValue);
+      console.debug('[P1C User Edit Commit]', {
+        committed: updateResult?.committed,
+        reason: updateResult?.reason,
+        parameterPath: resolved?.parameterPath,
+        value: resolved?.clampedValue,
+        candidateStatusAfter: updateResult?.candidate?.status ?? null,
+        revision: updateResult?.candidate?.revision ?? null,
+      });
+      // A rejected (transactional) edit leaves the previously-valid
+      // Candidate in place -- re-read the ACTIVE Candidate (not
+      // updateResult.candidate, which is null on rejection) so the
+      // badge always reflects the true current exportable state, and
+      // never shows a phantom status for an edit that never committed.
       const c = candidateStore.getActiveCandidate();
       if (c) { state.lastCandidateStatus = c.status; updateCandidateStatusBadge(c.status); }
     });
@@ -3308,41 +3331,99 @@ function buildAnalysisDisplay(stats, preset) {
 // only the *input* to that unchanged pipeline changed, from a
 // DOM-reconstructed preset to legacyPresetAdapter(validated Candidate).
 // See P1C_LEGACY_PRESET_MIGRATION_MAP.md.
+// EPIC 2E-P1C R3: sanitize only the characters that are actually
+// illegal in a Windows/macOS/Linux filename (< > : " / \ | ? *).
+// Previously downloadXMP() used a strict word-character allowlist
+// (`[^\w\u0E00-\u0E7F\s\-_]`) that silently mangled perfectly legal
+// preset names (parentheses, apostrophes, etc.) into underscores --
+// never a hard failure, but not what "sanitize only illegal
+// characters" asks for. This narrower sanitizer runs before the name
+// reaches downloadXMP(); downloadXMP()'s own sanitize call remains as
+// an unchanged second safety net (a no-op on an already-safe string).
+function sanitizePresetFilename(name) {
+  const raw = (name ?? '').toString().trim();
+  const safe = raw.replace(/[<>:"/\\|?*]/g, '_');
+  return safe || 'AI Preset';
+}
+
 function handleDownload() {
-  const candidate = candidateStore.getValidatedCandidate();
-  if (!candidate) {
-    // No valid Candidate exists (EMPTY/BUILDING/INVALID/STALE/FAILED) --
+  const activeSession = singleImageOrchestrator.getActiveSessionSnapshot();
+  const activeCandidateForLog = candidateStore.getActiveCandidate();
+  // EPIC 2E-P1C R3: bounded development diagnostic -- IDs/status/
+  // revision/parameter-path strings only, never image data.
+  console.debug('[P1C XMP Download Attempt]', {
+    sessionId: activeSession?.sessionId ?? null,
+    generationId: activeSession?.generationId ?? null,
+    candidateId: activeCandidateForLog?.candidateId ?? null,
+    candidateStatus: activeCandidateForLog?.status ?? null,
+    revision: activeCandidateForLog?.revision ?? null,
+    changedParameters: activeCandidateForLog?.diagnostics?.manualEdits?.changedParameters ?? [],
+  });
+
+  const readiness = candidateStore.getCandidateExportReadiness();
+  if (!readiness.ready) {
+    // No valid Candidate exists (EMPTY/BUILDING/INVALID/STALE/FAILED),
+    // or it no longer belongs to the active Session/generation --
     // block export outright. Never fall back to reading stale slider
     // DOM values; that would silently reintroduce the exact
     // DOM-as-hidden-source-of-truth problem P1C removes.
-    singleImageOrchestrator.traceXmpExportBlocked({ reason: 'NO_VALID_CANDIDATE' });
+    singleImageOrchestrator.traceXmpExportBlocked({ reason: readiness.reason });
+    console.error('[P1C XMP Export Blocked]', {
+      reason: readiness.reason,
+      sessionId: activeSession?.sessionId ?? null,
+      generationId: activeSession?.generationId ?? null,
+      validationErrors: readiness.validationErrors,
+    });
     const msgEl = document.getElementById('successMsg');
     if (msgEl) msgEl.textContent = t('appShell.downloadBlockedNoCandidate', null, state.lang);
     return;
   }
 
-  let preset = candidateToLegacyPreset(candidate);
+  const candidate = readiness.candidate;
 
-  // The existing final safety net (unchanged) still runs, exactly as it
-  // did before P1C -- it now clamps the Candidate-derived preset instead
-  // of a DOM-derived one, but the clamp logic itself is untouched.
-  const safety = quickSafetyClamp(preset);
-  preset = safety.preset;
-  if (safety.adjustments.length) {
-    console.debug('[Pre-XMP Validation · Export]', safety.adjustments);
+  // EPIC 2E-P1C R3: the whole export pipeline below is now wrapped in
+  // try/catch. Previously an uncaught exception anywhere in this
+  // pipeline (candidateToLegacyPreset -> quickSafetyClamp ->
+  // serializeXMP -> downloadXMP) aborted silently -- no success
+  // message, no error message, no downloaded file, and no visible
+  // indication anything had gone wrong. This is the direct fix for the
+  // real browser symptom "Clicking Download XMP does not download the
+  // file" -- see P1C_R3_USER_EDIT_EXPORT_FIX.md for the exact
+  // reproduced root cause.
+  try {
+    let preset = candidateToLegacyPreset(candidate);
+
+    // The existing final safety net (unchanged) still runs, exactly as
+    // it did before P1C -- it now clamps the Candidate-derived preset
+    // instead of a DOM-derived one, but the clamp logic itself is
+    // untouched.
+    const safety = quickSafetyClamp(preset);
+    preset = safety.preset;
+    if (safety.adjustments.length) {
+      console.debug('[Pre-XMP Validation · Export]', safety.adjustments);
+      const msgEl = document.getElementById('successMsg');
+      if (msgEl) msgEl.textContent = t('appShell.downloadSafetyAdjustments', { count: safety.adjustments.length }, state.lang);
+    } else {
+      const msgEl = document.getElementById('successMsg');
+      if (msgEl) msgEl.textContent = t('appShell.downloadSuccess', null, state.lang);
+    }
+
+    singleImageOrchestrator.traceXmpExportUsingCandidate({ candidateId: candidate.candidateId, revision: candidate.revision });
+
+    const xmp  = serializeXMP(preset);
+    const name = sanitizePresetFilename(document.getElementById('presetName')?.value);
+    downloadXMP(xmp, name);
+    flashSuccess();
+  } catch (error) {
+    console.error('[P1C XMP Export Failed]', {
+      name: error?.name,
+      message: error?.message,
+      candidateId: candidate?.candidateId,
+      revision: candidate?.revision,
+    });
     const msgEl = document.getElementById('successMsg');
-    if (msgEl) msgEl.textContent = t('appShell.downloadSafetyAdjustments', { count: safety.adjustments.length }, state.lang);
-  } else {
-    const msgEl = document.getElementById('successMsg');
-    if (msgEl) msgEl.textContent = t('appShell.downloadSuccess', null, state.lang);
+    if (msgEl) msgEl.textContent = t('appShell.downloadExportFailed', null, state.lang);
   }
-
-  singleImageOrchestrator.traceXmpExportUsingCandidate({ candidateId: candidate.candidateId, revision: candidate.revision });
-
-  const xmp    = serializeXMP(preset);
-  const name   = document.getElementById('presetName')?.value || 'AI Preset';
-  downloadXMP(xmp, name);
-  flashSuccess();
 }
 
 function handleReanalyze() {

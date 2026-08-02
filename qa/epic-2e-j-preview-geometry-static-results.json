@@ -1,11 +1,11 @@
 {
   "suite": "DEPLOY GEOMETRY R1 — Preview Geometry Static test",
-  "runId": "0fc6b5d0-bcf9-4fb3-94fd-3edcf2652663",
-  "startedAt": "2026-08-02T05:48:16.374Z",
-  "completedAt": "2026-08-02T05:48:16.454Z",
+  "runId": "b3ee954b-dfa1-426c-91e2-3d2513199f17",
+  "startedAt": "2026-08-02T06:42:07.019Z",
+  "completedAt": "2026-08-02T06:42:07.179Z",
   "completed": true,
   "sourceHash": "53c62baa1e93df98e9dcacef7321f4eae73a211080f75fb39ba42f83ac778bb6",
-  "generatedAt": "2026-08-02T05:48:16.454Z",
+  "generatedAt": "2026-08-02T06:42:07.179Z",
   "summary": {
     "total": 36,
     "pass": 36,

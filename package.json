@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.3.1",
-  "description": "LUMIXA AI EPIC 2E-P1C R2 — Candidate Runtime Lifecycle Order fix: Candidate build now runs only after completeAnalysis() reaches COMPLETED/PARTIAL (never during ANALYZING), fixing the real browser \"Auto-Tune Candidate build failed\" defect. Baseline: EPIC 2E-P1C R1 Canonical Lightroom Auto-Tune Candidate.",
+  "version": "2.3.2",
+  "description": "LUMIXA AI EPIC 2E-P1C R3 — User-Edit XMP Export fix: transactional Candidate edits (clone-validate-commit, never corrupting the last valid state), export-readiness diagnostics (getCandidateExportReadiness), and a real root-cause fix in legacy-preset-adapter.js for the \"Download XMP does nothing\" defect. Baseline: EPIC 2E-P1C R2 Candidate Runtime Lifecycle Order fix.",
   "main": "index.js",
   "directories": {
     "doc": "docs"
