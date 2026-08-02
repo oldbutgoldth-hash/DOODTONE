@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.2.0",
-  "description": "LUMIXA AI EPIC 2E-P1B — AI Image Analysis Report: normalized report contract, photographer-friendly interpretation engine, conservative confidence aggregation, Thai/English report UI. Baseline: EPIC 2E-P1A R3 Single Image Analysis Session Foundation.",
+  "version": "2.3.0",
+  "description": "LUMIXA AI EPIC 2E-P1C — Canonical Lightroom Auto-Tune Candidate: single source-of-truth Candidate Store, Candidate<->Slider synchronization, Candidate-owned XMP export source. Baseline: EPIC 2E-P1B AI Image Analysis Report.",
   "main": "index.js",
   "directories": {
     "doc": "docs"

@@ -36,6 +36,9 @@ import { syncEvidenceKeyToLegacyState, clearLegacyMirrors } from './legacy-state
 import { computeCacheKey, readCompatibleEvidence, writeCompletedEvidence } from './single-image-analysis-cache.js';
 import { buildAnalysisReportFromSession } from './report/analysis-report-builder.js';
 import { REPORT_STATUS } from './report/analysis-report-schema.js';
+import { buildCandidateFromSession } from './candidate/candidate-builder.js';
+import { CANDIDATE_STATUS } from './candidate/candidate-schema.js';
+import { validateCandidate } from './candidate/candidate-validator.js';
 
 export const ENGINE_VERSION = 'single-image-orchestrator@1.0.0';
 
@@ -303,7 +306,17 @@ export function commitFromSettled(ticket, moduleId, settledResult, opts = {}, le
   return commitEvidence(ticket, moduleId, normalized, legacyState);
 }
 
-/** Commit the single-image Candidate (buildFinalPreset's output). */
+/**
+ * Commit the RAW single-image Candidate (buildFinalPreset's flat
+ * output, already validated/benchmarked by the existing P1A/P1B
+ * pipeline). EPIC 2E-P1C: this is now `session.candidateRaw`, NOT
+ * `session.candidate` -- `session.candidate` is reserved exclusively
+ * for the canonical, nested P1C Candidate built by
+ * buildAndCommitCandidate() below, from this same raw value. See
+ * P1C_CANDIDATE_SOURCE_LINEAGE_AUDIT.md §6/§13 for why this rename is
+ * safe (nothing outside core/single-image/ read the old flat
+ * `session.candidate` shape back).
+ */
 export function commitCandidate(ticket, candidate) {
   if (!isActiveGeneration(ticket.sessionId, ticket.generationId)) {
     return { committed: false };
@@ -311,11 +324,77 @@ export function commitCandidate(ticket, candidate) {
   let committed = false;
   updateActiveSession(ticket.sessionId, ticket.generationId, (s) => {
     committed = true;
-    s.candidate = candidate;
+    s.candidateRaw = candidate;
     s.runtime.moduleStates.decisionCandidate = MODULE_STATE.COMPLETED;
     _trace(s, 'EVIDENCE_NORMALIZED', { moduleId: 'decisionCandidate' });
   });
   return { committed };
+}
+
+// ---------------------------------------------------------------------
+// Canonical Candidate build (EPIC 2E-P1C)
+// ---------------------------------------------------------------------
+
+/**
+ * Build the canonical, nested Lightroom Auto-Tune Candidate from the
+ * ACTIVE Session's already-committed `candidateRaw` (never re-runs
+ * buildFinalPreset or any Core module) and commit it to
+ * `session.candidate`. Must be called AFTER `commitCandidate()` has
+ * populated `session.candidateRaw` for this generation -- a no-op
+ * (not an error) if the ticket is stale or the Session has not reached
+ * a terminal analysis status yet.
+ *
+ * @param {{sessionId,generationId}} ticket
+ * @param {{legacyState?: object, engineVersion?: string}} [opts]
+ * @returns {{committed: boolean, candidate: object|null, validation: object|null, reason: string|null}}
+ */
+export function buildAndCommitCandidate(ticket, { legacyState = null, engineVersion = null } = {}) {
+  if (!ticket || !isActiveGeneration(ticket.sessionId, ticket.generationId)) {
+    return { committed: false, candidate: null, validation: null, reason: 'STALE_GENERATION' };
+  }
+  const session = getActiveSession();
+  if (session.status !== SESSION_STATUS.COMPLETED && session.status !== SESSION_STATUS.PARTIAL) {
+    return { committed: false, candidate: null, validation: null, reason: 'SESSION_NOT_TERMINAL' };
+  }
+
+  const startedAt = Date.now();
+  _trace(session, 'CANDIDATE_BUILD_STARTED');
+  const { candidate } = buildCandidateFromSession(session, { engineVersion });
+  _trace(session, 'CANDIDATE_NORMALIZED', { candidateId: candidate.candidateId });
+
+  _trace(session, 'CANDIDATE_VALIDATION_STARTED', { candidateId: candidate.candidateId });
+  const fullValidation = validateCandidate(candidate);
+  if (fullValidation.errors.length > 0) {
+    candidate.status = CANDIDATE_STATUS.INVALID;
+    _trace(session, 'CANDIDATE_INVALID', { candidateId: candidate.candidateId, errorCount: fullValidation.errors.length });
+  } else if (fullValidation.warnings.length > 0) {
+    candidate.status = CANDIDATE_STATUS.VALID_WITH_WARNINGS;
+    _trace(session, 'CANDIDATE_VALID_WITH_WARNINGS', { candidateId: candidate.candidateId, warningCount: fullValidation.warnings.length });
+  } else if (candidate.status !== CANDIDATE_STATUS.FAILED && candidate.status !== CANDIDATE_STATUS.EMPTY) {
+    candidate.status = CANDIDATE_STATUS.VALID;
+    _trace(session, 'CANDIDATE_VALID', { candidateId: candidate.candidateId });
+  }
+
+  let committed = false;
+  updateActiveSession(ticket.sessionId, ticket.generationId, (s) => {
+    committed = true;
+    s.candidate = candidate;
+    _trace(s, 'CANDIDATE_COMMITTED', {
+      candidateId: candidate.candidateId, status: candidate.status,
+      revision: candidate.revision, durationMs: Date.now() - startedAt,
+    });
+  });
+
+  if (!committed) {
+    _trace(session, 'CANDIDATE_STALE_REJECTED', { candidateId: candidate.candidateId });
+    return { committed: false, candidate: null, validation: fullValidation, reason: 'STALE_GENERATION_AT_COMMIT' };
+  }
+
+  _trace(session, (candidate.status === CANDIDATE_STATUS.INVALID || candidate.status === CANDIDATE_STATUS.FAILED)
+    ? 'CANDIDATE_BUILD_FAILED' : 'CANDIDATE_BUILD_COMPLETED',
+    { candidateId: candidate.candidateId, durationMs: Date.now() - startedAt });
+
+  return { committed: true, candidate, validation: fullValidation, reason: null };
 }
 
 /**
@@ -351,7 +430,7 @@ export function completeAnalysis(ticket) {
         proxySize: s.cache.proxySize ?? 0,
       });
       s.cache.key = key;
-      writeCompletedEvidence(key, s.evidence, { candidate: s.candidate, status: finalStatus });
+      writeCompletedEvidence(key, s.evidence, { candidate: s.candidate, candidateRaw: s.candidateRaw, status: finalStatus });
     }
   });
   return finalStatus;
@@ -483,6 +562,35 @@ export function resetActiveSession(legacyState = null) {
 
 export function getActiveSessionSnapshot() {
   return getActiveSession();
+}
+
+// ---------------------------------------------------------------------
+// XMP export trace events (EPIC 2E-P1C)
+// ---------------------------------------------------------------------
+
+/**
+ * Trace that an XMP export used the validated Candidate as its source
+ * (never the DOM). Called from ui/app.js's handleDownload() right
+ * before serializeXMP(). A no-op (not an error) if there is no active
+ * Session to attach the trace to.
+ */
+export function traceXmpExportUsingCandidate({ candidateId = null, revision = null } = {}) {
+  const session = getActiveSession();
+  if (!session) return { traced: false };
+  _trace(session, 'XMP_EXPORT_USING_CANDIDATE', { candidateId, revision });
+  return { traced: true };
+}
+
+/**
+ * Trace that an XMP export was blocked because no valid Candidate
+ * existed. Called from ui/app.js's handleDownload() when
+ * candidateStore.getValidatedCandidate() returns null.
+ */
+export function traceXmpExportBlocked({ reason = null } = {}) {
+  const session = getActiveSession();
+  if (!session) return { traced: false };
+  _trace(session, 'XMP_EXPORT_BLOCKED_NO_CANDIDATE', { reason });
+  return { traced: true };
 }
 
 export { SINGLE_IMAGE_FULL, PROFILE_VERSION, getRequiredModuleIds, getTotalModuleCount };

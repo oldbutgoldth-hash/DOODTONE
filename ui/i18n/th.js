@@ -136,6 +136,7 @@ export const th = {
     resetButton: 'รีเซ็ต',
     downloadSuccess: 'ดาวน์โหลดเรียบร้อยแล้ว!',
     downloadSafetyAdjustments: 'ดาวน์โหลดเรียบร้อยแล้ว! ปรับค่าเพื่อความปลอดภัย {{count}} รายการ',
+    downloadBlockedNoCandidate: 'ไม่สามารถดาวน์โหลดได้: ยังไม่มีค่า Auto-Tune ที่ถูกต้อง กรุณารอให้การวิเคราะห์เสร็จสิ้น หรือแก้ไขค่าที่ไม่ถูกต้องด้านบน',
     supportDivider: 'สนับสนุนโครงการ',
     supportTitle: 'สนับสนุนโครงการนี้',
     supportIntro: 'LUMIXA AI วิเคราะห์แสง สี โทน และลักษณะการแต่งภาพจากภาพอ้างอิง แล้วสร้าง Lightroom preset (.XMP) ภายในเครื่อง',
@@ -1179,5 +1180,15 @@ export const th = {
         recommendation: 'การเพิ่มคอนทราสต์อาจช่วยให้ภาพดูมีมิติมากขึ้น',
       },
     },
+  },
+  // EPIC 2E-P1C -- ข้อความสถานะ Auto-Tune Candidate (แบบสั้น)
+  candidateStatus: {
+    building: 'กำลังสร้างค่า Auto-Tune…',
+    ready: 'ค่า Auto-Tune พร้อมใช้งาน',
+    valid: 'ค่า Auto-Tune ถูกต้อง',
+    validWithWarnings: 'ค่า Auto-Tune ถูกต้อง (มีคำเตือน)',
+    invalid: 'ค่า Auto-Tune ไม่ถูกต้อง',
+    userEdited: 'ค่า Auto-Tune — แก้ไขโดยผู้ใช้',
+    failed: 'สร้างค่า Auto-Tune ไม่สำเร็จ',
   },
 };

@@ -181,6 +181,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1a-r3-upload-lifecycle-integration-test.mjs',
   // EPIC 2E-P1B — AI Image Analysis Report (normalized report contract, photographer interpretation, confidence model).
   'qa/epic-2e-p1b-analysis-report-test.mjs',
+  // EPIC 2E-P1C — Canonical Lightroom Auto-Tune Candidate + Candidate Store + Slider Synchronization + Candidate-Owned XMP Source.
+  'qa/epic-2e-p1c-candidate-test.mjs',
 ];
 
 let anyFailed = false;

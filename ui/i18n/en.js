@@ -135,6 +135,7 @@ export const en = {
     resetButton: 'Reset',
     downloadSuccess: 'Download complete!',
     downloadSafetyAdjustments: 'Download complete! {{count}} safety adjustment(s) were applied.',
+    downloadBlockedNoCandidate: 'Download blocked: no valid Auto-Tune Candidate is available yet. Wait for analysis to finish, or fix any invalid values shown above.',
     supportDivider: 'Support the project',
     supportTitle: 'Support this project',
     supportIntro: 'LUMIXA AI analyzes light, colour, tone, and editing characteristics from a reference image and creates a Lightroom preset (.XMP) locally.',
@@ -1191,5 +1192,15 @@ export const en = {
         recommendation: 'Adding contrast may help the image read with more depth.',
       },
     },
+  },
+  // EPIC 2E-P1C -- minimal Auto-Tune Candidate status badge text.
+  candidateStatus: {
+    building: 'Building Auto-Tune Candidate…',
+    ready: 'Auto-Tune Candidate ready',
+    valid: 'Auto-Tune Candidate valid',
+    validWithWarnings: 'Auto-Tune Candidate valid, with warnings',
+    invalid: 'Auto-Tune Candidate invalid',
+    userEdited: 'Auto-Tune Candidate — user edited',
+    failed: 'Auto-Tune Candidate build failed',
   },
 };

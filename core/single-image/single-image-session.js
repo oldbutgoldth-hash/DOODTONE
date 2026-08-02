@@ -138,6 +138,12 @@ export function createSingleImageSession(opts = {}) {
     evidence: _emptyEvidence(),
     report: null,
     candidate: null,
+    // EPIC 2E-P1C: the raw, flat buildFinalPreset() output (already
+    // validated/benchmarked by the existing pipeline). `candidate`
+    // above is now reserved exclusively for the canonical, nested P1C
+    // Candidate built FROM this raw value -- see
+    // core/single-image/candidate/candidate-builder.js.
+    candidateRaw: null,
     validation: {
       evidenceValid: false,
       candidateValid: false,
@@ -193,7 +199,7 @@ export function validateSessionShape(session) {
   }
   const requiredTopKeys = [
     'sessionId', 'generationId', 'workflow', 'status', 'image', 'timing',
-    'progress', 'evidence', 'report', 'candidate', 'validation', 'xmp',
+    'progress', 'evidence', 'report', 'candidate', 'candidateRaw', 'validation', 'xmp',
     'cache', 'runtime', 'errors', 'warnings',
   ];
   for (const key of requiredTopKeys) {
@@ -259,6 +265,7 @@ export function resetSessionData(session) {
   session.evidence = _emptyEvidence();
   session.report = null;
   session.candidate = null;
+  session.candidateRaw = null;
   session.validation = {
     evidenceValid: false,
     candidateValid: false,

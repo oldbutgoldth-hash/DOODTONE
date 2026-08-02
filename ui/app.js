@@ -74,6 +74,13 @@ import * as singleImageOrchestrator from '../core/single-image/single-image-orch
 // session.report (built by the orchestrator from already-committed
 // evidence) -- never re-runs analysis, never reads DOM/slider state.
 import { renderSingleImageReport, clearSingleImageReportDisplay } from './single-image-report-renderer.js';
+// EPIC 2E-P1C — Canonical Lightroom Auto-Tune Candidate: pure mapping/
+// store modules. The Candidate Store (not the DOM) is the source of
+// Lightroom values from here on -- see P1C_CANDIDATE_ARCHITECTURE.md.
+import { renderCandidateToSliders, resolveSliderEdit, getSupportedSliderIds } from '../core/single-image/candidate/candidate-slider-adapter.js';
+import { candidateToLegacyPreset } from '../core/single-image/candidate/legacy-preset-adapter.js';
+import * as candidateStore from '../core/single-image/candidate/candidate-store.js';
+import { CANDIDATE_STATUS } from '../core/single-image/candidate/candidate-schema.js';
 
 // ─── Theme tokens (LUMIXA visual system) ───────────────────────────────────────
 const THEME = {
@@ -112,6 +119,8 @@ const state = {
   lastWB:      null,
   lastSkin:    null,
   lastSingleImageReport: null, // EPIC 2E-P1B: last-built AI Image Analysis Report snapshot (UI mirror of session.report)
+  lastCandidateStatus: null, // EPIC 2E-P1C: last-known Candidate status (UI mirror, for locale re-render of the status badge only)
+  _candidateSliderSyncGuard: false, // EPIC 2E-P1C: true while renderCandidateToSliders() is writing sliders, so the slider 'input' listener below can ignore its own writes (no feedback loop)
   lastBasic:   null,
   lastHSL:     null,
   lastGrading: null,
@@ -681,6 +690,33 @@ waitForRoot(() => {
   if (calCard)  renderCalibrationPanel(calCard, state.lang);
 
   bindSliders(document.body);
+
+  // EPIC 2E-P1C — Candidate-owned slider synchronization (Slider -> Candidate).
+  // Wired exactly once at boot, over exactly the supported slider-ID set
+  // (getSupportedSliderIds()) -- confirmed via source audit that
+  // renderHSLPanel/renderGradingPanel/renderCalibrationPanel above are
+  // themselves called exactly once at boot and never again on language
+  // change, so this listener never needs to be re-attached. Each edit:
+  // updates ONE Candidate parameter (never rebuilds/reruns analysis),
+  // sets status USER_EDITED, bumps revision. Guarded by
+  // state._candidateSliderSyncGuard so a Candidate -> Slider render
+  // (runAnalysis()'s commit block, resetAllToAuto, etc.) can never loop
+  // back into a spurious "user edit."
+  for (const sliderId of getSupportedSliderIds()) {
+    const el = document.getElementById(sliderId);
+    if (!el) continue;
+    el.addEventListener('input', function () {
+      if (state._candidateSliderSyncGuard) return;
+      const resolved = resolveSliderEdit(sliderId, this.value);
+      if (!resolved) return;
+      const session = singleImageOrchestrator.getActiveSessionSnapshot();
+      if (!session) return;
+      candidateStore.updateCandidateParameter(session.sessionId, session.generationId, resolved.parameterPath, resolved.clampedValue);
+      const c = candidateStore.getActiveCandidate();
+      if (c) { state.lastCandidateStatus = c.status; updateCandidateStatusBadge(c.status); }
+    });
+  }
+
   window.switchTab = switchTab;
   setupAnalysisTabs();
   setupAnalysisResizeObserver();
@@ -955,6 +991,11 @@ function rerenderCurrentUiForLocale() {
       renderSingleImageReport(reportInner, state.lastSingleImageReport, state.lang);
     }
   } catch (err) { console.warn('Locale re-render: AI Image Analysis Report failed (other sections unaffected):', err); }
+
+  // EPIC 2E-P1C: Candidate status badge -- text-only re-render from the
+  // last-known status mirror. Never rebuilds the Candidate, never
+  // re-renders sliders, never touches the Candidate Store.
+  try { updateCandidateStatusBadge(state.lastCandidateStatus); } catch (err) { console.warn('Locale re-render: Candidate status badge failed (other sections unaffected):', err); }
 
   // Review Console (+ its own Build Controlled V2 Preview button
   // label/hint) -- already a pure function of state.lastPreviewSandbox
@@ -2267,6 +2308,14 @@ async function runAnalysis(callerTicket = null) {
     state.lastSingleImageReport = null;
   }
 
+  // EPIC 2E-P1C: no stale Candidate status may be visible while a new
+  // analysis is in flight -- clear the badge immediately (the sliders
+  // themselves keep showing their last values until the new Candidate
+  // is committed, matching the Report section's own "keep old UI,
+  // replace only the status" pattern above).
+  updateCandidateStatusBadge(null);
+  state.lastCandidateStatus = null;
+
   try {
     setAnalysisBox('loading', t('analysisBox.analyzingHistogram', null, state.lang));
 
@@ -2547,6 +2596,10 @@ async function runAnalysis(callerTicket = null) {
     if (benchmark.details.extremelyUnsafe) {
       const reclamp = quickSafetyClamp(validatedPreset);
       finalPreset = { ...reclamp.preset, _decision: validatedPreset._decision, _validation: validationReport, _benchmark: benchmark };
+      // EPIC 2E-P1C: preserve the reclamp adjustments on the preset so
+      // candidate-builder.js can attribute them in diagnostics.safetyClamps
+      // (does not change finalPreset's Lightroom values themselves).
+      finalPreset._reclampAdjustments = reclamp.adjustments;
       logBench.decide('reclamp', null, `safetyScore ${benchmark.safetyScore} < threshold — quickSafetyClamp re-applied (${reclamp.adjustments.length} adjustment(s)).`);
       reclamp.adjustments.forEach(a => logBench.decide('reclamp_detail', null, a));
     } else {
@@ -2561,7 +2614,39 @@ async function runAnalysis(callerTicket = null) {
     // failure mode — a stale image A's finalPreset can no longer land
     // on image B's sliders.
     if (!singleImageOrchestrator.commitCandidate(analysisTicket, finalPreset).committed) return;
-    applyPresetToSliders(finalPreset);
+
+    // EPIC 2E-P1C: build the canonical nested Candidate from the Session's
+    // evidence + the just-committed raw preset (session.candidateRaw), and
+    // make it the one source of Lightroom values from here on. The old
+    // applyPresetToSliders(finalPreset) direct-from-preset path is retired
+    // for this call site -- see P1C_CANDIDATE_ARCHITECTURE.md.
+    const candidateResult = singleImageOrchestrator.buildAndCommitCandidate(analysisTicket, {
+      legacyState: state,
+      engineVersion: singleImageOrchestrator.ENGINE_VERSION,
+    });
+    if (candidateResult && candidateResult.committed && candidateResult.candidate) {
+      // Guard flag so the boot-time slider 'input' listener (wired near
+      // bindSliders(document.body) below) can tell "the Candidate Store
+      // just wrote this slider" apart from "the user just edited this
+      // slider" -- setSlider() itself only assigns el.value (no input
+      // event fires from a JS property assignment), so this guard is a
+      // belt-and-braces measure per the spec's explicit
+      // "prevent feedback loops via a synchronization guard" rule.
+      state._candidateSliderSyncGuard = true;
+      renderCandidateToSliders(candidateResult.candidate, { setSlider });
+      state._candidateSliderSyncGuard = false;
+      const nameEl = document.getElementById('presetName');
+      if (nameEl) nameEl.value = candidateResult.candidate.profile?.name ?? finalPreset.name;
+      state.lastCandidateStatus = candidateResult.candidate.status;
+      updateCandidateStatusBadge(candidateResult.candidate.status);
+    } else {
+      // Candidate build failed or this run was superseded -- do not fall
+      // back to the old direct-DOM path (that would reintroduce exactly
+      // the "DOM as hidden source of truth" problem P1C removes). Leave
+      // sliders at their last known state and surface an INVALID badge.
+      state.lastCandidateStatus = CANDIDATE_STATUS.FAILED;
+      updateCandidateStatusBadge(CANDIDATE_STATUS.FAILED);
+    }
 
     const logVal = processingLog.startStage('PreXMPValidation', {
       mood: styleFingerprint.mood, colorCast: styleFingerprint.colorCast,
@@ -3081,9 +3166,57 @@ async function runAnalysis(callerTicket = null) {
       if (reportSec) reportSec.style.display = 'none';
       state.lastSingleImageReport = null;
     }
+    // EPIC 2E-P1C: a failed analysis must never leave a stale Candidate
+    // status badge visible either -- the FAILED status the orchestrator
+    // set on the Session (see buildAndCommitCandidate()/failAnalysis())
+    // is mirrored here for the UI badge only; no Candidate is rebuilt.
+    state.lastCandidateStatus = CANDIDATE_STATUS.FAILED;
+    updateCandidateStatusBadge(CANDIDATE_STATUS.FAILED);
   }
 }
 
+// EPIC 2E-P1C — minimal Candidate status badge. Text/color-only; never
+// rebuilds the Candidate, never touches the Candidate Store, never
+// re-renders sliders. `status` is one of CANDIDATE_STATUS or null/
+// undefined (hides the badge). See P1C_CANDIDATE_ARCHITECTURE.md and
+// index.html's #candidateStatusBadge element.
+const CANDIDATE_BADGE_I18N_KEY = Object.freeze({
+  BUILDING: 'candidateStatus.building',
+  AUTO_GENERATED: 'candidateStatus.ready',
+  VALID: 'candidateStatus.valid',
+  VALID_WITH_WARNINGS: 'candidateStatus.validWithWarnings',
+  INVALID: 'candidateStatus.invalid',
+  USER_EDITED: 'candidateStatus.userEdited',
+  FAILED: 'candidateStatus.failed',
+});
+const CANDIDATE_BADGE_COLOR = Object.freeze({
+  BUILDING: 'var(--text-dim)',
+  AUTO_GENERATED: 'var(--success)',
+  VALID: 'var(--success)',
+  VALID_WITH_WARNINGS: 'var(--warn)',
+  INVALID: 'var(--danger)',
+  USER_EDITED: 'var(--accent)',
+  FAILED: 'var(--danger)',
+});
+function updateCandidateStatusBadge(status) {
+  const el = document.getElementById('candidateStatusBadge');
+  if (!el) return;
+  // EMPTY / STALE / null / undefined -- nothing worth surfacing to the
+  // user (EMPTY = no analysis run yet; STALE never reaches the UI mirror
+  // since a superseded build simply never commits).
+  const key = status ? CANDIDATE_BADGE_I18N_KEY[status] : null;
+  if (!key) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.textContent = t(key, null, state.lang);
+  el.style.color = CANDIDATE_BADGE_COLOR[status] || 'var(--text-dim)';
+  el.style.borderColor = CANDIDATE_BADGE_COLOR[status] || 'var(--border)';
+  el.style.display = 'block';
+}
+
+// EPIC 2E-P1C — DEPRECATED COMPATIBILITY FUNCTION. Superseded by
+// renderCandidateToSliders(candidate, { setSlider }) at this file's one
+// call site (runAnalysis()'s Candidate-commit block). Confirmed via
+// project-wide grep to have zero remaining callers as of P1C; retained
+// only as a documented fallback, not deleted outright.
 function applyPresetToSliders(preset) {
   setSlider('exp', preset.exp); setSlider('con', preset.con);
   setSlider('hi',  preset.hi);  setSlider('sh',  preset.sh);
@@ -3117,9 +3250,31 @@ function buildAnalysisDisplay(stats, preset) {
 }
 
 // ─── Action handlers ──────────────────────────────────────────────────────────
+// EPIC 2E-P1C: XMP export source migrated from readSlidersAsPreset()
+// (DOM reconstruction) to the canonical Candidate Store. The existing
+// serializer/downloader (serializeXMP, downloadXMP) and the existing
+// final safety net (quickSafetyClamp) are unchanged and still run --
+// only the *input* to that unchanged pipeline changed, from a
+// DOM-reconstructed preset to legacyPresetAdapter(validated Candidate).
+// See P1C_LEGACY_PRESET_MIGRATION_MAP.md.
 function handleDownload() {
-  let preset = readSlidersAsPreset();
+  const candidate = candidateStore.getValidatedCandidate();
+  if (!candidate) {
+    // No valid Candidate exists (EMPTY/BUILDING/INVALID/STALE/FAILED) --
+    // block export outright. Never fall back to reading stale slider
+    // DOM values; that would silently reintroduce the exact
+    // DOM-as-hidden-source-of-truth problem P1C removes.
+    singleImageOrchestrator.traceXmpExportBlocked({ reason: 'NO_VALID_CANDIDATE' });
+    const msgEl = document.getElementById('successMsg');
+    if (msgEl) msgEl.textContent = t('appShell.downloadBlockedNoCandidate', null, state.lang);
+    return;
+  }
 
+  let preset = candidateToLegacyPreset(candidate);
+
+  // The existing final safety net (unchanged) still runs, exactly as it
+  // did before P1C -- it now clamps the Candidate-derived preset instead
+  // of a DOM-derived one, but the clamp logic itself is untouched.
   const safety = quickSafetyClamp(preset);
   preset = safety.preset;
   if (safety.adjustments.length) {
@@ -3130,6 +3285,8 @@ function handleDownload() {
     const msgEl = document.getElementById('successMsg');
     if (msgEl) msgEl.textContent = t('appShell.downloadSuccess', null, state.lang);
   }
+
+  singleImageOrchestrator.traceXmpExportUsingCandidate({ candidateId: candidate.candidateId, revision: candidate.revision });
 
   const xmp    = serializeXMP(preset);
   const name   = document.getElementById('presetName')?.value || 'AI Preset';
@@ -3178,6 +3335,20 @@ function handleReset() {
     if (reportInner) clearSingleImageReportDisplay(reportInner, state.lang);
   }
   state.lastSingleImageReport = null;
+
+  // EPIC 2E-P1C: session.candidate was already nulled by
+  // resetSessionData() inside resetActiveSession() above; also clear the
+  // Candidate Store's pub/sub mirror, the status badge, and any manual
+  // edit history so a Reset can never leave a stale Candidate reachable
+  // by XMP export.
+  // clearActiveCandidate(sessionId, generationId) is generation-gated;
+  // session.candidate was already nulled by resetSessionData() inside
+  // resetActiveSession() above, so this call is invoked with no
+  // sessionId purely to notify the pub/sub channel (candidate-store.js
+  // treats a falsy sessionId as "already cleared, just notify").
+  candidateStore.clearActiveCandidate();
+  updateCandidateStatusBadge(null);
+  state.lastCandidateStatus = null;
 
   state.imageLoaded = false; state.lastStats = null; state.lastPalette = null; state.lastWB = null;
   state.lastCurveSet = null;
@@ -3279,6 +3450,15 @@ function handleReset() {
 // ─── Read sliders ─────────────────────────────────────────────────────────────
 const gv = id => parseInt(document.getElementById(id)?.value ?? 0, 10);
 
+// EPIC 2E-P1C — DEPRECATED COMPATIBILITY FUNCTION. The main single-image
+// XMP export path (handleDownload()) no longer calls this -- it now
+// reads from candidateStore.getValidatedCandidate() ->
+// candidateToLegacyPreset() instead, per P1C's "Candidate Store, not the
+// DOM, is the source of Lightroom values" rule. Confirmed via
+// project-wide grep to have zero remaining callers in this codebase as
+// of P1C; retained only as a documented compatibility fallback rather
+// than deleted outright, per the spec's legacy-compatibility guidance.
+// See P1C_LEGACY_PRESET_MIGRATION_MAP.md.
 function readSlidersAsPreset() {
   const HSL_CHANNELS = ['red','orange','yellow','green','aqua','blue','purple','magenta'];
   const hsl = {};

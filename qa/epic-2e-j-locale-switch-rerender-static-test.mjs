@@ -182,6 +182,13 @@ if (rerenderFnSrc) {
     // only -- verified pure by its own dedicated P1B test suite
     // (qa/epic-2e-p1b-analysis-report-test.mjs, cases 21-23).
     'renderSingleImageReport',
+    // EPIC 2E-P1C: the Candidate status badge re-renders text/color
+    // only from the already-known status mirror
+    // (state.lastCandidateStatus) -- never rebuilds the Candidate,
+    // never re-renders sliders, never touches the Candidate Store.
+    // See P1C_CANDIDATE_ARCHITECTURE.md and the dedicated P1C test
+    // suite (qa/epic-2e-p1c-candidate-test.mjs).
+    'updateCandidateStatusBadge',
   ]);
   const unexpectedCalls = [...new Set(calledFunctionNames)].filter((n) => !allowedFunctionNames.has(n) && n !== 'warn');
   record('Every function called inside rerenderCurrentUiForLocale() is one of the known pure re-render/lookup functions (no unexpected new call introduced)', unexpectedCalls.length === 0, { unexpectedCalls });
