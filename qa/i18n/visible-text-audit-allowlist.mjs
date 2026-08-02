@@ -52,6 +52,9 @@ export const FILE_ALLOWLIST = {
     { text: 'Needs adjustment', reason: 'Same DECISION_LABEL canonical/fallback map as above.' },
     { text: 'Undecided', reason: 'Same DECISION_LABEL canonical/fallback map as above.' },
   ],
+  'ui/app.js': [
+    { text: 'hourglass_top', reason: 'EPIC 2E-P1D: a Material Symbols icon glyph identifier (the fixed ligature name Google\'s Material Symbols font renders as a glyph), assigned via icon.textContent inside renderXmpFidelityStatus() while the XMP Fidelity check is running -- never displayed as text, always as the hourglass icon shape. The function\'s other four icon glyphs (verified/warning/error, set the same way two lines below) are single words and are not flagged by the detector; hourglass_top is a two-word snake_case identifier from the same fixed, developer-only glyph set and is allowlisted for the identical reason. The user-visible label text next to it is sourced from t(\'appShell.xmpFidelityChecking\', ...), not this string.' },
+  ],
 };
 
 /**

@@ -1,6 +1,36 @@
 # P1D — Modified Files
 
-## New files
+## R2 — additional changes (fixing 2 full-static-suite regressions)
+
+- `qa/epic-2e-j-locale-switch-rerender-static-test.mjs` — added
+  `'renderXmpFidelityStatus'` to the reviewed pure-function allowlist
+  used by the "every function called inside
+  `rerenderCurrentUiForLocale()` is a known pure re-render" check,
+  with a written justification. No other part of this test was
+  changed; the detector logic itself was not weakened.
+- `qa/i18n/visible-text-audit-allowlist.mjs` — added one entry to
+  `FILE_ALLOWLIST['ui/app.js']` for the string `'hourglass_top'`
+  (a Material Symbols icon glyph identifier set via
+  `icon.textContent` inside `renderXmpFidelityStatus()`), with a
+  written justification. Allowlist grew from 9 to 10 entries (bound:
+  40). The detector's own matching logic in
+  `qa/epic-2e-j-i18n-visible-text-audit-static-test.mjs` was not
+  changed.
+- `package.json` — version `2.4.0` → `2.4.1`, description updated to
+  note the static-suite regression fixes.
+- `qa/baselines/p1d_r2_full_static_suite_results.txt` (new) —
+  per-suite exit-code/timing evidence log from running all 67
+  `qa/run-static-suites.mjs` suites individually in declared order
+  (see `P1D_QA_REPORT.md` for methodology). Evidence artifact only;
+  read by no test or production code.
+- `P1D_QA_REPORT.md`, `P1D_MODIFIED_FILES.md`, `P1D_RELEASE_NOTES.md`
+  — updated (this document is one of them).
+
+No P1D core module (`core/single-image/xmp-fidelity/*`), no
+Candidate/session module, no `ui/app.js` production logic, and no
+other file from the R1 list below was touched in R2.
+
+## New files (R1)
 
 - `core/single-image/xmp-fidelity/xmp-property-map.js`
 - `core/single-image/xmp-fidelity/xmp-readback-schema.js`
@@ -20,7 +50,7 @@
   `P1D_MODIFIED_FILES.md`, `P1D_RELEASE_NOTES.md`, `P1D_QA_REPORT.md`,
   `P1D_KNOWN_LIMITATIONS.md`
 
-## Modified files
+## Modified files (R1)
 
 - `core/single-image/single-image-session.js` — added additive
   `session.xmpFidelity: null` field to `createSingleImageSession()`,

@@ -1,5 +1,92 @@
 # P1D — QA Report
 
+## R2 — Full static suite regressions found in R1 and fixed
+
+R1's QA report reported the *delegated* regression suites (the ones
+`qa/epic-2e-p1d-xmp-fidelity-gate-test.mjs` itself spawns, plus a
+manually-selected list of P1A/P1B/P1C/N1/P0.8A/Production-Lock
+suites) as clean, and that claim was accurate for those specific
+suites. It did **not** constitute running the full aggregate
+`node qa/run-static-suites.mjs` (67 suites, everything in the
+project's history), which R1 never completed — the honest
+"environment timeout" note in R1's report explained why, but the
+report should have stated plainly that the full aggregate had not
+actually been run to a verified exit code, rather than implying
+general cleanliness. Running it for real (see methodology below)
+surfaced exactly 2 genuine regressions, both introduced by P1D:
+
+1. **`qa/epic-2e-j-locale-switch-rerender-static-test.mjs`** (28/29 →
+   now 29/29) — this suite asserts that every function called inside
+   `rerenderCurrentUiForLocale()` is on a reviewed allowlist of pure,
+   side-effect-free re-render functions. P1D's `renderXmpFidelityStatus()`
+   call (added to re-render the Fidelity status line's text on a
+   language switch, without rerunning analysis or reserializing) was
+   never added to that allowlist, so the suite correctly flagged it as
+   an unreviewed new call.
+   **Fix**: verified by direct source inspection that
+   `renderXmpFidelityStatus()` — when called from
+   `rerenderCurrentUiForLocale()` — only calls
+   `document.getElementById`/`document.createElement`/`.appendChild`
+   and the centralized `t()` lookup, reading exclusively from the
+   already-stored `state.lastXmpFidelityUiStatus` /
+   `state.lastXmpFidelityReport` / `state.lastXmpFidelityXml`. It never
+   calls `serializeXMP()`, `runXmpFidelityCheck()`, `downloadXMP()`,
+   `runAnalysis()`, or `buildAndCommitCandidate()`, and performs no
+   network/file I/O. Added `'renderXmpFidelityStatus'` to the
+   allowlist in `qa/epic-2e-j-locale-switch-rerender-static-test.mjs`
+   with a written justification — the only change made to that file.
+2. **`qa/epic-2e-j-i18n-visible-text-audit-static-test.mjs`** (18/20 →
+   now 20/20) — flagged `icon.textContent = 'hourglass_top'` (set
+   inside `renderXmpFidelityStatus()` while a Fidelity check is
+   running) as visible English prose, because the detector requires
+   ≥2 alphabetic words to count as prose and the snake_case
+   `hourglass_top` splits into two. The adjacent icon glyphs in the
+   same function (`verified`, `warning`, `error`) are single words and
+   were never flagged. No existing icon-rendering helper exists in
+   this project to route Material Symbols glyph names through (the
+   other four glyphs use the identical raw
+   `icon.textContent = '...'` pattern) — there was no "convention" to
+   reuse.
+   **Fix**: added a single, individually-justified entry for
+   `hourglass_top` to `FILE_ALLOWLIST['ui/app.js']` in
+   `qa/i18n/visible-text-audit-allowlist.mjs`, explaining it is a
+   Material Symbols icon glyph identifier, not photographer-facing
+   text (the visible label text next to it is sourced from
+   `t('appShell.xmpFidelityChecking', ...)`, not this string). The
+   allowlist total grew from 9 to 10 entries (bound is 40). The
+   detector's matching logic itself was not changed.
+
+### Full static suite verification methodology (R2)
+
+`node qa/run-static-suites.mjs` cannot complete within this tool's
+hard 45-second single-command timeout (confirmed: the timeout cannot
+be raised past 45000ms, and background/`nohup`'d processes do not
+survive past the end of the launching call because each shell call
+runs in its own torn-down PID namespace). Measured wall-clock time for
+all 67 suites run sequentially: **63.9 seconds**.
+
+To verify the aggregate's actual exit code without being able to
+execute the single command in one shot, every one of the 67 suites in
+`STATIC_SUITES` was extracted from `qa/run-static-suites.mjs` in its
+exact declared order and run individually
+(`node <suite-path>`, capturing its real process exit code) across
+several chunked tool calls. `qa/run-static-suites.mjs`'s own exit
+logic (read directly from its source) is exactly: `spawnSync` each
+suite in that same list and order, in-process; if any exits non-zero,
+set `anyFailed = true`; exit `1` if `anyFailed`, else exit `0`. There
+is no additional aggregate-only check beyond that loop. Running each
+suite individually via `node <suite>` is process-identical to what
+`spawnSync(process.execPath, [suite])` does internally.
+
+**Result: all 67/67 suites exited 0.** Raw exit-code/timing log saved
+at `qa/baselines/p1d_r2_full_static_suite_results.txt` (format:
+`<exit_code> <milliseconds> <suite path>`, one line per suite, in
+run order). This makes `node qa/run-static-suites.mjs`'s exit code
+deterministically `0` per its own source logic above — it was not
+possible to also capture the single aggregate command's own process
+exit code directly in this environment, so this is the strongest
+verification obtainable here, not a substitute for it.
+
 ## Static / integration tests
 
 `node qa/epic-2e-p1d-xmp-fidelity-gate-test.mjs` — **71/71 PASS, 0
@@ -43,6 +130,9 @@ UI wiring (3), i18n coverage (1), and 7 mutation tests.
 | `qa/epic-2e-n1-n5-integration-static-test.mjs` (RCM) | 5/5 PASS |
 | `qa/epic-2e-p0-8a-preview-artifact-repair-static-test.mjs` | 22/22 PASS |
 | `qa/epic-2e-j-r2-phase-e-static-test.mjs` (145-file Production Lock) | 92/92 PASS |
+| `qa/epic-2e-j-locale-switch-rerender-static-test.mjs` (R2 fix) | 29/29 PASS |
+| `qa/epic-2e-j-i18n-visible-text-audit-static-test.mjs` (R2 fix) | 20/20 PASS |
+| **All 67 suites in `qa/run-static-suites.mjs`, run individually in declared order (R2)** | **67/67 exit 0** |
 
 Before manifest regeneration, exactly 5 files showed a hash mismatch
 in the Production Lock check — all 5 are files this round legitimately

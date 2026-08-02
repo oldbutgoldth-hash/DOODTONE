@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.4.0",
-  "description": "LUMIXA AI EPIC 2E-P1D \u2014 XMP Serialize and Readback Fidelity Gate",
+  "version": "2.4.1",
+  "description": "LUMIXA AI EPIC 2E-P1D R2 \u2014 XMP Serialize and Readback Fidelity Gate (static-suite regressions fixed)",
   "main": "index.js",
   "directories": {
     "doc": "docs"
