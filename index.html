@@ -740,6 +740,21 @@
                 <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px">close</span> <span data-i18n-key="appShell.resetButton">Reset</span></button>
             </div>
             <div id="successMsg" style="display:none;margin-top:14px;padding:12px 16px;background:var(--accent-soft);color:var(--success);border-radius:2px;font-size:12.5px;font-weight:600;border:1px solid var(--border)"><span data-i18n-key="appShell.downloadSuccess">Download complete!</span></div>
+            <!-- EPIC 2E-P1D — XMP Fidelity status, next to Download .xmp. Not a
+                 redesign: one small status line + a collapsed Advanced
+                 Diagnostics disclosure. Raw XMP never shown as the primary UI. -->
+            <div id="xmpFidelityStatus" style="display:none;margin-top:10px;padding:10px 14px;border-radius:2px;font-size:11.5px;font-weight:600;border:1px solid var(--border);align-items:center;gap:8px;flex-wrap:wrap">
+              <span id="xmpFidelityStatusIcon" style="font-family:'Material Symbols Outlined';font-size:15px"></span>
+              <span id="xmpFidelityStatusText"></span>
+              <details id="xmpFidelityDiagnostics" style="display:none;flex-basis:100%;margin-top:6px">
+                <summary style="cursor:pointer;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.xmpFidelityAdvancedDiagnostics">Advanced Diagnostics</summary>
+                <ul id="xmpFidelityMismatchList" style="margin:8px 0 0;padding-left:18px;font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);line-height:1.6"></ul>
+                <details style="margin-top:6px">
+                  <summary style="cursor:pointer;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.xmpFidelityRawXmp">Raw XMP</summary>
+                  <pre id="xmpFidelityRawXmp" style="margin:6px 0 0;padding:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:2px;font-size:9.5px;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--text-dim)"></pre>
+                </details>
+              </details>
+            </div>
           </div>
 
         </div>

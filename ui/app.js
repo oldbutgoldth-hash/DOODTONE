@@ -81,6 +81,12 @@ import { renderCandidateToSliders, resolveSliderEdit, getSupportedSliderIds } fr
 import { candidateToLegacyPreset } from '../core/single-image/candidate/legacy-preset-adapter.js';
 import * as candidateStore from '../core/single-image/candidate/candidate-store.js';
 import { CANDIDATE_STATUS } from '../core/single-image/candidate/candidate-schema.js';
+// EPIC 2E-P1D — XMP Serialize + Readback Fidelity Gate: only the
+// status-enum import is needed here -- all parsing/comparison/gate
+// logic lives in core/single-image/xmp-fidelity/ and is invoked
+// through singleImageOrchestrator.runXmpFidelityCheck(), never
+// duplicated in the UI layer.
+import { FIDELITY_STATUS } from '../core/single-image/xmp-fidelity/xmp-fidelity-report.js';
 
 // ─── Theme tokens (LUMIXA visual system) ───────────────────────────────────────
 const THEME = {
@@ -996,6 +1002,16 @@ function rerenderCurrentUiForLocale() {
   try { _rerenderPersistentAnnouncementsForLocale(); } catch (err) { console.warn('Locale re-render: live announcements failed:', err); }
   try { const panel = document.getElementById('analysisInner'); if (panel?.__lumixaAnalysisStats) renderAnalysisPanel(panel, panel.__lumixaAnalysisStats, state.lang); } catch (err) { console.warn('Locale re-render: Analysis panel labels failed:', err); }
   try { const success = document.getElementById('successMsg'); if (success && success.style.display !== 'none') success.textContent = t('appShell.downloadSuccess', null, state.lang); } catch (err) { console.warn('Locale re-render: download status failed:', err); }
+  // EPIC 2E-P1D: re-render the XMP Fidelity status line's text in the
+  // new locale if it is currently visible. Pure text re-render from
+  // state.lastXmpFidelity* -- never rebuilds the Candidate, never
+  // reruns analysis, never serializes again.
+  try {
+    const fidWrap = document.getElementById('xmpFidelityStatus');
+    if (fidWrap && fidWrap.style.display !== 'none' && state.lastXmpFidelityUiStatus) {
+      renderXmpFidelityStatus(state.lastXmpFidelityUiStatus, state.lastXmpFidelityReport, state.lastXmpFidelityXml);
+    }
+  } catch (err) { console.warn('Locale re-render: XMP fidelity status failed:', err); }
 
   // R4 Phase C: the persistent "AI Box" analysis-complete summary is
   // innerHTML-injected (not a data-i18n-key element), so it falls
@@ -3346,6 +3362,96 @@ function sanitizePresetFilename(name) {
   return safe || 'AI Preset';
 }
 
+// EPIC 2E-P1D — XMP Fidelity status UI. Small status line next to the
+// Download button (never a redesign): icon + one-line TH/EN message,
+// with an "Advanced Diagnostics" disclosure (collapsed by default,
+// never the primary UI) listing the first few mismatched parameters
+// plus the raw generated XMP for a FAIL/PASS_WITH_WARNINGS result.
+const XMP_FIDELITY_UI_COLORS = {
+  CHECKING:            { border: 'var(--border)' },
+  [FIDELITY_STATUS.PASS]:                { border: 'var(--success)' },
+  [FIDELITY_STATUS.PASS_WITH_WARNINGS]:  { border: 'var(--warn, #b8860b)' },
+  [FIDELITY_STATUS.FAIL]:                { border: 'var(--danger, #c0392b)' },
+  [FIDELITY_STATUS.PARSE_FAILED]:        { border: 'var(--danger, #c0392b)' },
+};
+
+function _hideXmpFidelityStatus() {
+  const el = document.getElementById('xmpFidelityStatus');
+  if (el) el.style.display = 'none';
+  const diag = document.getElementById('xmpFidelityDiagnostics');
+  if (diag) diag.style.display = 'none';
+}
+
+/**
+ * @param {'CHECKING'|'PASS'|'PASS_WITH_WARNINGS'|'FAIL'|'PARSE_FAILED'} uiStatus
+ * @param {object|null} report  the Fidelity Report (null while CHECKING)
+ * @param {string|null} xmpString  the exact string that was validated (for Advanced Diagnostics only)
+ */
+function renderXmpFidelityStatus(uiStatus, report = null, xmpString = null) {
+  const wrap = document.getElementById('xmpFidelityStatus');
+  const icon = document.getElementById('xmpFidelityStatusIcon');
+  const text = document.getElementById('xmpFidelityStatusText');
+  const diag = document.getElementById('xmpFidelityDiagnostics');
+  const list = document.getElementById('xmpFidelityMismatchList');
+  const raw  = document.getElementById('xmpFidelityRawXmp');
+  if (!wrap || !icon || !text) return;
+
+  wrap.style.display = 'flex';
+  wrap.style.borderColor = (XMP_FIDELITY_UI_COLORS[uiStatus] || {}).border || 'var(--border)';
+
+  // EPIC 2E-P1D: remember the last-rendered state so a language switch
+  // can re-render this line's TEXT in the new locale (see
+  // rerenderCurrentUiForLocale() below) WITHOUT rerunning analysis,
+  // rebuilding the Candidate, or serializing again -- purely a text
+  // re-render from already-computed data, exactly like the existing
+  // successMsg / Analysis-panel locale re-render pattern above.
+  state.lastXmpFidelityUiStatus = uiStatus;
+  state.lastXmpFidelityReport = report;
+  state.lastXmpFidelityXml = xmpString;
+
+  const mismatchCount = (report?.mismatches?.length ?? 0) + (report?.missingRequired?.length ?? 0);
+
+  if (uiStatus === 'CHECKING') {
+    icon.textContent = 'hourglass_top';
+    text.textContent = t('appShell.xmpFidelityChecking', null, state.lang);
+    if (diag) diag.style.display = 'none';
+    return;
+  }
+  if (uiStatus === FIDELITY_STATUS.PASS) {
+    icon.textContent = 'verified';
+    text.textContent = t('appShell.xmpFidelityVerified', null, state.lang);
+    if (diag) diag.style.display = 'none';
+  } else if (uiStatus === FIDELITY_STATUS.PASS_WITH_WARNINGS) {
+    icon.textContent = 'warning';
+    text.textContent = t('appShell.xmpFidelityVerifiedWithWarnings', { count: report?.summary?.warnings ?? 0 }, state.lang);
+  } else if (uiStatus === FIDELITY_STATUS.PARSE_FAILED) {
+    icon.textContent = 'error';
+    text.textContent = t('appShell.xmpFidelityParseFailed', null, state.lang);
+  } else {
+    // FAIL
+    icon.textContent = 'error';
+    text.textContent = t('appShell.xmpFidelityMismatch', { count: mismatchCount }, state.lang);
+  }
+
+  // Advanced Diagnostics: only populate/expose it when there is
+  // something beyond a clean PASS to show.
+  if (diag && (uiStatus === FIDELITY_STATUS.FAIL || uiStatus === FIDELITY_STATUS.PARSE_FAILED || uiStatus === FIDELITY_STATUS.PASS_WITH_WARNINGS)) {
+    diag.style.display = 'block';
+    if (list) {
+      list.innerHTML = '';
+      const problems = [...(report?.missingRequired ?? []), ...(report?.mismatches ?? [])].slice(0, 10);
+      for (const p of problems) {
+        const li = document.createElement('li');
+        li.textContent = `${p.xmpProperty ?? p.candidatePath}: ${p.message ?? p.result}`;
+        list.appendChild(li);
+      }
+    }
+    if (raw) raw.textContent = xmpString ?? '';
+  } else if (diag) {
+    diag.style.display = 'none';
+  }
+}
+
 function handleDownload() {
   const activeSession = singleImageOrchestrator.getActiveSessionSnapshot();
   const activeCandidateForLog = candidateStore.getActiveCandidate();
@@ -3376,44 +3482,80 @@ function handleDownload() {
     });
     const msgEl = document.getElementById('successMsg');
     if (msgEl) msgEl.textContent = t('appShell.downloadBlockedNoCandidate', null, state.lang);
+    _hideXmpFidelityStatus();
     return;
   }
 
   const candidate = readiness.candidate;
+  renderXmpFidelityStatus('CHECKING');
 
-  // EPIC 2E-P1C R3: the whole export pipeline below is now wrapped in
-  // try/catch. Previously an uncaught exception anywhere in this
-  // pipeline (candidateToLegacyPreset -> quickSafetyClamp ->
-  // serializeXMP -> downloadXMP) aborted silently -- no success
-  // message, no error message, no downloaded file, and no visible
-  // indication anything had gone wrong. This is the direct fix for the
-  // real browser symptom "Clicking Download XMP does not download the
-  // file" -- see P1C_R3_USER_EDIT_EXPORT_FIX.md for the exact
-  // reproduced root cause.
+  // EPIC 2E-P1C R3: the whole export pipeline below is wrapped in
+  // try/catch (unchanged from R3 -- still the fix for "Clicking
+  // Download XMP does nothing" on an uncaught exception).
+  //
+  // EPIC 2E-P1D — Single Serialization Rule: `serializeXMP()` is
+  // called EXACTLY ONCE per download attempt, right here. The XMP
+  // Fidelity Gate below parses and validates THIS SAME STRING (`xmp`)
+  // -- it never re-serializes -- and `downloadXMP()` at the bottom is
+  // handed this SAME STRING again. There is no second serialize call
+  // anywhere in this function.
   try {
     let preset = candidateToLegacyPreset(candidate);
 
     // The existing final safety net (unchanged) still runs, exactly as
     // it did before P1C -- it now clamps the Candidate-derived preset
     // instead of a DOM-derived one, but the clamp logic itself is
-    // untouched.
+    // untouched. Its OUTPUT (`preset`, post-clamp) is the exact object
+    // handed to serializeXMP() below, and is also the "export expected
+    // value" ground truth the Fidelity Gate compares readback against
+    // -- never the pre-clamp Candidate value (see
+    // P1D_XMP_COMPARISON_RULES.md, "Expected Value Source").
     const safety = quickSafetyClamp(preset);
     preset = safety.preset;
-    if (safety.adjustments.length) {
-      console.debug('[Pre-XMP Validation · Export]', safety.adjustments);
-      const msgEl = document.getElementById('successMsg');
-      if (msgEl) msgEl.textContent = t('appShell.downloadSafetyAdjustments', { count: safety.adjustments.length }, state.lang);
-    } else {
-      const msgEl = document.getElementById('successMsg');
-      if (msgEl) msgEl.textContent = t('appShell.downloadSuccess', null, state.lang);
-    }
 
+    singleImageOrchestrator.traceXmpSerializationStarted({ candidateId: candidate.candidateId, revision: candidate.revision });
+    const xmp = serializeXMP(preset); // <-- the ONE serialize call for this attempt
+    singleImageOrchestrator.traceXmpSerializationCompleted({ candidateId: candidate.candidateId, revision: candidate.revision, xmpLength: xmp.length });
     singleImageOrchestrator.traceXmpExportUsingCandidate({ candidateId: candidate.candidateId, revision: candidate.revision });
 
-    const xmp  = serializeXMP(preset);
-    const name = sanitizePresetFilename(document.getElementById('presetName')?.value);
-    downloadXMP(xmp, name);
-    flashSuccess();
+    const ticket = { sessionId: activeSession?.sessionId, generationId: activeSession?.generationId };
+    const fidelity = singleImageOrchestrator.runXmpFidelityCheck(ticket, { candidate, exportExpectedPreset: preset, xmpString: xmp });
+
+    renderXmpFidelityStatus(fidelity.status, fidelity.report, xmp);
+
+    const allowed = fidelity.status === FIDELITY_STATUS.PASS || fidelity.status === FIDELITY_STATUS.PASS_WITH_WARNINGS;
+
+    if (allowed) {
+      singleImageOrchestrator.traceXmpDownloadAllowed({ candidateId: candidate.candidateId, fidelityReportId: fidelity.report?.fidelityReportId ?? null, status: fidelity.status });
+
+      const msgEl = document.getElementById('successMsg');
+      if (safety.adjustments.length) {
+        console.debug('[Pre-XMP Validation · Export]', safety.adjustments);
+        if (msgEl) msgEl.textContent = t('appShell.downloadSafetyAdjustments', { count: safety.adjustments.length }, state.lang);
+      } else if (msgEl) {
+        msgEl.textContent = t('appShell.downloadSuccess', null, state.lang);
+      }
+
+      // Same string (`xmp`) validated above -- never re-serialized.
+      const name = sanitizePresetFilename(document.getElementById('presetName')?.value);
+      downloadXMP(xmp, name);
+      flashSuccess();
+    } else {
+      // FAIL or PARSE_FAILED -- block download outright. The Candidate
+      // is never mutated by anything above, so it is preserved
+      // automatically; no rollback logic is needed.
+      console.error('[P1D XMP Download Blocked]', {
+        status: fidelity.status,
+        errorCode: fidelity.report?.diagnostics?.errorCode ?? null,
+        mismatchCount: (fidelity.report?.mismatches?.length ?? 0) + (fidelity.report?.missingRequired?.length ?? 0),
+        candidateId: candidate.candidateId, revision: candidate.revision,
+      });
+      singleImageOrchestrator.traceXmpDownloadBlocked({
+        candidateId: candidate.candidateId, fidelityReportId: fidelity.report?.fidelityReportId ?? null,
+        status: fidelity.status, errorCode: fidelity.report?.diagnostics?.errorCode ?? null,
+        errorMessage: fidelity.report?.diagnostics?.errorMessage ?? null,
+      });
+    }
   } catch (error) {
     console.error('[P1C XMP Export Failed]', {
       name: error?.name,
@@ -3421,8 +3563,10 @@ function handleDownload() {
       candidateId: candidate?.candidateId,
       revision: candidate?.revision,
     });
+    singleImageOrchestrator.traceXmpSerializationFailed({ candidateId: candidate?.candidateId ?? null, revision: candidate?.revision ?? null, errorMessage: String(error?.message ?? error) });
     const msgEl = document.getElementById('successMsg');
     if (msgEl) msgEl.textContent = t('appShell.downloadExportFailed', null, state.lang);
+    renderXmpFidelityStatus(FIDELITY_STATUS.PARSE_FAILED, { summary: {}, mismatches: [], missingRequired: [], diagnostics: { errorCode: 'UNKNOWN_FIDELITY_ERROR', errorMessage: String(error?.message ?? error) } }, null);
   }
 }
 
@@ -3481,6 +3625,13 @@ function handleReset() {
   candidateStore.clearActiveCandidate();
   updateCandidateStatusBadge(null);
   state.lastCandidateStatus = null;
+
+  // EPIC 2E-P1D: a Fidelity Report/badge from the PREVIOUS image (or a
+  // pre-edit revision of the same image) must never remain visible --
+  // session.xmpFidelity was already nulled by resetSessionData() inside
+  // resetActiveSession() above; this clears the mirrored UI the same
+  // way the Candidate status badge is cleared just above.
+  _hideXmpFidelityStatus();
 
   state.imageLoaded = false; state.lastStats = null; state.lastPalette = null; state.lastWB = null;
   state.lastCurveSet = null;

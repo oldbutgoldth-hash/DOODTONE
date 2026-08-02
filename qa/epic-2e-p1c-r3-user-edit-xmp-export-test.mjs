@@ -285,7 +285,13 @@ let ctx = buildReadySession();
 
   check('23. Download does not call readSlidersAsPreset()', downloadStart > -1 && !downloadBody.includes('readSlidersAsPreset()'));
   check('24. Download does not rerun analysis (no runAnalysis()/commitEvidence()/buildAndCommitCandidate() call inside handleDownload())', downloadStart > -1 && !downloadBody.includes('runAnalysis(') && !downloadBody.includes('commitEvidence(') && !downloadBody.includes('buildAndCommitCandidate('));
-  check('24b. handleDownload() wraps the export pipeline in try/catch with the required diagnostic', /try\s*\{[\s\S]{0,1500}catch\s*\(error\)\s*\{[\s\S]{0,400}\[P1C XMP Export Failed\]/.test(downloadBody));
+  // EPIC 2E-P1D: handleDownload()'s try body legitimately grew (now
+  // also runs the XMP Fidelity Gate between serialize and download,
+  // per P1D_XMP_FIDELITY_GATE_POLICY.md) -- the single try/catch
+  // wrapping the WHOLE pipeline with the required diagnostic is still
+  // the property under test, so the distance bounds are widened to
+  // match, not the semantic check itself.
+  check('24b. handleDownload() wraps the export pipeline in try/catch with the required diagnostic', /try\s*\{[\s\S]{0,4500}catch\s*\(error\)\s*\{[\s\S]{0,600}\[P1C XMP Export Failed\]/.test(downloadBody));
   check('24c. handleDownload() uses getCandidateExportReadiness() and blocks on !ready', downloadBody.includes('getCandidateExportReadiness()') && /if\s*\(!readiness\.ready\)/.test(downloadBody));
 
   const storeSource = readFileSync(path.join(ROOT, 'core/single-image/candidate/candidate-store.js'), 'utf8');

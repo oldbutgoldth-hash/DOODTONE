@@ -39,6 +39,14 @@ import { REPORT_STATUS } from './report/analysis-report-schema.js';
 import { buildCandidateFromSession } from './candidate/candidate-builder.js';
 import { CANDIDATE_STATUS } from './candidate/candidate-schema.js';
 import { validateCandidate } from './candidate/candidate-validator.js';
+// EPIC 2E-P1D — XMP Serialize + Readback Fidelity Gate. Pure gate
+// module only -- this orchestrator function is the ONLY place that
+// traces events and commits `session.xmpFidelity`, mirroring the
+// exact pure-core/traced-orchestrator split already established by
+// buildAndCommitCandidate() above (candidate-builder.js is pure;
+// this file owns tracing + Session commit).
+import { runXmpFidelityGate } from './xmp-fidelity/xmp-fidelity-gate.js';
+import { FIDELITY_STATUS } from './xmp-fidelity/xmp-fidelity-report.js';
 
 export const ENGINE_VERSION = 'single-image-orchestrator@1.0.0';
 
@@ -562,6 +570,127 @@ export function resetActiveSession(legacyState = null) {
 
 export function getActiveSessionSnapshot() {
   return getActiveSession();
+}
+
+// ---------------------------------------------------------------------
+// XMP Serialize + Readback Fidelity Gate (EPIC 2E-P1D)
+// ---------------------------------------------------------------------
+
+/**
+ * Trace that XMP serialization is about to run for this download
+ * attempt. Called from ui/app.js's handleDownload() immediately
+ * before the ONE serializeXMP() call for this attempt (see the
+ * Single Serialization Rule in P1D_XMP_FIDELITY_GATE_POLICY.md).
+ */
+export function traceXmpSerializationStarted({ candidateId = null, revision = null } = {}) {
+  const session = getActiveSession();
+  if (!session) return { traced: false };
+  _trace(session, 'XMP_SERIALIZATION_STARTED', { candidateId, revision });
+  return { traced: true };
+}
+
+export function traceXmpSerializationCompleted({ candidateId = null, revision = null, xmpLength = 0 } = {}) {
+  const session = getActiveSession();
+  if (!session) return { traced: false };
+  _trace(session, 'XMP_SERIALIZATION_COMPLETED', { candidateId, revision, xmpLength });
+  return { traced: true };
+}
+
+export function traceXmpSerializationFailed({ candidateId = null, revision = null, errorMessage = null } = {}) {
+  const session = getActiveSession();
+  if (!session) return { traced: false };
+  _trace(session, 'XMP_SERIALIZATION_FAILED', { candidateId, revision, errorCode: 'SERIALIZATION_FAILED', errorMessage });
+  return { traced: true };
+}
+
+/**
+ * Run the XMP Fidelity Gate for the ONE XMP string this download
+ * attempt already serialized (never re-serializes -- `xmpString` is
+ * parsed exactly as given), trace every required lifecycle event, and
+ * commit the resulting Fidelity Report to `session.xmpFidelity`
+ * (generation-gated, exactly like `buildAndCommitCandidate()` commits
+ * `session.candidate`). Does NOT rerun analysis, does NOT rebuild the
+ * Candidate, does NOT read DOM/slider state -- `candidate` and
+ * `exportExpectedPreset` are supplied by the caller (ui/app.js's
+ * handleDownload(), which already has them from the existing,
+ * unmodified candidateToLegacyPreset()/quickSafetyClamp() pipeline).
+ *
+ * @param {{sessionId,generationId}} ticket
+ * @param {{candidate:object, exportExpectedPreset:object, xmpString:string}} params
+ * @returns {{committed:boolean, status:string, report:object|null, reason:string|null}}
+ */
+export function runXmpFidelityCheck(ticket, { candidate, exportExpectedPreset, xmpString }) {
+  if (!ticket || !isActiveGeneration(ticket.sessionId, ticket.generationId)) {
+    return { committed: false, status: FIDELITY_STATUS.FAIL, report: null, reason: 'STALE_GENERATION' };
+  }
+  const session = getActiveSession();
+
+  _trace(session, 'XMP_READBACK_STARTED', { candidateId: candidate?.candidateId ?? null, revision: candidate?.revision ?? null });
+  const { status, report } = runXmpFidelityGate({ candidate, exportExpectedPreset, xmpString });
+
+  if (report.readback.parseStatus === 'OK') {
+    _trace(session, 'XMP_READBACK_COMPLETED', { candidateId: candidate?.candidateId ?? null, fidelityReportId: report.fidelityReportId });
+  } else {
+    _trace(session, 'XMP_READBACK_FAILED', {
+      candidateId: candidate?.candidateId ?? null, fidelityReportId: report.fidelityReportId,
+      errorCode: report.diagnostics.errorCode, errorMessage: report.diagnostics.errorMessage,
+    });
+  }
+
+  _trace(session, 'XMP_FIDELITY_COMPARISON_STARTED', { candidateId: candidate?.candidateId ?? null, fidelityReportId: report.fidelityReportId });
+  const mismatchCount = report.mismatches.length + report.missingRequired.length;
+  _trace(session, mismatchCount === 0 ? 'XMP_FIDELITY_MATCH' : 'XMP_FIDELITY_MISMATCH', {
+    candidateId: candidate?.candidateId ?? null, fidelityReportId: report.fidelityReportId, mismatchCount,
+  });
+
+  const statusTraceType = {
+    [FIDELITY_STATUS.PASS]: 'XMP_FIDELITY_PASSED',
+    [FIDELITY_STATUS.PASS_WITH_WARNINGS]: 'XMP_FIDELITY_PASSED_WITH_WARNINGS',
+    [FIDELITY_STATUS.FAIL]: 'XMP_FIDELITY_FAILED',
+    [FIDELITY_STATUS.PARSE_FAILED]: 'XMP_FIDELITY_FAILED',
+  }[status] ?? 'XMP_FIDELITY_FAILED';
+  _trace(session, statusTraceType, {
+    candidateId: candidate?.candidateId ?? null, fidelityReportId: report.fidelityReportId,
+    status, mismatchCount, durationMs: report.diagnostics.durationMs,
+    errorCode: report.diagnostics.errorCode, errorMessage: report.diagnostics.errorMessage,
+  });
+
+  let committed = false;
+  const result = updateActiveSession(ticket.sessionId, ticket.generationId, (s) => {
+    // Belt-and-braces staleness guard, matching updateCandidateParameter()'s
+    // own pattern: if the Candidate this report was computed FOR is no
+    // longer the live one (a newer build/edit/reset raced this call),
+    // do not attach a report for a different Candidate identity/revision.
+    if (candidate && s.candidate && (s.candidate.candidateId !== candidate.candidateId || s.candidate.revision !== candidate.revision)) {
+      _trace(s, 'XMP_FIDELITY_STALE_REJECTED', { candidateId: candidate.candidateId, fidelityReportId: report.fidelityReportId, revision: candidate.revision, currentRevision: s.candidate.revision });
+      return;
+    }
+    s.xmpFidelity = report;
+    committed = true;
+  });
+
+  return {
+    committed: result.applied && committed,
+    status,
+    report,
+    reason: result.applied ? (committed ? null : 'STALE_CANDIDATE_REPLACED') : result.reason,
+  };
+}
+
+/** Trace that a download was allowed (PASS or PASS_WITH_WARNINGS). */
+export function traceXmpDownloadAllowed({ candidateId = null, fidelityReportId = null, status = null } = {}) {
+  const session = getActiveSession();
+  if (!session) return { traced: false };
+  _trace(session, 'XMP_DOWNLOAD_ALLOWED', { candidateId, fidelityReportId, status });
+  return { traced: true };
+}
+
+/** Trace that a download was blocked by the Fidelity Gate (FAIL / PARSE_FAILED). */
+export function traceXmpDownloadBlocked({ candidateId = null, fidelityReportId = null, status = null, errorCode = null, errorMessage = null } = {}) {
+  const session = getActiveSession();
+  if (!session) return { traced: false };
+  _trace(session, 'XMP_DOWNLOAD_BLOCKED', { candidateId, fidelityReportId, status, errorCode, errorMessage });
+  return { traced: true };
 }
 
 // ---------------------------------------------------------------------

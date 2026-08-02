@@ -187,6 +187,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs',
   // EPIC 2E-P1C R3 — User-Edit XMP Export fix (transactional manual edits, export-readiness diagnostics, real edited-value XMP export).
   'qa/epic-2e-p1c-r3-user-edit-xmp-export-test.mjs',
+  // EPIC 2E-P1D -- XMP Serialize + Readback Fidelity Gate
+  'qa/epic-2e-p1d-xmp-fidelity-gate-test.mjs',
 ];
 
 let anyFailed = false;

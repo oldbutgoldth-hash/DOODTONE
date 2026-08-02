@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.3.2",
-  "description": "LUMIXA AI EPIC 2E-P1C R3 — User-Edit XMP Export fix: transactional Candidate edits (clone-validate-commit, never corrupting the last valid state), export-readiness diagnostics (getCandidateExportReadiness), and a real root-cause fix in legacy-preset-adapter.js for the \"Download XMP does nothing\" defect. Baseline: EPIC 2E-P1C R2 Candidate Runtime Lifecycle Order fix.",
+  "version": "2.4.0",
+  "description": "LUMIXA AI EPIC 2E-P1D \u2014 XMP Serialize and Readback Fidelity Gate",
   "main": "index.js",
   "directories": {
     "doc": "docs"

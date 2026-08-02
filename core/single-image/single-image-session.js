@@ -158,6 +158,14 @@ export function createSingleImageSession(opts = {}) {
       filename: null,
       status: 'NOT_GENERATED',
     },
+    // EPIC 2E-P1D — XMP Serialize + Readback Fidelity Gate. Additive
+    // field, separate from the (unused, pre-existing) `xmp` field
+    // above -- see P1D_XMP_SERIALIZATION_AUDIT.md §15. Holds the most
+    // recent Fidelity Report (core/single-image/xmp-fidelity/
+    // xmp-fidelity-report.js shape) computed for THIS session's
+    // Candidate, or null if never checked. Cleared on new upload
+    // (fresh Session object) and on Reset (resetSessionData below).
+    xmpFidelity: null,
     cache: {
       key: null,
       fingerprint: null,
@@ -200,7 +208,7 @@ export function validateSessionShape(session) {
   const requiredTopKeys = [
     'sessionId', 'generationId', 'workflow', 'status', 'image', 'timing',
     'progress', 'evidence', 'report', 'candidate', 'candidateRaw', 'validation', 'xmp',
-    'cache', 'runtime', 'errors', 'warnings',
+    'xmpFidelity', 'cache', 'runtime', 'errors', 'warnings',
   ];
   for (const key of requiredTopKeys) {
     if (!(key in session)) errors.push(`missing top-level key: ${key}`);
@@ -275,6 +283,9 @@ export function resetSessionData(session) {
     warnings: [],
   };
   session.xmp = { content: null, readback: null, filename: null, status: 'NOT_GENERATED' };
+  // EPIC 2E-P1D: a stale Fidelity Report must never survive a Reset
+  // (matches the exact scope of report/candidate clearing above).
+  session.xmpFidelity = null;
   session.progress = { stage: 'RESET', currentModule: null, completedModules: 0, totalModules: 0, percentage: 0 };
   session.runtime.moduleStates = {};
   return session;

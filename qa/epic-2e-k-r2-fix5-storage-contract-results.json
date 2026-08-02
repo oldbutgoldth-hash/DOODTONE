@@ -5,9 +5,9 @@
   "nativeBrowserIndexedDbVerified": false,
   "decision": "PASS",
   "completed": true,
-  "runId": "5eebde0e-a948-4567-9f9b-4b7d52cd523b",
-  "startedAt": "2026-08-02T06:42:09.126Z",
-  "completedAt": "2026-08-02T06:42:10.460Z",
+  "runId": "0027d7fd-8bc2-4a68-8add-e0d48c02baac",
+  "startedAt": "2026-08-02T08:01:47.257Z",
+  "completedAt": "2026-08-02T08:01:48.523Z",
   "sourceHash": "1c6a04d9bb0f0a17d3e1502e25b5150a6842754af802b3928c979beaacb1eab2",
   "passCount": 24,
   "failCount": 0,
@@ -125,8 +125,8 @@
       "evidence": {
         "migratedSession": {
           "sessionId": "cal-session-fix5-v1",
-          "createdAt": "2026-08-02T06:42:10.451Z",
-          "updatedAt": "2026-08-02T06:42:10.451Z",
+          "createdAt": "2026-08-02T08:01:48.514Z",
+          "updatedAt": "2026-08-02T08:01:48.514Z",
           "locale": "th",
           "appVersion": "v1",
           "calibrationSchemaVersion": 2,
