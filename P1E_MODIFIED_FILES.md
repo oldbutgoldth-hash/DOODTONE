@@ -1,9 +1,44 @@
 # P1E — Modified Files
 
 **EPIC 2E-P1E — Color Intelligence & Creative Tone Candidate**
-Version 2.5.0. Baseline: EPIC 2E-P1D R2.
+Version 2.5.1 (R2). Baseline: EPIC 2E-P1E R1 (v2.5.0).
 
-## New files
+## R2 -- Circular Grading Hue fix
+
+- `core/single-image/color-intelligence/color-plan-builder.js` -- added
+  two new pure helpers, `normalizeHue(value)` and
+  `restoreCircularHue(current, target, fraction)` (both exported, for
+  direct unit testing). Changed exactly one call site: Color Grading
+  Hue restoration for `shadows`/`midtones`/`highlights` now uses
+  `restoreCircularHue()` (gated on `evid.sat !== 0`, else the current
+  hue is preserved unchanged) instead of the generic
+  `_restoreTowardEvidence()`. No other line in this file changed --
+  HSL Hue, Calibration Hue, Grading Saturation, Grading Luminance, and
+  every other formula are byte-identical to R1. See
+  `P1E_R2_CIRCULAR_GRADING_HUE_FIX.md` for the full before/after and
+  rationale.
+- `qa/epic-2e-p1e-color-intelligence-test.mjs` -- added one new import
+  (`restoreCircularHue`, `normalizeHue`) and one new test section
+  (checks 71-90, 24 checks total including lettered sub-cases) covering
+  all 18 required circular-hue scenarios. Checks 1-70 (R1) are
+  unmodified.
+- `package.json` -- version `2.5.0` -> `2.5.1`, description updated.
+- `qa/baselines/p1e_r2_full_static_suite_results.txt` (new) --
+  per-suite exit-code evidence log from re-running all 68
+  `qa/run-static-suites.mjs` suites individually after the fix, from a
+  freshly extracted R2 ZIP.
+- `P1E_QA_REPORT.md`, `P1E_MODIFIED_FILES.md`, `P1E_RELEASE_NOTES.md`,
+  `P1E_CREATIVE_TONE_HEURISTICS.md` -- updated (this document is one of
+  them). `P1E_R2_CIRCULAR_GRADING_HUE_FIX.md` -- new.
+
+No other P1E module
+(`core/single-image/color-intelligence/color-intelligence-schema.js`,
+`evidence-color-signals.js`, `color-intelligence-engine.js`), no
+`candidate-builder.js`/`candidate-schema.js` integration point, no
+Candidate/Session/XMP/Fidelity-Gate file, and no file from the R1 list
+below was touched in R2.
+
+## New files (R1)
 
 - `core/single-image/color-intelligence/color-intelligence-schema.js` —
   pure constants: `STRENGTH_MODE`, `STRENGTH_SCALARS`,
@@ -45,7 +80,7 @@ Version 2.5.0. Baseline: EPIC 2E-P1D R2.
   `P1E_CANDIDATE_INTEGRATION_NOTE.md` (this document and its six
   companions).
 
-## Modified files
+## Modified files (R1)
 
 - `core/single-image/candidate/candidate-builder.js` — header doc comment
   updated to honestly describe the function as "a pure reshape PLUS one

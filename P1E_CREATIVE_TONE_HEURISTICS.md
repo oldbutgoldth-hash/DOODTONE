@@ -124,3 +124,44 @@ hard *bound* — so even at `STRONG`, no field can ever exceed the same
 Layer A ceiling `BALANCED` or `NATURAL` would also respect. This keeps a
 future user-facing intensity control (out of scope for this EPIC) purely
 additive: exposing it later would never require touching any bound.
+
+## 10. (R2) Color Grading Hue restoration is circular, not linear -- it is the ONE absolute cyclic angle this module restores
+
+Every other field this module restores -- HSL Hue/Saturation/Luminance,
+Calibration Hue/Saturation, Grading Saturation/Luminance, Presence -- is a
+SIGNED RELATIVE adjustment: a positive or negative amount to shift an
+already-existing value by. Ordinary linear interpolation (`current + gap *
+fraction`) is correct for all of them.
+
+Color Grading Hue is different in kind, not just in bound: Lightroom's
+Color Grading Hue control is an ABSOLUTE angle on a 0-359 degree color
+wheel, where 359 and 0 are adjacent. Treating it as a signed relative
+value and computing a plain linear gap (`target - current`) breaks down
+exactly at the one place a 0-359 wheel actually wraps: a current hue of
+350 restoring toward a target of 10 has a real linear gap of `10 - 350 =
+-340`, even though the true angular distance is only 20 degrees the other
+way around the wheel. At a 0.7 restoration fraction this produced 112 --
+a completely unrelated green/cyan hue -- when the intended, evidence-
+justified result was a small ~4-degree warm nudge.
+
+`restoreCircularHue(current, target, fraction)` fixes this by computing
+the SHORTEST signed angular delta around the wheel
+(`((target - current + 540) % 360) - 180`) before applying the
+restoration fraction, then renormalizing into 0-359. It is used for
+**Grading Hue only** -- explicitly not for HSL Hue or Calibration Hue,
+both of which really are signed relative adjustments and would be
+mis-restored by circular math (a small negative HSL hue adjustment near
+0 does not mean "wrap almost all the way around a color wheel it was
+never placed on" -- it means "shift down slightly"). Getting this
+distinction right -- absolute cyclic angle vs. signed relative
+adjustment -- is the entire heuristic; see
+`P1E_R2_CIRCULAR_GRADING_HUE_FIX.md` for the full worked example and the
+documented tie-break rule for an exact 180-degree separation.
+
+If a zone's evidence carries no saturation intent at all (`evid.sat ===
+0`), the current hue is preserved unchanged rather than circular-restored
+-- a hue direction is only meaningful in the presence of some actual
+saturation to apply it to; restoring a "new" hue for a zone the evidence
+says should have none would be inventing color, which this whole module
+exists to avoid.
+

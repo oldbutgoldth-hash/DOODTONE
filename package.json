@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.5.0",
-  "description": "LUMIXA AI EPIC 2E-P1E \u2014 Color Intelligence & Creative Tone Candidate",
+  "version": "2.5.1",
+  "description": "LUMIXA AI EPIC 2E-P1E R2 \u2014 Circular Grading Hue fix",
   "main": "index.js",
   "directories": {
     "doc": "docs"

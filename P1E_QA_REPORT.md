@@ -1,9 +1,51 @@
 # P1E — QA Report
 
 **EPIC 2E-P1E — Color Intelligence & Creative Tone Candidate**
-Version 2.5.0. Baseline: EPIC 2E-P1D R2.
+Version 2.5.1 (R2). Baseline: EPIC 2E-P1E R1 (v2.5.0).
 
-## Baseline note
+## R2 -- Circular Grading Hue fix
+
+A real mathematical defect was reported and fixed this round: Color
+Grading Hue (`grading.{shadows,midtones,highlights}.hue`) was being
+restored with the same generic linear/signed helper
+(`_restoreTowardEvidence()`) used for every other field, but Grading Hue
+is an absolute, cyclic 0-359 degree angle, not a signed relative
+adjustment. Linear interpolation across the 0/360 boundary (e.g. current
+350 -> target 10) produced a wildly wrong intermediate result (112,
+landing in an unrelated green/cyan hue) instead of the correct short
+circular path (4, a small warm-hue nudge). Full root cause, fix, and
+verification are in the new `P1E_R2_CIRCULAR_GRADING_HUE_FIX.md`. In
+summary:
+
+- Two new pure helpers, `normalizeHue()` and `restoreCircularHue()`,
+  were added to `color-plan-builder.js` and are used only for Color
+  Grading Hue -- never for HSL Hue or Calibration Hue, which remain
+  signed relative adjustments on the original linear path.
+- Color Grading Saturation and Luminance formulas, all P1E bounds, and
+  the default BALANCED strength mode are byte-identical to R1.
+- 24 new checks (tests 71-90) were added to
+  `qa/epic-2e-p1e-color-intelligence-test.mjs`, covering every scenario
+  requested in the fix report (short path both directions, both
+  directions across the exact 359/1 red boundary, two ordinary non-
+  wrapping cases, a wide in-range sweep, fraction 0/1 boundaries,
+  fraction > 1 under STRONG, the exact-180-degree tie-break in both
+  directions, and source-level plus numeric proof that HSL Hue,
+  Calibration Hue, and Grading Saturation/Luminance are all unchanged).
+  94/94 PASS, 0 FAIL (70 R1 checks + 24 new R2 checks, all in the same
+  file, same run).
+- Re-verified after the fix, standalone: `qa/epic-2e-p1c-candidate-
+  test.mjs` 86/86 PASS, `qa/epic-2e-p1d-xmp-fidelity-gate-test.mjs`
+  71/71 PASS.
+- All 68 suites in `qa/run-static-suites.mjs` were individually
+  re-verified to exit 0 from a freshly extracted R2 ZIP (see the
+  methodology section below, and
+  `qa/baselines/p1e_r2_full_static_suite_results.txt`).
+
+No other P1E module, no Candidate/Session/XMP/Fidelity-Gate file, and no
+Production-locked file changed in R2 -- only `color-plan-builder.js`,
+the test file, `package.json`'s version, and this documentation set.
+
+## R1 baseline note (unchanged from the original P1E delivery)
 
 No new project ZIP was attached to this round's request; the working
 directory that produced the delivered `LUMIXA_EPIC_2E_P1D_XMP_READBACK_
@@ -13,7 +55,7 @@ per that rule rather than left implicit.
 
 ## New test suite: `qa/epic-2e-p1e-color-intelligence-test.mjs`
 
-**70/70 PASS, 0 FAIL.** Run against the real production modules
+**94/94 PASS, 0 FAIL (70 R1 checks + 24 new R2 circular-hue checks).** Run against the real production modules
 (`buildCandidateFromSession`, `candidateToLegacyPreset`, `quickSafetyClamp`,
 `serializeXMP`, `runXmpFidelityGate`, the real orchestrator, the real
 Candidate Store). Covers:
@@ -106,8 +148,11 @@ capturing its real process exit code) across several chunked tool calls.
 `spawnSync` each suite in-process, in that same order; exit 1 if any
 failed, else exit 0.
 
-**Result: all 68/68 suites exited 0.** Raw evidence log saved at
-`qa/baselines/p1e_full_static_suite_results.txt`. This makes
+**Result: all 68/68 suites exited 0 (re-confirmed in R2, after the
+circular-hue fix, from a freshly extracted ZIP).** Raw evidence logs
+saved at `qa/baselines/p1e_full_static_suite_results.txt` (R1) and
+`qa/baselines/p1e_r2_full_static_suite_results.txt` (R2, current). This
+makes
 `node qa/run-static-suites.mjs`'s exit code deterministically `0` per its
 own source logic, per the same reasoning documented in P1D R2's report.
 
@@ -158,3 +203,12 @@ running app) is claimed as verified.
   `candidate.grading.balance` and `candidate.cal.shadowTint`) are not
   exported by the current serializer at all; P1E does not write to
   either of them, matching that pre-existing, documented limitation.
+- (Resolved in R2) R1 shipped with the Color Grading Hue
+  circular-interpolation defect described in
+  `P1E_R2_CIRCULAR_GRADING_HUE_FIX.md` -- Grading Hue was restored with
+  the same linear formula as every signed relative field, which is
+  wrong for an absolute cyclic angle and could turn a small warm-hue
+  push into an unrelated hue near the 0/360 boundary. Fixed in R2; no
+  other known defect of this kind was found in HSL Hue or Calibration
+  Hue, both of which are genuinely signed relative adjustments and
+  correctly remain on the linear path.

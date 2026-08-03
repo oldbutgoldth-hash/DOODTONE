@@ -1,9 +1,32 @@
 # P1E — Release Notes
 
 **EPIC 2E-P1E — Color Intelligence & Creative Tone Candidate**
-Version 2.5.0. Baseline: EPIC 2E-P1D R2.
+Version 2.5.1 (R2). Baseline: EPIC 2E-P1E R1 (v2.5.0).
 
-## What's new
+## R2 -- Circular Grading Hue fix
+
+A real mathematical defect in Color Grading Hue restoration was reported
+and fixed: Grading Hue is an absolute, cyclic 0-359 degree angle, but R1
+restored it with the same linear formula used for signed relative
+fields. Near the 0/360 boundary this could turn a small, intentional
+warm-hue adjustment (e.g. 350 -> 10, a 20-degree nudge) into a wildly
+different, unrelated hue (the linear math produced 112 -- a green/cyan
+result -- instead of the correct ~4). A dedicated circular-restoration
+helper now handles Grading Hue only; HSL Hue and Calibration Hue (both
+genuinely signed relative adjustments, not absolute angles) are
+unaffected and remain on the original path. Grading Saturation,
+Luminance, all P1E bounds, and the default BALANCED strength mode are
+unchanged. See `P1E_R2_CIRCULAR_GRADING_HUE_FIX.md` for full detail.
+
+24 new tests (94/94 total in the P1E suite) cover the short path in both
+directions across the boundary, the exact-180-degree tie-break, fraction
+0/1/>1 behavior, and source-level + numeric proof that every other
+formula is untouched. `qa/epic-2e-p1c-candidate-test.mjs` (86/86) and
+`qa/epic-2e-p1d-xmp-fidelity-gate-test.mjs` (71/71) were re-run
+standalone and still fully pass; all 68 static suites were re-verified
+to exit 0 from a freshly extracted ZIP.
+
+## What's new (R1)
 
 Auto-Tune Candidate color recommendations are meaningfully stronger for
 images with real color-grading opportunity, while remaining bounded and

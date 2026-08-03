@@ -39,12 +39,69 @@ import {
 function _clamp(v, mag) { return Math.max(-mag, Math.min(mag, v)); }
 
 /**
+ * EPIC 2E-P1E R2 — Circular Grading Hue fix.
+ *
+ * Normalizes any hue-like number into the canonical 0-359 degree
+ * range. `((value % 360) + 360) % 360` (rather than a plain
+ * `value % 360`) is required because JS's `%` returns a negative
+ * result for a negative left-hand operand (e.g. `-10 % 360 === -10`,
+ * not `350`).
+ */
+export function normalizeHue(value) {
+  const v = Number.isFinite(value) ? value : 0;
+  return ((v % 360) + 360) % 360;
+}
+
+/**
+ * EPIC 2E-P1E R2 — Circular Grading Hue fix.
+ *
+ * Restores a `fraction` of the way from `current` to `target` along
+ * the SHORTEST path around the 0/360 wrap point, for an ABSOLUTE,
+ * cyclic hue value (Lightroom Color Grading Hue only). This is NOT a
+ * drop-in replacement for `_restoreTowardEvidence()` below: it is
+ * used ONLY for `grading.{shadows,midtones,highlights}.hue`, never
+ * for HSL Hue adjustments or Calibration Hue -- both of the latter
+ * are SIGNED RELATIVE adjustments (e.g. "+6 degrees"), not absolute
+ * angles, and the generic linear/signed-conflict logic in
+ * `_restoreTowardEvidence()` remains correct for them. See
+ * P1E_R2_CIRCULAR_GRADING_HUE_FIX.md and
+ * P1E_CREATIVE_TONE_HEURISTICS.md for the full rationale.
+ *
+ * `((targetHue - currentHue + 540) % 360) - 180` yields the shortest
+ * SIGNED delta in the half-open range [-180, 180) (the `+540`, i.e.
+ * `+180 + 360`, rather than `+180`, keeps the operand to `%` always
+ * non-negative in JS, avoiding the same negative-modulo pitfall
+ * `normalizeHue()` guards against). At an exact 180-degree
+ * separation this formula deterministically evaluates to `-180` in
+ * both directions (350->170 and 170->350 both compute a -180 delta
+ * from their own starting point) -- i.e. the documented, deterministic
+ * tie-break rule for an exact 180-degree difference is "always rotate
+ * in the decreasing-degree direction from `current`". A fraction
+ * greater than 1 (relevant to the internal STRONG strength mode, not
+ * exposed in the UI this round) is never clamped to the evidence
+ * target here -- the result is simply renormalized into 0-359, kept
+ * deterministic by the same modulo arithmetic regardless of
+ * magnitude.
+ */
+export function restoreCircularHue(current, target, fraction) {
+  const currentHue = normalizeHue(current);
+  const targetHue = normalizeHue(target);
+  const shortestDelta = ((targetHue - currentHue + 540) % 360) - 180;
+  return normalizeHue(currentHue + shortestDelta * fraction);
+}
+
+/**
  * Restores a bounded fraction of the gap between `current` (the
  * already-dampened Candidate value) and `evidenceTarget` (the Core
  * engine's own reasoned recommendation), never exceeding
  * `evidenceTarget` in magnitude and never flipping sign relative to
  * `evidenceTarget` when the two disagree (a sign conflict signals
  * real uncertainty -- the conservative choice is to change nothing).
+ *
+ * NOT used for Color Grading Hue (see `restoreCircularHue()` above) --
+ * still used for every other field this module restores, including
+ * HSL Hue and Calibration Hue, which are signed relative adjustments,
+ * not absolute cyclic angles.
  */
 function _restoreTowardEvidence(current, evidenceTarget, fraction, hardBound) {
   const cur = Number.isFinite(current) ? current : 0;
@@ -134,13 +191,28 @@ export function buildColorPlan({ candidateColorFields, signals, strengthMode = D
       const satBound = BOUNDS.grading.saturation + (zone !== 'midtones' ? BOUNDS.grading.shadowsHighlightsExtra : 0);
       const lumBound = BOUNDS.grading.luminance;
       const fraction = scalar; // grading has no per-channel skin adjacency; global skin caution still applies lightly via presence step below
-      const newHue = _restoreTowardEvidence(curZone.hue ?? 0, evid.hue, fraction, 359 /* hue is cyclic 0-359, bounded elsewhere by the tiny magnitude of gap */);
+      // EPIC 2E-P1E R2 fix: Color Grading Hue is an ABSOLUTE, cyclic
+      // 0-359 angle (unlike HSL/Calibration Hue, which are signed
+      // relative adjustments) -- it must be restored along the
+      // shortest circular path, never the generic linear gap, or a
+      // small warm-hue adjustment near the 0/360 boundary (e.g.
+      // 350 -> 10) can be misread as a huge swing through an
+      // unrelated green/cyan hue. If the evidence carries no real
+      // saturation intent for this zone (`evid.sat === 0`), there is
+      // no meaningful color direction to rotate toward either --
+      // preserve the current hue unchanged rather than inventing a
+      // rotation for an effectively neutral zone. See
+      // P1E_R2_CIRCULAR_GRADING_HUE_FIX.md.
+      const curHueNorm = normalizeHue(curZone.hue ?? 0);
+      const newHue = (evid.sat ?? 0) === 0
+        ? curHueNorm
+        : restoreCircularHue(curHueNorm, evid.hue, fraction);
       const newSat = _restoreTowardEvidence(curZone.saturation ?? 0, evid.sat, fraction, satBound);
       const newLum = _restoreTowardEvidence(curZone.luminance ?? 0, evid.balance, fraction, lumBound);
       plan.grading[zone] = { hue: newHue, saturation: newSat, luminance: newLum };
-      if (newSat !== curZone.saturation || newLum !== curZone.luminance) {
+      if (newHue !== curHueNorm || newSat !== curZone.saturation || newLum !== curZone.luminance) {
         fieldsBoosted.push(`grading.${zone}`);
-        reasons.push(`grading.${zone}: grading confidence ${gradingConfidence} >= ${MIN_GRADING_CONFIDENCE} -> restored toward "${signals?.grading?.look ?? 'evidence'}" look (sat ${curZone.saturation}->${newSat}, lum ${curZone.luminance}->${newLum}).`);
+        reasons.push(`grading.${zone}: grading confidence ${gradingConfidence} >= ${MIN_GRADING_CONFIDENCE} -> restored toward "${signals?.grading?.look ?? 'evidence'}" look (hue ${curHueNorm}->${newHue} [circular], sat ${curZone.saturation}->${newSat}, lum ${curZone.luminance}->${newLum}).`);
       }
     }
   } else {

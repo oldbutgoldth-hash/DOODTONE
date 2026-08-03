@@ -30,7 +30,7 @@ const {
   skinCautionScale, buildEmptyColorPlan,
 } = await import('../core/single-image/color-intelligence/color-intelligence-schema.js');
 const { deriveColorSignals } = await import('../core/single-image/color-intelligence/evidence-color-signals.js');
-const { buildColorPlan } = await import('../core/single-image/color-intelligence/color-plan-builder.js');
+const { buildColorPlan, restoreCircularHue, normalizeHue } = await import('../core/single-image/color-intelligence/color-plan-builder.js');
 const { applyColorIntelligence } = await import('../core/single-image/color-intelligence/color-intelligence-engine.js');
 
 const { createSingleImageSession, updateSessionStatus, SESSION_STATUS, MODULE_STATE } = await import('../core/single-image/single-image-session.js');
@@ -455,6 +455,141 @@ function runFullPipeline(candidate) {
 
   const esmGate = runSuite('qa/epic-2e-j-esm-syntax-gate-static-test.mjs');
   check('70. ESM syntax gate suite remains passing (new P1E files carry no duplicate-declaration/comment-corruption defects)', esmGate.ok);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 71-88. EPIC 2E-P1E R2 — Circular Grading Hue fix
+// ══════════════════════════════════════════════════════════════════
+{
+  const TOL = 1e-9;
+  const close = (a, b, tol = TOL) => Math.abs(a - b) <= tol;
+
+  // 1. current 350 -> target 10 uses the short path across 360 (verbatim
+  //    from the reported defect: linear math gave 112; correct answer is 4).
+  check('71. Circular hue: 350 -> 10 @ fraction 0.7 takes the short path across the 0/360 boundary (== 4, not 112)', close(restoreCircularHue(350, 10, 0.7), 4));
+
+  // 2. current 10 -> target 350 uses the short REVERSE path.
+  check('72. Circular hue: 10 -> 350 @ fraction 0.7 takes the short reverse path (== 356)', close(restoreCircularHue(10, 350, 0.7), 356));
+
+  // 3. current 359 -> target 1 remains near the red boundary.
+  {
+    const r = restoreCircularHue(359, 1, 0.7);
+    check('73. Circular hue: 359 -> 1 @ fraction 0.7 remains near the red/0-360 boundary (within 1 degree of 0)', r < 1 || r > 359, `got ${r}`);
+  }
+
+  // 4. current 1 -> target 359 remains near the red boundary.
+  {
+    const r = restoreCircularHue(1, 359, 0.7);
+    check('74. Circular hue: 1 -> 359 @ fraction 0.7 remains near the red/0-360 boundary (within 1 degree of 360/0)', r > 359 || r < 1, `got ${r}`);
+  }
+
+  // 5. current 30 -> target 90 interpolates normally (no wrap involved).
+  check('75. Circular hue: 30 -> 90 @ fraction 0.7 interpolates normally, no wrap needed (== 72)', close(restoreCircularHue(30, 90, 0.7), 72));
+
+  // 6. current 90 -> target 30 interpolates normally (reverse, no wrap).
+  check('76. Circular hue: 90 -> 30 @ fraction 0.7 interpolates normally in reverse (== 48)', close(restoreCircularHue(90, 30, 0.7), 48));
+
+  // 7. Output is always >= 0 and < 360, across a wide sweep of inputs.
+  {
+    let allInRange = true;
+    for (let c = -400; c <= 800; c += 37) {
+      for (let t = -400; t <= 800; t += 53) {
+        for (const f of [0, 0.3, 0.7, 1, 1.3, -0.5, 2.5]) {
+          const r = restoreCircularHue(c, t, f);
+          if (!(r >= 0 && r < 360)) { allInRange = false; break; }
+        }
+        if (!allInRange) break;
+      }
+      if (!allInRange) break;
+    }
+    check('77. Circular hue: output is always >= 0 and < 360 across a wide sweep of current/target/fraction inputs', allInRange);
+  }
+
+  // 8. Fraction 0 returns the normalized current hue, unchanged.
+  check('78. Circular hue: fraction 0 returns the normalized current hue unchanged (350 -> 350)', restoreCircularHue(350, 10, 0) === normalizeHue(350));
+  check('78b. Circular hue: fraction 0 normalizes an out-of-range current value (370 -> 10)', restoreCircularHue(370, 10, 0) === normalizeHue(370));
+
+  // 9. Fraction 1 returns the normalized target hue exactly.
+  check('79. Circular hue: fraction 1 returns the normalized target hue exactly (350 -> 10 @ 1 == 10)', close(restoreCircularHue(350, 10, 1), normalizeHue(10)));
+  check('79b. Circular hue: fraction 1 normalizes an out-of-range target value (10 -> 370 @ 1 == 10)', close(restoreCircularHue(10, 370, 1), normalizeHue(370)));
+
+  // 10. Fraction > 1 (relevant to the internal STRONG strength mode)
+  //     remains deterministic and normalized, never throws, never NaN.
+  {
+    const strongScalar = STRENGTH_SCALARS[STRENGTH_MODE.STRONG];
+    check('80. Circular hue: STRENGTH_SCALARS.STRONG is itself > 1 (precondition for this test to be meaningful)', strongScalar > 1);
+    const r1 = restoreCircularHue(350, 10, strongScalar);
+    const r2 = restoreCircularHue(350, 10, strongScalar);
+    check('81. Circular hue: fraction > 1 (STRONG scalar) produces a finite, normalized, deterministic result (same inputs -> same output, in range)', Number.isFinite(r1) && r1 >= 0 && r1 < 360 && r1 === r2);
+  }
+
+  // 11. Exact 180-degree difference follows the documented deterministic
+  //     rule (this module's rule: the formula always resolves the tie to
+  //     a -180 delta measured from `current`, i.e. rotates in the
+  //     decreasing-degree direction from current -- verified concretely
+  //     for both directions of an exact-180 pair).
+  check('82. Circular hue: exact 180-degree separation (10 -> 190 @ 0.5) resolves via the documented decreasing-direction tie-break (== 280)', close(restoreCircularHue(10, 190, 0.5), 280));
+  check('83. Circular hue: exact 180-degree separation, reverse pair (190 -> 10 @ 0.5) resolves the SAME documented tie-break direction relative to ITS OWN current (== 100)', close(restoreCircularHue(190, 10, 0.5), 100));
+  check('84. Circular hue: exact 180-degree separation @ fraction 1 lands exactly on the target regardless of tie-break direction (10 -> 190 == 190)', close(restoreCircularHue(10, 190, 1), 190));
+
+  // 12. HSL Hue adjustments remain on the existing signed linear path
+  //     (never routed through the new circular helper).
+  {
+    const hslSrc = readFileSync(path.join(ROOT, 'core/single-image/color-intelligence/color-plan-builder.js'), 'utf8');
+    const hslLoopStart = hslSrc.indexOf("for (const ch of HSL_CHANNEL_IDS) {");
+    const hslLoopEnd = hslSrc.indexOf('// ── Color Grading', hslLoopStart);
+    const hslLoopBody = hslSrc.slice(hslLoopStart, hslLoopEnd);
+    check('85. Source: HSL Hue restoration still calls the generic signed `_restoreTowardEvidence()` helper, never `restoreCircularHue()`', hslLoopBody.includes('_restoreTowardEvidence(curHue, evid.hueAdj') && !hslLoopBody.includes('restoreCircularHue('));
+  }
+
+  // 13. Calibration Hue remains on the existing signed linear path.
+  {
+    const calSrc = readFileSync(path.join(ROOT, 'core/single-image/color-intelligence/color-plan-builder.js'), 'utf8');
+    const calLoopStart = calSrc.indexOf('// ── Calibration');
+    const calLoopEnd = calSrc.indexOf('// ── Presence', calLoopStart);
+    const calLoopBody = calSrc.slice(calLoopStart, calLoopEnd);
+    check('86. Source: Calibration Hue restoration still calls the generic signed `_restoreTowardEvidence()` helper, never `restoreCircularHue()`', calLoopBody.includes('_restoreTowardEvidence(curHue, evid.hue') && !calLoopBody.includes('restoreCircularHue('));
+  }
+
+  // 14. Color Grading Saturation/Luminance formulas are unchanged by this
+  //     repair -- proven both at the source level (still call
+  //     `_restoreTowardEvidence`, same bound expressions) and numerically
+  //     (a real buildColorPlan() run reproduces the exact pre-fix R1
+  //     saturation/luminance values for the same rich-evidence fixture).
+  {
+    const richSession = baseSession(richColorfulEvidence);
+    const signals = deriveColorSignals(richSession.evidence);
+    const zeroFieldsLocal = { hsl: { hue: {}, saturation: {}, luminance: {} }, grading: { shadows: { hue: 0, saturation: 0, luminance: 0 }, midtones: { hue: 0, saturation: 0, luminance: 0 }, highlights: { hue: 0, saturation: 0, luminance: 0 } }, cal: {}, basic: { vibrance: 0, saturation: 0 } };
+    const plan = buildColorPlan({ candidateColorFields: zeroFieldsLocal, signals, strengthMode: STRENGTH_MODE.BALANCED });
+    // Saturation/luminance are untouched by the R2 fix: they still come
+    // straight from `_restoreTowardEvidence(cur, evid.sat/.balance, scalar, satBound/lumBound)`
+    // with cur=0 and fraction=0.7 (BALANCED), so the result is exactly
+    // 70% of the evidence value (bounded), independent of the hue fix.
+    const expectedShadowSat = Math.min(BOUNDS.grading.saturation + BOUNDS.grading.shadowsHighlightsExtra, 26 * 0.7);
+    const expectedShadowLum = Math.min(BOUNDS.grading.luminance, Math.abs(-20 * 0.7)) * Math.sign(-20);
+    check('87. Grading Saturation is numerically unchanged by the R2 hue fix (shadows.saturation still == min(bound, 26*0.7))', close(plan.grading.shadows.saturation, expectedShadowSat, 1e-6));
+    check('87b. Grading Luminance is numerically unchanged by the R2 hue fix (shadows.luminance still == 20*0.7, negative)', close(plan.grading.shadows.luminance, expectedShadowLum, 1e-6));
+    const planSrc = readFileSync(path.join(ROOT, 'core/single-image/color-intelligence/color-plan-builder.js'), 'utf8');
+    check('87c. Source: grading saturation/luminance still call `_restoreTowardEvidence()` with the same bound expressions as R1', planSrc.includes("_restoreTowardEvidence(curZone.saturation ?? 0, evid.sat, fraction, satBound)") && planSrc.includes("_restoreTowardEvidence(curZone.luminance ?? 0, evid.balance, fraction, lumBound)"));
+  }
+
+  // 15-17. P1E's own 70 R1 checks, plus P1C and P1D, all still pass --
+  //   already proven by this same file's tests 1-70 (self-consistent: if
+  //   this file reaches this point with 0 failures so far, 1-70 passed)
+  //   and by the standalone P1C/P1D re-runs below.
+  check('88. This suite\'s own R1 checks (1-70) all passed before reaching this R2 section (self-consistent proof within a single run)', fail === 0);
+
+  const { spawnSync: spawnSyncR2 } = await import('node:child_process');
+  function runSuiteR2(rel) {
+    const r = spawnSyncR2(process.execPath, [path.join(ROOT, rel)], { encoding: 'utf8' });
+    return { ok: r.status === 0, out: r.stdout || '', err: r.stderr || '' };
+  }
+  const p1cR2Check = runSuiteR2('qa/epic-2e-p1c-candidate-test.mjs');
+  const p1cMatchR2 = /(\d+)\/(\d+) PASS/.exec(p1cR2Check.out);
+  check('89. P1C Candidate test suite (86/86) still fully passes after the R2 circular-hue fix', p1cMatchR2 && Number(p1cMatchR2[1]) === Number(p1cMatchR2[2]) && Number(p1cMatchR2[2]) === 86);
+
+  const p1dCheckR2 = runSuiteR2('qa/epic-2e-p1d-xmp-fidelity-gate-test.mjs');
+  check('90. P1D XMP Readback Fidelity Gate test suite (71/71) still fully passes after the R2 circular-hue fix', /71\/71 PASS/.test(p1dCheckR2.out));
 }
 
 console.log(`\n${pass}/${pass + fail} PASS, ${fail} FAIL`);
