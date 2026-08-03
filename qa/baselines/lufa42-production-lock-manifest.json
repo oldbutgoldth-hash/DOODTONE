@@ -1,6 +1,6 @@
 {
   "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
-  "generatedAt": "2026-08-03T15:31:34.139Z",
+  "generatedAt": "2026-08-03T17:07:26.638Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
@@ -14,7 +14,7 @@
     "ui/visual-preview-comparison-controller-v2.js",
     "ui/visual-preview-comparison-renderer-v2.js"
   ],
-  "lockedFileCount": 164,
+  "lockedFileCount": 173,
   "files": {
     "core/analysis-cache.js": "23577dc396adbe2803ee52c3472b0d55c880d0133433614f8fb7b923bb0fa154",
     "core/basic-panel-engine/index.js": "82467e72711b3d98359e9a50543a8a9f2cc98b7f9a42c9e5e25afbec620aae5b",
@@ -111,7 +111,16 @@
     "core/project-version.js": "050705f40d34375391f8970540ec0caa808507633a9c47a41cceeb323617033e",
     "core/reference-transfer-engine/index.js": "9a73cb7e155b280d14ad6f22529100024e43e172ac25c5f7aff43b38d007c3ef",
     "core/scene-classifier/index.js": "8f27307e3425c270b7379008f6e9329d03a60f8d50dd0d0218209526b707347d",
-    "core/single-image/candidate/candidate-builder.js": "d26f93ca891c854db19fb465cbcd8414625fa24d41134ab06dcd40e5ebce8aa2",
+    "core/single-image/basic-tone-intelligence/basic-tone-guardrails.js": "9eee8fa7fc62e955a6cfd8f251b3651f0c85326bc7c3a218518354bcab7175ad",
+    "core/single-image/basic-tone-intelligence/basic-tone-lineage.js": "8d572c4e6ecfb7c30b9e2fd3083412be26038152d40eaea3030d567ec7b86f9a",
+    "core/single-image/basic-tone-intelligence/basic-tone-plan-builder.js": "5e6254151d02d75d0a437e80f9481de6aa628ce6cdc341ea6c5751b86bc8545d",
+    "core/single-image/basic-tone-intelligence/basic-tone-schema.js": "86a2fb3af2ec95a9abafd0e32af256e9ee6bfc8e118ac93e50b6f3a34cdcd981",
+    "core/single-image/basic-tone-intelligence/black-white-point-planner.js": "1e858f2c0159159cd50738751d5dde16e07379d3f24d52dca05e3fa8a45ae091",
+    "core/single-image/basic-tone-intelligence/dynamic-range-classifier.js": "03014ebb542c8fe2c785887ae61d365e1814c56e21393e875417b1a55ce4b8e1",
+    "core/single-image/basic-tone-intelligence/exposure-recommendation.js": "ca6f3448ad8ad818e2fd8ebcb5f918bf91212852de7f786fd0c50b9639abbc44",
+    "core/single-image/basic-tone-intelligence/highlight-shadow-recovery.js": "c99d48f1cfb14367e26b974293430f4685dc512f4c35cb3c401d142132eb5f81",
+    "core/single-image/basic-tone-intelligence/local-contrast-planner.js": "560d3e7a9580aba996f61f6c9c4b428573982e3c78df2651019e5a5ec1331af9",
+    "core/single-image/candidate/candidate-builder.js": "b7b4ef58b586e37eea7d0c375a8df3f2b529040151908e37db5ba6791b646fb9",
     "core/single-image/candidate/candidate-export-parity.js": "4c5e71029e210c4693d1dc71c13c7d1d7db6722f085e7277a809d3ca2f0f7a90",
     "core/single-image/candidate/candidate-lineage.js": "31b8a49fcefbd0b414ef93b956501ddae6999bb0ba2ead0544b1f1223c2e866b",
     "core/single-image/candidate/candidate-schema.js": "9444f24d84c7594511c29fcf1ef6cdd4f3add79c7ef1d536e892043d1dd444d1",
@@ -162,9 +171,9 @@
     "ui/histogram-renderer.js": "f421cec0e0dbb9783c864e4561f07575bd12bdcffdf642eb3d1990ee50c99c24",
     "ui/hsl-analyzer-renderer.js": "5a76c96319b4a0f942f0f81739b04ee774870892953fee0fe0aa8cd16e8738f9",
     "ui/i18n/domain-presenters.js": "7b617d8277113659f600885478d23a8041f730c3b030a9f0fb59ace7b9e34959",
-    "ui/i18n/en.js": "56d589c58ee9ef01322ebd37f6454fbd414baf42304d9c4ca7438921c4e0b1cd",
+    "ui/i18n/en.js": "6f4f7ed7556186744d87e5299d50ef837b5aefaf24a59c14c9e8413dd3c87756",
     "ui/i18n/index.js": "f659ecfb05f86c844131798ef11901578db013b2cf2d542604825014c80af379",
-    "ui/i18n/th.js": "76eac06bf2f8bb9580e4b27e6d67c87ca57f53bd5f1870b7f819787f029692e6",
+    "ui/i18n/th.js": "5480e59b8033cd4f0ce73ce63f1e06e438fcc6a95f4cfce1d17b866f58738596",
     "ui/image-analysis-renderer.js": "4061c83bd316981bc46bde4fad95a16679e1c2d663ad74d298d0089c528dc790",
     "ui/interactive-preview-observation-session-v2.js": "aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9",
     "ui/palette-renderer.js": "d31aab02d6842cbf53733c14c8ebaa1ac7eda2b28508c9df1854ef458a0069d0",
@@ -179,6 +188,6 @@
     "ui/tone-curve-renderer.js": "3424ad63b6c889a2025e23ea0c7513411e7c4c0bb4dddb1dbc305e1bbd254c6e",
     "ui/ui-engine.js": "147a55ca9acb75b6b5fa05fbede5d246ddc0b37a8ceacd055ff5c1a4d11f6711",
     "ui/whitebalance-renderer.js": "af235b1af3f88d38415bb6d93f34d3a9302f2f94f32e3d39f3570d202abdbe60",
-    "index.html": "df690f7bb09ddf6ca0a5cb5a88d11430873428da3830d974d4f87b22ba5bf858"
+    "index.html": "290f407743871a95a9367271504825381f35f03e551edb654a63a189a464ae6d"
   }
 }

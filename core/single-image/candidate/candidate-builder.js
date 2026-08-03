@@ -43,6 +43,8 @@ import {
 import { buildParameterLineage, assembleLineageMap } from './candidate-lineage.js';
 import { applyColorIntelligence } from '../color-intelligence/color-intelligence-engine.js';
 import { DEFAULT_STRENGTH_MODE } from '../color-intelligence/color-intelligence-schema.js';
+import { buildBasicTonePlan } from '../basic-tone-intelligence/basic-tone-plan-builder.js';
+import { DEFAULT_STRENGTH_MODE as DEFAULT_BASIC_TONE_STRENGTH_MODE } from '../basic-tone-intelligence/basic-tone-schema.js';
 import { SINGLE_IMAGE_FULL, PROFILE_VERSION } from '../single-image-analysis-profile.js';
 import { SESSION_STATUS, MODULE_STATE } from '../single-image-session.js';
 import { confidenceFromRaw } from '../report/confidence-aggregator.js';
@@ -206,21 +208,58 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
   // ── diagnostics: source evidence + per-parameter lineage ─────────
   candidate.diagnostics.sourceEvidence = Object.keys(evidence).filter((k) => _evidenceOk(evidence, k));
 
+  // ── EPIC 2E-P1F — Basic Tone Intelligence & Adaptive Dynamic Range ──
+  // Runs AFTER the pure raw-preset reshape above (so lineage below can
+  // still see what the legacy pipeline originally produced via
+  // `rawPreset.exp` etc. if ever needed) and BEFORE P1E's Color
+  // Intelligence enrichment, per the documented composition order:
+  // Evidence -> baseline Core Candidate -> Basic Tone Plan -> Color
+  // Intelligence Plan -> canonical Candidate validation -> UI -> XMP
+  // (see P1F_P1E_COMPOSITION_POLICY.md). This function is pure: it
+  // reads `evidence.stats` (histogram-engine) and `evidence.skin`
+  // (already computed upstream) and returns a plan; candidate-builder
+  // itself is the only place that writes the plan's finalValues into
+  // `candidate.basic.exposure/contrast/highlights/shadows/whites/
+  // blacks/texture/clarity/dehaze` — the SAME nine fields
+  // P1F_BASIC_VALUE_LINEAGE_AUDIT.md traced as near-zero-by-design in
+  // the P1E R3 baseline. P1F never writes `candidate.basic.vibrance`/
+  // `saturation` (P1E's territory) or any hsl/grading/cal/whiteBalance
+  // field. See P1F_BASIC_TONE_INTELLIGENCE_ARCHITECTURE.md.
+  const basicTonePlan = buildBasicTonePlan(evidence, { strengthMode: DEFAULT_BASIC_TONE_STRENGTH_MODE });
+  candidate.basic.exposure = basicTonePlan.finalValues.exposure;
+  candidate.basic.contrast = basicTonePlan.finalValues.contrast;
+  candidate.basic.highlights = basicTonePlan.finalValues.highlights;
+  candidate.basic.shadows = basicTonePlan.finalValues.shadows;
+  candidate.basic.whites = basicTonePlan.finalValues.whites;
+  candidate.basic.blacks = basicTonePlan.finalValues.blacks;
+  candidate.basic.texture = basicTonePlan.finalValues.texture;
+  candidate.basic.clarity = basicTonePlan.finalValues.clarity;
+  candidate.basic.dehaze = basicTonePlan.finalValues.dehaze;
+  candidate.diagnostics.basicToneIntelligence = {
+    schemaVersion: basicTonePlan.schemaVersion, strengthMode: basicTonePlan.strengthMode,
+    sceneClass: basicTonePlan.sceneClass, confidence: basicTonePlan.confidence,
+    engaged: basicTonePlan.diagnostics.engaged, fieldsAdjusted: basicTonePlan.diagnostics.fieldsAdjusted,
+    reasons: basicTonePlan.diagnostics.reasons, protections: basicTonePlan.protections,
+    lineage: basicTonePlan.lineage,
+  };
+
   // ── EPIC 2E-P1E — Color Intelligence & Creative Tone enrichment ──
   // Runs exactly once per build, AFTER the pure raw-preset reshape
-  // above (candidate.hsl/grading/cal/basic already hold the
-  // legacy-pipeline's own values at this point) and BEFORE the
-  // lineage entries and autoValues snapshot below, so any bounded,
-  // evidence-driven strengthening this step makes becomes part of
-  // the Candidate's own "auto" recommendation — exactly like every
-  // other field already reshaped above. This function is pure: it
+  // above AND after the Basic Tone Plan above (candidate.hsl/grading/
+  // cal/basic already hold their own respective values at this point)
+  // and BEFORE the lineage entries and autoValues snapshot below, so
+  // any bounded, evidence-driven strengthening this step makes becomes
+  // part of the Candidate's own "auto" recommendation — exactly like
+  // every other field already reshaped above. This function is pure: it
   // reads `evidence` (already computed upstream by the existing
   // pipeline) and mutates only `candidate.hsl`, `candidate.grading`
   // (excluding `balance`), `candidate.cal` (excluding `shadowTint`),
   // and `candidate.basic.vibrance`/`saturation`. It never calls
   // buildFinalPreset, validateFinalPreset, quickSafetyClamp, or any
   // Core analysis module, and never touches any other Candidate
-  // field. See P1E_COLOR_INTELLIGENCE_ARCHITECTURE.md.
+  // field -- in particular, it never touches the nine Basic fields
+  // P1F just wrote above (see P1F_P1E_COMPOSITION_POLICY.md's ownership
+  // boundary tests). See P1E_COLOR_INTELLIGENCE_ARCHITECTURE.md.
   const colorIntelligenceResult = applyColorIntelligence(candidate, evidence, {
     strengthMode: DEFAULT_STRENGTH_MODE,
   });

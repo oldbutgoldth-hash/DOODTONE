@@ -761,6 +761,27 @@
                 <tbody id="exportParityTableBody"></tbody>
               </table>
             </details>
+            <!-- EPIC 2E-P1F — Basic Tone Intelligence Advanced Diagnostics. A
+                 small, collapsed disclosure (never the primary UI) showing the
+                 evidence-driven scene classification/confidence for the 9 Basic
+                 Panel fields (Exposure/Contrast/Highlights/Shadows/Whites/
+                 Blacks/Texture/Clarity/Dehaze) and a Candidate-vs-Export-
+                 Expected table for each -- never raw XML. -->
+            <details id="basicToneDiagnostics" style="display:none;margin-top:10px;padding:10px 14px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2)">
+              <summary style="cursor:pointer;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.basicToneAdvancedDiagnostics">Advanced Diagnostics — Basic Tone</summary>
+              <div id="basicToneSummary" style="margin-top:8px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:11px;color:var(--text-dim)"></div>
+              <table style="margin-top:8px;border-collapse:collapse;width:100%">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.basicToneParameter">Parameter</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityCandidateCurrent">Candidate current</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityExportExpected">Export expected</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityMatchStatus">Match status</th>
+                  </tr>
+                </thead>
+                <tbody id="basicToneTableBody"></tbody>
+              </table>
+            </details>
             <!-- EPIC 2E-P1D — XMP Fidelity status, next to Download .xmp. Not a
                  redesign: one small status line + a collapsed Advanced
                  Diagnostics disclosure. Raw XMP never shown as the primary UI. -->

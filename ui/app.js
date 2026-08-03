@@ -3198,6 +3198,13 @@ async function runAnalysis(callerTicket = null) {
         // pure, by buildAndCommitCandidate() -- no re-serialization, no
         // DOM-as-source-of-truth).
         renderExportParityDiagnostics(candidateResult.candidate);
+        // EPIC 2E-P1F: render the Basic Tone Intelligence Advanced
+        // Diagnostics panel from candidate.diagnostics.basicToneIntelligence
+        // (already computed, pure, by buildCandidateFromSession() via
+        // buildBasicTonePlan()) -- scene class / confidence / evidence
+        // summary / per-field Candidate-vs-Export-Expected values, never
+        // raw XML.
+        renderBasicToneDiagnostics(candidateResult.candidate);
       } else {
         // Candidate build failed (or this run was superseded) even
         // though the Session reached a terminal status -- do not fall
@@ -3436,6 +3443,72 @@ function renderExportParityDiagnostics(candidate) {
       for (const c of cells) {
         const td = document.createElement('td');
         td.textContent = c;
+        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
+        tr.appendChild(td);
+      }
+      tableBody.appendChild(tr);
+    }
+  }
+}
+
+// EPIC 2E-P1F basic field ownership, in display order -- matches
+// candidate.basic.{field} / candidatePath 'basic.<field>' in PROPERTY_MAP.
+const BASIC_TONE_FIELDS = ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks', 'texture', 'clarity', 'dehaze'];
+
+/**
+ * EPIC 2E-P1F -- Basic Tone Intelligence Advanced Diagnostics.
+ *
+ * Renders, for the CURRENT Candidate, the Basic Tone Plan's scene
+ * classification, confidence, plain-language evidence summary, and a
+ * per-field table (Basic Candidate value / Export Expected value /
+ * match status) for the 9 Basic Panel fields P1F now computes from
+ * evidence -- reusing the SAME computeExportParity() utility P1E R3's
+ * panel already uses (never a second parity mechanism). Shown only
+ * under the existing Advanced Diagnostics disclosure convention; never
+ * exposes raw XML.
+ */
+function renderBasicToneDiagnostics(candidate) {
+  const section = document.getElementById('basicToneDiagnostics');
+  const summaryEl = document.getElementById('basicToneSummary');
+  const tableBody = document.getElementById('basicToneTableBody');
+  if (!section) return;
+
+  const basicTone = candidate?.diagnostics?.basicToneIntelligence ?? null;
+  if (!basicTone) { section.style.display = 'none'; return; }
+
+  section.style.display = 'block';
+
+  if (summaryEl) {
+    const parts = [
+      t('appShell.basicToneSceneClass', { sceneClass: basicTone.sceneClass }, state.lang),
+      t('appShell.basicToneConfidence', { confidence: (basicTone.confidence ?? 0).toFixed(2) }, state.lang),
+      basicTone.engaged
+        ? t('appShell.basicToneFieldsAdjusted', { count: basicTone.fieldsAdjusted.length, fields: basicTone.fieldsAdjusted.join(', ') }, state.lang)
+        : t('appShell.basicToneNoAdjustment', null, state.lang),
+    ];
+    summaryEl.textContent = parts.join(' · ');
+  }
+
+  if (tableBody) {
+    tableBody.innerHTML = '';
+    let parityEntries = [];
+    try { parityEntries = computeExportParity(candidate).entries; } catch { parityEntries = []; }
+    const byPath = new Map(parityEntries.map((e) => [e.parameterPath, e]));
+
+    for (const field of BASIC_TONE_FIELDS) {
+      const path = `basic.${field}`;
+      const entry = byPath.get(path);
+      const candidateValue = entry ? entry.candidateCurrentValue : candidate?.basic?.[field];
+      const exportExpected = entry ? entry.exportExpectedValue : candidateValue;
+      const matches = entry ? entry.candidateVsExportMatch : true;
+      const tr = document.createElement('tr');
+      const cells = [
+        field, String(candidateValue), String(exportExpected),
+        matches ? t('appShell.exportParityMatchYes', null, state.lang) : t('appShell.exportParityMatchNo', null, state.lang),
+      ];
+      for (const cellText of cells) {
+        const td = document.createElement('td');
+        td.textContent = cellText;
         td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
         tr.appendChild(td);
       }

@@ -145,7 +145,12 @@ function freshTicketWithSession(session) {
   check('12. Candidate is built from active session.evidence + candidateRaw (sessionId matches)', candidate.sessionId === session.sessionId);
   check('13. Candidate generationId matches active Session', candidate.generationId === session.generationId);
   check('14. Candidate status is AUTO_GENERATED for a completed Session with a raw preset', candidate.status === CANDIDATE_STATUS.AUTO_GENERATED);
-  check('15. Candidate numerical values match the raw preset exactly (no retuning) — exposure', candidate.basic.exposure === 25);
+  // EPIC 2E-P1F: basic.exposure (and 8 sibling Basic fields) are no longer a raw
+  // passthrough -- they are now intentionally computed by the Basic Tone Plan from
+  // real evidence (see P1F_BASIC_VALUE_LINEAGE_AUDIT.md's root-cause finding that the
+  // pre-P1F pipeline left these near-zero by design). Non-Basic fields (15b-15e)
+  // remain an exact raw passthrough, unaffected by P1F -- still checked below.
+  check('15. Candidate basic.exposure is a finite, bounded integer sourced from the P1F Basic Tone Plan (no longer a raw-preset passthrough)', Number.isInteger(candidate.basic.exposure) && Math.abs(candidate.basic.exposure) <= 25);
   check('15b. Candidate numerical values match the raw preset exactly — whiteBalance.temperature', candidate.whiteBalance.temperature === 6);
   check('15c. Candidate numerical values match the raw preset exactly — HSL orange hue', candidate.hsl.hue.orange === 3);
   check('15d. Candidate numerical values match the raw preset exactly — grading shadows hue', candidate.grading.shadows.hue === 220);
@@ -218,8 +223,11 @@ function freshTicketWithSession(session) {
   const writes = {};
   const fakeSetSlider = (id, val) => { writes[id] = val; };
   const { renderedCount } = renderCandidateToSliders(candidate, { setSlider: fakeSetSlider });
-  check('32. renderCandidateToSliders() writes every supported Candidate value into its slider', renderedCount > 0 && writes.exp === 25 && writes.temp === 6);
-  check('33. Candidate→Slider mapping rounds only for DISPLAY -- the stored Candidate value is untouched (exact, not rounded)', candidate.basic.exposure === 25 && Number.isInteger(writes.exp));
+  // EPIC 2E-P1F: basic.exposure is now P1F-computed (not the raw fixture's 25) --
+  // compare the slider write against the Candidate's own actual value instead of a
+  // stale literal. whiteBalance.temperature is untouched by P1F, so 6 remains valid.
+  check('32. renderCandidateToSliders() writes every supported Candidate value into its slider', renderedCount > 0 && writes.exp === candidate.basic.exposure && writes.temp === 6);
+  check('33. Candidate→Slider mapping rounds only for DISPLAY -- the stored Candidate value is untouched (exact, not rounded)', Number.isInteger(candidate.basic.exposure) && Number.isInteger(writes.exp) && writes.exp === candidate.basic.exposure);
   check('34. Missing DOM control does not delete the Candidate value (renderCandidateToSliders never mutates the Candidate)', candidate.hsl.hue.orange === 3);
   const supportedIds = getSupportedSliderIds();
   check('35. getSupportedSliderIds() covers exp/temp/tint and every HSL/Grading/Calibration slider ID actually used by ui/ui-engine.js panels', supportedIds.includes('exp') && supportedIds.includes('hsl_h_red') && supportedIds.includes('grd_sh_h') && supportedIds.includes('cal_red_h'));
@@ -238,8 +246,13 @@ function freshTicketWithSession(session) {
   const resolved = resolveSliderEdit('exp', '140');
   check('36. resolveSliderEdit() maps a raw slider input event to exactly one Candidate parameter path', resolved.parameterPath === 'basic.exposure' && resolved.clampedValue === 140);
 
+  // EPIC 2E-P1F: basic.contrast is now P1F-computed, not the raw fixture's 10 --
+  // capture the actual value BEFORE the edit and assert it is unchanged AFTER,
+  // which is the real invariant this test exists to prove (editing exposure must
+  // never also change contrast), independent of what P1F computed contrast to be.
+  const contrastBeforeEdit = built.basic.contrast;
   const edit1 = candidateStore.updateCandidateParameter(ticket.sessionId, ticket.generationId, resolved.parameterPath, resolved.clampedValue);
-  check('37. updateCandidateParameter() updates ONLY the edited parameter', edit1.committed && edit1.candidate.basic.exposure === 140 && edit1.candidate.basic.contrast === 10);
+  check('37. updateCandidateParameter() updates ONLY the edited parameter', edit1.committed && edit1.candidate.basic.exposure === 140 && edit1.candidate.basic.contrast === contrastBeforeEdit);
   check('38. Editing a slider sets Candidate status to USER_EDITED', edit1.candidate.status === CANDIDATE_STATUS.USER_EDITED);
   check('39. Editing a slider increments the Candidate revision (no full rebuild)', edit1.candidate.revision === revisionBefore + 1);
   check('40. Editing a slider records the change in diagnostics.manualEdits.changedParameters', edit1.candidate.diagnostics.manualEdits.changedParameters.includes('basic.exposure'));
@@ -267,10 +280,12 @@ function freshTicketWithSession(session) {
   const resetOne = candidateStore.resetParameterToAuto(ticket.sessionId, ticket.generationId, 'basic.exposure');
   check('44. resetParameterToAuto() restores exactly the recorded Auto value and clears USER_EDITED (no other changed params)', resetOne.committed && resetOne.candidate.basic.exposure === autoExposure && resetOne.candidate.status === CANDIDATE_STATUS.AUTO_GENERATED);
 
+  const autoContrast = getActiveSession().candidate.diagnostics.autoValues.basic.contrast;
+  const autoTemperature = getActiveSession().candidate.diagnostics.autoValues.whiteBalance.temperature;
   candidateStore.updateCandidateParameter(ticket.sessionId, ticket.generationId, 'basic.contrast', 77);
   candidateStore.updateCandidateParameter(ticket.sessionId, ticket.generationId, 'whiteBalance.temperature', 33);
   const resetAll = candidateStore.resetAllToAuto(ticket.sessionId, ticket.generationId);
-  check('45. resetAllToAuto() restores every parameter to its recorded Auto snapshot', resetAll.committed && resetAll.candidate.basic.contrast === 10 && resetAll.candidate.whiteBalance.temperature === 6 && resetAll.candidate.status === CANDIDATE_STATUS.AUTO_GENERATED);
+  check('45. resetAllToAuto() restores every parameter to its recorded Auto snapshot', resetAll.committed && resetAll.candidate.basic.contrast === autoContrast && resetAll.candidate.whiteBalance.temperature === autoTemperature && resetAll.candidate.status === CANDIDATE_STATUS.AUTO_GENERATED);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -305,16 +320,28 @@ function freshTicketWithSession(session) {
   const { candidate } = orch.buildAndCommitCandidate(ticket, {});
   const legacyPreset = candidateToLegacyPreset(candidate);
 
-  check('49. Legacy Preset Adapter round-trips exact numerical equality vs. the original raw preset (exp/temp/tint)', legacyPreset.exp === session.candidateRaw.exp && legacyPreset.temp === session.candidateRaw.temp && legacyPreset.tint === session.candidateRaw.tint);
+  // EPIC 2E-P1F: exp is now intentionally P1F-derived, not a raw-preset passthrough --
+  // the real invariant this test protects is that the Legacy Preset Adapter faithfully
+  // carries whatever the Candidate holds (whichever layer produced it), so compare
+  // against candidate.basic.exposure instead. temp/tint are untouched by P1F/P1E and
+  // remain an exact raw-preset passthrough as before.
+  check('49. Legacy Preset Adapter round-trips exact numerical equality vs. the Candidate (exp) and the original raw preset (temp/tint, untouched fields)', legacyPreset.exp === candidate.basic.exposure && legacyPreset.temp === session.candidateRaw.temp && legacyPreset.tint === session.candidateRaw.tint);
   check('50. Legacy Preset Adapter preserves HSL channel names exactly (hsl_h_orange etc.)', legacyPreset.hsl.hsl_h_orange === session.candidateRaw.hsl.hsl_h_orange);
   check('51. Legacy Preset Adapter preserves Calibration names exactly (cal_red_s etc.)', legacyPreset.cal.cal_red_s === session.candidateRaw.cal.cal_red_s);
   check('52. Legacy Preset Adapter preserves Grading zone field names exactly (grd_sh_h etc.)', legacyPreset.grade.grd_sh_h === session.candidateRaw.grade.grd_sh_h);
 
+  // EPIC 2E-P1F: exp/con/hi/sh/wh/bl/texture/clarity/dehaze are now intentionally
+  // recomputed by the Basic Tone Plan -- excluded from this equivalence check by
+  // design (see P1F_BASIC_VALUE_LINEAGE_AUDIT.md / P1F_P1E_COMPOSITION_POLICY.md).
+  // Every OTHER numeric field (temp, tint, vib, sat, sharp, noise, curve points,
+  // hsl/grade/cal) must still be byte-for-byte identical -- this is the real
+  // invariant this test protects: P1F must never leak into fields it doesn't own.
+  const P1F_OWNED_BASIC_KEYS = new Set(['exp', 'con', 'hi', 'sh', 'wh', 'bl', 'texture', 'clarity', 'dehaze']);
   const safetyBefore = quickSafetyClamp(session.candidateRaw);
   const safetyAfter = quickSafetyClamp(legacyPreset);
-  const sameKeys = Object.keys(safetyBefore.preset).filter((k) => typeof safetyBefore.preset[k] === 'number');
+  const sameKeys = Object.keys(safetyBefore.preset).filter((k) => typeof safetyBefore.preset[k] === 'number' && !P1F_OWNED_BASIC_KEYS.has(k));
   const allEqual = sameKeys.every((k) => safetyBefore.preset[k] === safetyAfter.preset[k]);
-  check('53. Pre/post equivalence: quickSafetyClamp() on the original raw preset vs. on the Legacy-Preset-Adapter output yields IDENTICAL numeric Lightroom values (exact integer equality)', allEqual, `mismatch=${JSON.stringify(sameKeys.filter((k) => safetyBefore.preset[k] !== safetyAfter.preset[k]))}`);
+  check('53. Pre/post equivalence: quickSafetyClamp() on the original raw preset vs. on the Legacy-Preset-Adapter output yields IDENTICAL numeric Lightroom values for every field P1F does not own (exact integer equality)', allEqual, `mismatch=${JSON.stringify(sameKeys.filter((k) => safetyBefore.preset[k] !== safetyAfter.preset[k]))}`);
 
   const validated = candidateStore.getValidatedCandidate();
   check('54. getValidatedCandidate() returns the Candidate when status is VALID/VALID_WITH_WARNINGS/USER_EDITED', validated !== null && (validated.status === CANDIDATE_STATUS.VALID || validated.status === CANDIDATE_STATUS.VALID_WITH_WARNINGS || validated.status === CANDIDATE_STATUS.USER_EDITED || validated.status === CANDIDATE_STATUS.AUTO_GENERATED === false));

@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J ENV-B1B PART 11 — In-Memory App Harness static/functional self-test",
-  "generatedAt": "2026-08-03T15:25:15.389Z",
+  "generatedAt": "2026-08-03T17:03:34.423Z",
   "summary": {
     "total": 65,
     "pass": 65,
@@ -65,12 +65,12 @@
     {
       "test": "The real project builds successfully into an in-memory app (no exception)",
       "result": "PASS",
-      "evidence": "moduleCount=163"
+      "evidence": "moduleCount=172"
     },
     {
       "test": "10. the Import Map <script type=\"importmap\"> appears before the first <script type=\"module\"> tag",
       "result": "PASS",
-      "evidence": "importMapIdx=10194, firstModuleScriptIdx=4334312"
+      "evidence": "importMapIdx=10194, firstModuleScriptIdx=4400652"
     },
     {
       "test": "11. no <script type=\"module\" src=\"...​\"> tag remains in the document (the ui/app.js entry was converted to an inline canonical import)",
@@ -85,7 +85,7 @@
     {
       "test": "The Import Map is valid, parseable JSON with an \"imports\" object",
       "result": "PASS",
-      "evidence": "163 entries"
+      "evidence": "172 entries"
     },
     {
       "test": "Every Import Map value is a data:text/javascript;base64,... URL (never a network URL)",
@@ -115,7 +115,7 @@
     {
       "test": "12/19/20. Building the in-memory app twice never modifies index.html, ui/app.js, or any Core/Mapping/XMP file on disk (Production, Mapping, and XMP remain byte-identical)",
       "result": "PASS",
-      "evidence": "{\"before\":{\"index.html\":\"df690f7bb09ddf6ca0a5cb5a88d11430873428da3830d974d4f87b22ba5bf858\",\"ui/app.js\":\"18f38ed653f7893c0042f330818ab350949f3aa9219046cc37d7a0b0c73b744a\",\"core/histogram-engine/index.js\":\"b2872fe3eb35de5d138b1eec3b85d305540d43c856a190513aa3cac7e6ef6615\",\"core/lightroom-mapping-engine/index.js\":\"f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099\",\"core/xmp-validator/index.js\":\"ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f\"},\"after\":{\"index.html\":\"df690f7bb09ddf6ca0a5cb5a88d11430873428da3830d974d4f87b22ba5bf858\",\"ui/app.js\":\"18f38ed653f7893c0042f330818ab350949f3aa9219046cc37d7a0b0c73b744a\",\"core/histogram-engine/index.js\":\"b2872fe3eb35de5d138b1eec3b85d305540d43c856a190513aa3cac7e6ef6615\",\"core/lightroom-mapping-engine/index.js\":\"f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099\",\"core/xmp-validator/index.js\":\"ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f\"}}"
+      "evidence": "{\"before\":{\"index.html\":\"290f407743871a95a9367271504825381f35f03e551edb654a63a189a464ae6d\",\"ui/app.js\":\"c9795818364d6d9d6f1e11172aa7bf2a2a93a9eda2d21bc13bba88ce1e80b7fe\",\"core/histogram-engine/index.js\":\"b2872fe3eb35de5d138b1eec3b85d305540d43c856a190513aa3cac7e6ef6615\",\"core/lightroom-mapping-engine/index.js\":\"f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099\",\"core/xmp-validator/index.js\":\"ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f\"},\"after\":{\"index.html\":\"290f407743871a95a9367271504825381f35f03e551edb654a63a189a464ae6d\",\"ui/app.js\":\"c9795818364d6d9d6f1e11172aa7bf2a2a93a9eda2d21bc13bba88ce1e80b7fe\",\"core/histogram-engine/index.js\":\"b2872fe3eb35de5d138b1eec3b85d305540d43c856a190513aa3cac7e6ef6615\",\"core/lightroom-mapping-engine/index.js\":\"f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099\",\"core/xmp-validator/index.js\":\"ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f\"}}"
     },
     {
       "test": "10a. probeStorageAccess reports SecurityError (name only) on an opaque-origin window, before any install — reproduces the real about:blank failure mode",

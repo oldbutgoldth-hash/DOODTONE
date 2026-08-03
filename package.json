@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.5.2",
-  "description": "LUMIXA AI EPIC 2E-P1E R3 — XMP Color Parity Repair and Stronger Creative Tone Engine",
+  "version": "2.6.0",
+  "description": "LUMIXA AI EPIC 2E-P1F — Basic Tone Intelligence and Adaptive Dynamic Range",
   "main": "index.js",
   "directories": {
     "doc": "docs"

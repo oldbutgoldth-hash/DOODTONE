@@ -155,6 +155,13 @@ export const en = {
     exportParityMatchStatus: 'Match status',
     exportParityMatchYes: 'Match',
     exportParityMatchNo: 'Adjusted',
+    // EPIC 2E-P1F — Basic Tone Intelligence Advanced Diagnostics
+    basicToneAdvancedDiagnostics: 'Advanced Diagnostics — Basic Tone',
+    basicToneParameter: 'Parameter',
+    basicToneSceneClass: 'Scene: {sceneClass}',
+    basicToneConfidence: 'Confidence: {confidence}',
+    basicToneFieldsAdjusted: '{count} field(s) adjusted: {fields}',
+    basicToneNoAdjustment: 'No Basic field required adjustment',
     supportDivider: 'Support the project',
     supportTitle: 'Support this project',
     supportIntro: 'LUMIXA AI analyzes light, colour, tone, and editing characteristics from a reference image and creates a Lightroom preset (.XMP) locally.',

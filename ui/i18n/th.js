@@ -156,6 +156,13 @@ export const th = {
     exportParityMatchStatus: 'สถานะการตรงกัน',
     exportParityMatchYes: 'ตรงกัน',
     exportParityMatchNo: 'ถูกปรับค่า',
+    // EPIC 2E-P1F — การวินิจฉัยขั้นสูง: โทนพื้นฐาน (Basic Tone)
+    basicToneAdvancedDiagnostics: 'การวินิจฉัยขั้นสูง — โทนพื้นฐาน',
+    basicToneParameter: 'พารามิเตอร์',
+    basicToneSceneClass: 'ฉาก: {sceneClass}',
+    basicToneConfidence: 'ความเชื่อมั่น: {confidence}',
+    basicToneFieldsAdjusted: 'ปรับ {count} รายการ: {fields}',
+    basicToneNoAdjustment: 'ไม่มีค่าพื้นฐานที่ต้องปรับ',
     supportDivider: 'สนับสนุนโครงการ',
     supportTitle: 'สนับสนุนโครงการนี้',
     supportIntro: 'LUMIXA AI วิเคราะห์แสง สี โทน และลักษณะการแต่งภาพจากภาพอ้างอิง แล้วสร้าง Lightroom preset (.XMP) ภายในเครื่อง',
