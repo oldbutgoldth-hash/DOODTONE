@@ -39,6 +39,7 @@ import { REPORT_STATUS } from './report/analysis-report-schema.js';
 import { buildCandidateFromSession } from './candidate/candidate-builder.js';
 import { CANDIDATE_STATUS } from './candidate/candidate-schema.js';
 import { validateCandidate } from './candidate/candidate-validator.js';
+import { computeExportParity } from './candidate/candidate-export-parity.js';
 // EPIC 2E-P1D — XMP Serialize + Readback Fidelity Gate. Pure gate
 // module only -- this orchestrator function is the ONLY place that
 // traces events and commits `session.xmpFidelity`, mirroring the
@@ -369,6 +370,50 @@ export function buildAndCommitCandidate(ticket, { legacyState = null, engineVers
   _trace(session, 'CANDIDATE_BUILD_STARTED');
   const { candidate } = buildCandidateFromSession(session, { engineVersion });
   _trace(session, 'CANDIDATE_NORMALIZED', { candidateId: candidate.candidateId });
+
+  // EPIC 2E-P1E R3 -- Creative Tone Plan trace (bounded, no image data).
+  // candidate.diagnostics.colorIntelligence already carries the plan's
+  // engaged/fieldsBoosted/reasons/sceneClass -- this trace event only
+  // records identity + a small summary, never pixel/evidence payloads.
+  _trace(session, 'CREATIVE_TONE_PLAN_CREATED', {
+    candidateId: candidate.candidateId,
+    strengthMode: candidate.diagnostics.colorIntelligence?.strengthMode ?? null,
+    sceneClass: candidate.diagnostics.colorIntelligence?.sceneClass ?? null,
+    fieldsBoostedCount: (candidate.diagnostics.colorIntelligence?.fieldsBoosted ?? []).length,
+  });
+
+  // EPIC 2E-P1E R3 -- Export Parity Audit. Computes, once per build
+  // (pure, no serialization, no DOM), whether this Candidate's own
+  // current color values already satisfy quickSafetyClamp()'s export-
+  // time thresholds -- the exact question Objective A exists to answer.
+  // Stored on candidate.diagnostics.exportParity for the Advanced
+  // Diagnostics panel and for getCandidateExportReadiness() callers;
+  // never blocks the build, never mutates the Candidate.
+  _trace(session, 'COLOR_PARITY_AUDIT_STARTED', { candidateId: candidate.candidateId });
+  const exportParity = computeExportParity(candidate);
+  candidate.diagnostics.exportParity = {
+    allMatch: exportParity.allMatch,
+    summary: exportParity.summary,
+    mismatches: exportParity.entries.filter((e) => !e.candidateVsExportMatch).map((e) => ({
+      parameterPath: e.parameterPath, xmpProperty: e.xmpProperty,
+      candidateValue: e.candidateCurrentValue, exportExpectedValue: e.exportExpectedValue,
+    })),
+  };
+  for (const mismatch of candidate.diagnostics.exportParity.mismatches) {
+    _trace(session, 'COLOR_EXPORT_SAFE_ADJUSTMENT', {
+      candidateId: candidate.candidateId, parameterPath: mismatch.parameterPath,
+      candidateValue: mismatch.candidateValue, exportExpectedValue: mismatch.exportExpectedValue,
+    });
+  }
+  _trace(session, exportParity.allMatch ? 'COLOR_PARITY_MATCH' : 'COLOR_PARITY_MISMATCH', {
+    candidateId: candidate.candidateId, mismatchCount: exportParity.summary.mismatched,
+  });
+  _trace(session, 'COLOR_PARITY_AUDIT_COMPLETED', {
+    candidateId: candidate.candidateId, allMatch: exportParity.allMatch, totalChecked: exportParity.summary.totalChecked,
+  });
+  _trace(session, 'CREATIVE_TONE_PLAN_APPLIED', {
+    candidateId: candidate.candidateId, engaged: candidate.diagnostics.colorIntelligence?.engaged ?? false,
+  });
 
   _trace(session, 'CANDIDATE_VALIDATION_STARTED', { candidateId: candidate.candidateId });
   const fullValidation = validateCandidate(candidate);

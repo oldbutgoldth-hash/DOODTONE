@@ -1,0 +1,7 @@
+{
+  "suite": "epic-2e-p1e-r3-browser-qa",
+  "startedAt": "2026-08-03T15:33:54.726Z",
+  "scenarios": [],
+  "status": "BROWSER_BINARY_UNAVAILABLE",
+  "reason": "no Chromium executable found"
+}

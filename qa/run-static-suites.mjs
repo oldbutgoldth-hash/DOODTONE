@@ -191,6 +191,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1d-xmp-fidelity-gate-test.mjs',
   // EPIC 2E-P1E — Color Intelligence & Creative Tone Candidate.
   'qa/epic-2e-p1e-color-intelligence-test.mjs',
+  // EPIC 2E-P1E R3 — XMP Color Parity Repair + Stronger Creative Tone Engine.
+  'qa/epic-2e-p1e-r3-parity-creative-tone-test.mjs',
 ];
 
 let anyFailed = false;

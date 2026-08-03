@@ -35,8 +35,32 @@ import {
   HSL_CHANNEL_IDS, GRADING_ZONE_IDS, CAL_PRIMARY_IDS,
   SKIN_ADJACENT_HSL_CHANNELS, skinCautionScale, buildEmptyColorPlan,
 } from './color-intelligence-schema.js';
+import { classifyScene, getFamilyMultiplier } from './creative-tone-strategy.js';
 
 function _clamp(v, mag) { return Math.max(-mag, Math.min(mag, v)); }
+
+/**
+ * EPIC 2E-P1E R3 -- Export-safe integer normalization.
+ *
+ * Every P1E-computed color field (HSL Hue/Saturation/Luminance,
+ * Color Grading Hue/Saturation/Luminance, Calibration Hue/Saturation,
+ * Vibrance/Saturation) corresponds to a real Lightroom slider whose
+ * DOM step is always 1 whole unit (see candidate-validator.js
+ * SLIDER_RANGES) and whose XMP property Lightroom itself stores and
+ * displays as a whole number. Before this fix, a fractional
+ * restoration result (e.g. `2 + 20 * 0.805 = 18.1`) was written into
+ * the Candidate AS-IS and serialized into the XMP string verbatim
+ * (`core/preset-engine/index.js` never rounds `hsl_s_*`/`grd_*_s`/
+ * `cal_*_s` etc.) -- producing a non-integer XMP attribute value that
+ * Lightroom would round or reject on its own terms, silently
+ * reintroducing a Candidate/UI vs. Lightroom divergence identical in
+ * class to the one this R3 round exists to close. Rounding HERE, once,
+ * at the moment P1E commits its own recommendation, guarantees
+ * Candidate current value === UI displayed value === export-expected
+ * value === XMP value === Lightroom's own displayed value, for every
+ * P1E-authored color field. See P1E_R3_EXPORT_SAFE_VALUE_POLICY.md.
+ */
+function _roundClean(v) { return Math.round(v); }
 
 /**
  * EPIC 2E-P1E R2 — Circular Grading Hue fix.
@@ -139,6 +163,51 @@ export function buildColorPlan({ candidateColorFields, signals, strengthMode = D
     scale: skinScale,
   };
 
+  // EPIC 2E-P1E R3 -- scene-aware creative tone layer. classifyScene()
+  // reads ONLY evidence already available (signals) plus the
+  // Candidate's own current color fields (never fabricates a signal).
+  // getFamilyMultiplier() returns a small, bounded [0.5, 1.3] per-
+  // field-family multiplier folded into the SAME restoration
+  // `fraction` every field family already computes below -- the final
+  // result is still always passed through the SAME hard `_clamp(...,
+  // hardBound)` inside `_restoreTowardEvidence()`/`restoreCircularHue()`,
+  // so no scene multiplier can ever push a value outside `BOUNDS`.
+  // Skin channels never receive the `hslNonSkin` multiplier -- they
+  // keep ONLY their own, separate, always-active `skinScale` above,
+  // preserving "skin protection has structural priority" regardless
+  // of scene class. See P1E_R3_EVIDENCE_TO_CREATIVE_TONE_MAP.md and
+  // P1E_R3_CREATIVE_TONE_STRENGTH_MODEL.md.
+  const sceneResult = classifyScene({ signals, candidateColorFields });
+  plan.sceneClass = sceneResult.sceneClass;
+  plan.sceneReasons = sceneResult.reasons;
+  plan.sceneSignalsUsed = sceneResult.signalsUsed;
+  const sceneMult = {
+    hslNonSkin: getFamilyMultiplier(sceneResult.sceneClass, 'hslNonSkin'),
+    presenceVibrance: getFamilyMultiplier(sceneResult.sceneClass, 'presenceVibrance'),
+    presenceSaturation: getFamilyMultiplier(sceneResult.sceneClass, 'presenceSaturation'),
+    grading: getFamilyMultiplier(sceneResult.sceneClass, 'grading'),
+    calibration: getFamilyMultiplier(sceneResult.sceneClass, 'calibration'),
+  };
+  // Documented technicalCorrection / creativeTone split (R3
+  // formalization, no duplicated formula -- see creative-tone-
+  // strategy.js header): technicalCorrection = restraint-only signals
+  // (ALREADY_SATURATED scene class + the pre-existing skinScale, both
+  // <=1.0 multipliers); creativeTone = intentional-strengthening
+  // signals (every other scene class, each <=1.3 multiplier).
+  // Recorded here for explainability only -- the actual math is the
+  // SAME fraction composition used below (compose = strengthScalar *
+  // technical * creative * skinCaution, then the existing hard clamp).
+  plan.layers = {
+    technicalCorrection: {
+      sceneClass: sceneResult.sceneClass,
+      appliesRestraint: sceneResult.sceneClass === 'ALREADY_SATURATED',
+      skinCautionScale: skinScale,
+    },
+    creativeTone: {
+      strengthMode, strengthScalar: scalar, sceneClass: sceneResult.sceneClass, sceneMultipliers: sceneMult,
+    },
+  };
+
   // ── HSL ───────────────────────────────────────────────────────────
   const hslChannels = signals?.hsl?.channels ?? {};
   for (const ch of HSL_CHANNEL_IDS) {
@@ -156,7 +225,10 @@ export function buildColorPlan({ candidateColorFields, signals, strengthMode = D
     const isSkin = SKIN_ADJACENT_HSL_CHANNELS.has(ch);
     const bound = isSkin ? BOUNDS.hsl.skin : BOUNDS.hsl.color;
     const extraCaution = isSkin ? skinScale : 1.0;
-    const fraction = scalar * extraCaution;
+    // Non-skin channels also receive the bounded scene-aware
+    // multiplier (R3); skin channels never do -- extraCaution
+    // (skinScale) already governs them exclusively.
+    const fraction = isSkin ? (scalar * extraCaution) : (scalar * extraCaution * sceneMult.hslNonSkin);
 
     const hueBound = bound.hue;
     const satBound = isSkin ? Math.max(bound.satLow, bound.satHigh) : bound.sat;
@@ -169,9 +241,9 @@ export function buildColorPlan({ candidateColorFields, signals, strengthMode = D
     if (isSkin) newSat = Math.max(-bound.satLow, Math.min(bound.satHigh, newSat));
     const newLum = _restoreTowardEvidence(curLum, evid.lumAdj, fraction, lumBound);
 
-    plan.hsl.hue[ch] = newHue;
-    plan.hsl.saturation[ch] = newSat;
-    plan.hsl.luminance[ch] = newLum;
+    plan.hsl.hue[ch] = _roundClean(newHue);
+    plan.hsl.saturation[ch] = _roundClean(newSat);
+    plan.hsl.luminance[ch] = _roundClean(newLum);
 
     if (newHue !== curHue || newSat !== curSat || newLum !== curLum) {
       fieldsBoosted.push(`hsl.${ch}`);
@@ -190,7 +262,7 @@ export function buildColorPlan({ candidateColorFields, signals, strengthMode = D
       if (!evid) { plan.grading[zone] = { ...curZone }; continue; }
       const satBound = BOUNDS.grading.saturation + (zone !== 'midtones' ? BOUNDS.grading.shadowsHighlightsExtra : 0);
       const lumBound = BOUNDS.grading.luminance;
-      const fraction = scalar; // grading has no per-channel skin adjacency; global skin caution still applies lightly via presence step below
+      const fraction = scalar * sceneMult.grading; // grading has no per-channel skin adjacency; global skin caution still applies lightly via presence step below
       // EPIC 2E-P1E R2 fix: Color Grading Hue is an ABSOLUTE, cyclic
       // 0-359 angle (unlike HSL/Calibration Hue, which are signed
       // relative adjustments) -- it must be restored along the
@@ -209,7 +281,7 @@ export function buildColorPlan({ candidateColorFields, signals, strengthMode = D
         : restoreCircularHue(curHueNorm, evid.hue, fraction);
       const newSat = _restoreTowardEvidence(curZone.saturation ?? 0, evid.sat, fraction, satBound);
       const newLum = _restoreTowardEvidence(curZone.luminance ?? 0, evid.balance, fraction, lumBound);
-      plan.grading[zone] = { hue: newHue, saturation: newSat, luminance: newLum };
+      plan.grading[zone] = { hue: _roundClean(newHue), saturation: _roundClean(newSat), luminance: _roundClean(newLum) };
       if (newHue !== curHueNorm || newSat !== curZone.saturation || newLum !== curZone.luminance) {
         fieldsBoosted.push(`grading.${zone}`);
         reasons.push(`grading.${zone}: grading confidence ${gradingConfidence} >= ${MIN_GRADING_CONFIDENCE} -> restored toward "${signals?.grading?.look ?? 'evidence'}" look (hue ${curHueNorm}->${newHue} [circular], sat ${curZone.saturation}->${newSat}, lum ${curZone.luminance}->${newLum}).`);
@@ -237,11 +309,11 @@ export function buildColorPlan({ candidateColorFields, signals, strengthMode = D
     // three color layers, and additionally skin-cautioned since red
     // primary shifts affect skin more than green/blue.
     const extraCaution = prim === 'red' ? skinScale : 1.0;
-    const fraction = scalar * 0.8 * extraCaution;
+    const fraction = scalar * 0.8 * extraCaution * sceneMult.calibration;
     const newHue = _restoreTowardEvidence(curHue, evid.hue, fraction, BOUNDS.calibration.hue);
     const newSat = _restoreTowardEvidence(curSat, evid.sat, fraction, BOUNDS.calibration.saturation);
-    plan.cal[`${key}Hue`] = newHue;
-    plan.cal[`${key}Saturation`] = newSat;
+    plan.cal[`${key}Hue`] = _roundClean(newHue);
+    plan.cal[`${key}Saturation`] = _roundClean(newSat);
     if (newHue !== curHue || newSat !== curSat) {
       fieldsBoosted.push(`cal.${key}`);
       reasons.push(`cal.${key}: coverage ${evid.coveragePct}% -> restored toward evidence (hue ${curHue}->${newHue}, sat ${curSat}->${newSat}).`);
@@ -262,13 +334,13 @@ export function buildColorPlan({ candidateColorFields, signals, strengthMode = D
   const curSat = candidateColorFields?.basic?.saturation ?? 0;
   const opportunityScore = Math.min(1, fieldsBoosted.length / 6) * (signals?.overallColorConfidence ?? 0.3);
   if (opportunityScore > 0.05) {
-    const vibTarget = BOUNDS.presence.vibrance * opportunityScore;
-    const satTarget = BOUNDS.presence.saturation * opportunityScore * 0.7; // Saturation stays more conservative than Vibrance (real photographic practice: Vibrance protects already-saturated/skin tones, Saturation does not)
-    const presenceFraction = scalar * skinScale;
+    const vibTarget = BOUNDS.presence.vibrance * opportunityScore * sceneMult.presenceVibrance;
+    const satTarget = BOUNDS.presence.saturation * opportunityScore * 0.7 * sceneMult.presenceSaturation; // Saturation stays more conservative than Vibrance (real photographic practice: Vibrance protects already-saturated/skin tones, Saturation does not)
+    const presenceFraction = scalar * skinScale; // vibrance/saturation targets themselves are scaled by sceneMult below, not this fraction
     const newVib = _restoreTowardEvidence(curVib, Math.sign(curVib || 1) * Math.max(Math.abs(curVib), vibTarget), presenceFraction, BOUNDS.presence.vibrance);
     const newSat2 = _restoreTowardEvidence(curSat, Math.sign(curSat || 1) * Math.max(Math.abs(curSat), satTarget), presenceFraction, BOUNDS.presence.saturation);
-    plan.presence.vibrance = newVib;
-    plan.presence.saturation = newSat2;
+    plan.presence.vibrance = _roundClean(newVib);
+    plan.presence.saturation = _roundClean(newSat2);
     if (newVib !== curVib || newSat2 !== curSat) {
       fieldsBoosted.push('presence');
       reasons.push(`presence: opportunity score ${opportunityScore.toFixed(2)} (from ${fieldsBoosted.length} boosted color fields, overall confidence ${(signals?.overallColorConfidence ?? 0).toFixed(2)}) -> vibrance ${curVib}->${newVib}, saturation ${curSat}->${newSat2}.`);

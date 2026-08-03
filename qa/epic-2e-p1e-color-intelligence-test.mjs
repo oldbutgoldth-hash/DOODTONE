@@ -31,6 +31,7 @@ const {
 } = await import('../core/single-image/color-intelligence/color-intelligence-schema.js');
 const { deriveColorSignals } = await import('../core/single-image/color-intelligence/evidence-color-signals.js');
 const { buildColorPlan, restoreCircularHue, normalizeHue } = await import('../core/single-image/color-intelligence/color-plan-builder.js');
+const { classifyScene, getFamilyMultiplier } = await import('../core/single-image/color-intelligence/creative-tone-strategy.js');
 const { applyColorIntelligence } = await import('../core/single-image/color-intelligence/color-intelligence-engine.js');
 
 const { createSingleImageSession, updateSessionStatus, SESSION_STATUS, MODULE_STATE } = await import('../core/single-image/single-image-session.js');
@@ -561,13 +562,30 @@ function runFullPipeline(candidate) {
     const signals = deriveColorSignals(richSession.evidence);
     const zeroFieldsLocal = { hsl: { hue: {}, saturation: {}, luminance: {} }, grading: { shadows: { hue: 0, saturation: 0, luminance: 0 }, midtones: { hue: 0, saturation: 0, luminance: 0 }, highlights: { hue: 0, saturation: 0, luminance: 0 } }, cal: {}, basic: { vibrance: 0, saturation: 0 } };
     const plan = buildColorPlan({ candidateColorFields: zeroFieldsLocal, signals, strengthMode: STRENGTH_MODE.BALANCED });
-    // Saturation/luminance are untouched by the R2 fix: they still come
-    // straight from `_restoreTowardEvidence(cur, evid.sat/.balance, scalar, satBound/lumBound)`
-    // with cur=0 and fraction=0.7 (BALANCED), so the result is exactly
-    // 70% of the evidence value (bounded), independent of the hue fix.
-    const expectedShadowSat = Math.min(BOUNDS.grading.saturation + BOUNDS.grading.shadowsHighlightsExtra, 26 * 0.7);
-    const expectedShadowLum = Math.min(BOUNDS.grading.luminance, Math.abs(-20 * 0.7)) * Math.sign(-20);
-    check('87. Grading Saturation is numerically unchanged by the R2 hue fix (shadows.saturation still == min(bound, 26*0.7))', close(plan.grading.shadows.saturation, expectedShadowSat, 1e-6));
+    // Saturation/luminance formulas themselves are untouched by the R2
+    // hue fix: they still come straight from
+    // `_restoreTowardEvidence(cur, evid.sat/.balance, fraction, satBound/lumBound)`
+    // with cur=0. As of EPIC 2E-P1E R3, `fraction` also includes the
+    // documented, bounded scene-aware multiplier (creative-tone-
+    // strategy.js) -- this fixture's evidence (scene.category
+    // "Landscape", confidence 0.8) classifies as GREEN_OUTDOOR, whose
+    // `grading` multiplier is 1.05 (see FAMILY_MULTIPLIERS). The
+    // expected value below is computed from the SAME real
+    // classifyScene()/getFamilyMultiplier() functions the production
+    // code calls -- not a hand-duplicated literal -- so this remains a
+    // genuine regression proof of the composed formula, updated to
+    // reflect the R3 addition on top of the still-unchanged R1/R2 math.
+    const sceneForTest87 = classifyScene({ signals, candidateColorFields: zeroFieldsLocal });
+    const gradingMultForTest87 = getFamilyMultiplier(sceneForTest87.sceneClass, 'grading');
+    const fractionForTest87 = 0.7 * gradingMultForTest87; // BALANCED scalar * scene multiplier
+    // EPIC 2E-P1E R3: color-plan-builder.js now rounds every P1E-
+    // computed color field to the nearest whole Lightroom unit before
+    // storing it (see _roundClean() -- export-safe integer
+    // normalization, P1E_R3_EXPORT_SAFE_VALUE_POLICY.md), so the
+    // expected value here must be rounded the same way to match.
+    const expectedShadowSat = Math.round(Math.min(BOUNDS.grading.saturation + BOUNDS.grading.shadowsHighlightsExtra, 26 * fractionForTest87));
+    const expectedShadowLum = Math.round(Math.min(BOUNDS.grading.luminance, Math.abs(-20 * fractionForTest87)) * Math.sign(-20));
+    check('87. Grading Saturation reflects the R1/R2 formula plus the R3 documented, bounded scene multiplier (shadows.saturation == min(bound, 26*0.7*sceneMult.grading))', close(plan.grading.shadows.saturation, expectedShadowSat, 1e-6));
     check('87b. Grading Luminance is numerically unchanged by the R2 hue fix (shadows.luminance still == 20*0.7, negative)', close(plan.grading.shadows.luminance, expectedShadowLum, 1e-6));
     const planSrc = readFileSync(path.join(ROOT, 'core/single-image/color-intelligence/color-plan-builder.js'), 'utf8');
     check('87c. Source: grading saturation/luminance still call `_restoreTowardEvidence()` with the same bound expressions as R1', planSrc.includes("_restoreTowardEvidence(curZone.saturation ?? 0, evid.sat, fraction, satBound)") && planSrc.includes("_restoreTowardEvidence(curZone.luminance ?? 0, evid.balance, fraction, lumBound)"));

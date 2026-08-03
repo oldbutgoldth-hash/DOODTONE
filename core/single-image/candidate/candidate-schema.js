@@ -121,6 +121,15 @@ export function createEmptyCandidate({ sessionId = null, generationId = null, ca
       // any pre-P1E code path, so its absence/presence cannot break
       // existing validation or serialization.
       colorIntelligence: null,
+      // EPIC 2E-P1E R3 — additive-only field. Holds computeExportParity()'s
+      // summary (core/single-image/candidate/candidate-export-parity.js):
+      // whether this Candidate's own current color values already
+      // satisfy quickSafetyClamp()'s export-time thresholds, and the
+      // exact before/after of any field that would be adjusted at
+      // export. null until single-image-orchestrator.js's
+      // buildAndCommitCandidate() computes it; never read by any
+      // pre-R3 code path.
+      exportParity: null,
     },
   };
 }

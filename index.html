@@ -740,6 +740,27 @@
                 <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:15px">close</span> <span data-i18n-key="appShell.resetButton">Reset</span></button>
             </div>
             <div id="successMsg" style="display:none;margin-top:14px;padding:12px 16px;background:var(--accent-soft);color:var(--success);border-radius:2px;font-size:12.5px;font-weight:600;border:1px solid var(--border)"><span data-i18n-key="appShell.downloadSuccess">Download complete!</span></div>
+            <!-- EPIC 2E-P1E R3 — Export Parity Advanced Diagnostics. A small,
+                 collapsed disclosure (never the primary UI) available as soon
+                 as a Candidate exists (no download attempt required), showing
+                 whether the visible Candidate values already match what
+                 quickSafetyClamp() will write at export time. Rows only
+                 render for parameters that actually differ. -->
+            <details id="exportParityDiagnostics" style="display:none;margin-top:10px;padding:10px 14px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2)">
+              <summary style="cursor:pointer;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityAdvancedDiagnostics">Advanced Diagnostics — Export Parity</summary>
+              <div id="exportParityNotice" style="display:none;margin-top:8px;padding:8px 10px;background:var(--accent-soft);border-radius:2px;font-size:11px;color:var(--text)" data-i18n-key="appShell.exportParitySafeAdjustmentNotice">Some values were adjusted to export-safe limits</div>
+              <table style="margin-top:8px;border-collapse:collapse;width:100%">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityParameter">Parameter</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityCandidateCurrent">Candidate current</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityExportExpected">Export expected</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityMatchStatus">Match status</th>
+                  </tr>
+                </thead>
+                <tbody id="exportParityTableBody"></tbody>
+              </table>
+            </details>
             <!-- EPIC 2E-P1D — XMP Fidelity status, next to Download .xmp. Not a
                  redesign: one small status line + a collapsed Advanced
                  Diagnostics disclosure. Raw XMP never shown as the primary UI. -->

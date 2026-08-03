@@ -79,6 +79,7 @@ import { renderSingleImageReport, clearSingleImageReportDisplay } from './single
 // Lightroom values from here on -- see P1C_CANDIDATE_ARCHITECTURE.md.
 import { renderCandidateToSliders, resolveSliderEdit, getSupportedSliderIds } from '../core/single-image/candidate/candidate-slider-adapter.js';
 import { candidateToLegacyPreset } from '../core/single-image/candidate/legacy-preset-adapter.js';
+import { computeExportParity } from '../core/single-image/candidate/candidate-export-parity.js';
 import * as candidateStore from '../core/single-image/candidate/candidate-store.js';
 import { CANDIDATE_STATUS } from '../core/single-image/candidate/candidate-schema.js';
 // EPIC 2E-P1D — XMP Serialize + Readback Fidelity Gate: only the
@@ -3192,6 +3193,11 @@ async function runAnalysis(callerTicket = null) {
         }
         state.lastCandidateStatus = candidateResult.candidate.status;
         updateCandidateStatusBadge(candidateResult.candidate.status);
+        // EPIC 2E-P1E R3: render the Export Parity Advanced Diagnostics
+        // panel from candidate.diagnostics.exportParity (already computed,
+        // pure, by buildAndCommitCandidate() -- no re-serialization, no
+        // DOM-as-source-of-truth).
+        renderExportParityDiagnostics(candidateResult.candidate);
       } else {
         // Candidate build failed (or this run was superseded) even
         // though the Session reached a terminal status -- do not fall
@@ -3387,6 +3393,57 @@ function _hideXmpFidelityStatus() {
  * @param {object|null} report  the Fidelity Report (null while CHECKING)
  * @param {string|null} xmpString  the exact string that was validated (for Advanced Diagnostics only)
  */
+/**
+ * EPIC 2E-P1E R3 -- Export Parity Advanced Diagnostics.
+ *
+ * Renders, for the CURRENT Candidate, whether every P1D-supported
+ * color-plus-tone parameter's on-screen value already matches what
+ * quickSafetyClamp() will actually write at export time -- computed
+ * PURELY (computeExportParity(), no serialization, no DOM read) from
+ * candidate.diagnostics.exportParity (already populated by
+ * buildAndCommitCandidate()). Shown only under the existing Advanced
+ * Diagnostics disclosure (never as the main UI); the safe-adjustment
+ * notice only appears when at least one field would actually change.
+ */
+function renderExportParityDiagnostics(candidate) {
+  const section = document.getElementById('exportParityDiagnostics');
+  const notice = document.getElementById('exportParityNotice');
+  const tableBody = document.getElementById('exportParityTableBody');
+  if (!section) return;
+
+  const exportParity = candidate?.diagnostics?.exportParity ?? null;
+  if (!exportParity) { section.style.display = 'none'; return; }
+
+  section.style.display = 'block';
+
+  if (notice) {
+    if (exportParity.mismatches.length > 0) {
+      notice.style.display = 'block';
+      notice.textContent = t('appShell.exportParitySafeAdjustmentNotice', { count: exportParity.mismatches.length }, state.lang);
+    } else {
+      notice.style.display = 'none';
+    }
+  }
+
+  if (tableBody) {
+    tableBody.innerHTML = '';
+    // Only render rows for fields that actually differ -- a full 58-row
+    // table of MATCH/MATCH would defeat the "keep the main UI clean,
+    // only show something when there's something to show" requirement.
+    for (const m of exportParity.mismatches) {
+      const tr = document.createElement('tr');
+      const cells = [m.parameterPath, String(m.candidateValue), String(m.exportExpectedValue), t('appShell.exportParityMatchNo', null, state.lang)];
+      for (const c of cells) {
+        const td = document.createElement('td');
+        td.textContent = c;
+        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
+        tr.appendChild(td);
+      }
+      tableBody.appendChild(tr);
+    }
+  }
+}
+
 function renderXmpFidelityStatus(uiStatus, report = null, xmpString = null) {
   const wrap = document.getElementById('xmpFidelityStatus');
   const icon = document.getElementById('xmpFidelityStatusIcon');

@@ -78,6 +78,20 @@ export function applyColorIntelligence(candidate, evidence, { strengthMode = DEF
     fieldsBoosted: plan.fieldsBoosted,
     skinProtection: plan.skinProtection,
     reasons: plan.reasons,
+    // EPIC 2E-P1E R3 -- Scene-aware Creative Tone: propagate the plan's
+    // own scene classification + composed technicalCorrection/
+    // creativeTone layer summary onto the Candidate's diagnostics, so
+    // the orchestrator's CREATIVE_TONE_PLAN_CREATED trace event (which
+    // reads candidate.diagnostics.colorIntelligence?.sceneClass) and
+    // any future Advanced Diagnostics surface actually see the real
+    // scene class -- previously dropped here, so every trace event's
+    // sceneClass field was silently always null despite buildColorPlan()
+    // computing a real one. Found and fixed during the R3 parity audit
+    // (never re-derives the classification -- same plan.sceneClass
+    // buildColorPlan() already produced).
+    sceneClass: plan.sceneClass ?? null,
+    sceneReasons: plan.sceneReasons ?? [],
+    layers: plan.layers ?? null,
     durationMs: Date.now() - startedAt,
   };
 
