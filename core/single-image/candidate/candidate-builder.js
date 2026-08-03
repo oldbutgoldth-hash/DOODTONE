@@ -1,15 +1,39 @@
 /**
  * EPIC 2E-P1C — Canonical Lightroom Auto-Tune Candidate Builder
+ * EPIC 2E-P1E — Color Intelligence & Creative Tone Candidate
  *
  * Builds ONE canonical, nested Candidate from a Session's already-
  * computed `candidateRaw` (the flat `buildFinalPreset()` output,
  * already validated/benchmarked/possibly reclamped by the existing
  * P1A/P1B pipeline — see P1C_CANDIDATE_SOURCE_LINEAGE_AUDIT.md §2/§6)
- * plus `session.evidence` for confidence/lineage context. This is a
- * PURE reshape — it never calls buildFinalPreset, validateFinalPreset,
- * quickSafetyClamp, or any Core analysis module itself, and it never
- * changes a numerical value beyond what the existing pipeline already
- * computed (see P1C_QA_REPORT.md's pre/post equivalence report).
+ * plus `session.evidence` for confidence/lineage context.
+ *
+ * As of EPIC 2E-P1E, this function does TWO things, in this exact
+ * order, and both are documented here so nothing is silently implied:
+ *
+ *  1. A PURE reshape of `candidateRaw` into the nested Candidate shape
+ *     — never calls buildFinalPreset, validateFinalPreset,
+ *     quickSafetyClamp, or any Core analysis module itself, and never
+ *     changes a numerical value beyond what the existing pipeline
+ *     already computed (see P1C_QA_REPORT.md's pre/post equivalence
+ *     report — still true for every NON-color field, and for every
+ *     color field when P1E's own evidence gate finds no meaningful,
+ *     bounded improvement to make).
+ *  2. ONE deliberate, bounded, evidence-driven Color Intelligence
+ *     enrichment step (`applyColorIntelligence()`, EPIC 2E-P1E) that
+ *     may strengthen `candidate.hsl`, `candidate.grading` (excluding
+ *     the documented-unsupported `balance` field), `candidate.cal`
+ *     (excluding the documented-unsupported `shadowTint` field), and
+ *     `candidate.basic.vibrance`/`saturation` — never any other
+ *     field — using the SAME `session.evidence` already computed
+ *     upstream. This step runs BEFORE the lineage/autoValues snapshot
+ *     below, so the enriched values correctly become the Candidate's
+ *     "auto" recommendation (what "Reset to Auto" reverts to), not
+ *     the pre-enrichment reshape. See
+ *     P1E_COLOR_INTELLIGENCE_ARCHITECTURE.md and
+ *     P1E_CANDIDATE_INTEGRATION_NOTE.md for the full rationale, and
+ *     P1E_CREATIVE_TONE_HEURISTICS.md for why this is never a
+ *     "just multiply by a constant" hack.
  */
 
 import {
@@ -17,6 +41,8 @@ import {
   CANDIDATE_STATUS, HSL_CHANNEL_IDS, GRADING_ZONE_IDS, CANDIDATE_SCHEMA_VERSION,
 } from './candidate-schema.js';
 import { buildParameterLineage, assembleLineageMap } from './candidate-lineage.js';
+import { applyColorIntelligence } from '../color-intelligence/color-intelligence-engine.js';
+import { DEFAULT_STRENGTH_MODE } from '../color-intelligence/color-intelligence-schema.js';
 import { SINGLE_IMAGE_FULL, PROFILE_VERSION } from '../single-image-analysis-profile.js';
 import { SESSION_STATUS, MODULE_STATE } from '../single-image-session.js';
 import { confidenceFromRaw } from '../report/confidence-aggregator.js';
@@ -179,6 +205,26 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
 
   // ── diagnostics: source evidence + per-parameter lineage ─────────
   candidate.diagnostics.sourceEvidence = Object.keys(evidence).filter((k) => _evidenceOk(evidence, k));
+
+  // ── EPIC 2E-P1E — Color Intelligence & Creative Tone enrichment ──
+  // Runs exactly once per build, AFTER the pure raw-preset reshape
+  // above (candidate.hsl/grading/cal/basic already hold the
+  // legacy-pipeline's own values at this point) and BEFORE the
+  // lineage entries and autoValues snapshot below, so any bounded,
+  // evidence-driven strengthening this step makes becomes part of
+  // the Candidate's own "auto" recommendation — exactly like every
+  // other field already reshaped above. This function is pure: it
+  // reads `evidence` (already computed upstream by the existing
+  // pipeline) and mutates only `candidate.hsl`, `candidate.grading`
+  // (excluding `balance`), `candidate.cal` (excluding `shadowTint`),
+  // and `candidate.basic.vibrance`/`saturation`. It never calls
+  // buildFinalPreset, validateFinalPreset, quickSafetyClamp, or any
+  // Core analysis module, and never touches any other Candidate
+  // field. See P1E_COLOR_INTELLIGENCE_ARCHITECTURE.md.
+  const colorIntelligenceResult = applyColorIntelligence(candidate, evidence, {
+    strengthMode: DEFAULT_STRENGTH_MODE,
+  });
+  candidate.diagnostics.colorIntelligence = colorIntelligenceResult.diagnostics;
 
   const decisionCtx = rawPreset._decision ?? {};
   const wbConfidence = decisionCtx.wb?.confidence != null ? confidenceFromRaw(decisionCtx.wb.confidence).score : null;

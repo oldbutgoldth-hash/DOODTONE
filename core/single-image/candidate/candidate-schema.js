@@ -113,6 +113,14 @@ export function createEmptyCandidate({ sessionId = null, generationId = null, ca
       manualEdits: { changedParameters: [], revision: 0, lastEditedAt: null },
       lineage: {},
       autoValues: null,
+      // EPIC 2E-P1E — additive-only field. Holds the diagnostics object
+      // returned by applyColorIntelligence() (see
+      // core/single-image/color-intelligence/color-intelligence-engine.js)
+      // describing what the Color Intelligence layer did/did not change
+      // and why. null until candidate-builder.js runs it; never read by
+      // any pre-P1E code path, so its absence/presence cannot break
+      // existing validation or serialization.
+      colorIntelligence: null,
     },
   };
 }

@@ -189,6 +189,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1c-r3-user-edit-xmp-export-test.mjs',
   // EPIC 2E-P1D -- XMP Serialize + Readback Fidelity Gate
   'qa/epic-2e-p1d-xmp-fidelity-gate-test.mjs',
+  // EPIC 2E-P1E — Color Intelligence & Creative Tone Candidate.
+  'qa/epic-2e-p1e-color-intelligence-test.mjs',
 ];
 
 let anyFailed = false;
