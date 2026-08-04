@@ -1,6 +1,6 @@
 {
   "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
-  "generatedAt": "2026-08-03T17:07:26.638Z",
+  "generatedAt": "2026-08-04T03:30:43.477Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
@@ -14,7 +14,7 @@
     "ui/visual-preview-comparison-controller-v2.js",
     "ui/visual-preview-comparison-renderer-v2.js"
   ],
-  "lockedFileCount": 173,
+  "lockedFileCount": 182,
   "files": {
     "core/analysis-cache.js": "23577dc396adbe2803ee52c3472b0d55c880d0133433614f8fb7b923bb0fa154",
     "core/basic-panel-engine/index.js": "82467e72711b3d98359e9a50543a8a9f2cc98b7f9a42c9e5e25afbec620aae5b",
@@ -120,7 +120,7 @@
     "core/single-image/basic-tone-intelligence/exposure-recommendation.js": "ca6f3448ad8ad818e2fd8ebcb5f918bf91212852de7f786fd0c50b9639abbc44",
     "core/single-image/basic-tone-intelligence/highlight-shadow-recovery.js": "c99d48f1cfb14367e26b974293430f4685dc512f4c35cb3c401d142132eb5f81",
     "core/single-image/basic-tone-intelligence/local-contrast-planner.js": "560d3e7a9580aba996f61f6c9c4b428573982e3c78df2651019e5a5ec1331af9",
-    "core/single-image/candidate/candidate-builder.js": "b7b4ef58b586e37eea7d0c375a8df3f2b529040151908e37db5ba6791b646fb9",
+    "core/single-image/candidate/candidate-builder.js": "45d20fc91c0eaa9055a2e2eb40a3c5f620eb97212c7c7d957fdc6f2474478f3b",
     "core/single-image/candidate/candidate-export-parity.js": "4c5e71029e210c4693d1dc71c13c7d1d7db6722f085e7277a809d3ca2f0f7a90",
     "core/single-image/candidate/candidate-lineage.js": "31b8a49fcefbd0b414ef93b956501ddae6999bb0ba2ead0544b1f1223c2e866b",
     "core/single-image/candidate/candidate-schema.js": "9444f24d84c7594511c29fcf1ef6cdd4f3add79c7ef1d536e892043d1dd444d1",
@@ -133,6 +133,15 @@
     "core/single-image/color-intelligence/color-plan-builder.js": "96691b087532972a81bbf4ea2e7ee2dd0376e5f14c3106cbda8b5130e23a2ae1",
     "core/single-image/color-intelligence/creative-tone-strategy.js": "55fc56b68ad8fb1130347a613f9faea3c41fb7710e3e6772505aab84d65c4611",
     "core/single-image/color-intelligence/evidence-color-signals.js": "75b6686ca30110409054e70d534e67fc5b99fb7fb90527a9cd9a4c90f816a4c7",
+    "core/single-image/detail-intelligence/detail-evidence-extractor.js": "784163fbdb5ab52acb7bba7e8c23849f9415a83b3e52a9208150fab466f6c6bb",
+    "core/single-image/detail-intelligence/detail-guardrails.js": "5c209e800463fdd08567b8f0eda4adc38528167fe5fef34e457b6b367bdfd236",
+    "core/single-image/detail-intelligence/detail-lineage.js": "6a5576e010267dc8bddbd270132fa44bd8284784630196314329a354fd3ac621",
+    "core/single-image/detail-intelligence/detail-plan-builder.js": "a55317e27041271ee9132b9d732ce3d2c0cb9fb6adc78f17f0245d003b7cbed2",
+    "core/single-image/detail-intelligence/detail-schema.js": "96767357bbb496c86713aac239ff0e53176cf7b9de8ce44a8870a1ffbf081f04",
+    "core/single-image/detail-intelligence/edge-detail-classifier.js": "1952c4549fb2e7f5e75b7d451561a1ae73fd480eac09468f37919e36b3bc1044",
+    "core/single-image/detail-intelligence/noise-profile-estimator.js": "073857ba1be5decdb31c9c8813631761dbb6d8c96f9a65687bfe48b173e11e0b",
+    "core/single-image/detail-intelligence/noise-reduction-planner.js": "84b441d5fff80f48ffcfec669614e7fb12e63c69769264fc4ff6acfc9548aa04",
+    "core/single-image/detail-intelligence/sharpening-planner.js": "93fab6a3c90b714c4d9c6369a877283c50affc6cc7b6b5e56acdf6ab139f599b",
     "core/single-image/evidence-normalizer.js": "332b91788ad10ab35da2d42bac282bcc9cafb4a8e92eae0d0457644d4f6038a6",
     "core/single-image/legacy-state-adapter.js": "2034beda9ab355b2ba37187e5cdca582c3430dcb5a568216da9dc7acef6d75e9",
     "core/single-image/report/analysis-report-builder.js": "814f7bd64f86d6d48e2622afef8d24c3e991a4243b37ba758987decb727c59e7",
@@ -142,7 +151,7 @@
     "core/single-image/report/report-lineage.js": "7cefd24454bf7829d2288e5ba67b020eab1f533beb4dbcbf883271a63096bd5b",
     "core/single-image/single-image-analysis-cache.js": "37bbee8f813c6e10bcd5e950fc3a07dca334e7d0f80d3714d31393b67ef82efa",
     "core/single-image/single-image-analysis-profile.js": "fb30f540d8ee046997c9701e93202de9b404eadc1cca84dc4c927ec88aa9a5ba",
-    "core/single-image/single-image-orchestrator.js": "de9f480253b3c29ee87fa7e2367ada87eaf60e14dd28e39ce6a26b2c5655cfe3",
+    "core/single-image/single-image-orchestrator.js": "0a69bf657dd53755c15f26dda243f1207a235bb402068f515ec12cdcafb4ca79",
     "core/single-image/single-image-session-store.js": "0ded959317608164c094a5e68045b4c59704fdc71f837cfb5115d59981d24e1d",
     "core/single-image/single-image-session.js": "6859716999326e1eed42e9dd29166a0b4e92212719a9e1c0bc04ea54321ed549",
     "core/single-image/xmp-fidelity/candidate-xmp-comparator.js": "2d7fb86f7585e472d5ce18e86b5ca5acab447e8030f5ba46e5c770258cffaaa3",
@@ -171,9 +180,9 @@
     "ui/histogram-renderer.js": "f421cec0e0dbb9783c864e4561f07575bd12bdcffdf642eb3d1990ee50c99c24",
     "ui/hsl-analyzer-renderer.js": "5a76c96319b4a0f942f0f81739b04ee774870892953fee0fe0aa8cd16e8738f9",
     "ui/i18n/domain-presenters.js": "7b617d8277113659f600885478d23a8041f730c3b030a9f0fb59ace7b9e34959",
-    "ui/i18n/en.js": "6f4f7ed7556186744d87e5299d50ef837b5aefaf24a59c14c9e8413dd3c87756",
+    "ui/i18n/en.js": "2e7b5965d42f1985a9a52a78e2fdd3951de7ed0bcd6846f05874181884f902f4",
     "ui/i18n/index.js": "f659ecfb05f86c844131798ef11901578db013b2cf2d542604825014c80af379",
-    "ui/i18n/th.js": "5480e59b8033cd4f0ce73ce63f1e06e438fcc6a95f4cfce1d17b866f58738596",
+    "ui/i18n/th.js": "62266ec640710537d0435d632973bfe3c77a130804ba7eae0317aa5448d9391a",
     "ui/image-analysis-renderer.js": "4061c83bd316981bc46bde4fad95a16679e1c2d663ad74d298d0089c528dc790",
     "ui/interactive-preview-observation-session-v2.js": "aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9",
     "ui/palette-renderer.js": "d31aab02d6842cbf53733c14c8ebaa1ac7eda2b28508c9df1854ef458a0069d0",
@@ -188,6 +197,6 @@
     "ui/tone-curve-renderer.js": "3424ad63b6c889a2025e23ea0c7513411e7c4c0bb4dddb1dbc305e1bbd254c6e",
     "ui/ui-engine.js": "147a55ca9acb75b6b5fa05fbede5d246ddc0b37a8ceacd055ff5c1a4d11f6711",
     "ui/whitebalance-renderer.js": "af235b1af3f88d38415bb6d93f34d3a9302f2f94f32e3d39f3570d202abdbe60",
-    "index.html": "290f407743871a95a9367271504825381f35f03e551edb654a63a189a464ae6d"
+    "index.html": "d6d24cb387153cdf01031e5bce5f19d509a1e258235f0607fa1f014356de9722"
   }
 }

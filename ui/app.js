@@ -3205,6 +3205,13 @@ async function runAnalysis(callerTicket = null) {
         // summary / per-field Candidate-vs-Export-Expected values, never
         // raw XML.
         renderBasicToneDiagnostics(candidateResult.candidate);
+        // EPIC 2E-P1G: render the Detail Intelligence Advanced
+        // Diagnostics panel from candidate.diagnostics.detailIntelligence
+        // (already computed, pure, by buildCandidateFromSession() via
+        // buildDetailPlan()) -- scene flags / confidence / bounded
+        // evidence scores / Sharpening + Luminance NR Candidate-vs-
+        // Export-Expected values, never raw XML, never raw pixel data.
+        renderDetailIntelligenceDiagnostics(candidateResult.candidate);
       } else {
         // Candidate build failed (or this run was superseded) even
         // though the Session reached a terminal status -- do not fall
@@ -3515,6 +3522,96 @@ function renderBasicToneDiagnostics(candidate) {
       tableBody.appendChild(tr);
     }
   }
+}
+
+/**
+ * EPIC 2E-P1G -- Detail Intelligence Advanced Diagnostics.
+ *
+ * Renders, for the CURRENT Candidate, the Detail Plan's scene flags,
+ * confidence, plain-language evidence summary, bounded evidence scores
+ * (edge/detail, luminance noise, chroma noise -- all 0-1 scalars, never
+ * raw pixel arrays), and a per-field table (Sharpening/Luminance NR
+ * Candidate value / Export Expected value / match status) -- reusing
+ * the SAME computeExportParity() utility P1E R3's and P1F's panels
+ * already use (never a second parity mechanism). Also renders an
+ * explicit note that Color Noise Reduction is NOT Candidate-driven
+ * (hardcoded XMP literal) -- never implies a working control for an
+ * unsupported field. Shown only under the existing Advanced
+ * Diagnostics disclosure convention; never exposes raw XML.
+ */
+const DETAIL_INTEL_FIELDS = [
+  { field: 'sharpening', path: 'detail.sharpening' },
+  { field: 'noiseReduction', path: 'detail.noiseReduction' },
+];
+function renderDetailIntelligenceDiagnostics(candidate) {
+  const section = document.getElementById('detailIntelDiagnostics');
+  const summaryEl = document.getElementById('detailIntelSummary');
+  const evidenceEl = document.getElementById('detailIntelEvidence');
+  const tableBody = document.getElementById('detailIntelTableBody');
+  const colorNrNoteEl = document.getElementById('detailIntelColorNrNote');
+  if (!section) return;
+
+  const detailIntel = candidate?.diagnostics?.detailIntelligence ?? null;
+  if (!detailIntel) { section.style.display = 'none'; return; }
+
+  section.style.display = 'block';
+
+  if (summaryEl) {
+    const flags = Array.isArray(detailIntel.sceneClass) ? detailIntel.sceneClass.join(', ') : String(detailIntel.sceneClass ?? '');
+    const parts = [
+      t('appShell.detailSceneFlags', { flags }, state.lang),
+      t('appShell.detailConfidence', { confidence: (detailIntel.confidence ?? 0).toFixed(2) }, state.lang),
+      detailIntel.engaged
+        ? t('appShell.detailEngaged', null, state.lang)
+        : t('appShell.detailNoAdjustment', null, state.lang),
+    ];
+    if (detailIntel.protections?.focusLimited) parts.push(t('appShell.detailFocusLimited', null, state.lang));
+    summaryEl.textContent = parts.join(' \u00b7 ');
+  }
+
+  if (evidenceEl) {
+    const ev = detailIntel.evidence;
+    if (ev) {
+      const fmt = (v) => (typeof v === 'number' ? v.toFixed(2) : '\u2014');
+      const skinCoverage = typeof ev.skinCoverage === 'number' ? `${Math.round(ev.skinCoverage * 100)}%` : '\u2014';
+      evidenceEl.textContent = [
+        t('appShell.detailEdgeDensity', { score: fmt(ev.edgeDensity) }, state.lang),
+        t('appShell.detailLuminanceNoise', { score: fmt(ev.luminanceNoise) }, state.lang),
+        t('appShell.detailChromaNoise', { score: fmt(ev.chromaNoise) }, state.lang),
+        t('appShell.detailSkinCoverage', { coverage: skinCoverage }, state.lang),
+      ].join(' \u00b7 ');
+    } else {
+      evidenceEl.textContent = '';
+    }
+  }
+
+  if (tableBody) {
+    tableBody.innerHTML = '';
+    let parityEntries = [];
+    try { parityEntries = computeExportParity(candidate).entries; } catch { parityEntries = []; }
+    const byPath = new Map(parityEntries.map((e) => [e.parameterPath, e]));
+
+    for (const { field, path } of DETAIL_INTEL_FIELDS) {
+      const entry = byPath.get(path);
+      const candidateValue = entry ? entry.candidateCurrentValue : candidate?.detail?.[field];
+      const exportExpected = entry ? entry.exportExpectedValue : candidateValue;
+      const matches = entry ? entry.candidateVsExportMatch : true;
+      const tr = document.createElement('tr');
+      const cells = [
+        field, String(candidateValue), String(exportExpected),
+        matches ? t('appShell.exportParityMatchYes', null, state.lang) : t('appShell.exportParityMatchNo', null, state.lang),
+      ];
+      for (const cellText of cells) {
+        const td = document.createElement('td');
+        td.textContent = cellText;
+        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
+        tr.appendChild(td);
+      }
+      tableBody.appendChild(tr);
+    }
+  }
+
+  if (colorNrNoteEl) colorNrNoteEl.textContent = t('appShell.detailColorNrUnsupported', null, state.lang);
 }
 
 function renderXmpFidelityStatus(uiStatus, report = null, xmpString = null) {

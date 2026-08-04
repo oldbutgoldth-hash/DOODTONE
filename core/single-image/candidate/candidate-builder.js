@@ -45,6 +45,8 @@ import { applyColorIntelligence } from '../color-intelligence/color-intelligence
 import { DEFAULT_STRENGTH_MODE } from '../color-intelligence/color-intelligence-schema.js';
 import { buildBasicTonePlan } from '../basic-tone-intelligence/basic-tone-plan-builder.js';
 import { DEFAULT_STRENGTH_MODE as DEFAULT_BASIC_TONE_STRENGTH_MODE } from '../basic-tone-intelligence/basic-tone-schema.js';
+import { buildDetailPlan } from '../detail-intelligence/detail-plan-builder.js';
+import { DEFAULT_STRENGTH_MODE as DEFAULT_DETAIL_STRENGTH_MODE } from '../detail-intelligence/detail-schema.js';
 import { SINGLE_IMAGE_FULL, PROFILE_VERSION } from '../single-image-analysis-profile.js';
 import { SESSION_STATUS, MODULE_STATE } from '../single-image-session.js';
 import { confidenceFromRaw } from '../report/confidence-aggregator.js';
@@ -264,6 +266,56 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
     strengthMode: DEFAULT_STRENGTH_MODE,
   });
   candidate.diagnostics.colorIntelligence = colorIntelligenceResult.diagnostics;
+
+  // ── EPIC 2E-P1G — Detail Intelligence, Sharpening and Noise Reduction ──
+  // Runs AFTER both P1F's Basic Tone Plan and P1E's Color Intelligence
+  // enrichment above (candidate.basic.texture/.clarity already hold
+  // their FINAL P1F values at this point, and
+  // candidate.diagnostics.basicToneIntelligence already carries P1F's
+  // own sceneClass/protections) and BEFORE the lineage entries and
+  // autoValues snapshot below — the same composition-order convention
+  // P1F and P1E each established: Evidence -> P1F Basic Tone Plan ->
+  // P1E Color Plan -> P1G Detail Plan -> canonical Candidate validation
+  // -> UI -> XMP (see P1G_P1F_DETAIL_COORDINATION_POLICY.md). This
+  // function is pure: it reads `evidence` (session.evidence, already
+  // computed upstream) plus the two ALREADY-FINAL P1F basic fields
+  // above (read-only — P1G never recomputes or overwrites P1F's own
+  // plan) and returns a Detail Plan; candidate-builder itself is the
+  // only place that writes the plan's finalValues into
+  // `candidate.detail.sharpening`/`.noiseReduction` — replacing the
+  // hardcoded `sharp = 40` / `noise = isPortrait ? 20 : 10` literals
+  // this EPIC's audit traced to
+  // core/lightroom-mapping-engine/index.js (see
+  // P1G_DETAIL_VALUE_LINEAGE_AUDIT.md §3). P1G NEVER writes
+  // candidate.detail.colorNoiseReduction (remains the existing literal
+  // `25` set above — Color Noise Reduction has no proven Candidate ->
+  // Legacy Preset -> Serializer -> XMP export path; see
+  // P1G_SUPPORTED_XMP_DETAIL_FIELDS.md) and NEVER touches
+  // candidate.basic/.hsl/.grading/.cal (P1F/P1E territory).
+  const detailPlan = buildDetailPlan(evidence, {
+    strengthMode: DEFAULT_DETAIL_STRENGTH_MODE,
+    basicToneDiagnostics: candidate.diagnostics.basicToneIntelligence ?? null,
+    p1fTexture: candidate.basic.texture,
+    p1fClarity: candidate.basic.clarity,
+  });
+  candidate.detail.sharpening = detailPlan.finalValues.sharpening;
+  candidate.detail.noiseReduction = detailPlan.finalValues.noiseReductionLuminance;
+  candidate.diagnostics.detailIntelligence = {
+    schemaVersion: detailPlan.schemaVersion, strengthMode: detailPlan.strengthMode,
+    sceneClass: detailPlan.sceneClass, confidence: detailPlan.confidence,
+    engaged: detailPlan.diagnostics.engaged, reasons: detailPlan.diagnostics.reasons,
+    // Bounded scalar evidence summary only (0-1 scores) for the Advanced
+    // Diagnostics panel -- never raw pixel arrays/ImageData (per spec:
+    // "Do not expose large raw pixel arrays").
+    evidence: detailPlan.evidence ? {
+      luminanceNoise: detailPlan.evidence.luminanceNoise ?? null, chromaNoise: detailPlan.evidence.chromaNoise ?? null,
+      edgeDensity: detailPlan.evidence.edgeDensity ?? null, fineDetailDensity: detailPlan.evidence.fineDetailDensity ?? null,
+      focusConfidence: detailPlan.evidence.focusConfidence ?? null, motionBlurRisk: detailPlan.evidence.motionBlurRisk ?? null,
+      skinCoverage: detailPlan.evidence.skinCoverage ?? null,
+    } : null,
+    sharpening: detailPlan.sharpening, noiseReduction: detailPlan.noiseReduction,
+    protections: detailPlan.protections, lineage: detailPlan.lineage,
+  };
 
   const decisionCtx = rawPreset._decision ?? {};
   const wbConfidence = decisionCtx.wb?.confidence != null ? confidenceFromRaw(decisionCtx.wb.confidence).score : null;

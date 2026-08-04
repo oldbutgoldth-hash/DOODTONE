@@ -782,6 +782,29 @@
                 <tbody id="basicToneTableBody"></tbody>
               </table>
             </details>
+            <!-- EPIC 2E-P1G — Detail Intelligence Advanced Diagnostics. A
+                 small, collapsed disclosure (never the primary UI) showing the
+                 evidence-driven scene flags/confidence for Sharpening and
+                 Luminance Noise Reduction, plus a Candidate-vs-Export-Expected
+                 table for both -- never raw XML. Color Noise Reduction is
+                 explicitly documented as unsupported (hardcoded XMP literal). -->
+            <details id="detailIntelDiagnostics" style="display:none;margin-top:10px;padding:10px 14px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2)">
+              <summary style="cursor:pointer;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.detailAdvancedDiagnostics">Advanced Diagnostics — Detail</summary>
+              <div id="detailIntelSummary" style="margin-top:8px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:11px;color:var(--text-dim)"></div>
+              <div id="detailIntelEvidence" style="margin-top:6px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono)"></div>
+              <table style="margin-top:8px;border-collapse:collapse;width:100%">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.detailParameter">Parameter</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityCandidateCurrent">Candidate current</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityExportExpected">Export expected</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityMatchStatus">Match status</th>
+                  </tr>
+                </thead>
+                <tbody id="detailIntelTableBody"></tbody>
+              </table>
+              <div id="detailIntelColorNrNote" style="margin-top:8px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:10px;color:var(--text-dim);font-style:italic"></div>
+            </details>
             <!-- EPIC 2E-P1D — XMP Fidelity status, next to Download .xmp. Not a
                  redesign: one small status line + a collapsed Advanced
                  Diagnostics disclosure. Raw XMP never shown as the primary UI. -->

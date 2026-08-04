@@ -195,6 +195,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1e-r3-parity-creative-tone-test.mjs',
   // EPIC 2E-P1F — Basic Tone Intelligence & Adaptive Dynamic Range.
   'qa/epic-2e-p1f-basic-tone-intelligence-test.mjs',
+  // EPIC 2E-P1G — Detail Intelligence, Sharpening and Noise Reduction.
+  'qa/epic-2e-p1g-detail-intelligence-test.mjs',
 ];
 
 let anyFailed = false;

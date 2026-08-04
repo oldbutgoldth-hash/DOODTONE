@@ -333,15 +333,22 @@ function freshTicketWithSession(session) {
   // EPIC 2E-P1F: exp/con/hi/sh/wh/bl/texture/clarity/dehaze are now intentionally
   // recomputed by the Basic Tone Plan -- excluded from this equivalence check by
   // design (see P1F_BASIC_VALUE_LINEAGE_AUDIT.md / P1F_P1E_COMPOSITION_POLICY.md).
-  // Every OTHER numeric field (temp, tint, vib, sat, sharp, noise, curve points,
-  // hsl/grade/cal) must still be byte-for-byte identical -- this is the real
-  // invariant this test protects: P1F must never leak into fields it doesn't own.
+  // EPIC 2E-P1G: sharp/noise (Sharpening/Luminance Noise Reduction) are now
+  // likewise intentionally recomputed by the Detail Plan, replacing the
+  // hardcoded `sharp = 40` / `noise = isPortrait ? 20 : 10` literals this
+  // EPIC's audit traced to core/lightroom-mapping-engine/index.js -- also
+  // excluded from this equivalence check by design (see
+  // P1G_DETAIL_VALUE_LINEAGE_AUDIT.md). Every OTHER numeric field (temp,
+  // tint, vib, sat, curve points, hsl/grade/cal) must still be byte-for-byte
+  // identical -- this is the real invariant this test protects: neither P1F
+  // nor P1G may leak into fields they don't own.
   const P1F_OWNED_BASIC_KEYS = new Set(['exp', 'con', 'hi', 'sh', 'wh', 'bl', 'texture', 'clarity', 'dehaze']);
+  const P1G_OWNED_DETAIL_KEYS = new Set(['sharp', 'noise']);
   const safetyBefore = quickSafetyClamp(session.candidateRaw);
   const safetyAfter = quickSafetyClamp(legacyPreset);
-  const sameKeys = Object.keys(safetyBefore.preset).filter((k) => typeof safetyBefore.preset[k] === 'number' && !P1F_OWNED_BASIC_KEYS.has(k));
+  const sameKeys = Object.keys(safetyBefore.preset).filter((k) => typeof safetyBefore.preset[k] === 'number' && !P1F_OWNED_BASIC_KEYS.has(k) && !P1G_OWNED_DETAIL_KEYS.has(k));
   const allEqual = sameKeys.every((k) => safetyBefore.preset[k] === safetyAfter.preset[k]);
-  check('53. Pre/post equivalence: quickSafetyClamp() on the original raw preset vs. on the Legacy-Preset-Adapter output yields IDENTICAL numeric Lightroom values for every field P1F does not own (exact integer equality)', allEqual, `mismatch=${JSON.stringify(sameKeys.filter((k) => safetyBefore.preset[k] !== safetyAfter.preset[k]))}`);
+  check('53. Pre/post equivalence: quickSafetyClamp() on the original raw preset vs. on the Legacy-Preset-Adapter output yields IDENTICAL numeric Lightroom values for every field neither P1F nor P1G owns (exact integer equality)', allEqual, `mismatch=${JSON.stringify(sameKeys.filter((k) => safetyBefore.preset[k] !== safetyAfter.preset[k]))}`);
 
   const validated = candidateStore.getValidatedCandidate();
   check('54. getValidatedCandidate() returns the Candidate when status is VALID/VALID_WITH_WARNINGS/USER_EDITED', validated !== null && (validated.status === CANDIDATE_STATUS.VALID || validated.status === CANDIDATE_STATUS.VALID_WITH_WARNINGS || validated.status === CANDIDATE_STATUS.USER_EDITED || validated.status === CANDIDATE_STATUS.AUTO_GENERATED === false));

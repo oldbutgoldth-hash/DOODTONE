@@ -415,6 +415,38 @@ export function buildAndCommitCandidate(ticket, { legacyState = null, engineVers
     candidateId: candidate.candidateId, engaged: candidate.diagnostics.colorIntelligence?.engaged ?? false,
   });
 
+  // EPIC 2E-P1G — Detail Intelligence trace (bounded, no image data).
+  // candidate.diagnostics.detailIntelligence already carries the plan's
+  // sceneClass/confidence/engaged/reasons -- these trace events record
+  // identity + a small bounded summary only, per the required event
+  // list (DETAIL_ANALYSIS_STARTED .. DETAIL_EXPORT_PARITY_MISMATCH).
+  // Detail's own export parity is already covered by the SAME
+  // computeExportParity() call above (PROPERTY_MAP includes
+  // detail.sharpening/detail.noiseReduction) -- no second parity
+  // mechanism is introduced here.
+  const detailIntel = candidate.diagnostics.detailIntelligence ?? null;
+  _trace(session, 'DETAIL_ANALYSIS_STARTED', { candidateId: candidate.candidateId });
+  if (detailIntel) {
+    _trace(session, 'DETAIL_EVIDENCE_EXTRACTED', {
+      candidateId: candidate.candidateId, confidence: detailIntel.confidence,
+      source: detailIntel.sceneClass?.includes('LOW_CONFIDENCE') ? 'none' : 'image-analysis-core+skin-classifier',
+    });
+    _trace(session, 'DETAIL_SCENE_CLASSIFIED', { candidateId: candidate.candidateId, flags: detailIntel.sceneClass });
+    _trace(session, 'DETAIL_PLAN_CREATED', {
+      candidateId: candidate.candidateId, sharpening: detailIntel.sharpening?.amount ?? 0,
+      noiseReduction: detailIntel.noiseReduction?.luminance ?? 0, strengthMode: detailIntel.strengthMode,
+    });
+    if (detailIntel.sceneClass?.includes('LOW_CONFIDENCE') && detailIntel.confidence === 0) {
+      _trace(session, 'DETAIL_LOW_CONFIDENCE_FALLBACK', { candidateId: candidate.candidateId });
+    }
+    if (detailIntel.protections?.focusLimited) {
+      _trace(session, 'DETAIL_FOCUS_LIMITED', { candidateId: candidate.candidateId, reasons: ['Source sharpness is limited, so sharpening was reduced to avoid halos.'] });
+    }
+    const detailMismatch = candidate.diagnostics.exportParity?.mismatches?.some((m) => m.parameterPath === 'detail.sharpening' || m.parameterPath === 'detail.noiseReduction');
+    _trace(session, detailMismatch ? 'DETAIL_EXPORT_PARITY_MISMATCH' : 'DETAIL_EXPORT_PARITY_MATCH', { candidateId: candidate.candidateId });
+    _trace(session, 'DETAIL_PLAN_APPLIED', { candidateId: candidate.candidateId, engaged: detailIntel.engaged ?? false });
+  }
+
   _trace(session, 'CANDIDATE_VALIDATION_STARTED', { candidateId: candidate.candidateId });
   const fullValidation = validateCandidate(candidate);
   if (fullValidation.errors.length > 0) {

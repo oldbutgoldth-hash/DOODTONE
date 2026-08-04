@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.6.0",
-  "description": "LUMIXA AI EPIC 2E-P1F — Basic Tone Intelligence and Adaptive Dynamic Range",
+  "version": "2.7.0",
+  "description": "LUMIXA AI EPIC 2E-P1G — Detail Intelligence, Sharpening and Noise Reduction",
   "main": "index.js",
   "directories": {
     "doc": "docs"
