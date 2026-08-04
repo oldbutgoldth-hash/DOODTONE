@@ -47,6 +47,8 @@ import { buildBasicTonePlan } from '../basic-tone-intelligence/basic-tone-plan-b
 import { DEFAULT_STRENGTH_MODE as DEFAULT_BASIC_TONE_STRENGTH_MODE } from '../basic-tone-intelligence/basic-tone-schema.js';
 import { buildDetailPlan } from '../detail-intelligence/detail-plan-builder.js';
 import { DEFAULT_STRENGTH_MODE as DEFAULT_DETAIL_STRENGTH_MODE } from '../detail-intelligence/detail-schema.js';
+import { buildWhiteBalancePlan } from '../white-balance-intelligence/wb-plan-builder.js';
+import { DEFAULT_STRENGTH_MODE as DEFAULT_WB_STRENGTH_MODE } from '../white-balance-intelligence/white-balance-schema.js';
 import { SINGLE_IMAGE_FULL, PROFILE_VERSION } from '../single-image-analysis-profile.js';
 import { SESSION_STATUS, MODULE_STATE } from '../single-image-session.js';
 import { confidenceFromRaw } from '../report/confidence-aggregator.js';
@@ -243,6 +245,47 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
     engaged: basicTonePlan.diagnostics.engaged, fieldsAdjusted: basicTonePlan.diagnostics.fieldsAdjusted,
     reasons: basicTonePlan.diagnostics.reasons, protections: basicTonePlan.protections,
     lineage: basicTonePlan.lineage,
+  };
+
+  // ── EPIC 2E-P1H — White Balance Intelligence & Illuminant Separation ──
+  // Runs AFTER P1F's Basic Tone Plan and BEFORE P1E's Color Intelligence
+  // enrichment, per the spec's required composition order: Evidence ->
+  // P1F Basic Tone Plan -> P1H White Balance Plan -> P1E Color Plan ->
+  // P1G Detail Plan -> canonical Candidate validation -> UI -> XMP (see
+  // P1H_CANDIDATE_INTEGRATION_ORDER.md). This function is pure: it reads
+  // `evidence.wb` (core/whitebalance-engine, already computed upstream)
+  // and `evidence.colorCast` (core/color-cast-detector -- newly wired to
+  // session.evidence by this EPIC, see ui/app.js's commitEvidence('colorCast',
+  // ...) call) and returns a plan; candidate-builder itself is the only
+  // place that writes the plan's finalValues into
+  // `candidate.whiteBalance.temperature`/`.tint` -- REPLACING the value
+  // the pure raw-preset reshape above set from `rawPreset.temp`/`.tint`
+  // (the legacy Lightroom Mapping Engine's heavily-compounded-dampening
+  // output -- see P1H_WHITE_BALANCE_VALUE_LINEAGE_AUDIT.md §1 for why
+  // that value is so often near zero). P1H owns ONLY
+  // whiteBalance.temperature/.tint and its own diagnostics/lineage; it
+  // never touches candidate.hsl/grading/cal/basic (P1E/P1F territory) --
+  // see P1H_P1E_WHITE_BALANCE_COLOR_OWNERSHIP.md.
+  const wbPlan = buildWhiteBalancePlan(evidence, { strengthMode: DEFAULT_WB_STRENGTH_MODE });
+  candidate.whiteBalance.temperature = wbPlan.finalValues.temperature;
+  candidate.whiteBalance.tint = wbPlan.finalValues.tint;
+  candidate.diagnostics.whiteBalanceIntelligence = {
+    schemaVersion: wbPlan.schemaVersion, status: wbPlan.status, strengthMode: wbPlan.strengthMode,
+    confidence: wbPlan.confidence, confidenceTier: wbPlan.confidenceTier,
+    classification: wbPlan.classification,
+    correction: wbPlan.correction, protections: wbPlan.protections,
+    // Bounded scalar evidence summary only -- never raw pixel arrays.
+    evidence: wbPlan.evidence ? {
+      rawTemperature: wbPlan.evidence.rawTemperature ?? null, rawTint: wbPlan.evidence.rawTint ?? null,
+      neutralReferenceConfidence: wbPlan.evidence.neutralReferenceConfidence ?? null,
+      skinConsistencyConfidence: wbPlan.evidence.skinConsistencyConfidence ?? null,
+      estimatorAgreement: wbPlan.evidence.estimatorAgreement ?? null,
+      shadowCastLabel: wbPlan.evidence.shadowCastLabel ?? null, highlightCastLabel: wbPlan.evidence.highlightCastLabel ?? null,
+      bgObjectColorRisk: wbPlan.evidence.bgObjectColorRisk ?? null, mixedLightingRisk: wbPlan.evidence.mixedLightingRisk ?? null,
+    } : null,
+    engaged: wbPlan.diagnostics.engaged, reasons: wbPlan.diagnostics.reasons, warnings: wbPlan.diagnostics.warnings,
+    mixedLightMessage: wbPlan.diagnostics.mixedLightMessage,
+    lineage: wbPlan.lineage,
   };
 
   // ── EPIC 2E-P1E — Color Intelligence & Creative Tone enrichment ──

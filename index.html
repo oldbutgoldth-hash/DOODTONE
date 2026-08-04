@@ -811,6 +811,32 @@
               </table>
               <div id="detailIntelColorNrNote" style="margin-top:8px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:10px;color:var(--text-dim);font-style:italic"></div>
             </details>
+            <!-- EPIC 2E-P1H — White Balance Intelligence Advanced Diagnostics.
+                 A small, collapsed disclosure (never the primary UI) showing the
+                 evidence-driven cast classification/confidence for Temperature
+                 and Tint, plus a Candidate-vs-Export-Expected table for both --
+                 never raw XML, never raw pixel data. Mirrors the P1G Detail
+                 Intelligence panel's structure/conventions exactly. -->
+            <details id="wbIntelDiagnostics" style="display:none;margin-top:10px;padding:10px 14px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2)">
+              <summary style="cursor:pointer;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.wbAdvancedDiagnostics">Advanced Diagnostics — White Balance</summary>
+              <div id="wbIntelSummary" style="margin-top:8px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:11px;color:var(--text-dim)"></div>
+              <!-- EPIC 2E-P1H -- mixed-lighting / object-color-bias / export-safety
+                   notices, shown only when the corresponding protection engaged. -->
+              <div id="wbIntelMixedLightNotice" style="display:none;margin-top:6px;padding:8px 10px;background:var(--warn-soft,rgba(255,180,60,.12));border-radius:2px;font-size:11px;color:var(--text)"></div>
+              <div id="wbIntelSafeAdjustmentNotice" style="display:none;margin-top:6px;padding:8px 10px;background:var(--warn-soft,rgba(255,180,60,.12));border-radius:2px;font-size:11px;color:var(--text)"></div>
+              <div id="wbIntelEvidence" style="margin-top:6px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono)"></div>
+              <table style="margin-top:8px;border-collapse:collapse;width:100%">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.wbParameter">Parameter</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityCandidateCurrent">Candidate current</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityExportExpected">Export expected</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityMatchStatus">Match status</th>
+                  </tr>
+                </thead>
+                <tbody id="wbIntelTableBody"></tbody>
+              </table>
+            </details>
             <!-- EPIC 2E-P1D — XMP Fidelity status, next to Download .xmp. Not a
                  redesign: one small status line + a collapsed Advanced
                  Diagnostics disclosure. Raw XMP never shown as the primary UI. -->

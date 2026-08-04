@@ -199,6 +199,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1g-detail-intelligence-test.mjs',
   // EPIC 2E-P1G R2 — Detail Export Safety Clamp (Layer-B quickSafetyClamp() hard limits).
   'qa/epic-2e-p1g-r2-detail-export-safety-clamp-test.mjs',
+  // EPIC 2E-P1H — White Balance Intelligence & Illuminant Separation.
+  'qa/epic-2e-p1h-white-balance-intelligence-test.mjs',
 ];
 
 let anyFailed = false;

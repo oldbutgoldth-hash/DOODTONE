@@ -2465,6 +2465,19 @@ async function runAnalysis(callerTicket = null) {
     if (!castRes)      logS3a.warn('CastDetector failed — BG attenuation skipped');
     logS3a.end('ok');
 
+    // EPIC 2E-P1H: castRes was already computed for real above (and fed
+    // into analyzeWhiteBalance()/buildFinalPreset() downstream) but was
+    // never itself committed as its own session.evidence entry, even
+    // though the analysis-profile table already reserves a 'colorCast'
+    // slot (moduleId:'colorCast', evidenceKey:'colorCast' — see
+    // single-image-analysis-profile.js). This wires that pre-existing,
+    // unused slot to the real result so White Balance Intelligence (and
+    // any future module) can read per-zone cast evidence from
+    // session.evidence.colorCast without re-running Canvas analysis.
+    // Additive only — does not change castRes's existing usage anywhere
+    // else in this function.
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'colorCast', { status: castRes ? 'COMPLETED' : 'SOFT_FAILED', result: castRes, completedAt: Date.now() }, state);
+
     const logS3b = processingLog.startStage('SceneClassifier');
     const sceneRes = classifyScene(stats, skinClassRes);
     logS3b.output({
@@ -3205,6 +3218,13 @@ async function runAnalysis(callerTicket = null) {
         // summary / per-field Candidate-vs-Export-Expected values, never
         // raw XML.
         renderBasicToneDiagnostics(candidateResult.candidate);
+        // EPIC 2E-P1H: render the White Balance Intelligence Advanced
+        // Diagnostics panel from candidate.diagnostics.whiteBalanceIntelligence
+        // (already computed, pure, by buildCandidateFromSession() via
+        // buildWhiteBalancePlan()) -- cast classification / confidence /
+        // bounded evidence summary / per-field Candidate-vs-Export-Expected
+        // values, never raw XML.
+        renderWBIntelligenceDiagnostics(candidateResult.candidate);
         // EPIC 2E-P1G: render the Detail Intelligence Advanced
         // Diagnostics panel from candidate.diagnostics.detailIntelligence
         // (already computed, pure, by buildCandidateFromSession() via
@@ -3633,6 +3653,130 @@ function renderDetailIntelligenceDiagnostics(candidate) {
   }
 
   if (colorNrNoteEl) colorNrNoteEl.textContent = t('appShell.detailColorNrUnsupported', null, state.lang);
+}
+
+/**
+ * EPIC 2E-P1H -- White Balance Intelligence Advanced Diagnostics.
+ *
+ * Renders, for the CURRENT Candidate, the White Balance Plan's primary
+ * cast classification + flags, confidence tier, plain-language evidence
+ * summary (raw reading, neutral-reference confidence, skin-validation
+ * status, object-color-bias score -- all bounded scalars/labels, never
+ * raw pixel data), a mixed-lighting notice (exact bilingual string from
+ * the module) when that protection engaged, and a per-field
+ * Candidate-vs-Export-Expected table for Temperature/Tint -- reusing
+ * the SAME computeExportParity() utility every other Advanced
+ * Diagnostics panel in this file already uses (never a second parity
+ * mechanism). Shown only under the existing Advanced Diagnostics
+ * disclosure convention; never exposes raw XML.
+ */
+const WB_INTEL_FIELDS = [
+  { field: 'temperature', path: 'whiteBalance.temperature' },
+  { field: 'tint', path: 'whiteBalance.tint' },
+];
+function renderWBIntelligenceDiagnostics(candidate) {
+  const section = document.getElementById('wbIntelDiagnostics');
+  const summaryEl = document.getElementById('wbIntelSummary');
+  const evidenceEl = document.getElementById('wbIntelEvidence');
+  const tableBody = document.getElementById('wbIntelTableBody');
+  const mixedLightNoticeEl = document.getElementById('wbIntelMixedLightNotice');
+  const safeAdjustmentNoticeEl = document.getElementById('wbIntelSafeAdjustmentNotice');
+  if (!section) return;
+
+  const wbIntel = candidate?.diagnostics?.whiteBalanceIntelligence ?? null;
+  if (!wbIntel) { section.style.display = 'none'; return; }
+
+  section.style.display = 'block';
+
+  if (summaryEl) {
+    const flags = Array.isArray(wbIntel.classification?.flags) ? wbIntel.classification.flags.join(', ') : String(wbIntel.classification?.primaryCast ?? '');
+    const parts = [
+      t('appShell.wbPrimaryCast', { cast: wbIntel.classification?.primaryCast ?? '—' }, state.lang),
+      t('appShell.wbFlags', { flags }, state.lang),
+      t('appShell.wbConfidence', { confidence: (wbIntel.confidence ?? 0).toFixed(2), tier: wbIntel.confidenceTier ?? '—' }, state.lang),
+      t('appShell.wbStrengthMode', { mode: wbIntel.strengthMode ?? '—' }, state.lang),
+      wbIntel.engaged
+        ? t('appShell.wbEngaged', null, state.lang)
+        : t('appShell.wbNoAdjustment', null, state.lang),
+    ];
+    if (wbIntel.protections?.objectColorBiasGuard) parts.push(t('appShell.wbObjectColorBiasGuard', null, state.lang));
+    if (wbIntel.protections?.intentionalLightPreserved) parts.push(t('appShell.wbIntentionalLightPreserved', null, state.lang));
+    summaryEl.textContent = parts.join(' \u00b7 ');
+  }
+
+  if (evidenceEl) {
+    const ev = wbIntel.evidence;
+    if (ev) {
+      const fmt = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
+      evidenceEl.textContent = [
+        t('appShell.wbRawReading', { temp: ev.rawTemperature ?? '—', tint: ev.rawTint ?? '—' }, state.lang),
+        t('appShell.wbNeutralConfidence', { score: fmt(ev.neutralReferenceConfidence) }, state.lang),
+        wbIntel.protections?.skinValidationApplied
+          ? t('appShell.wbSkinValidationUsed', null, state.lang)
+          : t('appShell.wbSkinValidationNotUsed', { reason: '' }, state.lang),
+        t('appShell.wbObjectColorBias', { score: (wbIntel.classification?.objectColorBiasScore ?? 0).toFixed(2) }, state.lang),
+      ].join(' \u00b7 ');
+    } else {
+      evidenceEl.textContent = '';
+    }
+  }
+
+  if (mixedLightNoticeEl) {
+    const msg = wbIntel.mixedLightMessage;
+    if (msg && wbIntel.protections?.mixedLightGuard) {
+      mixedLightNoticeEl.style.display = 'block';
+      mixedLightNoticeEl.textContent = state.lang === 'th' ? msg.th : msg.en;
+    } else {
+      mixedLightNoticeEl.style.display = 'none';
+    }
+  }
+
+  let parityEntries = [];
+  try { parityEntries = computeExportParity(candidate).entries; } catch { parityEntries = []; }
+  const byPath = new Map(parityEntries.map((e) => [e.parameterPath, e]));
+
+  // EPIC 2E-P1H -- WB-specific export-safety notice. Reuses the SAME
+  // computeExportParity() call above; only filters down to the two WB
+  // paths. Shown only when quickSafetyClamp() actually adjusted
+  // Temperature or Tint (e.g. a corrupted/manually out-of-range
+  // Candidate) -- an auto-generated P1H Candidate never triggers this,
+  // since the planner's own ceilings (38 temp / -11..29 tint) stay
+  // comfortably under the existing HARD_LIMITS.wb export ceiling
+  // (40 / -12..30).
+  if (safeAdjustmentNoticeEl) {
+    const wbAdjusted = WB_INTEL_FIELDS.some(({ path }) => {
+      const entry = byPath.get(path);
+      return entry ? !entry.candidateVsExportMatch : false;
+    });
+    if (wbAdjusted) {
+      safeAdjustmentNoticeEl.style.display = 'block';
+      safeAdjustmentNoticeEl.textContent = t('appShell.wbExportSafeAdjustmentNotice', null, state.lang);
+    } else {
+      safeAdjustmentNoticeEl.style.display = 'none';
+    }
+  }
+
+  if (tableBody) {
+    tableBody.innerHTML = '';
+    for (const { field, path } of WB_INTEL_FIELDS) {
+      const entry = byPath.get(path);
+      const candidateValue = entry ? entry.candidateCurrentValue : candidate?.whiteBalance?.[field];
+      const exportExpected = entry ? entry.exportExpectedValue : candidateValue;
+      const matches = entry ? entry.candidateVsExportMatch : true;
+      const tr = document.createElement('tr');
+      const cells = [
+        field, String(candidateValue), String(exportExpected),
+        matches ? t('appShell.exportParityMatchYes', null, state.lang) : t('appShell.exportParityMatchNo', null, state.lang),
+      ];
+      for (const cellText of cells) {
+        const td = document.createElement('td');
+        td.textContent = cellText;
+        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
+        tr.appendChild(td);
+      }
+      tableBody.appendChild(tr);
+    }
+  }
 }
 
 function renderXmpFidelityStatus(uiStatus, report = null, xmpString = null) {
