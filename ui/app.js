@@ -11,6 +11,7 @@ import { analyzeImage }                        from '../core/histogram-engine/in
 import { buildPreset, serializeXMP, downloadXMP } from '../core/preset-engine/index.js';
 import { extractPalette }                      from '../core/kmeans-engine/index.js';
 import { analyzeWhiteBalance }                 from '../core/whitebalance-engine/index.js';
+import { runWhiteBalanceEstimators }           from '../core/single-image/white-balance-estimators/estimator-ensemble.js';
 import {
   setSlider, bindSliders, switchTab,
   renderHSLPanel, renderGradingPanel, renderCalibrationPanel,
@@ -2528,6 +2529,24 @@ async function runAnalysis(callerTicket = null) {
     const styleRecognition = styleRecRes;
     singleImageOrchestrator.commitEvidence(analysisTicket, 'skinTone', { status: 'COMPLETED', result: skin, completedAt: Date.now() }, state);
     singleImageOrchestrator.commitEvidence(analysisTicket, 'whiteBalance', { status: wb ? 'COMPLETED' : 'SOFT_FAILED', result: wb, completedAt: Date.now() }, state);
+    // EPIC 2E-P1I: run the pixel-level multi-estimator White Balance
+    // pipeline once for this generation, immediately after the legacy
+    // WB engine result is available. Synchronous (canvas draw +
+    // estimator math are all synchronous), wrapped fail-closed so a
+    // pixel-sampling error never blocks the rest of analysis --
+    // P1H's wb-evidence-extractor.js treats this evidence as OPTIONAL
+    // and falls back to R1 (whiteBalance-engine-only) behaviour
+    // byte-for-byte when it is absent or UNAVAILABLE. P1I never
+    // writes session.candidate directly -- see
+    // P1I_P1H_INTEGRATION_POLICY.md.
+    let wbEstimatorBundle = null;
+    try {
+      wbEstimatorBundle = runWhiteBalanceEstimators(img, { generationId: analysisTicket?.generationId ?? null });
+    } catch (error) {
+      console.warn('[LUMIXA][P1I] White Balance estimator pipeline failed -- falling back to R1 WB evidence.', error?.message || error);
+    }
+    singleImageOrchestrator.commitEvidence(analysisTicket, 'wbEstimators', { status: wbEstimatorBundle && wbEstimatorBundle.status !== 'UNAVAILABLE' ? 'COMPLETED' : 'SOFT_FAILED', result: wbEstimatorBundle, completedAt: Date.now() }, state);
+    singleImageOrchestrator.traceWbEstimatorPipeline(analysisTicket, wbEstimatorBundle);
     singleImageOrchestrator.commitEvidence(analysisTicket, 'hsl', { status: hsl ? 'COMPLETED' : 'SOFT_FAILED', result: hsl, completedAt: Date.now() }, state);
     singleImageOrchestrator.commitEvidence(analysisTicket, 'colorGrading', { status: grading ? 'COMPLETED' : 'SOFT_FAILED', result: grading, completedAt: Date.now() }, state);
     singleImageOrchestrator.commitEvidence(analysisTicket, 'toneCurves', { status: toneCurves ? 'COMPLETED' : 'SOFT_FAILED', result: toneCurves, completedAt: Date.now() }, state);
@@ -3776,6 +3795,97 @@ function renderWBIntelligenceDiagnostics(candidate) {
       }
       tableBody.appendChild(tr);
     }
+  }
+
+  renderWBEstimatorDiagnostics();
+}
+
+// EPIC 2E-P1I -- estimator status label lookup, bilingual.
+const WB_ESTIMATOR_STATUS_KEY = {
+  OK: 'appShell.wbEstimatorStatusOK',
+  DEGRADED: 'appShell.wbEstimatorStatusDegraded',
+  REJECTED: 'appShell.wbEstimatorStatusRejected',
+  UNAVAILABLE: 'appShell.wbEstimatorStatusUnavailable',
+};
+const WB_ESTIMATOR_DISPLAY_ORDER = ['grayWorld', 'whitePatch', 'shadesOfGray', 'neutralRegion', 'highlightIlluminant', 'shadowIlluminant'];
+
+/**
+ * EPIC 2E-P1I -- renders the nested "Pixel-level estimators" sub-panel
+ * inside the existing WB Advanced Diagnostics disclosure. Reads the
+ * LIVE session's own wbEstimators evidence (not just the compact
+ * summary carried on the Candidate's diagnostics) via
+ * getActiveSessionSnapshot(), so every individual estimator's
+ * estimate/confidence/rejection-reason is visible -- never raw pixel
+ * data, scalars and reason codes only. No-ops (hides the sub-panel)
+ * when no usable bundle exists for the active session, matching the
+ * fail-open-to-nothing convention every other Advanced Diagnostics
+ * sub-section in this file already uses.
+ */
+function renderWBEstimatorDiagnostics() {
+  const details = document.getElementById('wbIntelEstimatorDetails');
+  const agreementEl = document.getElementById('wbIntelAgreement');
+  const tbody = document.getElementById('wbIntelEstimatorTableBody');
+  const objectBiasEl = document.getElementById('wbIntelObjectBiasReason');
+  const mixedLightEl = document.getElementById('wbIntelMixedLightReason');
+  if (!details) return;
+
+  let bundle = null;
+  try {
+    const snap = singleImageOrchestrator.getActiveSessionSnapshot();
+    const entry = snap?.evidence?.wbEstimators;
+    if (entry && (entry.status === 'COMPLETED' || entry.status === 'CACHE_HIT')) bundle = entry.result ?? null;
+  } catch { bundle = null; }
+
+  if (!bundle || bundle.status === 'UNAVAILABLE' || !bundle.ensemble || !Array.isArray(bundle.ensemble.usableEstimatorIds) || bundle.ensemble.usableEstimatorIds.length === 0) {
+    details.style.display = 'none';
+    return;
+  }
+  details.style.display = 'block';
+
+  if (agreementEl) {
+    agreementEl.textContent = t('appShell.wbEstimatorAgreementLine', {
+      agreement: (bundle.ensemble.agreement ?? 0).toFixed(2),
+      usable: bundle.ensemble.usableEstimatorIds.length,
+      outliers: bundle.ensemble.outlierEstimatorIds?.length ?? 0,
+      rejected: bundle.ensemble.rejectedEstimatorIds?.length ?? 0,
+    }, state.lang);
+  }
+
+  if (tbody) {
+    tbody.innerHTML = '';
+    for (const id of WB_ESTIMATOR_DISPLAY_ORDER) {
+      const result = bundle.estimators?.[id];
+      if (!result) continue;
+      const tr = document.createElement('tr');
+      const statusLabel = t(WB_ESTIMATOR_STATUS_KEY[result.status] ?? 'appShell.wbEstimatorStatusUnavailable', null, state.lang);
+      const tempTint = result.estimate ? `${result.estimate.temperatureIntent} / ${result.estimate.tintIntent}` : '—';
+      const confidence = typeof result.confidence === 'number' ? result.confidence.toFixed(2) : '—';
+      const reason = result.diagnostics?.rejectionReason ?? (result.diagnostics?.warnings?.[0] ?? '—');
+      const cells = [id, statusLabel, tempTint, confidence, reason];
+      for (const cellText of cells) {
+        const td = document.createElement('td');
+        td.textContent = String(cellText);
+        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+  }
+
+  if (objectBiasEl && bundle.objectBias) {
+    objectBiasEl.textContent = t('appShell.wbObjectBiasReasonLine', {
+      probability: (bundle.objectBias.objectBiasProbability ?? 0).toFixed(2),
+      reasons: bundle.objectBias.reasonCodes?.length ? bundle.objectBias.reasonCodes.join(', ') : t('appShell.wbObjectBiasReasonNone', null, state.lang),
+      hue: bundle.objectBias.dominantHueFamily ?? 'none',
+    }, state.lang);
+  }
+
+  if (mixedLightEl && bundle.mixedLight) {
+    mixedLightEl.textContent = t('appShell.wbMixedLightReasonLine', {
+      status: bundle.mixedLight.isMixedLight ? t('appShell.wbMixedLightStatusDetected', null, state.lang) : t('appShell.wbMixedLightStatusNotDetected', null, state.lang),
+      score: (bundle.mixedLight.score ?? 0).toFixed(2),
+      reason: bundle.mixedLight.reason ?? '',
+    }, state.lang);
   }
 }
 

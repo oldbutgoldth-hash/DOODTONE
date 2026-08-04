@@ -201,6 +201,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1g-r2-detail-export-safety-clamp-test.mjs',
   // EPIC 2E-P1H — White Balance Intelligence & Illuminant Separation.
   'qa/epic-2e-p1h-white-balance-intelligence-test.mjs',
+  // EPIC 2E-P1I — Pixel-Level Multi-Estimator White Balance V2.
+  'qa/epic-2e-p1i-pixel-multi-estimator-wb-test.mjs',
 ];
 
 let anyFailed = false;

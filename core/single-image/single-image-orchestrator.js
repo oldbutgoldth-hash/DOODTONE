@@ -799,4 +799,83 @@ export function traceXmpExportBlocked({ reason = null } = {}) {
   return { traced: true };
 }
 
+// ---------------------------------------------------------------------
+// White Balance pixel-estimator trace events (EPIC 2E-P1I)
+// ---------------------------------------------------------------------
+
+/**
+ * Fires the full bounded WB_ESTIMATOR_* trace-event sequence for one
+ * completed (or failed) runWhiteBalanceEstimators() call. Called from
+ * ui/app.js immediately after commitEvidence(..., 'wbEstimators', ...).
+ * Every event carries only bounded scalars (estimatorId, status,
+ * confidence, acceptedPixelCount, rejectionReason, durationMs,
+ * timestamp) plus sessionId/generationId (added automatically by
+ * `_trace()`) -- never a pixel array, never binary image data.
+ *
+ * Stale-generation safe: if `ticket` no longer matches the active
+ * generation, fires exactly ONE `WB_PIXEL_EVIDENCE_STALE_REJECTED`
+ * event (on whatever session IS currently active, if any) and returns
+ * without touching that session further -- mirrors the exact
+ * staleness-guard pattern `runXmpFidelityCheck()` already uses above.
+ *
+ * @param {{sessionId,generationId}} ticket
+ * @param {object|null} bundle  runWhiteBalanceEstimators()'s return value, or null on hard failure
+ * @param {string|null} [failureMessage]
+ */
+export function traceWbEstimatorPipeline(ticket, bundle, failureMessage = null) {
+  const session = getActiveSession();
+  if (!session) return { traced: false };
+
+  if (ticket && !isActiveGeneration(ticket.sessionId, ticket.generationId)) {
+    _trace(session, 'WB_PIXEL_EVIDENCE_STALE_REJECTED', { generationId: ticket.generationId });
+    return { traced: true, stale: true };
+  }
+
+  _trace(session, 'WB_ESTIMATOR_PIPELINE_STARTED', {});
+
+  if (!bundle || bundle.status === 'UNAVAILABLE') {
+    _trace(session, 'WB_ESTIMATOR_PIPELINE_FAILED', { errorMessage: failureMessage ?? bundle?.diagnostics?.reason ?? 'no usable estimator bundle' });
+    return { traced: true, stale: false };
+  }
+
+  _trace(session, 'WB_PIXEL_SAMPLE_CREATED', {
+    acceptedPixelCount: bundle.diagnostics?.sampleSummary?.accepted ?? 0,
+    durationMs: bundle.diagnostics?.durationMs ?? 0,
+  });
+
+  const perEstimatorTraceType = {
+    grayWorld: 'WB_GRAY_WORLD_COMPLETED',
+    whitePatch: 'WB_WHITE_PATCH_COMPLETED',
+    shadesOfGray: 'WB_SHADES_OF_GRAY_COMPLETED',
+    neutralRegion: 'WB_NEUTRAL_REGION_COMPLETED',
+    highlightIlluminant: 'WB_HIGHLIGHT_SHADOW_COMPLETED',
+    shadowIlluminant: 'WB_HIGHLIGHT_SHADOW_COMPLETED',
+  };
+  for (const [estimatorId, result] of Object.entries(bundle.estimators ?? {})) {
+    const isUsable = result && (result.status === 'OK' || result.status === 'DEGRADED') && result.estimate;
+    _trace(session, isUsable ? (perEstimatorTraceType[estimatorId] ?? 'WB_ESTIMATOR_REJECTED') : 'WB_ESTIMATOR_REJECTED', {
+      estimatorId,
+      status: result?.status ?? 'UNAVAILABLE',
+      confidence: result?.confidence ?? 0,
+      acceptedPixelCount: result?.evidence?.acceptedPixelCount ?? 0,
+      rejectionReason: result?.diagnostics?.rejectionReason ?? null,
+    });
+  }
+
+  if ((bundle.ensemble?.outlierEstimatorIds?.length ?? 0) > 0) {
+    _trace(session, 'WB_ESTIMATOR_DISAGREEMENT', {
+      outlierEstimatorIds: bundle.ensemble.outlierEstimatorIds,
+      agreement: bundle.ensemble.agreement ?? 0,
+    });
+  }
+
+  _trace(session, 'WB_ESTIMATOR_ENSEMBLE_COMPLETED', {
+    confidence: bundle.ensemble?.confidence ?? 0,
+    acceptedPixelCount: bundle.diagnostics?.sampleSummary?.accepted ?? 0,
+    durationMs: bundle.diagnostics?.durationMs ?? 0,
+  });
+
+  return { traced: true, stale: false };
+}
+
 export { SINGLE_IMAGE_FULL, PROFILE_VERSION, getRequiredModuleIds, getTotalModuleCount };

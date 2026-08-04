@@ -836,6 +836,30 @@
                 </thead>
                 <tbody id="wbIntelTableBody"></tbody>
               </table>
+              <!-- EPIC 2E-P1I -- pixel-level multi-estimator evidence, nested
+                   inside the SAME Advanced Diagnostics disclosure (never a
+                   second top-level panel). Shown only when
+                   session.evidence.wbEstimators produced a usable bundle.
+                   Never displays raw pixel arrays -- confidence/estimate
+                   scalars and reason codes only. -->
+              <details id="wbIntelEstimatorDetails" style="display:none;margin-top:8px;padding:8px 10px;border-radius:2px;border:1px solid var(--border);background:var(--surface-1)">
+                <summary style="cursor:pointer;font-family:var(--font-mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.wbEstimatorsHeading">Pixel-level estimators</summary>
+                <div id="wbIntelAgreement" style="margin-top:6px;font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono)"></div>
+                <table style="margin-top:6px;border-collapse:collapse;width:100%">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.wbEstimatorName">Estimator</th>
+                      <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.wbEstimatorStatus">Status</th>
+                      <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.wbEstimatorTempTint">Temp / Tint</th>
+                      <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.wbConfidenceHeader">Confidence</th>
+                      <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.wbEstimatorReason">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody id="wbIntelEstimatorTableBody"></tbody>
+                </table>
+                <div id="wbIntelObjectBiasReason" style="margin-top:6px;font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono)"></div>
+                <div id="wbIntelMixedLightReason" style="margin-top:4px;font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono)"></div>
+              </details>
             </details>
             <!-- EPIC 2E-P1D — XMP Fidelity status, next to Download .xmp. Not a
                  redesign: one small status line + a collapsed Advanced

@@ -56,6 +56,7 @@ export const EVIDENCE_KEYS = Object.freeze([
   'colorCast',           // <- local `castRes` in runAnalysis (color-cast-detector) — no legacy state mirror exists today
   'scene',               // <- local `sceneRes` in runAnalysis (scene-classifier) — no legacy state mirror exists today
   'wb',                  // <- state.lastWB (whitebalance-engine)
+  'wbEstimators',         // <- EPIC 2E-P1I: pixel-level multi-estimator WB bundle (no legacy state mirror; new evidence key, additive)
   'hsl',                 // <- state.lastHSL (hsl-analyzer-engine)
   'grading',             // <- state.lastGrading (colorgrading-ai-engine)
   'toneCurves',          // <- state.lastToneCurves (tone-curve-ai-engine)

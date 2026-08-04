@@ -5,7 +5,7 @@
         "core/lightroom-mapping-engine/index.js": "f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099",
         "core/preset-engine/index.js": "42f3bb83bf850bed3dd4d2a5b66019264c0a0e5561ff07c2e7e3d644c00dedde",
         "core/xmp-validator/index.js": "cfad7b468088c6e3db17163dc4364d3ddd60e5199526a33bfee846f8cd0c95a9",
-        "ui/app.js": "aaa36dc897c5b7737e75be3ce26fbc36fe7f30426d1fc073bb00fd86f66fb5d2",
+        "ui/app.js": "2e3ea9a2af561b3d5bf01104b9dc7d41a0d2b800977fe0132127258e567b884c",
         "ui/ui-engine.js": "147a55ca9acb75b6b5fa05fbede5d246ddc0b37a8ceacd055ff5c1a4d11f6711",
         "core/color-match/reference-xmp-generator.js": "88ce0055bfee339da327604518a53bcb8213e33f8079dda0feb0d1d5e9e58e27"
     },

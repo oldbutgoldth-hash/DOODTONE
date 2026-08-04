@@ -20,6 +20,22 @@ function _resultOf(evidence, key) {
   return usable ? (entry.result ?? null) : null;
 }
 
+/**
+ * EPIC 2E-P1I: is the pixel-level multi-estimator WB bundle usable as
+ * corroborating evidence? Requires the bundle itself to be present,
+ * NOT status UNAVAILABLE, and to have produced at least one usable
+ * individual estimator -- an empty/degraded-to-nothing bundle is
+ * treated exactly like "P1I did not run" (R1 fallback), never as a
+ * false signal.
+ */
+function _p1iUsable(wbEstimators) {
+  return !!(wbEstimators
+    && wbEstimators.status !== 'UNAVAILABLE'
+    && wbEstimators.ensemble
+    && Array.isArray(wbEstimators.ensemble.usableEstimatorIds)
+    && wbEstimators.ensemble.usableEstimatorIds.length > 0);
+}
+
 function _clamp01(v) {
   return Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 }
@@ -32,6 +48,14 @@ export function extractWBEvidence(evidence) {
   const wb = _resultOf(evidence, 'wb');
   const cast = _resultOf(evidence, 'colorCast');
   const skin = _resultOf(evidence, 'skin');
+  // EPIC 2E-P1I: optional pixel-level multi-estimator evidence -- an
+  // ADDITIONAL, higher-quality evidence source layered on top of the
+  // existing R1 (whitebalance-engine-only) evidence, never a
+  // replacement for it. See P1I_P1H_INTEGRATION_POLICY.md for the
+  // exact ownership boundary this function preserves: P1I supplies
+  // evidence fields only, P1H's confidence/classification/guardrail
+  // logic downstream in wb-plan-builder.js is completely unchanged.
+  const wbEstimators = _resultOf(evidence, 'wbEstimators');
   const reasons = [];
 
   if (!wb || !wb.consensus || typeof wb.consensus.temperature !== 'number') {
@@ -43,15 +67,15 @@ export function extractWBEvidence(evidence) {
   if (degraded) reasons.push('color-cast-detector evidence unavailable -- shadow/highlight cast labels and object-color-bias signals fall back to whitebalance-engine-internal estimates only');
 
   // ── The 9 required evidence fields (adapted to real repo contracts) ──
-  const rawTemperature = wb.consensus.temperature;
-  const rawTint = wb.consensus.tint;
+  let rawTemperature = wb.consensus.temperature;
+  let rawTint = wb.consensus.tint;
 
   // Neutral-reference confidence: how much real neutral-pixel evidence
   // backs this WB reading. Reuses wbIntent.neutralBias/referenceConfidence
   // (already computed in whitebalance-engine's _buildWBIntent()) rather
   // than re-deriving a second neutral-pixel scan -- see
   // P1H_ILLUMINANT_OBJECT_BIAS_POLICY.md.
-  const neutralReferenceConfidence = intent
+  let neutralReferenceConfidence = intent
     ? _clamp01(0.5 * intent.neutralBias + 0.5 * intent.referenceConfidence)
     : _clamp01(wb.confidence ?? 0.4);
 
@@ -94,7 +118,7 @@ export function extractWBEvidence(evidence) {
   const borderLabel = cast?.border?.label ?? null;
   const centerStrength = cast?.center?.strength ?? 0;
   const borderStrength = cast?.border?.strength ?? 0;
-  const bgObjectColorRisk = cast
+  let bgObjectColorRisk = cast
     ? _clamp01(
         (cast.bgGreenDominant ? 0.5 : 0) +
         (cast.subjectNeutral && cast.bgGreenDominant ? 0.3 : 0) +
@@ -110,10 +134,62 @@ export function extractWBEvidence(evidence) {
       )
     : _clamp01(intent?.greenBounceRisk ?? 0);
 
-  const mixedLightingRisk = _clamp01(intent?.mixedLightingRisk ?? 0);
+  let mixedLightingRisk = _clamp01(intent?.mixedLightingRisk ?? 0);
 
   const dataPoints = [!!wb, !!cast, !!skin, !!intent].filter(Boolean).length;
-  const confidence = _clamp01(0.35 + 0.15 * dataPoints);
+  let confidence = _clamp01(0.35 + 0.15 * dataPoints);
+
+  // ── EPIC 2E-P1I: layer pixel-level estimator evidence on top, when
+  // usable. Every field below starts from the EXACT R1 value computed
+  // above; when P1I evidence is absent/unavailable, none of this
+  // branch executes and the function's output is byte-for-byte
+  // identical to P1H R1 -- verified by test #56 ("P1H falls back to
+  // R1 evidence when P1I is unavailable"). ──────────────────────────
+  const p1iUsable = _p1iUsable(wbEstimators);
+  let source = cast ? 'whitebalance-engine+color-cast-detector' : 'whitebalance-engine';
+  let p1iSummary = null;
+
+  if (p1iUsable) {
+    const p1iConfidence = _clamp01(wbEstimators.ensemble.confidence);
+    const legacyConfidence = _clamp01(intent?.referenceConfidence ?? wb.confidence ?? 0.4);
+    const totalWeight = p1iConfidence + legacyConfidence;
+    if (totalWeight > 0) {
+      rawTemperature = Math.round(
+        (rawTemperature * legacyConfidence + wbEstimators.ensemble.consensus.temperature * p1iConfidence) / totalWeight
+      );
+      rawTint = Math.round(
+        (rawTint * legacyConfidence + wbEstimators.ensemble.consensus.tint * p1iConfidence) / totalWeight
+      );
+    }
+
+    const nrResult = wbEstimators.estimators?.neutralRegion;
+    if (nrResult && Number.isFinite(nrResult.confidence)) {
+      neutralReferenceConfidence = _clamp01(0.5 * neutralReferenceConfidence + 0.5 * nrResult.confidence);
+    }
+
+    if (wbEstimators.objectBias && Number.isFinite(wbEstimators.objectBias.objectBiasProbability)) {
+      bgObjectColorRisk = _clamp01(0.5 * bgObjectColorRisk + 0.5 * wbEstimators.objectBias.objectBiasProbability);
+    }
+
+    if (wbEstimators.mixedLight && Number.isFinite(wbEstimators.mixedLight.score)) {
+      mixedLightingRisk = _clamp01(0.5 * mixedLightingRisk + 0.5 * wbEstimators.mixedLight.score);
+    }
+
+    source = `${source}+pixel-multi-estimator`;
+    confidence = _clamp01(confidence + 0.05); // one additional real, independent data source
+    p1iSummary = {
+      ensembleConfidence: wbEstimators.ensemble.confidence,
+      ensembleConsensus: wbEstimators.ensemble.consensus,
+      usableEstimatorIds: wbEstimators.ensemble.usableEstimatorIds,
+      outlierEstimatorIds: wbEstimators.ensemble.outlierEstimatorIds,
+      objectBiasProbability: wbEstimators.objectBias?.objectBiasProbability ?? null,
+      objectBiasReasonCodes: wbEstimators.objectBias?.reasonCodes ?? [],
+      mixedLightScore: wbEstimators.mixedLight?.score ?? null,
+      mixedLightIsMixed: wbEstimators.mixedLight?.isMixedLight ?? false,
+    };
+  } else if (wbEstimators) {
+    reasons.push('pixel-level estimator bundle present but unusable (no estimator produced a usable result) -- falling back to R1 whitebalance-engine evidence only');
+  }
 
   return {
     ok: true,
@@ -121,7 +197,7 @@ export function extractWBEvidence(evidence) {
     confidence,
     reasons,
     evidence: {
-      source: cast ? 'whitebalance-engine+color-cast-detector' : 'whitebalance-engine',
+      source,
       rawTemperature, rawTint,
       neutralReferenceConfidence, skinConsistencyConfidence, estimatorAgreement,
       shadowCastLabel, highlightCastLabel, bgObjectColorRisk, mixedLightingRisk,
@@ -131,6 +207,7 @@ export function extractWBEvidence(evidence) {
         wbIntent: intent,
         centerLabel, borderLabel, bgGreenDominant: cast?.bgGreenDominant ?? null, subjectNeutral: cast?.subjectNeutral ?? null,
         skinCoveragePct,
+        pixelEstimators: p1iSummary,
       },
     },
   };

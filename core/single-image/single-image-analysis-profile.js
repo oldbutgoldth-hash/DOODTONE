@@ -130,6 +130,25 @@ export const SINGLE_IMAGE_FULL = Object.freeze([
     sourceFunction: 'analyzeWhiteBalance',
   },
   {
+    // EPIC 2E-P1I -- pixel-level multi-estimator White Balance evidence
+    // bundle. Runs AFTER 'whiteBalance'/'colorCast' resolve (SEQUENTIAL,
+    // not part of the g5-color-engines PARALLEL_GROUP) because it reuses
+    // neither's internals but is conceptually downstream evidence for
+    // the SAME generation. Additive-only: P1H's wb-evidence-extractor.js
+    // treats this evidence as optional and falls back to R1 (whiteBalance-
+    // engine-only) behaviour byte-for-byte when absent/unavailable.
+    moduleId: 'wbEstimators',
+    evidenceKey: 'wbEstimators',
+    required: false,
+    dependencies: ['whiteBalance', 'colorCast'],
+    executionMode: 'SEQUENTIAL',
+    groupId: 'g5b-wb-estimators',
+    timeoutMs: 15000,
+    fallbackPolicy: 'SOFT_FAIL',
+    sourceEngine: 'core/single-image/white-balance-estimators/estimator-ensemble.js',
+    sourceFunction: 'runWhiteBalanceEstimators',
+  },
+  {
     moduleId: 'hsl',
     evidenceKey: 'hsl',
     required: false,
