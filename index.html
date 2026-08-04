@@ -791,6 +791,12 @@
             <details id="detailIntelDiagnostics" style="display:none;margin-top:10px;padding:10px 14px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2)">
               <summary style="cursor:pointer;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.detailAdvancedDiagnostics">Advanced Diagnostics — Detail</summary>
               <div id="detailIntelSummary" style="margin-top:8px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:11px;color:var(--text-dim)"></div>
+              <!-- EPIC 2E-P1G R2 -- Detail-specific export-safety notice, shown
+                   only when quickSafetyClamp() actually adjusted Sharpening or
+                   Noise Reduction (e.g. a corrupted/manually out-of-range
+                   Candidate). Reuses the same computeExportParity() call the
+                   table below already makes -- no new parity mechanism. -->
+              <div id="detailIntelSafeAdjustmentNotice" style="display:none;margin-top:6px;padding:8px 10px;background:var(--warn-soft,rgba(255,180,60,.12));border-radius:2px;font-size:11px;color:var(--text)"></div>
               <div id="detailIntelEvidence" style="margin-top:6px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono)"></div>
               <table style="margin-top:8px;border-collapse:collapse;width:100%">
                 <thead>

@@ -197,6 +197,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1f-basic-tone-intelligence-test.mjs',
   // EPIC 2E-P1G — Detail Intelligence, Sharpening and Noise Reduction.
   'qa/epic-2e-p1g-detail-intelligence-test.mjs',
+  // EPIC 2E-P1G R2 — Detail Export Safety Clamp (Layer-B quickSafetyClamp() hard limits).
+  'qa/epic-2e-p1g-r2-detail-export-safety-clamp-test.mjs',
 ];
 
 let anyFailed = false;

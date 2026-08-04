@@ -59,3 +59,41 @@ Layer-B (`quickSafetyClamp`) hard-limit entry (pre-existing gap, not
 introduced by this EPIC; P1G's own Layer-A guardrails are the fix
 already shipped for it), and Color Noise Reduction remains
 Candidate-independent.
+
+---
+
+## LUMIXA AI v2.7.1 — EPIC 2E-P1G R2: Detail Export Safety Clamp
+
+### What changed
+
+A real, verified export-safety defect in the P1G R1 delivery is
+closed: `core/xmp-validator/index.js`'s `quickSafetyClamp()` (Layer B,
+the export-time safety net every other panel already has) had zero
+rules for Sharpening/Luminance Noise Reduction. This round adds
+`HARD_LIMITS.detail = { sharpening: {min:0,max:40}, noiseReduction:
+{min:0,max:40} }` and a new `_clampDetailPanel()`, wired into
+`quickSafetyClamp()` at the same position every other panel's clamp
+already runs. See `P1G_R2_DETAIL_EXPORT_SAFETY_CLAMP.md` for the full
+writeup.
+
+### What did NOT change
+
+P1G evidence extraction, scene classification, the Sharpening/Noise
+Reduction planners, P1F's Basic-tone formulas, P1E's color formulas,
+the Candidate Store, every serializer property name, P1D's comparison
+policy, Reference Color Match, the Preview pipeline, and every
+Production-write safety flag. No export support was added for Color
+Noise Reduction this round.
+
+### Test coverage
+
+`qa/epic-2e-p1g-r2-detail-export-safety-clamp-test.mjs` — 35/35 PASS
+(32 required numbered cases). `qa/epic-2e-p1g-detail-intelligence-test.mjs`
+(P1G R1) — 68/68 PASS, with mutation test M4 updated and M4b added to
+prove the new protection directly.
+
+### Known limitations (updated)
+
+See `P1G_KNOWN_LIMITATIONS.md` — the "no Layer-B hard limit" limitation
+is now closed. Color Noise Reduction remains Candidate-independent
+(unchanged, out of scope this round).

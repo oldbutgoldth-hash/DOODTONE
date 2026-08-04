@@ -49,6 +49,22 @@ export const HARD_LIMITS = {
   calibration: { hueCap: 10, satCap: 15 },
   presence: { vibCap: 30, satCap: 20 },
   curve: { shadowY: [0, 60], midY: [80, 180], highlightY: [180, 255] },
+  // ── EPIC 2E-P1G R2 — Detail Export Safety Clamp ────────────────────────
+  // Real UI slider ranges are Sharpening 0-150 / Noise Reduction 0-100
+  // (index.html, matching Lightroom's own Develop-module slider range --
+  // NOT a bug), and P1G's own Layer-A planner (detail-guardrails.js) never
+  // emits above 35 for either field under any evidence/mode combination
+  // (see qa/epic-2e-p1g-detail-intelligence-test.mjs tests 22/34). 40 is
+  // the conservative Layer-B export ceiling: comfortably above every
+  // value P1G's planner can legitimately produce (so auto-generated
+  // Candidates are NEVER touched by this clamp -- see R2 test 7/8/12),
+  // comfortably below the raw UI/Lightroom range (so a corrupted or
+  // manually-out-of-range Candidate is always caught before export). See
+  // P1G_R2_DETAIL_EXPORT_SAFETY_CLAMP.md for the full audit.
+  detail: {
+    sharpening:     { min: 0, max: 40 },
+    noiseReduction: { min: 0, max: 40 },
+  },
 };
 
 const SKIN_CHANNELS = new Set(['red', 'orange', 'yellow']);
@@ -306,6 +322,11 @@ export function quickSafetyClamp(preset) {
   const adjustments = [];
 
   _clampBasicPanel(p, HARD_LIMITS.basic, adjustments);
+  // EPIC 2E-P1G R2 -- the Layer-B safety net for Detail (Sharpening,
+  // Luminance Noise Reduction). Never touches p.colorNoise -- Color
+  // Noise Reduction has no Candidate-driven export path at all (see
+  // P1G_SUPPORTED_XMP_DETAIL_FIELDS.md) and this round does not add one.
+  _clampDetailPanel(p, HARD_LIMITS.detail, adjustments);
 
   if (p.tint < HARD_LIMITS.wb.tintGreenFloorIntentional) { adjustments.push(`Tint hard-floored (was ${p.tint}).`); p.tint = HARD_LIMITS.wb.tintGreenFloorIntentional; }
   if (p.tint > HARD_LIMITS.wb.tintMagentaCeil)            { adjustments.push(`Tint hard-ceilinged (was ${p.tint}).`); p.tint = HARD_LIMITS.wb.tintMagentaCeil; }
@@ -338,6 +359,38 @@ function _clampBasicPanel(p, limits, adjustments) {
     const v = p[key] ?? 0;
     const clamped = Math.max(lo, Math.min(hi, v));
     if (clamped !== v) { adjustments.push(`Basic Panel "${key}" (${v}) outside modest range [${lo},${hi}] — clamped to ${clamped}.`); p[key] = clamped; }
+  }
+}
+
+/**
+ * EPIC 2E-P1G R2 -- Detail Panel Layer-B safety net (Sharpening,
+ * Luminance Noise Reduction). Structurally mirrors _clampBasicPanel()
+ * (same shared HARD_LIMITS convention, same adjustments-array reporting
+ * contract) but additionally fails closed on non-finite input, since
+ * unlike the Basic Panel fields (which only ever arrive as real Basic
+ * Tone Plan output), Detail's whole purpose here is protecting against a
+ * Candidate that was corrupted *after* P1G's own Layer-A guardrails
+ * already ran (mutation test M4/M4b) -- a NaN/Infinity here means
+ * something upstream is already broken, and clamp(NaN, lo, hi) would
+ * itself evaluate to NaN (never a safe default), so it must be checked
+ * before, not after, the min/max clamp. Mirrors the identical fail-closed
+ * pattern already proven in detail-guardrails.js's applyDetailGuardrails().
+ */
+function _clampDetailPanel(p, limits, adjustments) {
+  const fields = { sharp: 'sharpening', noise: 'noiseReduction' };
+  for (const [key, name] of Object.entries(fields)) {
+    const { min: lo, max: hi } = limits[name];
+    const raw = p[key];
+    const wasNonFinite = !Number.isFinite(raw);
+    const v = wasNonFinite ? 0 : raw;
+    const clamped = Math.max(lo, Math.min(hi, v));
+    if (wasNonFinite) {
+      adjustments.push(`Detail "${key}" (${String(raw)}) was not a finite number — fail-closed to ${clamped} (never propagated as NaN/Infinity into the exported XMP).`);
+      p[key] = clamped;
+    } else if (clamped !== v) {
+      adjustments.push(`Detail "${key}" (${v}) outside export-safe range [${lo},${hi}] — clamped to ${clamped}.`);
+      p[key] = clamped;
+    }
   }
 }
 

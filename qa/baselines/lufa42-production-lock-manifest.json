@@ -1,6 +1,6 @@
 {
   "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
-  "generatedAt": "2026-08-04T03:30:43.477Z",
+  "generatedAt": "2026-08-04T04:24:04.432Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
@@ -167,7 +167,7 @@
     "core/style-recognition-engine/index.js": "d42c0b1f568a34b58198cc654751eb5323c1a0494c9ce2624ad3aa34b9a561a8",
     "core/tone-curve-ai-engine/index.js": "d9d95bc032e04d552d51a10f6030b6ca97d9b000b9abe32535727d6c57b9c7c6",
     "core/whitebalance-engine/index.js": "40b111ca145636a7b4c2726d38102df3c8d60a07fe42d8403333a159e79d5106",
-    "core/xmp-validator/index.js": "ef942bcc612811477b712ccfe521c343704759b2b3e44c8855686819d830060f",
+    "core/xmp-validator/index.js": "cfad7b468088c6e3db17163dc4364d3ddd60e5199526a33bfee846f8cd0c95a9",
     "ui/basic-panel-renderer.js": "efb96fd7bb73c98fa9355bb7f0ffee028ea6d952b320f3d62119f5538c48d04a",
     "ui/calibration-lab/calibration-lab-controller.js": "bb244e6d282c599858e4d77af723b653aec0e0238125d476552b0f0537e16105",
     "ui/calibration-lab/calibration-lab-entry.js": "281c53fa5fd98bb6741a53a3e59b6c5727426f125de7db99e67d4830188aa98f",
@@ -180,9 +180,9 @@
     "ui/histogram-renderer.js": "f421cec0e0dbb9783c864e4561f07575bd12bdcffdf642eb3d1990ee50c99c24",
     "ui/hsl-analyzer-renderer.js": "5a76c96319b4a0f942f0f81739b04ee774870892953fee0fe0aa8cd16e8738f9",
     "ui/i18n/domain-presenters.js": "7b617d8277113659f600885478d23a8041f730c3b030a9f0fb59ace7b9e34959",
-    "ui/i18n/en.js": "2e7b5965d42f1985a9a52a78e2fdd3951de7ed0bcd6846f05874181884f902f4",
+    "ui/i18n/en.js": "f358494e2eba930912128e8eee29a37678383ce9b12abd0df8fb3c406d56553a",
     "ui/i18n/index.js": "f659ecfb05f86c844131798ef11901578db013b2cf2d542604825014c80af379",
-    "ui/i18n/th.js": "62266ec640710537d0435d632973bfe3c77a130804ba7eae0317aa5448d9391a",
+    "ui/i18n/th.js": "d3d0da8014d5894d184fed3e87a4cbdd294434b0fceb8f683324290572c974ce",
     "ui/image-analysis-renderer.js": "4061c83bd316981bc46bde4fad95a16679e1c2d663ad74d298d0089c528dc790",
     "ui/interactive-preview-observation-session-v2.js": "aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9",
     "ui/palette-renderer.js": "d31aab02d6842cbf53733c14c8ebaa1ac7eda2b28508c9df1854ef458a0069d0",
@@ -197,6 +197,6 @@
     "ui/tone-curve-renderer.js": "3424ad63b6c889a2025e23ea0c7513411e7c4c0bb4dddb1dbc305e1bbd254c6e",
     "ui/ui-engine.js": "147a55ca9acb75b6b5fa05fbede5d246ddc0b37a8ceacd055ff5c1a4d11f6711",
     "ui/whitebalance-renderer.js": "af235b1af3f88d38415bb6d93f34d3a9302f2f94f32e3d39f3570d202abdbe60",
-    "index.html": "d6d24cb387153cdf01031e5bce5f19d509a1e258235f0607fa1f014356de9722"
+    "index.html": "43961e5729c1873655d7089dcfa8b979e7e12f8813f7ea74d2cb5ca7192f43c5"
   }
 }

@@ -4,6 +4,18 @@
 **Audit date:** 2026-08-04
 **Baseline:** LUMIXA AI v2.6.0 (EPIC 2E-P1F, fully verified — 77/77 P1F tests, 70/70 static suites)
 
+> **R2 update (EPIC 2E-P1G R2 — Detail Export Safety Clamp):** the
+> "Layer B clamp (`quickSafetyClamp`)" column below originally read
+> "None" for both `detail.sharpening` and `detail.noiseReduction` —
+> that was accurate for P1G R1. As of R2, both fields have a real
+> Layer-B hard limit (`HARD_LIMITS.detail` in
+> `core/xmp-validator/index.js`, `{min:0,max:40}` each). The two table
+> cells below are updated accordingly; every other row/finding in this
+> audit (evidence source, fixed/binary Candidate values, Color Noise
+> Reduction's permanent lack of export support, the unsupported-field
+> list) is unchanged and still accurate. See
+> `P1G_R2_DETAIL_EXPORT_SAFETY_CLAMP.md` for the full R2 writeup.
+
 This is a from-source audit, not a design proposal. Every claim below is
 backed by a file path + line reference, verified against the actual
 `lumixa_p1g` working copy (an exact `rsync -a` clone of the delivered
@@ -32,8 +44,8 @@ whether the value is fixed/dynamic/null/ignored.
 
 | Candidate path | Evidence source (current) | Source module | Legacy Preset key | Slider ID / range | XMP property | Layer A clamp | Layer B clamp (`quickSafetyClamp`) | P1D readback support | Export status | Fixed / Dynamic |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `detail.sharpening` | **None** — literal constant | `core/lightroom-mapping-engine/index.js:96` (`const sharp = 40;`) | `sharp` | `#sliderSharpening` (Lightroom range 0–150; current UI clamp band narrower — see §5) | `crs:Sharpness` (`core/preset-engine/index.js:146`) | **None** — `clampGroup: null` in `xmp-property-map.js` `BASIC_ENTRIES` | **None** — `core/xmp-validator/index.js` `HARD_LIMITS` has no `detail`/`sharp` group at all | Yes — `EXACT_INT` compare, `required: true` | **Supported, real** — Candidate → Legacy Preset → XMP → readback, full round-trip proven | **Fixed** (always 40, every image) |
-| `detail.noiseReduction` | **Binary heuristic** — `isPortrait` flag only, no measured noise | `core/lightroom-mapping-engine/index.js:97` (`const noise = isPortrait ? 20 : 10;`) | `noise` | `#sliderNoiseReduction` | `crs:LuminanceSmoothing` (`core/preset-engine/index.js:147`) | **None** | **None** | Yes — `EXACT_INT`, `required: true` | **Supported, real** | **Fixed-binary** (20 or 10, never anything else) |
+| `detail.sharpening` | **None** — literal constant | `core/lightroom-mapping-engine/index.js:96` (`const sharp = 40;`) | `sharp` | `#sliderSharpening` (Lightroom range 0–150; current UI clamp band narrower — see §5) | `crs:Sharpness` (`core/preset-engine/index.js:146`) | **None** — `clampGroup: null` in `xmp-property-map.js` `BASIC_ENTRIES` | **R2: `HARD_LIMITS.detail.sharpening = {min:0,max:40}`** (was None in R1 — see the R2 update note above) | Yes — `EXACT_INT` compare, `required: true` | **Supported, real** — Candidate → Legacy Preset → XMP → readback, full round-trip proven | **Fixed** (always 40, every image) |
+| `detail.noiseReduction` | **Binary heuristic** — `isPortrait` flag only, no measured noise | `core/lightroom-mapping-engine/index.js:97` (`const noise = isPortrait ? 20 : 10;`) | `noise` | `#sliderNoiseReduction` | `crs:LuminanceSmoothing` (`core/preset-engine/index.js:147`) | **None** | **R2: `HARD_LIMITS.detail.noiseReduction = {min:0,max:40}`** (was None in R1 — see the R2 update note above) | Yes — `EXACT_INT`, `required: true` | **Supported, real** | **Fixed-binary** (20 or 10, never anything else) |
 | `detail.colorNoiseReduction` | **None** — literal string, never reads Candidate at all | `core/preset-engine/index.js:148` (`crs:ColorNoiseReduction="25"`) | *(not read from `rawPreset` at all in the serializer — `candidate-builder.js:178` sets `candidate.detail.colorNoiseReduction = 25` as a display mirror only)* | `#sliderColorNoiseReduction` (if present in UI — value is cosmetic) | `crs:ColorNoiseReduction` (**hardcoded literal `"25"`**, see `XMP_FIXED_ATTRIBUTES['crs:ColorNoiseReduction'] = '25'` in `xmp-property-map.js`) | N/A | N/A | **No** — `xmp-property-map.js` lists `'detail.colorNoiseReduction'` in `UNSUPPORTED_CANDIDATE_PATHS`; P1D treats it as never-a-mismatch, not a proven parity | **Unsupported (hardcoded serializer literal)** | **Fixed** (always `"25"`, literally never varies) |
 | `detail.radius` | none | none | none | none — `createEmptyCandidate()` leaves it `null` | none | N/A | N/A | Listed in `UNSUPPORTED_CANDIDATE_PATHS` and `candidate-schema.js`'s `UNSUPPORTED_FIELD_PATHS` | **Unsupported** | `null` always |
 | `detail.detail` | none | none | none | none (`null`) | none | N/A | N/A | Unsupported (both lists) | **Unsupported** | `null` always |

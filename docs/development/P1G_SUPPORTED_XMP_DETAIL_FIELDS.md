@@ -9,11 +9,12 @@
 
 Both entries live in `xmp-property-map.js`'s existing `BASIC_ENTRIES`
 list (the same shared map P1E/P1F use — see
-`P1G_DETAIL_INTELLIGENCE_ARCHITECTURE.md`), with `clampGroup: null`
-(no Layer-B hard limit — see the two-layer safety-net gap section
-below), `required: true`. Verified end-to-end (Candidate → Legacy
-Preset → `quickSafetyClamp()` → `serializeXMP()` → P1D's real Fidelity
-Gate readback) by test 7 and test 46.
+`P1G_DETAIL_INTELLIGENCE_ARCHITECTURE.md`), `required: true`. As of
+R2, both fields also have a real Layer-B hard limit —
+`HARD_LIMITS.detail` in `core/xmp-validator/index.js` — see the updated
+section below. Verified end-to-end (Candidate → Legacy Preset →
+`quickSafetyClamp()` → `serializeXMP()` → P1D's real Fidelity Gate
+readback) by test 7 and test 46 (P1G R1) plus the full R2 suite.
 
 ## NOT supported: `detail.colorNoiseReduction`
 
@@ -31,20 +32,19 @@ Advanced-Diagnostics/lineage transparency, but always with
 hardcoded literal (test 29, 30) — never fabricating an export path that
 doesn't exist.
 
-## Two-layer safety-net gap (pre-existing, documented, not a P1G regression)
+## Two-layer safety net (R2: gap closed)
 
-`core/xmp-validator/index.js`'s `HARD_LIMITS` has **zero entries** for
-any Detail field, before and after this EPIC — confirmed by direct
-source grep in the original audit and re-confirmed by mutation test M4.
-This means Layer B (`quickSafetyClamp()`, applied a second time
-immediately before export) provides no protection whatsoever for
-Sharpening or Luminance Noise Reduction. `detail-guardrails.js` (Layer
-A, applied once before Candidate commit) is therefore the **sole**
-safety net for both fields. This gap pre-dates P1G and is not
-introduced by it — P1G's own Layer-A guardrails are the actual fix
-already shipped for it, but a direct post-commit overwrite of
-`candidate.detail.sharpening` still passes through unclamped at export
-time (M4). Closing this gap by adding `HARD_LIMITS.detail` entries is
-out of this EPIC's scope (it would touch the Production-Locked
-`xmp-validator/index.js`) and is recorded as a known limitation — see
-`P1G_KNOWN_LIMITATIONS.md`.
+As of R2, `core/xmp-validator/index.js`'s `HARD_LIMITS` has a real
+`detail` entry: `{ sharpening: {min:0,max:40}, noiseReduction:
+{min:0,max:40} }`. `quickSafetyClamp()` (Layer B, applied a second
+time immediately before export) now protects both Sharpening and
+Luminance Noise Reduction exactly as it already protected every other
+panel, catching anything Layer A's one-time, pre-commit
+`detail-guardrails.js` check cannot — post-commit mutations, future
+bugs, or a direct manual overwrite of the Candidate. Mutation tests
+M4/M4b (updated/added in R2) prove a corrupted `candidate.detail.sharpening
+= 999` (or `noiseReduction = 999`) is clamped to the documented safe
+maximum before export, with the P1D Fidelity Gate confirming the safe
+value — never 999 — was actually written to the XMP. See
+`P1G_R2_DETAIL_EXPORT_SAFETY_CLAMP.md` for the full writeup and
+`P1G_KNOWN_LIMITATIONS.md` for the updated limitations list.

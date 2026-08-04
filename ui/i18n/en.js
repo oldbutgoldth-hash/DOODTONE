@@ -175,6 +175,8 @@ export const en = {
     detailLuminanceNoise: 'Luminance noise score: {score}',
     detailChromaNoise: 'Chroma noise score (estimated): {score}',
     detailColorNrUnsupported: 'Color Noise Reduction is not Candidate-driven — the exported value is a fixed XMP attribute (25), never read from this preset. See P1G_SUPPORTED_XMP_DETAIL_FIELDS.md.',
+    // EPIC 2E-P1G R2 -- Detail Export Safety Clamp
+    detailExportSafeAdjustmentNotice: 'Some detail values were adjusted to export-safe limits',
     supportDivider: 'Support the project',
     supportTitle: 'Support this project',
     supportIntro: 'LUMIXA AI analyzes light, colour, tone, and editing characteristics from a reference image and creates a Lightroom preset (.XMP) locally.',

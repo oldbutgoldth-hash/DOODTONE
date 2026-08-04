@@ -3549,6 +3549,7 @@ function renderDetailIntelligenceDiagnostics(candidate) {
   const evidenceEl = document.getElementById('detailIntelEvidence');
   const tableBody = document.getElementById('detailIntelTableBody');
   const colorNrNoteEl = document.getElementById('detailIntelColorNrNote');
+  const safeAdjustmentNoticeEl = document.getElementById('detailIntelSafeAdjustmentNotice');
   if (!section) return;
 
   const detailIntel = candidate?.diagnostics?.detailIntelligence ?? null;
@@ -3585,12 +3586,32 @@ function renderDetailIntelligenceDiagnostics(candidate) {
     }
   }
 
+  let parityEntries = [];
+  try { parityEntries = computeExportParity(candidate).entries; } catch { parityEntries = []; }
+  const byPath = new Map(parityEntries.map((e) => [e.parameterPath, e]));
+
+  // EPIC 2E-P1G R2 -- Detail-specific export-safety notice. Reuses the
+  // SAME computeExportParity() call above (no second parity mechanism);
+  // only filters down to the two Detail paths. Shown only when at least
+  // one of them was actually adjusted by quickSafetyClamp() (e.g. a
+  // corrupted/manually out-of-range Candidate) -- an auto-generated P1G
+  // Candidate never triggers this, since the planner's own ceiling (35)
+  // stays comfortably under the Layer-B export ceiling (40).
+  if (safeAdjustmentNoticeEl) {
+    const detailAdjusted = DETAIL_INTEL_FIELDS.some(({ path }) => {
+      const entry = byPath.get(path);
+      return entry ? !entry.candidateVsExportMatch : false;
+    });
+    if (detailAdjusted) {
+      safeAdjustmentNoticeEl.style.display = 'block';
+      safeAdjustmentNoticeEl.textContent = t('appShell.detailExportSafeAdjustmentNotice', null, state.lang);
+    } else {
+      safeAdjustmentNoticeEl.style.display = 'none';
+    }
+  }
+
   if (tableBody) {
     tableBody.innerHTML = '';
-    let parityEntries = [];
-    try { parityEntries = computeExportParity(candidate).entries; } catch { parityEntries = []; }
-    const byPath = new Map(parityEntries.map((e) => [e.parameterPath, e]));
-
     for (const { field, path } of DETAIL_INTEL_FIELDS) {
       const entry = byPath.get(path);
       const candidateValue = entry ? entry.candidateCurrentValue : candidate?.detail?.[field];

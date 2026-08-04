@@ -1,19 +1,18 @@
 # P1G Known Limitations
 
-## 1. No Layer-B hard limit for Detail fields (pre-existing, not a P1G regression)
+## 1. ~~No Layer-B hard limit for Detail fields~~ — CLOSED in R2
 
-`core/xmp-validator/index.js`'s `HARD_LIMITS` has zero entries for
-`sharp`/`noise` — confirmed by direct source audit before this EPIC
-began, and re-confirmed by mutation test M4. This means
-`quickSafetyClamp()` (Layer B, applied a second time immediately before
-export) provides no protection whatsoever for Detail fields, before or
-after this EPIC. `detail-guardrails.js` (Layer A, applied once before
-Candidate commit) is the **sole** safety net. Closing this gap by
-adding `HARD_LIMITS.detail` entries would touch the Production-Locked
-`core/xmp-validator/index.js`, which is out of this EPIC's scope. A
-direct post-commit overwrite of `candidate.detail.sharpening` (e.g. by
-a future bug elsewhere in the codebase) would currently export
-unclamped.
+This limitation was real in P1G R1 and is now closed. R2 added
+`HARD_LIMITS.detail = { sharpening: {min:0,max:40}, noiseReduction:
+{min:0,max:40} }` to `core/xmp-validator/index.js` and wired a new
+`_clampDetailPanel()` into `quickSafetyClamp()`. Detail fields now have
+the same two-layer protection every other panel has: Layer A
+(`detail-guardrails.js`, applied once before Candidate commit) plus
+Layer B (`quickSafetyClamp()`, applied again at export, catching
+post-commit mutations, future bugs, or direct manual overwrites Layer
+A never sees). Mutation tests M4/M4b prove the fix directly against
+the real pipeline. See `P1G_R2_DETAIL_EXPORT_SAFETY_CLAMP.md` for the
+full writeup.
 
 ## 2. Color Noise Reduction is permanently unsupported
 

@@ -176,6 +176,8 @@ export const th = {
     detailLuminanceNoise: 'คะแนนจุดรบกวนความสว่าง: {score}',
     detailChromaNoise: 'คะแนนจุดรบกวนสี (ประมาณการ): {score}',
     detailColorNrUnsupported: 'การลดจุดรบกวนสีไม่ได้มาจาก Candidate — ค่าที่ส่งออกเป็นค่าคงที่ในไฟล์ XMP (25) เสมอ ไม่ได้อ่านจากค่านี้ ดูรายละเอียดใน P1G_SUPPORTED_XMP_DETAIL_FIELDS.md',
+    // EPIC 2E-P1G R2 -- Detail Export Safety Clamp
+    detailExportSafeAdjustmentNotice: 'ค่ารายละเอียดบางรายการถูกปรับให้อยู่ในช่วงปลอดภัยก่อนส่งออก',
     supportDivider: 'สนับสนุนโครงการ',
     supportTitle: 'สนับสนุนโครงการนี้',
     supportIntro: 'LUMIXA AI วิเคราะห์แสง สี โทน และลักษณะการแต่งภาพจากภาพอ้างอิง แล้วสร้าง Lightroom preset (.XMP) ภายในเครื่อง',

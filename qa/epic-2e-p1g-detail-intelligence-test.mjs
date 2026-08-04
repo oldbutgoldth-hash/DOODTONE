@@ -291,7 +291,13 @@ console.log('=== EPIC 2E-P1G — Detail Intelligence: Automated Test Suite ===\n
   gatePreset = quickSafetyClamp(gatePreset).preset;
   const gateXmp = serializeXMP(gatePreset);
   const { status: gateStatus, report: gateReport } = runXmpFidelityGate({ candidate, exportExpectedPreset: gatePreset, xmpString: gateXmp });
-  const detailMismatches = (gateReport?.comparisonResult?.comparisons ?? [])
+  // EPIC 2E-P1G R2 fix: buildFidelityReport() flattens comparisons onto the
+  // TOP level of the report object (report.comparisons), never under a
+  // nested report.comparisonResult key -- the old path below silently
+  // evaluated to [] via the ?? fallback, making this check vacuously true
+  // regardless of actual mismatches. Corrected to the real path, verified
+  // directly against the production report shape.
+  const detailMismatches = (gateReport?.comparisons ?? [])
     .filter((c) => (c.candidatePath === 'detail.sharpening' || c.candidatePath === 'detail.noiseReduction') && c.result !== 'MATCH');
   check('7. P1D readback equals Export Expected Detail values -- real Fidelity Gate run (Candidate -> Legacy Preset -> quickSafetyClamp -> serializeXMP -> readback) reports zero Detail-specific mismatches', detailMismatches.length === 0, `gate.status=${gateStatus}, detailMismatches=${JSON.stringify(detailMismatches)}`);
 }
@@ -485,7 +491,8 @@ console.log('=== EPIC 2E-P1G — Detail Intelligence: Automated Test Suite ===\n
   preset = safety.preset;
   const xmp = serializeXMP(preset);
   const { status, report } = runXmpFidelityGate({ candidate, exportExpectedPreset: preset, xmpString: xmp });
-  const detailComparisons = (report?.comparisonResult?.comparisons || []).filter((c) => c.candidatePath === 'detail.sharpening' || c.candidatePath === 'detail.noiseReduction');
+  // EPIC 2E-P1G R2 fix: see the identical correction + explanation on test 7 above.
+  const detailComparisons = (report?.comparisons || []).filter((c) => c.candidatePath === 'detail.sharpening' || c.candidatePath === 'detail.noiseReduction');
   const detailMismatches = detailComparisons.filter((c) => c.result !== 'MATCH');
   check('46. XMP Readback Fidelity Gate confirms Export Expected values == real XMP Readback values for both Detail fields (crs:Sharpness / crs:LuminanceSmoothing) -- P1D machinery reused, not a new parity mechanism', detailMismatches.length === 0, `status=${status}, detailMismatches=${detailMismatches.length}`);
 
@@ -570,18 +577,39 @@ console.log('=== EPIC 2E-P1G — Detail Intelligence: Automated Test Suite ===\n
     && Number.isFinite(guardedM3.values.noiseReduction) && guardedM3.values.noiseReduction === 0;
   check('M3. NaN/Infinity values reaching applyDetailGuardrails() (e.g. from a corrupted planner output) are fail-closed to 0 for both fields, with an explicit adjustment-reason string recorded, never propagated as NaN/Infinity into the Candidate or export', noNaNLeakedM3 && guardedM3.adjustments.some((a) => /not a finite number/.test(a)));
 
-  // M4 -- Detail has NO Layer-B (quickSafetyClamp/HARD_LIMITS) entry, unlike Basic/HSL -- an out-of-bounds
-  // post-commit overwrite is NOT caught downstream, confirming Layer A (detail-guardrails, applied once
-  // before commit) is the SOLE safety net for Detail fields, exactly as documented in
-  // P1G_DETAIL_VALUE_LINEAGE_AUDIT.md's two-layer safety-net gap section. This is a deliberate, honestly
-  // documented structural finding, not a P1G regression -- the gap pre-dates this EPIC and P1G's own
-  // Layer-A guardrails are the fix already shipped for it.
+  // M4 -- UPDATED by EPIC 2E-P1G R2 (Detail Export Safety Clamp).
+  // Superseded finding: R1 proved Detail had NO Layer-B entry and an
+  // out-of-bounds post-commit overwrite passed through unclamped (a
+  // real, documented export-safety defect -- see
+  // P1G_R2_DETAIL_EXPORT_SAFETY_CLAMP.md). R2 closes that gap by adding
+  // HARD_LIMITS.detail to core/xmp-validator/index.js. This test now
+  // proves the FIX: the same out-of-bounds overwrite is caught, clamped
+  // to the documented safe maximum, recorded as an adjustment, and the
+  // real P1D Fidelity Gate readback confirms the SAFE (clamped) value
+  // was what actually got exported -- never the unsafe 999.
   const { built: builtM4 } = buildReadySession('CLEAN_DAYLIGHT_PORTRAIT');
-  builtM4.candidate.detail.sharpening = 999; // far outside BOUNDS.sharpening, no HARD_LIMITS.detail entry exists to catch it
+  builtM4.candidate.detail.sharpening = 999; // far outside BOUNDS.sharpening -- HARD_LIMITS.detail now catches this
+  const hasHardLimitEntry = 'detail' in HARD_LIMITS && 'sharpening' in HARD_LIMITS.detail;
   const mismatchesM4 = getExportParityMismatches(builtM4.candidate);
   const sharpMismatchM4 = mismatchesM4.find((e) => e.parameterPath === 'detail.sharpening');
-  const noHardLimitEntry = !('detail' in HARD_LIMITS);
-  check('M4. Detail lacks a Layer-B hard-limit entry (unlike Basic/HSL) -- an out-of-bounds post-commit overwrite of candidate.detail.sharpening (999) passes through quickSafetyClamp() unclamped and is exported as-is (no parity mismatch raised), confirming detail-guardrails.js (Layer A, applied before commit) is the sole safety net for Detail fields', noHardLimitEntry && !sharpMismatchM4, `HARD_LIMITS.detail exists=${!noHardLimitEntry}, mismatchFound=${!!sharpMismatchM4}`);
+  const safeMaxM4 = HARD_LIMITS.detail?.sharpening?.max;
+  let presetM4 = candidateToLegacyPreset(builtM4.candidate);
+  presetM4 = quickSafetyClamp(presetM4).preset;
+  const xmpM4 = serializeXMP(presetM4);
+  const gateM4 = runXmpFidelityGate({ candidate: builtM4.candidate, exportExpectedPreset: presetM4, xmpString: xmpM4 });
+  check('M4. Detail NOW has a Layer-B hard-limit entry (HARD_LIMITS.detail, added in R2) -- an out-of-bounds post-commit overwrite of candidate.detail.sharpening (999) is caught by quickSafetyClamp(), clamped to the documented safe maximum, reported as an export-parity adjustment, and the real P1D Fidelity Gate readback confirms the SAFE clamped value was actually exported (never 999)', hasHardLimitEntry && !!sharpMismatchM4 && sharpMismatchM4.exportExpectedValue === safeMaxM4 && presetM4.sharp === safeMaxM4 && gateM4.status === 'PASS', `safeMax=${safeMaxM4}, exportExpected=${sharpMismatchM4?.exportExpectedValue}, presetSharp=${presetM4.sharp}, gateStatus=${gateM4.status}`);
+
+  // M4b -- the equivalent proof for Noise Reduction (999 -> clamped -> exported safely).
+  const { built: builtM4b } = buildReadySession('CLEAN_DAYLIGHT_PORTRAIT');
+  builtM4b.candidate.detail.noiseReduction = 999;
+  const mismatchesM4b = getExportParityMismatches(builtM4b.candidate);
+  const noiseMismatchM4b = mismatchesM4b.find((e) => e.parameterPath === 'detail.noiseReduction');
+  const safeMaxM4b = HARD_LIMITS.detail?.noiseReduction?.max;
+  let presetM4b = candidateToLegacyPreset(builtM4b.candidate);
+  presetM4b = quickSafetyClamp(presetM4b).preset;
+  const xmpM4b = serializeXMP(presetM4b);
+  const gateM4b = runXmpFidelityGate({ candidate: builtM4b.candidate, exportExpectedPreset: presetM4b, xmpString: xmpM4b });
+  check('M4b. Same protection for Noise Reduction -- an out-of-bounds post-commit overwrite of candidate.detail.noiseReduction (999) is caught by quickSafetyClamp(), clamped to the documented safe maximum, reported as an export-parity adjustment, and the real P1D Fidelity Gate readback confirms the SAFE clamped value was actually exported', !!noiseMismatchM4b && noiseMismatchM4b.exportExpectedValue === safeMaxM4b && presetM4b.noise === safeMaxM4b && gateM4b.status === 'PASS', `safeMax=${safeMaxM4b}, exportExpected=${noiseMismatchM4b?.exportExpectedValue}, presetNoise=${presetM4b.noise}, gateStatus=${gateM4b.status}`);
 
   // M5 -- change the Legacy Preset's Detail value directly; must NOT feed back into the Candidate (one-way, read-only export flow).
   const { built: builtM5 } = buildReadySession('CLEAN_DAYLIGHT_PORTRAIT');
