@@ -203,6 +203,10 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1h-white-balance-intelligence-test.mjs',
   // EPIC 2E-P1I — Pixel-Level Multi-Estimator White Balance V2.
   'qa/epic-2e-p1i-pixel-multi-estimator-wb-test.mjs',
+  // EPIC 2E-P1I R2 -- Pixel Skin Validation and WB Correction Plausibility.
+  'qa/epic-2e-p1i-r2-pixel-skin-validation-test.mjs',
+  // EPIC 2E-P1J -- Tone Curve Intelligence & Point-Curve Export Wiring.
+  'qa/epic-2e-p1j-tone-curve-intelligence-test.mjs',
 ];
 
 let anyFailed = false;

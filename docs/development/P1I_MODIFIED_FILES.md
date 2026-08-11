@@ -49,3 +49,57 @@
 ## Untouched (explicitly verified)
 
 `core/lightroom-mapping-engine/index.js`, `core/preset-engine/index.js`, `core/xmp-validator/index.js`, `ui/ui-engine.js`, `core/color-match/reference-xmp-generator.js` — byte-identical, confirmed via the RCM/N1 invariant manifest re-check.
+
+
+---
+
+# R2 addendum — Pixel Skin Validation and WB Correction Plausibility
+
+## New files: `core/single-image/white-balance-estimators/`
+
+| File | Lines | Purpose |
+|---|---|---|
+| `skin-sample-validator.js` | ~150 | Extracts and validates a trusted subset of skin-toned pixels from the shared P1I sample (reuses `isLikelySkinPixelYCbCr()`, rejects clipped/oversaturated/near-shadow candidates). Not a WB estimator. |
+| `skin-correction-plausibility.js` | ~180 | Simulates the ensemble's proposed correction on validated skin pixels only (pure, local, discarded after scoring) and scores before/after plausibility against the same skin chrominance band. |
+
+2 files, ~330 lines — all new.
+
+## Modified files (R2)
+
+| File | Change |
+|---|---|
+| `core/single-image/white-balance-estimators/estimator-ensemble.js` | Adds one import and, inside `runWhiteBalanceEstimators()` after `ensemble`/`objectBias`/`mixedLight` are computed, calls `validateSkinCorrection(sample, ensemble.consensus, { neutralRegionResult })` in a `try/catch` (falls back to an `UNAVAILABLE`-shaped result on error) and adds `skinValidation` to the returned bundle. `buildEstimatorEnsemble()` itself is untouched. |
+| `core/single-image/white-balance-estimators/wb-estimator-schema.js` | `createEmptyBundle(reason)`'s hard-failure fallback shape now also includes a default `UNAVAILABLE` `skinValidation`. |
+| `core/single-image/white-balance-intelligence/wb-evidence-extractor.js` | `skinConsistencyConfidence` changed from `const` to `let`; inside the existing `if (p1iUsable) { ... }` block, reads `wbEstimators.skinValidation` and, only when usable, overrides `skinConsistencyConfidence` with the real pixel-level confidence (R1 proxy formula otherwise unchanged). `p1iSummary` gains an additive `skinValidation` sub-object. `wb-plan-builder.js`, `cast-classifier.js`, `wb-guardrails.js`, `mixed-light-detector.js`, `skin-consistency-validator.js` are untouched. |
+| `index.html` | Additive markup hook (`wbIntelSkinValidationReason`) inside the existing Advanced Diagnostics estimator-details panel. |
+| `ui/i18n/en.js` / `ui/i18n/th.js` | Added `wbSkinValidationReasonLine`, `wbSkinValidationSupported`, `wbSkinValidationNotSupported`, `wbSkinValidationConflict`, `wbSkinValidationNoConflict` keys (English and Thai). |
+| `ui/app.js` | `renderWBEstimatorDiagnostics()` extended with a lookup/render block for the new skin-validation diagnostics line, sourced from `bundle.skinValidation`. This is the only production code path in `ui/app.js` touched by R2; `validateSkinCorrection()` itself is never called from `ui/app.js` (verified structurally). |
+| `package.json` | Version bumped `2.9.0` → `2.9.1`; description updated to reference EPIC 2E-P1I R2. |
+
+## Test / QA files (R2)
+
+| File | Purpose |
+|---|---|
+| `qa/fixtures/epic-2e-p1i/skin-validation-fixtures-r2.mjs` | Deterministic (seeded) synthetic pixel-array fixtures for the 11 skin-validation scenes (natural/clipped/red-stage-light/magenta-stage-light/shadow/cool-shifted/tiny-patch/compact-blob/foliage-only/costume-only/costume-with-real-skin). |
+| `qa/epic-2e-p1i-r2-pixel-skin-validation-test.mjs` | 30 numbered checks (29 spec-required scenarios plus one split structural sub-check) against real production modules — 30/30 passing. |
+| `qa/run-static-suites.mjs` | Registered the new R2 suite in `STATIC_SUITES`, immediately after the P1I R1 entry. |
+
+## Baseline/manifest maintenance (R2, expected per-round housekeeping)
+
+| File | Change |
+|---|---|
+| `qa/baselines/lufa42-production-lock-manifest.json` | Regenerated: 202 → 204 locked files (the 2 new estimator files), 0 mismatches on the other 202. |
+| `qa/baselines/epic-2e-n1-production-invariant.json` | Only the `ui/app.js` hash entry updated (expected every round, since `ui/app.js` legitimately changes for UI wiring); the other 5 protected engine-file hashes are unchanged. |
+
+## Untouched (explicitly verified, R2)
+
+Every R1-listed protected file above, plus every R1 estimator file
+(`wb-color-math.js`, `wb-pixel-sampler.js`, `gray-world-estimator.js`,
+`white-patch-estimator.js`, `shades-of-gray-estimator.js`,
+`neutral-region-estimator.js`, `highlight-shadow-illuminant-estimator.js`,
+`estimator-confidence.js`), `wb-plan-builder.js`, `cast-classifier.js`,
+`wb-guardrails.js`, `mixed-light-detector.js`,
+`skin-consistency-validator.js`, and the entire P1E/P1F/P1G/P1D/P1C/
+P1A/P1B color/tone/detail/candidate/XMP pipeline — byte-identical,
+confirmed via the regenerated Production Lock manifest (204 files, 0
+mismatches).

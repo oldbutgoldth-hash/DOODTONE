@@ -97,6 +97,15 @@ export function createEmptyBundle(reason) {
     ensemble: null,
     objectBias: null,
     mixedLight: null,
+    // EPIC 2E-P1I R2: additive field, present (as an explicit UNAVAILABLE
+    // shape, never `undefined`) even when the whole pixel pipeline could
+    // not run at all -- so every consumer can rely on
+    // bundle.skinValidation always being a well-formed object.
+    skinValidation: {
+      status: 'UNAVAILABLE', confidence: 0,
+      sampleSummary: { candidateSkinPixels: 0, acceptedSkinPixels: 0, rejectedClipped: 0, rejectedSaturated: 0, rejectedLowLuminance: 0, spatialCoverage: 0 },
+      plausibility: null, rejectionReason: 'NO_SKIN_DETECTED', warnings: [],
+    },
     diagnostics: { reason: reason ?? 'estimator pipeline did not run', durationMs: 0, warnings: [] },
   };
 }

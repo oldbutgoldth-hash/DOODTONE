@@ -28,6 +28,14 @@ import {
   ESTIMATOR_ID, ESTIMATOR_STATUS, WB_ESTIMATOR_SCHEMA_VERSION,
   WB_ESTIMATOR_BUNDLE_STATUS, createEmptyBundle,
 } from './wb-estimator-schema.js';
+// EPIC 2E-P1I R2 -- Pixel Skin Validation and WB Correction Plausibility.
+// Skin validation is deliberately called AFTER the ensemble consensus
+// below, as a SEPARATE, read-only validation pass over the SAME shared
+// pixel sample -- it never participates in buildEstimatorEnsemble()'s
+// weighted consensus/hierarchy (that function is completely unchanged
+// by this addition; see the M9/M9b-style structural tests in the R2
+// suite), and never writes Candidate. See P1I_R2_PIXEL_SKIN_VALIDATION_MODEL.md.
+import { validateSkinCorrection } from './skin-correction-plausibility.js';
 
 // Suggested hierarchy (spec): 1) valid neutral-region, 2) valid non-
 // clipped white patch, 3) shades of gray, 4) gray world. Implemented
@@ -224,6 +232,28 @@ export function runWhiteBalanceEstimators(pixelSource, opts = {}) {
   const objectBias = computeObjectBiasEvidence(estimators);
   const mixedLight = computeMixedLightEvidence(estimators, objectBias);
 
+  // EPIC 2E-P1I R2 -- Pixel Skin Validation and WB Correction Plausibility.
+  // Runs AFTER the ensemble consensus above, as a separate read-only
+  // validation pass over the SAME shared `sample` -- validates the
+  // proposed correction against real skin pixels, never participates in
+  // the consensus itself, never writes Candidate. Always produces a
+  // result (falls back to an UNAVAILABLE/NO_SKIN_DETECTED shape when no
+  // trustworthy skin sample exists), matching every other P1I
+  // estimator's "always returns a safe result, never throws" contract.
+  let skinValidation;
+  try {
+    skinValidation = validateSkinCorrection(sample, ensemble.consensus, {
+      neutralRegionResult: estimators[ESTIMATOR_ID.NEUTRAL_REGION],
+    });
+  } catch (error) {
+    skinValidation = {
+      status: 'UNAVAILABLE', confidence: 0,
+      sampleSummary: { candidateSkinPixels: 0, acceptedSkinPixels: 0, rejectedClipped: 0, rejectedSaturated: 0, rejectedLowLuminance: 0, spatialCoverage: 0 },
+      plausibility: null, rejectionReason: 'NO_SKIN_DETECTED',
+      warnings: [`skin validation failed: ${error?.message || error}`],
+    };
+  }
+
   const durationMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt);
   const anyUsable = ensemble.usableEstimatorIds.length > 0;
 
@@ -235,6 +265,7 @@ export function runWhiteBalanceEstimators(pixelSource, opts = {}) {
     ensemble,
     objectBias,
     mixedLight,
+    skinValidation,
     diagnostics: {
       reason: anyUsable ? null : ensemble.reason,
       durationMs,

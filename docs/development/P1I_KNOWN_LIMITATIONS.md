@@ -74,3 +74,59 @@ bright pixel reports low confidence or `UNAVAILABLE`, per test coverage),
 but it means the ensemble's behavior on unusual scene types is governed
 entirely by the confidence heuristics in Limitation #3, not by explicit
 scene-type rules.
+
+
+## 7. (R2) Skin sample size is often small, and confidence reflects that honestly
+
+Real photos frequently contain a small amount of skin, or skin under
+conditions (heavy shadow, extreme highlight, colored stage light) that
+this module deliberately rejects rather than trusts. In those cases
+`sampleQualityConfidence` is low or the result is `UNAVAILABLE` by
+design — this is the intended, conservative behavior (spec item:
+"don't trust every YCbCr-classified pixel"), not a defect. A photo with
+a small, clean headshot region will produce a usable but modestly
+confident result; a photo with no visible skin, or skin only under
+adverse conditions, will correctly fall back to R1's existing proxy
+behavior rather than fabricate a pixel-level answer from too little
+data.
+
+## 8. (R2) The Temp/Tint-to-gain inverse used for simulation is approximate by construction
+
+`_inverseTempTintToGains()` in `skin-correction-plausibility.js` is a
+necessarily approximate inverse of `gainsToTempTint()`: temperature and
+tint compress three RGB gain degrees of freedom into two scalars, so no
+exact inverse exists. The mean-gain-preserving convention chosen (see
+`P1I_R2_SKIN_CORRECTION_PLAUSIBILITY.md` §2) was verified to round-trip
+exactly through the real `gainsToTempTint()` for the tested cases and to
+produce genuine, correctly-signed hue shifts for pure-tint corrections —
+but it remains a documented approximation used only for this
+plausibility simulation, never exported for reuse, and never a source
+of truth for how the real Preview/Candidate pipeline renders a
+correction.
+
+## 9. (R2) The neutral-region conflict signal is a moderate, bounded reduction — not a second decision-maker
+
+When skin plausibility disagrees with a confident neutral-region
+reading, confidence is multiplied by `CONFLICT_PENALTY_MULTIPLIER =
+0.75` — a single, fixed, moderate reduction, not a re-adjudication
+between the two signals. This was a deliberate design choice per the
+spec's explicit requirement ("conflicts... get recorded and moderately
+reduce confidence, never a blind override") rather than, e.g., a
+weighted vote or a second consensus computation — the ensemble's own
+six-estimator consensus mechanism already exists for that purpose, and
+duplicating it here for one validator signal was judged unnecessary
+complexity for a signal that is itself optional, additive evidence.
+
+## 10. (R2) `qa/run-static-suites.mjs` was not executed as one literal blocking command in this sandbox
+
+This sandbox enforces a hard ceiling of roughly 43-45 seconds per shell
+command with no way to persist a background process across separate
+commands. Several suites in this project's existing dependency chain
+recursively re-run earlier suites in full via `spawnSync` (e.g. P1F
+re-runs P1E R3, which itself re-runs P1E R2), and the combined cost of
+that chain exceeds the per-command ceiling — a structural property of
+this sandbox, not of the suites or the code under test. Every suite was
+independently verified passing (see `P1I_QA_REPORT.md`'s R2 addendum
+§3 for the full methodology and result table); the literal aggregate
+exit code of one single `node qa/run-static-suites.mjs` invocation was
+not captured, and this is disclosed here rather than assumed.

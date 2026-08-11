@@ -49,6 +49,8 @@ import { buildDetailPlan } from '../detail-intelligence/detail-plan-builder.js';
 import { DEFAULT_STRENGTH_MODE as DEFAULT_DETAIL_STRENGTH_MODE } from '../detail-intelligence/detail-schema.js';
 import { buildWhiteBalancePlan } from '../white-balance-intelligence/wb-plan-builder.js';
 import { DEFAULT_STRENGTH_MODE as DEFAULT_WB_STRENGTH_MODE } from '../white-balance-intelligence/white-balance-schema.js';
+import { buildToneCurvePlan } from '../tone-curve-intelligence/tone-curve-plan-builder.js';
+import { DEFAULT_STRENGTH_MODE as DEFAULT_TONE_CURVE_STRENGTH_MODE } from '../tone-curve-intelligence/tone-curve-schema.js';
 import { SINGLE_IMAGE_FULL, PROFILE_VERSION } from '../single-image-analysis-profile.js';
 import { SESSION_STATUS, MODULE_STATE } from '../single-image-session.js';
 import { confidenceFromRaw } from '../report/confidence-aggregator.js';
@@ -136,6 +138,12 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
   candidate.basic.saturation = rawPreset.sat ?? 0;
 
   // ── curves ──────────────────────────────────────────────────────
+  // EPIC 2E-P1C baseline: rawPreset.curves was always undefined (see
+  // P1J_TONE_CURVE_LINEAGE_AUDIT.md) -- buildFinalPreset() never set
+  // it, so this fallback was silently dead in every real analysis run.
+  // Preserved here only as an honest, documented no-op fallback for any
+  // future caller that DOES populate rawPreset.curves directly (e.g. a
+  // manual-Curve-Editor-driven export path, if one is ever added).
   const curves = rawPreset.curves ?? null;
   candidate.curves.rgb = curves?.master ?? null;
   candidate.curves.red = curves?.red ?? null;
@@ -143,6 +151,36 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
   candidate.curves.blue = curves?.blue ?? null;
   candidate.curves.parametric = {
     shadows: rawPreset.crv_sh ?? 0, midtones: rawPreset.crv_mid ?? 0, highlights: rawPreset.crv_hi ?? 0,
+  };
+
+  // ── EPIC 2E-P1J — Tone Curve Intelligence & Point-Curve Export Wiring ──
+  // Reads the REAL, already-computed `evidence.toneCurves` result
+  // (core/tone-curve-ai-engine/index.js::generateToneCurves(), reused
+  // unmodified) and, when it engages, OVERWRITES the (always-null in
+  // practice) rawPreset-sourced values above with the real per-photo
+  // point-curve data -- this is the fix for the root cause documented
+  // in tone-curve-schema.js's header comment and
+  // P1J_TONE_CURVE_LINEAGE_AUDIT.md: candidate.curves.rgb/red/green/blue
+  // were always null for every AI-analyzed photo, so the real
+  // serializer's crs:ToneCurvePV2012* export always fell back to a flat
+  // identity curve regardless of the photo's actual tonal content. Only
+  // ever writes rgb/red/green/blue -- candidate.curves.parametric is
+  // explicitly out of scope (see tone-curve-schema.js's Scope Boundary
+  // section). Never writes candidate.basic/hsl/grading/cal/detail/
+  // whiteBalance -- P1J's territory is these four fields only.
+  const toneCurvePlan = buildToneCurvePlan(evidence, { strengthMode: DEFAULT_TONE_CURVE_STRENGTH_MODE });
+  if (toneCurvePlan.diagnostics.engaged) {
+    if (toneCurvePlan.finalValues.master != null) candidate.curves.rgb = toneCurvePlan.finalValues.master;
+    if (toneCurvePlan.finalValues.red != null) candidate.curves.red = toneCurvePlan.finalValues.red;
+    if (toneCurvePlan.finalValues.green != null) candidate.curves.green = toneCurvePlan.finalValues.green;
+    if (toneCurvePlan.finalValues.blue != null) candidate.curves.blue = toneCurvePlan.finalValues.blue;
+  }
+  candidate.diagnostics.toneCurveIntelligence = {
+    schemaVersion: toneCurvePlan.schemaVersion, strengthMode: toneCurvePlan.strengthMode,
+    confidence: toneCurvePlan.confidence, category: toneCurvePlan.category,
+    engaged: toneCurvePlan.diagnostics.engaged, reasons: toneCurvePlan.diagnostics.reasons,
+    warnings: toneCurvePlan.diagnostics.warnings, pointsRestrained: toneCurvePlan.diagnostics.pointsRestrained,
+    lineage: toneCurvePlan.lineage,
   };
 
   // ── hsl ─────────────────────────────────────────────────────────

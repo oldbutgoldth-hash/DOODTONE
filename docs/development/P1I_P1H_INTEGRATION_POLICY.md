@@ -90,3 +90,66 @@ Its result is committed via the same `commitEvidence()` stale-ticket
 check every other module uses, so a late-resolving call from a
 superseded generation can never attach its bundle to a newer Session
 (test #63).
+
+
+## R2 addendum -- Skin Validation V2 integration (additive only)
+
+R1 shipped `skinConsistencyConfidence` as a **proxy** signal in
+`wb-evidence-extractor.js`: `skinWarmth.confidence x skin coverage`, a
+colorimetric approximation with no real per-pixel skin validation
+behind it. R2 replaces that proxy, only when a usable result is
+available, with the real pixel-level result from
+`wbEstimators.skinValidation` (see `P1I_R2_PIXEL_SKIN_VALIDATION_MODEL.md`
+and `P1I_R2_SKIN_CORRECTION_PLAUSIBILITY.md`).
+
+The change in `wb-evidence-extractor.js` is a single, additive
+substitution inside the existing `if (p1iUsable) { ... }` block:
+
+```js
+const skinValidation = wbEstimators.skinValidation ?? null;
+const skinValidationUsable = !!(skinValidation
+  && skinValidation.status !== 'UNAVAILABLE'
+  && Number.isFinite(skinValidation.confidence));
+if (skinValidationUsable) {
+  skinConsistencyConfidence = _clamp01(skinValidation.confidence);
+}
+```
+
+**When `skinValidation` is absent, `UNAVAILABLE`, or has a non-finite
+confidence, the R1 proxy formula computes `skinConsistencyConfidence`
+completely unmodified** -- this is the fallback path required by the
+spec, and it was verified directly (not just asserted): a real
+`UNAVAILABLE`-status `wbEstimators` bundle produces a byte-identical
+`skinConsistencyConfidence` value to the pre-R2 code path (R2 suite
+tests 21/26).
+
+`p1iSummary` gains one new, purely additive sub-object,
+`p1iSummary.skinValidation`, carrying `status`, `confidence`,
+`acceptedSkinPixels`, `spatialCoverage`, `correctionSupported`, and
+`conflictWithNeutral` for diagnostics/UI consumption -- populated only
+when `skinValidationUsable` is true, `null` otherwise.
+
+**Every other line of `wb-evidence-extractor.js`, and every line of
+`wb-plan-builder.js`, `cast-classifier.js`, `wb-guardrails.js`,
+`mixed-light-detector.js`, and `skin-consistency-validator.js`, is
+untouched.** P1H's final ownership of the Temperature/Tint decision is
+unchanged by this round: Skin Validation V2 only changes what one
+input confidence value LOOKS like when real pixel evidence is
+available, never how P1H decides what to do with it -- the exact same
+principle this document already establishes for P1I R1's own evidence
+in the section above.
+
+### Storage location (documented deviation, same convention as R1)
+
+The spec suggests `session.whiteBalanceEstimators.skinValidation` (or
+an equivalent clearly-documented field) as the storage location. Per
+this document's own R1 precedent (see "Deviation from the spec's
+suggested field name" above), this project stores ALL P1I evidence
+inside the single `wbEstimators` bundle already committed to
+`session.evidence.wbEstimators` by `commitEvidence()`. `skinValidation`
+is simply one more additive key on that SAME bundle --
+`session.evidence.wbEstimators.skinValidation` -- rather than a second,
+parallel storage location. This reuses the exact generation-gating,
+stale-ticket rejection, and reset-clearing machinery the R1 bundle
+already has (see "Generation gating" above), which a second top-level
+field would have had to duplicate for no benefit.

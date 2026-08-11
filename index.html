@@ -859,7 +859,45 @@
                 </table>
                 <div id="wbIntelObjectBiasReason" style="margin-top:6px;font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono)"></div>
                 <div id="wbIntelMixedLightReason" style="margin-top:4px;font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono)"></div>
+                <!-- EPIC 2E-P1I R2 -- Pixel Skin Validation and WB Correction
+                     Plausibility. Informational only, no controls -- shown only
+                     when bundle.skinValidation is present and not UNAVAILABLE. -->
+                <div id="wbIntelSkinValidationReason" style="margin-top:4px;font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono)"></div>
               </details>
+            </details>
+            <!-- EPIC 2E-P1J — Tone Curve Intelligence Advanced Diagnostics. A
+                 small, collapsed disclosure (never the primary UI) showing the
+                 evidence-driven tone category/confidence, per-channel
+                 engagement reasons (from generateToneCurves(), unchanged),
+                 and a Candidate-vs-Export-Expected point-count/match table
+                 for master/red/green/blue -- never raw XML, never raw point
+                 arrays dumped to the DOM. Mirrors the P1G Detail / P1H White
+                 Balance panels' structure and conventions exactly. -->
+            <details id="toneCurveIntelDiagnostics" style="display:none;margin-top:10px;padding:10px 14px;border-radius:2px;border:1px solid var(--border);background:var(--surface-2)">
+              <summary style="cursor:pointer;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.toneCurveAdvancedDiagnostics">Advanced Diagnostics — Tone Curve</summary>
+              <div id="toneCurveIntelSummary" style="margin-top:8px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:11px;color:var(--text-dim)"></div>
+              <!-- EPIC 2E-P1J -- export-safety notice, shown only when
+                   quickSafetyClamp()'s new _clampToneCurvePanel() actually
+                   adjusted a point (e.g. a corrupted/manually out-of-range
+                   Candidate). An auto-generated P1J Candidate never triggers
+                   this -- the plan-builder's own Layer-A restraint (±60,
+                   scaled by strength mode) stays comfortably inside the
+                   Layer-B export bounds calibrated from the real engine's
+                   output ranges. -->
+              <div id="toneCurveIntelSafeAdjustmentNotice" style="display:none;margin-top:6px;padding:8px 10px;background:var(--warn-soft,rgba(255,180,60,.12));border-radius:2px;font-size:11px;color:var(--text)"></div>
+              <div id="toneCurveIntelEvidence" style="margin-top:6px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono);white-space:pre-line"></div>
+              <table style="margin-top:8px;border-collapse:collapse;width:100%">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.toneCurveChannel">Channel</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.toneCurveCandidatePoints">Candidate points</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.toneCurveExportPoints">Export expected points</th>
+                    <th style="text-align:left;padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;color:var(--text-dim)" data-i18n-key="appShell.exportParityMatchStatus">Match status</th>
+                  </tr>
+                </thead>
+                <tbody id="toneCurveIntelTableBody"></tbody>
+              </table>
+              <div id="toneCurveIntelParametricNote" style="margin-top:8px;padding:8px 10px;background:var(--surface-1);border-radius:2px;font-size:10px;color:var(--text-dim);font-style:italic"></div>
             </details>
             <!-- EPIC 2E-P1D — XMP Fidelity status, next to Download .xmp. Not a
                  redesign: one small status line + a collapsed Advanced

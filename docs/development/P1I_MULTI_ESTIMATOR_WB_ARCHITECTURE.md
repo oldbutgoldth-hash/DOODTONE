@@ -16,6 +16,8 @@
 | `highlight-shadow-illuminant-estimator.js` | Independent highlight-band / shadow-band estimators + `compareIlluminants()` |
 | `estimator-confidence.js` | Shared confidence-term building blocks (sample count, dominance penalty, weighted blend, cross-estimator agreement) |
 | `estimator-ensemble.js` | `buildEstimatorEnsemble()`, `computeObjectBiasEvidence()`, `computeMixedLightEvidence()`, and the top-level `runWhiteBalanceEstimators()` entrypoint |
+| `skin-sample-validator.js` **(R2)** | Extracts a trusted subset of skin-toned pixels from the shared sample; not a seventh WB estimator -- see `P1I_R2_PIXEL_SKIN_VALIDATION_MODEL.md` |
+| `skin-correction-plausibility.js` **(R2)** | Simulates the ensemble's proposed correction on validated skin pixels and scores plausibility; see `P1I_R2_SKIN_CORRECTION_PLAUSIBILITY.md` |
 
 ## Required flow (as specified, implemented exactly)
 
@@ -62,3 +64,25 @@ pair that can DETECT (not just guess at) mixed lighting via direct
 band-vs-band comparison. No single estimator is ever treated as
 absolute truth — this is the explicit, hard acceptance criterion the
 ensemble's outlier/agreement/confidence machinery exists to satisfy.
+
+
+## R2 addendum -- Pixel Skin Validation (additive only)
+
+R2 adds a validation-only layer that never changes the flow above:
+`buildEstimatorEnsemble()` (and everything upstream of it) is completely
+untouched. After the ensemble's consensus exists,
+`runWhiteBalanceEstimators()` calls `validateSkinCorrection(sample,
+ensemble.consensus, { neutralRegionResult })`, wrapped in a `try/catch`
+that falls back to an `UNAVAILABLE`-shaped result on any error, and adds
+one new key -- `skinValidation` -- to the returned bundle, alongside the
+existing six estimator results, `ensemble`, `objectBias`, and
+`mixedLight`. See `P1I_R2_PIXEL_SKIN_VALIDATION_MODEL.md` and
+`P1I_R2_SKIN_CORRECTION_PLAUSIBILITY.md` for the full model, and
+`P1I_P1H_INTEGRATION_POLICY.md`'s R2 addendum for how P1H consumes it.
+
+This is a **validator**, not a seventh estimator: it never appears in
+`ESTIMATOR_ID`, never participates in `combineWeighted()`, and never
+influences `ensemble.consensus`. It answers a different question than
+the six estimators do -- not "what illuminant does this evidence
+suggest," but "does the skin in this photo support the correction the
+ensemble already proposed."

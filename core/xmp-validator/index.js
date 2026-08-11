@@ -48,7 +48,33 @@ export const HARD_LIMITS = {
   },
   calibration: { hueCap: 10, satCap: 15 },
   presence: { vibCap: 30, satCap: 20 },
-  curve: { shadowY: [0, 60], midY: [80, 180], highlightY: [180, 255] },
+  // ── EPIC 2E-P1J — Tone Curve Export Safety Clamp ───────────────────────
+  // These three bounds existed in this file before P1J but were never
+  // wired to any clamp function (dead code -- see
+  // P1J_TONE_CURVE_LINEAGE_AUDIT.md §6). Their original values
+  // ([0,60]/[80,180]/[180,255]) were too narrow for
+  // core/tone-curve-ai-engine/index.js's real, legitimate per-point
+  // output -- traced directly from its source (never guessed): at
+  // x=64 the real range is [30,90] (master _buildSCurve's `sha`:
+  // clamp(...,40,85); per-channel _channelCurve's x=64 point:
+  // clamp(...,30,90)), and at x=192 the real range is [160,220]
+  // (master's `bri`: clamp(...,175,215); per-channel's x=192 point:
+  // clamp(...,160,220)) -- both of which the old [0,60]/[180,255]
+  // bounds would have clamped on ordinary, non-adversarial output.
+  // Recalibrated here (with the same "comfortably above legitimate
+  // output, comfortably below the raw [0,255] range" philosophy P1G R2
+  // established for HARD_LIMITS.detail) against the exact per-x-position
+  // ranges traced from every clamp() call in generateToneCurves():
+  //   x=0:   real [0,25]    -> shadowY    [0,100]  zone: x<96
+  //   x=64:  real [30,90]   -> shadowY    [0,100]  zone: x<96
+  //   x=128: real [100,155] -> midY       [70,190] zone: 96<=x<160
+  //   x=192: real [160,220] -> highlightY [140,255] zone: x>=160
+  //   x=255: real [230,255] -> highlightY [140,255] zone: x>=160
+  // Zone x-cutoffs (96, 160) sit at the midpoints between the engine's
+  // own fixed x-positions (0,64,128,192,255), so every one of its 5
+  // points buckets unambiguously into the zone its real range was
+  // calibrated against. See _clampToneCurvePanel() below.
+  curve: { shadowY: [0, 100], midY: [70, 190], highlightY: [140, 255] },
   // ── EPIC 2E-P1G R2 — Detail Export Safety Clamp ────────────────────────
   // Real UI slider ranges are Sharpening 0-150 / Noise Reduction 0-100
   // (index.html, matching Lightroom's own Develop-module slider range --
@@ -327,6 +353,16 @@ export function quickSafetyClamp(preset) {
   // Noise Reduction has no Candidate-driven export path at all (see
   // P1G_SUPPORTED_XMP_DETAIL_FIELDS.md) and this round does not add one.
   _clampDetailPanel(p, HARD_LIMITS.detail, adjustments);
+  // EPIC 2E-P1J -- the Layer-B safety net for Tone Curve point-curve
+  // arrays (master/red/green/blue). Activates the pre-existing
+  // HARD_LIMITS.curve.shadowY/midY/highlightY bounds, which were defined
+  // in this file before P1J but never wired to any clamp function (dead
+  // until now -- see P1J_TONE_CURVE_LINEAGE_AUDIT.md §6). Structurally
+  // mirrors _clampDetailPanel()'s fail-closed-on-non-finite convention.
+  // Never touches p.curves when it is null/absent -- most exports have
+  // no point-curve data, and that is a legitimate, common case, not an
+  // error.
+  _clampToneCurvePanel(p, HARD_LIMITS.curve, adjustments);
 
   if (p.tint < HARD_LIMITS.wb.tintGreenFloorIntentional) { adjustments.push(`Tint hard-floored (was ${p.tint}).`); p.tint = HARD_LIMITS.wb.tintGreenFloorIntentional; }
   if (p.tint > HARD_LIMITS.wb.tintMagentaCeil)            { adjustments.push(`Tint hard-ceilinged (was ${p.tint}).`); p.tint = HARD_LIMITS.wb.tintMagentaCeil; }
@@ -391,6 +427,47 @@ function _clampDetailPanel(p, limits, adjustments) {
       adjustments.push(`Detail "${key}" (${v}) outside export-safe range [${lo},${hi}] — clamped to ${clamped}.`);
       p[key] = clamped;
     }
+  }
+}
+
+/**
+ * EPIC 2E-P1J -- Tone Curve point-curve Layer-B safety net. For each of
+ * master/red/green/blue (when present as a valid array on p.curves),
+ * clamps every point's y-value into the zone-appropriate
+ * shadowY/midY/highlightY bound based on that point's OWN x position
+ * (x<85 -> shadowY, 96<=x<160 -> midY, x>=160 -> highlightY) -- x-zone
+ * based rather than point-index based, so this is robust to any point
+ * count/x arrangement, not just generateToneCurves()'s own fixed 5-point
+ * [0,64,128,192,255] shape. Fails closed on non-finite x/y (mirrors
+ * _clampDetailPanel()'s convention) by dropping that single point rather
+ * than propagating NaN/Infinity into serializeCurvePoints(). Never
+ * invents point data -- a curve with zero valid points after this pass
+ * is set to null (identical to "no curve data"), never a fabricated one.
+ */
+function _clampToneCurvePanel(p, limits, adjustments) {
+  const curves = p.curves;
+  if (!curves || typeof curves !== 'object') return;
+  for (const channel of ['master', 'red', 'green', 'blue']) {
+    const points = curves[channel];
+    if (!Array.isArray(points) || points.length === 0) continue;
+    let channelAdjusted = false;
+    const cleaned = [];
+    for (const pt of points) {
+      const xRaw = pt?.x, yRaw = pt?.y;
+      if (!Number.isFinite(xRaw) || !Number.isFinite(yRaw)) {
+        channelAdjusted = true;
+        continue; // fail-closed: drop the malformed point rather than clamp(NaN)
+      }
+      const x = Math.max(0, Math.min(255, xRaw));
+      const [lo, hi] = x < 96 ? limits.shadowY : x < 160 ? limits.midY : limits.highlightY;
+      const y = Math.max(lo, Math.min(hi, yRaw));
+      if (x !== xRaw || y !== yRaw) channelAdjusted = true;
+      cleaned.push({ x, y });
+    }
+    if (channelAdjusted) {
+      adjustments.push(`Tone Curve "${channel}" had one or more points outside the export-safe zone bounds (shadowY ${limits.shadowY}, midY ${limits.midY}, highlightY ${limits.highlightY}) or non-finite -- clamped/dropped.`);
+    }
+    curves[channel] = cleaned.length >= 2 ? cleaned : null;
   }
 }
 

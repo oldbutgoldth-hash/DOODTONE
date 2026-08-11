@@ -3251,6 +3251,14 @@ async function runAnalysis(callerTicket = null) {
         // evidence scores / Sharpening + Luminance NR Candidate-vs-
         // Export-Expected values, never raw XML, never raw pixel data.
         renderDetailIntelligenceDiagnostics(candidateResult.candidate);
+        // EPIC 2E-P1J: render the Tone Curve Intelligence Advanced
+        // Diagnostics panel from candidate.diagnostics.toneCurveIntelligence
+        // (already computed, pure, by buildCandidateFromSession() via
+        // buildToneCurvePlan()) -- tone category / confidence / per-channel
+        // engagement reasons / points-restrained note / per-channel
+        // Candidate-vs-Export-Expected point-count table, never raw XML,
+        // never raw point arrays dumped to the DOM.
+        renderToneCurveIntelligenceDiagnostics(candidateResult.candidate);
       } else {
         // Candidate build failed (or this run was superseded) even
         // though the Session reached a terminal status -- do not fall
@@ -3827,6 +3835,7 @@ function renderWBEstimatorDiagnostics() {
   const tbody = document.getElementById('wbIntelEstimatorTableBody');
   const objectBiasEl = document.getElementById('wbIntelObjectBiasReason');
   const mixedLightEl = document.getElementById('wbIntelMixedLightReason');
+  const skinValidationEl = document.getElementById('wbIntelSkinValidationReason'); // EPIC 2E-P1I R2
   if (!details) return;
 
   let bundle = null;
@@ -3887,6 +3896,152 @@ function renderWBEstimatorDiagnostics() {
       reason: bundle.mixedLight.reason ?? '',
     }, state.lang);
   }
+
+  // EPIC 2E-P1I R2 -- Pixel Skin Validation and WB Correction
+  // Plausibility. Informational only (no controls); hidden entirely
+  // when no usable skin-validation result exists for this session,
+  // matching the same fail-open-to-nothing convention as every other
+  // line in this panel.
+  if (skinValidationEl) {
+    const sv = bundle.skinValidation;
+    const svUsable = !!(sv && sv.status !== 'UNAVAILABLE' && Number.isFinite(sv.confidence));
+    if (svUsable) {
+      skinValidationEl.style.display = 'block';
+      skinValidationEl.textContent = t('appShell.wbSkinValidationReasonLine', {
+        status: t(WB_ESTIMATOR_STATUS_KEY[sv.status] ?? 'appShell.wbEstimatorStatusUnavailable', null, state.lang),
+        confidence: sv.confidence.toFixed(2),
+        acceptedPixels: sv.sampleSummary?.acceptedSkinPixels ?? 0,
+        coverage: (sv.sampleSummary?.spatialCoverage ?? 0).toFixed(3),
+        supported: sv.plausibility?.correctionSupported
+          ? t('appShell.wbSkinValidationSupported', null, state.lang)
+          : t('appShell.wbSkinValidationNotSupported', null, state.lang),
+        conflict: sv.plausibility?.conflictWithNeutral
+          ? t('appShell.wbSkinValidationConflict', null, state.lang)
+          : t('appShell.wbSkinValidationNoConflict', null, state.lang),
+      }, state.lang);
+    } else {
+      skinValidationEl.style.display = 'none';
+      skinValidationEl.textContent = '';
+    }
+  }
+}
+
+/**
+ * EPIC 2E-P1J -- Tone Curve Intelligence Advanced Diagnostics.
+ *
+ * Renders, for the CURRENT Candidate, the Tone Curve Plan's tone
+ * category, confidence, plain-language per-channel engagement reasons
+ * (from generateToneCurves(), unchanged -- reuse-first), a
+ * points-restrained note when the Layer-A restraint engaged, and a
+ * per-channel Candidate-vs-Export-Expected POINT-COUNT/match table for
+ * master/red/green/blue -- reusing the SAME computeExportParity()
+ * utility every other Advanced Diagnostics panel in this file already
+ * uses (its exportExpectedPreset return value, added in P1E R3, is
+ * read here for the curves branch rather than duplicating
+ * candidateToLegacyPreset()/quickSafetyClamp() calls). Never dumps raw
+ * point arrays to the DOM -- only counts and a match/adjusted status,
+ * consistent with every other panel's "never raw XML, never raw pixel
+ * data" convention. Also renders an explicit note that the Parametric
+ * Shadows/Midtones/Highlights curve sliders are NOT driven by this
+ * Intelligence layer (see tone-curve-schema.js's documented scope
+ * boundary) -- never implies a working control for an unwired field.
+ */
+const TONE_CURVE_INTEL_CHANNELS = [
+  { channel: 'master', candidateField: 'rgb', exportKey: 'master' },
+  { channel: 'red', candidateField: 'red', exportKey: 'red' },
+  { channel: 'green', candidateField: 'green', exportKey: 'green' },
+  { channel: 'blue', candidateField: 'blue', exportKey: 'blue' },
+];
+function _pointArraysEqual(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return a == null && b == null;
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i]?.x !== b[i]?.x || a[i]?.y !== b[i]?.y) return false;
+  }
+  return true;
+}
+function renderToneCurveIntelligenceDiagnostics(candidate) {
+  const section = document.getElementById('toneCurveIntelDiagnostics');
+  const summaryEl = document.getElementById('toneCurveIntelSummary');
+  const evidenceEl = document.getElementById('toneCurveIntelEvidence');
+  const tableBody = document.getElementById('toneCurveIntelTableBody');
+  const safeAdjustmentNoticeEl = document.getElementById('toneCurveIntelSafeAdjustmentNotice');
+  const parametricNoteEl = document.getElementById('toneCurveIntelParametricNote');
+  if (!section) return;
+
+  const curveIntel = candidate?.diagnostics?.toneCurveIntelligence ?? null;
+  if (!curveIntel) { section.style.display = 'none'; return; }
+
+  section.style.display = 'block';
+
+  if (summaryEl) {
+    const parts = [
+      t('appShell.toneCurveCategory', { category: curveIntel.category ?? '—' }, state.lang),
+      t('appShell.toneCurveConfidence', { confidence: (curveIntel.confidence ?? 0).toFixed(2) }, state.lang),
+      curveIntel.engaged
+        ? t('appShell.toneCurveEngaged', null, state.lang)
+        : t('appShell.toneCurveNoAdjustment', null, state.lang),
+    ];
+    if ((curveIntel.pointsRestrained ?? 0) > 0) {
+      parts.push(t('appShell.toneCurvePointsRestrained', { count: curveIntel.pointsRestrained }, state.lang));
+    }
+    summaryEl.textContent = parts.join(' · ');
+  }
+
+  if (evidenceEl) {
+    const lines = [
+      ...(Array.isArray(curveIntel.reasons) ? curveIntel.reasons : []),
+      ...(Array.isArray(curveIntel.warnings) ? curveIntel.warnings : []),
+    ];
+    evidenceEl.textContent = lines.join('\n');
+  }
+
+  let exportExpectedPreset = null;
+  try { exportExpectedPreset = computeExportParity(candidate).exportExpectedPreset ?? null; } catch { exportExpectedPreset = null; }
+
+  let anyChannelAdjusted = false;
+
+  if (tableBody) {
+    tableBody.innerHTML = '';
+    for (const { channel, candidateField, exportKey } of TONE_CURVE_INTEL_CHANNELS) {
+      const candidatePoints = candidate?.curves?.[candidateField] ?? null;
+      const exportPoints = exportExpectedPreset?.curves?.[exportKey] ?? null;
+      const matches = _pointArraysEqual(candidatePoints, exportPoints);
+      if (!matches) anyChannelAdjusted = true;
+      const candidateCount = Array.isArray(candidatePoints) ? String(candidatePoints.length) : '—';
+      const exportCount = Array.isArray(exportPoints) ? String(exportPoints.length) : '—';
+      const tr = document.createElement('tr');
+      const cells = [
+        channel, candidateCount, exportCount,
+        matches ? t('appShell.exportParityMatchYes', null, state.lang) : t('appShell.exportParityMatchNo', null, state.lang),
+      ];
+      for (const cellText of cells) {
+        const td = document.createElement('td');
+        td.textContent = cellText;
+        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
+        tr.appendChild(td);
+      }
+      tableBody.appendChild(tr);
+    }
+  }
+
+  // EPIC 2E-P1J -- export-safety notice, shown only when
+  // quickSafetyClamp()'s _clampToneCurvePanel() actually changed a
+  // channel's points (candidate vs. export-expected point arrays
+  // differ) -- an auto-generated P1J Candidate never triggers this,
+  // per the calibration documented on HARD_LIMITS.curve in
+  // xmp-validator/index.js.
+  if (safeAdjustmentNoticeEl) {
+    if (anyChannelAdjusted) {
+      safeAdjustmentNoticeEl.style.display = 'block';
+      safeAdjustmentNoticeEl.textContent = t('appShell.toneCurveExportSafeAdjustmentNotice', null, state.lang);
+    } else {
+      safeAdjustmentNoticeEl.style.display = 'none';
+    }
+  }
+
+  if (parametricNoteEl) parametricNoteEl.textContent = t('appShell.toneCurveParametricUnsupported', null, state.lang);
 }
 
 function renderXmpFidelityStatus(uiStatus, report = null, xmpString = null) {

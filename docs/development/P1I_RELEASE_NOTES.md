@@ -96,3 +96,71 @@ duplicated math inside the test suite itself. See
 ## Known limitations
 
 See `P1I_KNOWN_LIMITATIONS.md`.
+
+
+---
+
+# R2 — Pixel Skin Validation and WB Correction Plausibility
+
+**Version:** 2.9.1
+**Title:** Pixel Skin Validation and WB Correction Plausibility
+
+## Summary
+
+R1 shipped six pixel-level illuminant estimators feeding P1H's White
+Balance decision, plus a documented **proxy** skin-consistency signal
+inside P1H itself (`skinWarmth.confidence x skin coverage` — a
+colorimetric approximation, never real per-pixel validation). R2 closes
+that gap: a new, real pixel-level Skin Validation layer extracts a
+trusted subset of skin-toned pixels from the same shared P1I sample,
+simulates the ensemble's proposed correction on those pixels only, and
+scores whether the correction still looks like plausible skin
+afterward — before vs. after, on a continuous, ethnicity-neutral
+0-1 scale.
+
+This is a **validator, not a seventh estimator**. It never proposes its
+own Temperature/Tint value, never participates in the ensemble
+consensus, and its result only ever nudges an existing confidence value
+— corroborating, reducing, or leaving it unchanged — never overriding
+any other estimator or writing to Candidate directly.
+
+## What's new
+
+- **`skin-sample-validator.js`** — reuses the codebase's one existing
+  skin-chrominance classifier (`isLikelySkinPixelYCbCr()`) on the
+  already-sampled pixel set, then rejects clipped, oversaturated
+  (colored/stage-light-on-skin), and near-shadow candidates before
+  trusting the rest. Requires a minimum sample count AND minimum
+  spatial coverage, not just a nonzero pixel count.
+- **`skin-correction-plausibility.js`** — simulates the proposed
+  correction on the validated pixels in a pure, temporary, in-memory
+  calculation (never touching Candidate or Session), and scores
+  before/after skin-band plausibility using the same continuous
+  Cb/Cr-distance measure across the full realistic range of skin tones
+  — never one fixed target hue.
+- **P1H integration** — when a usable Skin Validation result exists,
+  it replaces the R1 proxy `skinConsistencyConfidence`; when unusable
+  (no skin detected, insufficient sample), R1's proxy behavior is
+  preserved exactly, byte-for-byte.
+- **Advanced Diagnostics UI** — one new line in the existing WB
+  estimator details panel, showing the skin validation status and
+  whether the proposed correction was supported (English + Thai).
+
+## What did not change
+
+`buildEstimatorEnsemble()`, all six R1 estimators, P1H's
+`wb-plan-builder.js`/`cast-classifier.js`/`wb-guardrails.js`/
+`mixed-light-detector.js`, the Candidate schema, the XMP serializer,
+the Fidelity Gate, Reference Color Match, Preview, and all production
+safety locks are untouched. See `P1I_R2_PIXEL_SKIN_VALIDATION_MODEL.md`,
+`P1I_R2_SKIN_CORRECTION_PLAUSIBILITY.md`, and the R2 addenda in
+`P1I_MULTI_ESTIMATOR_WB_ARCHITECTURE.md` / `P1I_P1H_INTEGRATION_POLICY.md`
+for full detail.
+
+## Testing
+
+30/30 new automated checks (`qa/epic-2e-p1i-r2-pixel-skin-validation-test.mjs`),
+full regression across the whole P1-series and Production Lock (see
+`P1I_QA_REPORT.md`'s R2 addendum for the complete table and an honest
+disclosure of the one sandbox-structural limitation encountered while
+verifying `qa/run-static-suites.mjs`'s full nested-spawn chain).

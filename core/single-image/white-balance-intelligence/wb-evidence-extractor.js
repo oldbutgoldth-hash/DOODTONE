@@ -87,7 +87,11 @@ export function extractWBEvidence(evidence) {
   // skin-consistency-validator.js for the full accept/reject decision.
   const skinCoveragePct = typeof skin?.coveragePct === 'number' ? skin.coveragePct : null;
   const skinWarmthConfidence = intent?.skinWarmth?.confidence ?? 0;
-  const skinConsistencyConfidence = skinCoveragePct != null
+  // EPIC 2E-P1I R2: `let`, not `const` -- may be replaced below by the
+  // real pixel-level Skin Validation V2 result when usable (see the
+  // p1iUsable branch). This proxy computation is preserved byte-for-byte
+  // as the R1 fallback value.
+  let skinConsistencyConfidence = skinCoveragePct != null
     ? _clamp01(skinWarmthConfidence * (skinCoveragePct >= 3 ? 1 : skinCoveragePct / 3))
     : 0;
 
@@ -177,6 +181,23 @@ export function extractWBEvidence(evidence) {
 
     source = `${source}+pixel-multi-estimator`;
     confidence = _clamp01(confidence + 0.05); // one additional real, independent data source
+
+    // EPIC 2E-P1I R2: replace the proxy-only skinConsistencyConfidence
+    // (computed above from wbIntent.skinWarmth -- see
+    // skin-consistency-validator.js's own PROXY note) with the REAL
+    // pixel-level Skin Validation V2 result, ONLY when that result is
+    // itself usable. When unavailable, skinConsistencyConfidence is left
+    // completely untouched -- byte-for-byte the same R1 proxy value --
+    // satisfying spec requirement #10 ("when skin is unavailable,
+    // preserve current P1I/P1H behavior exactly"). wb-plan-builder.js's
+    // validateSkinConsistency() and every downstream consumer are
+    // UNCHANGED by this -- they simply receive a more accurate number.
+    const skinValidation = wbEstimators.skinValidation ?? null;
+    const skinValidationUsable = !!(skinValidation && skinValidation.status !== 'UNAVAILABLE' && Number.isFinite(skinValidation.confidence));
+    if (skinValidationUsable) {
+      skinConsistencyConfidence = _clamp01(skinValidation.confidence);
+    }
+
     p1iSummary = {
       ensembleConfidence: wbEstimators.ensemble.confidence,
       ensembleConsensus: wbEstimators.ensemble.consensus,
@@ -186,6 +207,14 @@ export function extractWBEvidence(evidence) {
       objectBiasReasonCodes: wbEstimators.objectBias?.reasonCodes ?? [],
       mixedLightScore: wbEstimators.mixedLight?.score ?? null,
       mixedLightIsMixed: wbEstimators.mixedLight?.isMixedLight ?? false,
+      skinValidation: skinValidationUsable ? {
+        status: skinValidation.status,
+        confidence: skinValidation.confidence,
+        acceptedSkinPixels: skinValidation.sampleSummary?.acceptedSkinPixels ?? 0,
+        spatialCoverage: skinValidation.sampleSummary?.spatialCoverage ?? 0,
+        correctionSupported: skinValidation.plausibility?.correctionSupported ?? null,
+        conflictWithNeutral: skinValidation.plausibility?.conflictWithNeutral ?? false,
+      } : null,
     };
   } else if (wbEstimators) {
     reasons.push('pixel-level estimator bundle present but unusable (no estimator produced a usable result) -- falling back to R1 whitebalance-engine evidence only');

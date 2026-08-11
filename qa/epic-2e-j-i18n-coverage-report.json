@@ -1,9 +1,9 @@
 {
   "suite": "epic-2e-j-i18n-coverage-report",
   "round": "FULL-SYSTEM I18N COMPLETION R2 — Phase N",
-  "generatedAt": "2026-08-04T13:04:07.585Z",
-  "requestedKeys": 773,
-  "resolvedThaiKeys": 773,
+  "generatedAt": "2026-08-04T14:27:16.527Z",
+  "requestedKeys": 778,
+  "resolvedThaiKeys": 778,
   "englishFallbackKeys": 0,
   "genuinelyMissingKeys": 0,
   "unusedKeys": 418,
@@ -19,8 +19,8 @@
   ],
   "visibleEnglishLeakCount": 0,
   "dictionaryKeyCounts": {
-    "en": 1191,
-    "th": 1191
+    "en": 1196,
+    "th": 1196
   },
   "notes": [
     "unusedKeys is informational only — many dictionary entries are reached through dynamic namespaces or rare states.",
