@@ -12,10 +12,18 @@
  * P1C_CANDIDATE_SOURCE_LINEAGE_AUDIT.md §12. Groups/fields the current
  * Production pipeline does not produce (detail.radius/detail/masking/
  * noiseReductionDetail/colorNoiseReductionDetail/
- * colorNoiseReductionSmoothness, all of `effects`, all of `optics`,
- * `grading.balance`, `cal.shadowTint`) remain structurally present but
- * are always `null` — never a fabricated value — and are documented as
- * unsupported rather than silently omitted.
+ * colorNoiseReductionSmoothness, all of `optics`, `grading.balance`,
+ * `cal.shadowTint`) remain structurally present but are always `null`
+ * — never a fabricated value — and are documented as unsupported
+ * rather than silently omitted.
+ *
+ * EPIC 2E-P1K update: `effects.*` (Post-Crop Vignette + Grain) is now
+ * SERIALIZER-SUPPORTED (see xmp-property-map.js's PROPERTY_MAP) —
+ * moved out of UNSUPPORTED_FIELD_PATHS below. Its 7 fields still
+ * default to `null` on every built Candidate today because no
+ * Intelligence layer computes real values yet (planned: a future
+ * EPIC) — but they now round-trip through export correctly at their
+ * documented Lightroom-default fallback values when null.
  */
 
 export const CANDIDATE_SCHEMA_VERSION = 'P1C_CANDIDATE@1';
@@ -43,8 +51,6 @@ export const UNSUPPORTED_FIELD_PATHS = Object.freeze([
   'detail.radius', 'detail.detail', 'detail.masking',
   'detail.noiseReductionDetail', 'detail.colorNoiseReductionDetail', 'detail.colorNoiseReductionSmoothness',
   'grading.balance', 'cal.shadowTint',
-  'effects.postCropVignetteAmount', 'effects.postCropVignetteMidpoint', 'effects.postCropVignetteRoundness', 'effects.postCropVignetteFeather',
-  'effects.grainAmount', 'effects.grainSize', 'effects.grainFrequency',
   'optics.removeChromaticAberration', 'optics.enableProfileCorrections', 'optics.distortion', 'optics.vignette',
 ]);
 

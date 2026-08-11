@@ -51,7 +51,22 @@ export function computeExportParity(candidate) {
     const clampAdjusted = typeof preClampValue === 'number' && typeof exportExpectedValue === 'number'
       ? preClampValue !== exportExpectedValue
       : preClampValue !== exportExpectedValue;
-    const candidateVsExportMatch = candidateCurrentValue === exportExpectedValue;
+    // EPIC 2E-P1K -- a `null` Candidate value means "no Intelligence
+    // layer has computed this field yet" (documented, intentional --
+    // see candidate-schema.js's "never a fabricated value" convention),
+    // never a genuine parity mismatch: there is nothing on-screen for
+    // the export-expected value to disagree WITH. Mirrors the same
+    // "legitimately unavailable -- not an error" treatment
+    // candidate-schema.js's _validCurvePoints() already gives a null
+    // curve. Before P1K, every PROPERTY_MAP-covered candidatePath was
+    // guaranteed non-null by createEmptyCandidate()/normalizeCandidate()
+    // (curves/cal.shadowTint, the only prior nullable fields, were both
+    // outside PROPERTY_MAP -- CURVE_PROPERTIES/UNSUPPORTED respectively)
+    // -- P1K's effects.* additions are the first PROPERTY_MAP entries
+    // that can legitimately be null on a real Candidate (no engine
+    // populates them yet; that is future P1L+ work), so this null-aware
+    // branch was never needed, and never exercised, until now.
+    const candidateVsExportMatch = candidateCurrentValue === null || candidateCurrentValue === exportExpectedValue;
     return {
       parameterPath: entry.candidatePath,
       xmpProperty: entry.xmpProperty,

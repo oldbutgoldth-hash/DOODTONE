@@ -138,9 +138,12 @@ const downloadBody = appJsSource.slice(downloadStart, downloadEnd);
 // 9-11. Property-map coverage
 // ══════════════════════════════════════════════════════════════════
 {
-  check('9. Property map covers every Basic Panel + WB + Presence + Parametric Curve + Detail field (18)', PROPERTY_MAP.filter(e => e.clampGroup !== undefined).length >= 58 && PROPERTY_MAP.length === 58);
+  // EPIC 2E-P1K: PROPERTY_MAP grew from 58 to 65 (+7 effects.* entries
+  // -- Post-Crop Vignette/Grain, now serializer-supported). See
+  // P1K_SERIALIZER_XMP_ATTRIBUTE_AUDIT.md.
+  check('9. Property map covers every Basic Panel + WB + Presence + Parametric Curve + Detail + Effects field (65)', PROPERTY_MAP.filter(e => e.clampGroup !== undefined).length >= 58 && PROPERTY_MAP.length === 65);
   check('10. Property map covers all 8 HSL channels x 3 (24 entries)', PROPERTY_MAP.filter(e => e.candidatePath.startsWith('hsl.')).length === 24);
-  check('11. Property map + curve list + unsupported list together account for every UNSUPPORTED_FIELD_PATHS entry from candidate-schema.js', UNSUPPORTED_CANDIDATE_PATHS.length === 23 && getAllRequiredXmpProperties().length === 62);
+  check('11. Property map + curve list + unsupported list together account for every UNSUPPORTED_FIELD_PATHS entry from candidate-schema.js', UNSUPPORTED_CANDIDATE_PATHS.length === 16 && getAllRequiredXmpProperties().length === 69);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -237,7 +240,9 @@ const downloadBody = appJsSource.slice(downloadStart, downloadEnd);
   const { built } = buildReadySession();
   const { report } = runFullPipeline(built.candidate);
   const unsupported = report.comparisons.filter(c => c.result === COMPARISON_RESULT.UNSUPPORTED);
-  check('22. Every documented-unsupported Detail/Effects/Optics/profile field is classified UNSUPPORTED, not a failure', unsupported.length === 23 && report.status !== 'FAIL');
+  // EPIC 2E-P1K: 23 -> 16 (7 effects.* entries moved to PROPERTY_MAP --
+  // Post-Crop Vignette/Grain are now serializer-supported, not unsupported).
+  check('22. Every documented-unsupported Detail/Optics/profile field is classified UNSUPPORTED, not a failure', unsupported.length === 16 && report.status !== 'FAIL');
 }
 
 // ══════════════════════════════════════════════════════════════════

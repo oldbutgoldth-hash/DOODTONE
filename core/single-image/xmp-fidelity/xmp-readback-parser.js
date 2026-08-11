@@ -238,4 +238,6 @@ function _placeReadbackValue(readback, entry, value) {
   else if (group === 'grading' && rest.length === 2) readback.grading[rest[0]][rest[1]] = value;
   else if (group === 'grading' && rest[0] === 'blending') readback.grading.blending = value;
   else if (group === 'cal') readback.cal[rest[0]] = value;
+  // EPIC 2E-P1K -- Post-Crop Vignette + Grain readback placement.
+  else if (group === 'effects') readback.effects[rest[0]] = value;
 }

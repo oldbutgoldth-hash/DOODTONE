@@ -207,6 +207,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1i-r2-pixel-skin-validation-test.mjs',
   // EPIC 2E-P1J -- Tone Curve Intelligence & Point-Curve Export Wiring.
   'qa/epic-2e-p1j-tone-curve-intelligence-test.mjs',
+  // EPIC 2E-P1K -- Serializer Extension for Post-Crop Vignette + Grain.
+  'qa/epic-2e-p1k-serializer-effects-extension-test.mjs',
 ];
 
 let anyFailed = false;

@@ -83,8 +83,24 @@ for (const ch of HSL_CHANNEL_IDS) {
   HSL_ENTRIES.push({ candidatePath: `hsl.luminance.${ch}`,  legacyPresetKey: `hsl.hsl_l_${ch}`, xmpProperty: `crs:LuminanceAdjustment${cap}`,  compareMode: 'EXACT_INT', clampGroup: null,  required: true });
 }
 
+// EPIC 2E-P1K -- Post-Crop Vignette (4) + Grain (3). Real Lightroom
+// Develop-module Effects-panel attribute names (crs:PostCropVignette*,
+// crs:GrainAmount/Size/Frequency) -- see P1K_SERIALIZER_XMP_ATTRIBUTE_AUDIT.md.
+// Defaults mirror core/preset-engine/index.js::serializeXMP's own
+// `fx.* ?? <default>` fallbacks exactly (0/50/0/50 vignette, 0/25/50
+// grain -- Lightroom's own slider defaults).
+const EFFECTS_ENTRIES = [
+  { candidatePath: 'effects.postCropVignetteAmount',    legacyPresetKey: 'effects.fx_vignette_amount',    xmpProperty: 'crs:PostCropVignetteAmount',    compareMode: 'EXACT_INT', clampGroup: 'effects', required: true },
+  { candidatePath: 'effects.postCropVignetteMidpoint',  legacyPresetKey: 'effects.fx_vignette_midpoint',  xmpProperty: 'crs:PostCropVignetteMidpoint',  compareMode: 'EXACT_INT', clampGroup: 'effects', required: true },
+  { candidatePath: 'effects.postCropVignetteRoundness', legacyPresetKey: 'effects.fx_vignette_roundness', xmpProperty: 'crs:PostCropVignetteRoundness', compareMode: 'EXACT_INT', clampGroup: 'effects', required: true },
+  { candidatePath: 'effects.postCropVignetteFeather',   legacyPresetKey: 'effects.fx_vignette_feather',   xmpProperty: 'crs:PostCropVignetteFeather',   compareMode: 'EXACT_INT', clampGroup: 'effects', required: true },
+  { candidatePath: 'effects.grainAmount',    legacyPresetKey: 'effects.fx_grain_amount',    xmpProperty: 'crs:GrainAmount',    compareMode: 'EXACT_INT', clampGroup: 'effects', required: true },
+  { candidatePath: 'effects.grainSize',      legacyPresetKey: 'effects.fx_grain_size',      xmpProperty: 'crs:GrainSize',      compareMode: 'EXACT_INT', clampGroup: 'effects', required: true },
+  { candidatePath: 'effects.grainFrequency', legacyPresetKey: 'effects.fx_grain_frequency', xmpProperty: 'crs:GrainFrequency', compareMode: 'EXACT_INT', clampGroup: 'effects', required: true },
+];
+
 export const PROPERTY_MAP = Object.freeze([
-  ...BASIC_ENTRIES, ...GRADING_ENTRIES, ...CAL_ENTRIES, ...HSL_ENTRIES,
+  ...BASIC_ENTRIES, ...GRADING_ENTRIES, ...CAL_ENTRIES, ...HSL_ENTRIES, ...EFFECTS_ENTRIES,
 ]);
 
 // ── Tone Curves: array-typed, compared separately from the scalar map ──────
@@ -112,18 +128,23 @@ export const XMP_FIXED_ATTRIBUTES = Object.freeze({
   'crs:Copyright': '',
   'crs:ColorNoiseReduction': '25',
   'crs:WhiteBalance': 'Custom',
+  // EPIC 2E-P1K -- fixed literal (Highlight Priority), mirrors the
+  // WhiteBalance="Custom" convention. No Candidate field drives it.
+  'crs:PostCropVignetteStyle': '1',
 });
 
 // ── Candidate fields the real serializer never emits at all -- always
 // UNSUPPORTED, never a fidelity failure unless a documented promise
 // says otherwise (none currently does). See audit §4. ─────────────────────
+// EPIC 2E-P1K -- effects.* (Post-Crop Vignette + Grain) moved OUT of
+// this list into PROPERTY_MAP above; the real serializer now emits all
+// 7 attributes. optics.* remains unsupported (out of P1K's scope --
+// user's selected priorities were Vignette/Grain only).
 export const UNSUPPORTED_CANDIDATE_PATHS = Object.freeze([
   'detail.colorNoiseReduction', 'detail.radius', 'detail.detail', 'detail.masking',
   'detail.noiseReductionDetail', 'detail.colorNoiseReductionDetail', 'detail.colorNoiseReductionSmoothness',
   'profile.name', 'profile.treatment', 'profile.processVersion',
   'grading.balance', 'cal.shadowTint',
-  'effects.postCropVignetteAmount', 'effects.postCropVignetteMidpoint', 'effects.postCropVignetteRoundness', 'effects.postCropVignetteFeather',
-  'effects.grainAmount', 'effects.grainSize', 'effects.grainFrequency',
   'optics.removeChromaticAberration', 'optics.enableProfileCorrections', 'optics.distortion', 'optics.vignette',
 ]);
 

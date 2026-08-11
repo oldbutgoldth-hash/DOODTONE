@@ -41,6 +41,24 @@ export function candidateToLegacyPreset(candidate) {
     cal_blue_h: candidate.cal.bluePrimaryHue ?? 0, cal_blue_s: candidate.cal.bluePrimarySaturation ?? 0,
   };
 
+  // EPIC 2E-P1K -- Post-Crop Vignette + Grain. candidate.effects.* is
+  // structurally present since P1C but was always null (no engine wrote
+  // it, and the serializer didn't support it -- see
+  // candidate-schema.js's UNSUPPORTED_FIELD_PATHS). P1K adds real
+  // serializer support; this adapter now forwards the values (still
+  // null until a future Intelligence layer populates them) using the
+  // same real-Lightroom-default convention as `grade.grd_blend ?? 50`
+  // above. No Candidate field name changes -- purely additive.
+  const effects = {
+    fx_vignette_amount: candidate.effects?.postCropVignetteAmount ?? 0,
+    fx_vignette_midpoint: candidate.effects?.postCropVignetteMidpoint ?? 50,
+    fx_vignette_roundness: candidate.effects?.postCropVignetteRoundness ?? 0,
+    fx_vignette_feather: candidate.effects?.postCropVignetteFeather ?? 50,
+    fx_grain_amount: candidate.effects?.grainAmount ?? 0,
+    fx_grain_size: candidate.effects?.grainSize ?? 25,
+    fx_grain_frequency: candidate.effects?.grainFrequency ?? 50,
+  };
+
   return {
     name: candidate.profile?.name ?? 'AI Preset',
     exp: candidate.basic.exposure ?? 0, con: candidate.basic.contrast ?? 0,
@@ -53,7 +71,7 @@ export function candidateToLegacyPreset(candidate) {
     crv_hi: candidate.curves.parametric.highlights ?? 0,
     crv_mid: candidate.curves.parametric.midtones ?? 0,
     crv_sh: candidate.curves.parametric.shadows ?? 0,
-    hsl, grade, cal,
+    hsl, grade, cal, effects,
     // EPIC 2E-P1C R3: only emit a `curves` object when real point-curve
     // data exists (candidate.curves.rgb is the master channel every
     // other channel falls back to). Previously this always built a

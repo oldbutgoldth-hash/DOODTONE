@@ -91,6 +91,28 @@ export const HARD_LIMITS = {
     sharpening:     { min: 0, max: 40 },
     noiseReduction: { min: 0, max: 40 },
   },
+  // ── EPIC 2E-P1K -- Post-Crop Vignette + Grain Export Safety Clamp ──────
+  // Unlike Detail (P1G R2) and Tone Curve (P1J), there is no Layer-A
+  // planner for this group yet -- no Intelligence layer computes
+  // vignette/grain values (that is future work, not part of this
+  // EPIC's scope). Without a legitimate-output range to sit
+  // "comfortably above", these bounds instead pin directly to
+  // Lightroom's own real Develop-module Effects-panel slider ranges
+  // (Vignette Amount/Roundness -100..100, Midpoint/Feather 0..100,
+  // Grain Amount/Size/Frequency 0..100) -- the same "real UI range"
+  // source already used for HARD_LIMITS elsewhere in this file. This
+  // still protects export from a corrupted/out-of-range Candidate
+  // (fail-closed on non-finite, mirrors _clampDetailPanel()) even
+  // though every value is 0/50/0/50/0/25/50 (all-default) today.
+  effects: {
+    vignetteAmount:    { min: -100, max: 100 },
+    vignetteMidpoint:  { min: 0,    max: 100 },
+    vignetteRoundness: { min: -100, max: 100 },
+    vignetteFeather:   { min: 0,    max: 100 },
+    grainAmount:       { min: 0,    max: 100 },
+    grainSize:         { min: 0,    max: 100 },
+    grainFrequency:    { min: 0,    max: 100 },
+  },
 };
 
 const SKIN_CHANNELS = new Set(['red', 'orange', 'yellow']);
@@ -344,7 +366,12 @@ export function validateFinalPreset(preset, fingerprint) {
  * @returns {{ preset: object, adjustments: string[] }}
  */
 export function quickSafetyClamp(preset) {
-  const p = { ...preset, hsl: { ...preset.hsl }, grade: { ...preset.grade }, cal: { ...preset.cal } };
+  // EPIC 2E-P1K -- `effects` added to the shallow-copy set alongside
+  // hsl/grade/cal. Without this, _clampEffectsPanel()'s in-place writes
+  // to p.effects[key] would mutate the CALLER's original preset object
+  // (effects was previously never touched by this function, so the
+  // missing copy was never a bug until now).
+  const p = { ...preset, hsl: { ...preset.hsl }, grade: { ...preset.grade }, cal: { ...preset.cal }, effects: preset.effects ? { ...preset.effects } : preset.effects };
   const adjustments = [];
 
   _clampBasicPanel(p, HARD_LIMITS.basic, adjustments);
@@ -363,6 +390,10 @@ export function quickSafetyClamp(preset) {
   // no point-curve data, and that is a legitimate, common case, not an
   // error.
   _clampToneCurvePanel(p, HARD_LIMITS.curve, adjustments);
+  // EPIC 2E-P1K -- Layer-B safety net for Post-Crop Vignette + Grain.
+  // Never touches p.effects when it is null/absent (most exports today
+  // -- no engine populates this group yet).
+  _clampEffectsPanel(p, HARD_LIMITS.effects, adjustments);
 
   if (p.tint < HARD_LIMITS.wb.tintGreenFloorIntentional) { adjustments.push(`Tint hard-floored (was ${p.tint}).`); p.tint = HARD_LIMITS.wb.tintGreenFloorIntentional; }
   if (p.tint > HARD_LIMITS.wb.tintMagentaCeil)            { adjustments.push(`Tint hard-ceilinged (was ${p.tint}).`); p.tint = HARD_LIMITS.wb.tintMagentaCeil; }
@@ -412,6 +443,37 @@ function _clampBasicPanel(p, limits, adjustments) {
  * before, not after, the min/max clamp. Mirrors the identical fail-closed
  * pattern already proven in detail-guardrails.js's applyDetailGuardrails().
  */
+/**
+ * EPIC 2E-P1K -- Post-Crop Vignette + Grain Layer-B safety net.
+ * Structurally mirrors _clampDetailPanel() exactly (same shared
+ * HARD_LIMITS convention, same fail-closed-on-non-finite behaviour) --
+ * operates on p.effects (a nested flat object, like p.grade/p.cal),
+ * never on p directly, since the real serializer reads `p.effects.*`.
+ */
+function _clampEffectsPanel(p, limits, adjustments) {
+  if (!p.effects || typeof p.effects !== 'object') return;
+  const fields = {
+    fx_vignette_amount: 'vignetteAmount', fx_vignette_midpoint: 'vignetteMidpoint',
+    fx_vignette_roundness: 'vignetteRoundness', fx_vignette_feather: 'vignetteFeather',
+    fx_grain_amount: 'grainAmount', fx_grain_size: 'grainSize', fx_grain_frequency: 'grainFrequency',
+  };
+  for (const [key, name] of Object.entries(fields)) {
+    const { min: lo, max: hi } = limits[name];
+    const raw = p.effects[key];
+    const wasNonFinite = raw !== undefined && !Number.isFinite(raw);
+    if (raw === undefined) continue; // legitimately absent -- not an error
+    const v = wasNonFinite ? 0 : raw;
+    const clamped = Math.max(lo, Math.min(hi, v));
+    if (wasNonFinite) {
+      adjustments.push(`Effects "${key}" (${String(raw)}) was not a finite number -- fail-closed to ${clamped}.`);
+      p.effects[key] = clamped;
+    } else if (clamped !== v) {
+      adjustments.push(`Effects "${key}" (${v}) outside export-safe range [${lo},${hi}] -- clamped to ${clamped}.`);
+      p.effects[key] = clamped;
+    }
+  }
+}
+
 function _clampDetailPanel(p, limits, adjustments) {
   const fields = { sharp: 'sharpening', noise: 'noiseReduction' };
   for (const [key, name] of Object.entries(fields)) {

@@ -50,7 +50,12 @@ export function buildEmptyReadback() {
       bluePrimaryHue: null, bluePrimarySaturation: null,
     },
     detail: { sharpening: null, noiseReduction: null, colorNoiseReduction: null },
-    effects: {},
+    // EPIC 2E-P1K -- Post-Crop Vignette + Grain, now serializer-supported.
+    effects: {
+      postCropVignetteAmount: null, postCropVignetteMidpoint: null,
+      postCropVignetteRoundness: null, postCropVignetteFeather: null,
+      grainAmount: null, grainSize: null, grainFrequency: null,
+    },
     optics: {},
     missingProperties: [],
     unknownProperties: [],

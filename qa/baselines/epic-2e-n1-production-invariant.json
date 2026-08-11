@@ -3,8 +3,8 @@
   "files": {
     "core/color-match/reference-xmp-generator.js": "88ce0055bfee339da327604518a53bcb8213e33f8079dda0feb0d1d5e9e58e27",
     "core/lightroom-mapping-engine/index.js": "f6ff6490a4676579fd86b9eff121041211d6d52aa2430771ed9c9ff1742a0099",
-    "core/preset-engine/index.js": "42f3bb83bf850bed3dd4d2a5b66019264c0a0e5561ff07c2e7e3d644c00dedde",
-    "core/xmp-validator/index.js": "5ebad092a017da4d3d21c61d32e9fb9e98b4dfac991b88a66b8f2c17526b211f",
+    "core/preset-engine/index.js": "738dbf6b34c26c4f82ec120a4784a102b506e4ee0576760a89bd3aa3bd90bb5a",
+    "core/xmp-validator/index.js": "98175b9c20e24205fc76da2fe6e6db0ab8687579720eb5e450fb8f7c06fe2520",
     "ui/app.js": "402e0ef0d13e38654f29b951bf1fea0c9de45aa60ee8c3ee35718b01b673f827",
     "ui/ui-engine.js": "147a55ca9acb75b6b5fa05fbede5d246ddc0b37a8ceacd055ff5c1a4d11f6711"
   },

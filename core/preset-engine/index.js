@@ -112,8 +112,18 @@ export function serializeXMP(p) {
     ].join('\n      ');
   }).join('\n      ');
 
-  const g  = p.grade ?? {};
-  const ca = p.cal   ?? {};
+  const g  = p.grade   ?? {};
+  const ca = p.cal     ?? {};
+  // EPIC 2E-P1K -- Post-Crop Vignette + Grain support. Prior to this
+  // EPIC, serializeXMP() emitted zero crs: attributes for these two
+  // Effects-panel groups (see P1K_SERIALIZER_LINEAGE_AUDIT.md) -- every
+  // Candidate field in this group was structurally present but always
+  // null, and UNSUPPORTED_CANDIDATE_PATHS documented the gap. Defaults
+  // below (0/50/0/50 for vignette, 0/25/50 for grain) are Lightroom's
+  // own Develop-module slider defaults, not fabricated values -- the
+  // same "real UI default, never guessed" convention already used for
+  // `g.grd_blend ?? 50` above and `crs:WhiteBalance="Custom"` below.
+  const fx = p.effects ?? {};
 
   return `<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
@@ -172,6 +182,14 @@ export function serializeXMP(p) {
       crs:ToneCurvePV2012Red="${_curveStr(p, 'red')}"
       crs:ToneCurvePV2012Green="${_curveStr(p, 'green')}"
       crs:ToneCurvePV2012Blue="${_curveStr(p, 'blue')}"
+      crs:PostCropVignetteAmount="${fx.fx_vignette_amount ?? 0}"
+      crs:PostCropVignetteMidpoint="${fx.fx_vignette_midpoint ?? 50}"
+      crs:PostCropVignetteRoundness="${fx.fx_vignette_roundness ?? 0}"
+      crs:PostCropVignetteFeather="${fx.fx_vignette_feather ?? 50}"
+      crs:PostCropVignetteStyle="1"
+      crs:GrainAmount="${fx.fx_grain_amount ?? 0}"
+      crs:GrainSize="${fx.fx_grain_size ?? 25}"
+      crs:GrainFrequency="${fx.fx_grain_frequency ?? 50}"
     />
   </rdf:RDF>
 </x:xmpmeta>

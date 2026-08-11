@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.10.0",
-  "description": "LUMIXA AI EPIC 2E-P1J \u2014 Tone Curve Intelligence & Point-Curve Export Wiring",
+  "version": "2.11.0",
+  "description": "LUMIXA AI EPIC 2E-P1K \u2014 Serializer Extension for Post-Crop Vignette & Grain (XMP Export)",
   "main": "index.js",
   "directories": {
     "doc": "docs"

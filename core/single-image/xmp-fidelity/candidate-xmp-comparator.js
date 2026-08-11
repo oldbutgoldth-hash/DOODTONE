@@ -95,6 +95,8 @@ function _readbackScalar(readback, entry) {
   if (parts[0] === 'grading' && parts.length === 3) return readback.grading[parts[1]][parts[2]];
   if (parts[0] === 'grading' && parts[1] === 'blending') return readback.grading.blending;
   if (parts[0] === 'cal') return readback.cal[parts[1]];
+  // EPIC 2E-P1K -- Post-Crop Vignette + Grain.
+  if (parts[0] === 'effects') return readback.effects[parts[1]];
   return undefined;
 }
 
