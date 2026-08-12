@@ -401,6 +401,129 @@ export function classifyScene({ scene, stats } = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Photographer Style — EPIC 2E-P1N
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Classifies the reference image into a named photographer-style
+ * category (Wedding/Portrait/Landscape/Travel/Food/Street/Fashion/
+ * Documentary/Vintage/Luxury), sourced entirely from
+ * session.evidence.styleRecognition (core/style-recognition-engine's
+ * `recognizeStyle()`), which already runs and is already committed to
+ * evidence during analysis (see ui/app.js's ColorEngines stage) — P1N
+ * does not re-run or duplicate that classifier.
+ *
+ * Two supporting evidence keys, when present, add context without
+ * being required: `styleFingerprint` (core/style-fingerprint's mood/
+ * warmth/contrast summary) and `benchmark`
+ * (core/style-benchmark-engine's photographerAcceptance estimate of
+ * how well the final preset preserved that style). Neither of these
+ * is the named-category classifier itself — they describe *why* a
+ * style reads the way it does, and *how well the pipeline preserved
+ * it*, respectively. All three evidence keys are read defensively;
+ * a missing supporting key degrades the section gracefully rather
+ * than making it UNAVAILABLE (only a missing `styleRecognition` does
+ * that, since it is the section's sole required input).
+ *
+ * Ambiguity/low-confidence flags are recomputed here directly from
+ * `styleRecognition.top`/`.second` (not by reusing the engine's own
+ * raw English `.warnings` strings) so the resulting text stays on
+ * this project's {code, params} + i18n convention like every other
+ * section in this file.
+ */
+export function classifyPhotographerStyle({ styleRecognition, styleFingerprint, benchmark } = {}) {
+  if (!styleRecognition || !styleRecognition.top) {
+    return {
+      status: SECTION_STATUS.UNAVAILABLE, confidence: { score: null, level: 'UNAVAILABLE' },
+      observations: [], recommendations: [], warnings: [],
+      topStyle: null, topStyleConfidence: null, alternates: [], traits: [],
+      ambiguous: null, moodSummary: null, preservation: null,
+    };
+  }
+
+  const top = styleRecognition.top;
+  const second = styleRecognition.second ?? null;
+  const observations = [];
+  const recommendations = [];
+  const warnings = [];
+
+  const topStyle = top.style ?? null;
+  const topStyleConfidence = _num(top.confidence);
+  observations.push(_obs('photographerStyle.topStyle', { style: topStyle, confidence: topStyleConfidence }));
+
+  const traits = Array.isArray(top.traits) ? top.traits : [];
+  if (traits.length) {
+    observations.push(_obs('photographerStyle.traits', { traits: traits.join(', ') }));
+  }
+
+  const secondConfidence = second ? _num(second.confidence) : null;
+  const margin = (topStyleConfidence !== null && secondConfidence !== null) ? topStyleConfidence - secondConfidence : null;
+  const ambiguous = margin !== null && margin < 5;
+  const lowConfidence = topStyleConfidence !== null && topStyleConfidence < 25;
+
+  if (ambiguous) {
+    warnings.push(_obs('photographerStyle.ambiguousClassification', {
+      topStyle, topConfidence: topStyleConfidence, secondStyle: second.style ?? null, secondConfidence,
+    }));
+  }
+  if (lowConfidence) {
+    warnings.push(_obs('photographerStyle.lowConfidenceClassification', { topStyle, topConfidence: topStyleConfidence }));
+    recommendations.push(_obs('photographerStyle.reviewManually'));
+  }
+
+  const alternates = Array.isArray(styleRecognition.styles)
+    ? styleRecognition.styles.filter((s) => s.style !== topStyle).slice(0, 2).map((s) => ({ style: s.style ?? null, confidence: _num(s.confidence) }))
+    : [];
+
+  let moodSummary = null;
+  if (styleFingerprint) {
+    moodSummary = {
+      mood: styleFingerprint.moodLabel ?? null,
+      warmth: styleFingerprint.warmth ?? null,
+      contrastLevel: styleFingerprint.contrastLevel ?? null,
+    };
+    if (moodSummary.mood || moodSummary.warmth || moodSummary.contrastLevel) {
+      observations.push(_obs('photographerStyle.moodSummary', {
+        mood: moodSummary.mood ?? 'unknown', warmth: moodSummary.warmth ?? 'unknown', contrast: moodSummary.contrastLevel ?? 'unknown',
+      }));
+    }
+  }
+
+  let preservation = null;
+  const acceptance = benchmark?.photographerAcceptance;
+  if (acceptance) {
+    const accScore = _num(acceptance.score);
+    preservation = {
+      score: accScore,
+      strongPoints: Array.isArray(acceptance.strongPoints) ? acceptance.strongPoints.length : 0,
+      weakPoints: Array.isArray(acceptance.weakPoints) ? acceptance.weakPoints.length : 0,
+    };
+    if (accScore !== null) {
+      const tier = accScore >= 0.75 ? 'strong' : (accScore >= 0.5 ? 'draft' : 'rough');
+      // Tier is encoded directly into the code (not passed as a param)
+      // so each tier resolves to its own i18n leaf string -- matching
+      // this file's existing nested-code convention (e.g.
+      // dynamicRange.veryLow/low/moderate/high/veryHigh above).
+      observations.push(_obs(`photographerStyle.preservationEstimate.${tier}`, { score: Math.round(accScore * 100) }));
+      if (tier === 'rough') recommendations.push(_obs('photographerStyle.expectManualWork'));
+    }
+  }
+
+  // styleRecognition.confidence is the engine's own 0-1 margin-based
+  // classification confidence (not the per-style softmax score, which
+  // is already 0-100 and stored separately on each `styles[]` entry).
+  const confidence = confidenceFromRaw(styleRecognition.confidence);
+  const status = (ambiguous || lowConfidence)
+    ? SECTION_STATUS.LOW_CONFIDENCE
+    : (confidence.level === 'UNAVAILABLE' ? SECTION_STATUS.UNAVAILABLE : SECTION_STATUS.AVAILABLE);
+
+  return {
+    status, confidence, observations, recommendations, warnings,
+    topStyle, topStyleConfidence, alternates, traits, ambiguous, moodSummary, preservation,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Technical Issues — only generated when supporting evidence exists.
 // ─────────────────────────────────────────────────────────────────────────
 

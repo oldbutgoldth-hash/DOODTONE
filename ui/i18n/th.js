@@ -1150,6 +1150,7 @@ export const th = {
       unavailable: 'ส่วนนี้ไม่พร้อมใช้งาน เนื่องจากโมดูลวิเคราะห์ที่เกี่ยวข้องไม่สามารถให้ผลลัพธ์ที่ใช้งานได้สำหรับภาพนี้',
       exposure: 'การเปิดรับแสง', dynamicRange: 'ช่วงไดนามิก', whiteBalance: 'สมดุลแสงขาว',
       tone: 'โทนและคอนทราสต์', color: 'สี', skin: 'ผิว', scene: 'ฉาก',
+      photographerStyle: 'สไตล์ช่างภาพ',
     },
     field: {
       meanLuminance: 'ความสว่างเฉลี่ย', clippedHighlightsPercent: '% ไฮไลต์ที่ขาดรายละเอียด', crushedShadowsPercent: '% เงาที่ขาดรายละเอียด',
@@ -1158,6 +1159,8 @@ export const th = {
       blackPoint: 'จุดดำ', whitePoint: 'จุดขาว', contrastProfile: 'ลักษณะคอนทราสต์',
       saturationProfile: 'ความอิ่มตัวของสี', harmonyScheme: 'ความกลมกลืนของสี', skinPercentage: '% พื้นที่ผิวที่ตรวจพบ',
       primaryType: 'ประเภทฉาก',
+      topStyle: 'สไตล์ที่ใกล้เคียงที่สุด', topStyleConfidence: 'ความมั่นใจในการจับคู่',
+      alternateStyles: 'สไตล์อื่นที่พิจารณา', stylePreservation: 'ประมาณการคงสไตล์ไว้',
     },
     direction: { warm: 'อุ่น', cool: 'เย็น', neutral: 'กลาง', green: 'เขียว', magenta: 'ม่วงแดง' },
     contrastProfile: { flat: 'แบน', harsh: 'จัดจ้าน', normal: 'ปกติ' },
@@ -1213,6 +1216,16 @@ export const th = {
       scene: {
         primaryType: 'จัดประเภทฉากเป็น {{type}}',
       },
+      photographerStyle: {
+        topStyle: 'สไตล์ช่างภาพที่ใกล้เคียงที่สุด: {{style}} (ความมั่นใจ {{confidence}}%)',
+        traits: 'ลักษณะเฉพาะของสไตล์นี้: {{traits}}',
+        moodSummary: 'อารมณ์โดยรวมของภาพคือ{{mood}} โทนอุ่น/เย็น {{warmth}} และคอนทราสต์{{contrast}}',
+        preservationEstimate: {
+          strong: 'พรีเซ็ตที่สร้างขึ้นคาดว่าจะคงสไตล์นี้ไว้ได้ดี ({{score}}%) -- น่าจะใช้งานได้เลย',
+          draft: 'พรีเซ็ตที่สร้างขึ้นคาดว่าจะคงสไตล์นี้ไว้ได้เพียงบางส่วน ({{score}}%) -- ควรถือเป็นฉบับร่าง',
+          rough: 'พรีเซ็ตที่สร้างขึ้นคาดว่าจะคงสไตล์นี้ไว้ได้เพียงเล็กน้อย ({{score}}%) -- คาดว่าต้องปรับแต่งด้วยตนเองเพิ่มเติม',
+        },
+      },
     },
     recommendations: {
       exposure: {
@@ -1234,6 +1247,10 @@ export const th = {
         avoidStrongDehaze: 'ควรหลีกเลี่ยงการใช้ Dehaze แรงเกินไปบนผิว',
         protectFaceHighlights: 'ควรปกป้องไฮไลต์บริเวณใบหน้า',
       },
+      photographerStyle: {
+        reviewManually: 'ความมั่นใจในการจับคู่สไตล์ยังจำกัด ควรตรวจสอบสไตล์ที่ใกล้เคียงที่สุดด้วยตนเอง',
+        expectManualWork: 'พรีเซ็ตที่สร้างขึ้นเป็นเพียงจุดเริ่มต้นแบบคร่าวๆ สำหรับสไตล์นี้ -- คาดว่าต้องปรับแต่งด้วยตนเองเพิ่มเติม',
+      },
     },
     warnings: {
       exposure: { bothEndsClipping: 'ทั้งไฮไลต์และเงาขาดรายละเอียด -- ภาพนี้มีช่วงโทนกว้างซึ่งอาจกู้คืนได้ไม่สมบูรณ์' },
@@ -1244,6 +1261,10 @@ export const th = {
       whiteBalance: { lowNeutralConfidence: 'ความมั่นใจในการประเมินสมดุลแสงขาวอยู่ในระดับต่ำ เนื่องจากไม่พบพื้นที่สีกลางที่เพียงพอ' },
       skin: { lowConfidence: 'ความมั่นใจในการตรวจพบผิวสำหรับภาพนี้อยู่ในระดับต่ำ' },
       scene: { fallbackToHistogramCategory: 'ประเภทฉากประมาณจากค่าสถิติความสว่าง/สีเท่านั้น -- ตัวจำแนกฉากโดยเฉพาะไม่ได้ให้ผลลัพธ์ในรอบนี้' },
+      photographerStyle: {
+        ambiguousClassification: 'สไตล์ที่ใกล้เคียงที่สุดสองอันดับแรกมีคะแนนใกล้เคียงกันมาก ({{topStyle}} {{topConfidence}}% เทียบกับ {{secondStyle}} {{secondConfidence}}%) -- ควรถือว่าการจำแนกนี้ยังไม่ชัดเจน',
+        lowConfidenceClassification: 'ความมั่นใจในการจับคู่สไตล์อันดับแรกอยู่ในระดับต่ำ ({{topStyle}}, {{topConfidence}}%) -- ภาพนี้อาจไม่ตรงกับสไตล์ที่ฝึกไว้สไตล์ใดเป็นอย่างดี',
+      },
     },
     issues: {
       HIGHLIGHT_CLIPPING: {

@@ -1162,6 +1162,7 @@ export const en = {
       unavailable: 'This section is unavailable -- the underlying analysis module did not produce usable evidence for this image.',
       exposure: 'Exposure', dynamicRange: 'Dynamic Range', whiteBalance: 'White Balance',
       tone: 'Tone and Contrast', color: 'Color', skin: 'Skin', scene: 'Scene',
+      photographerStyle: 'Photographer Style',
     },
     field: {
       meanLuminance: 'Mean luminance', clippedHighlightsPercent: 'Highlight clipping %', crushedShadowsPercent: 'Shadow clipping %',
@@ -1170,6 +1171,8 @@ export const en = {
       blackPoint: 'Black point', whitePoint: 'White point', contrastProfile: 'Contrast profile',
       saturationProfile: 'Saturation', harmonyScheme: 'Color harmony', skinPercentage: 'Skin coverage %',
       primaryType: 'Scene type',
+      topStyle: 'Closest style match', topStyleConfidence: 'Match confidence',
+      alternateStyles: 'Also considered', stylePreservation: 'Style preservation estimate',
     },
     direction: { warm: 'Warm', cool: 'Cool', neutral: 'Neutral', green: 'Green', magenta: 'Magenta' },
     contrastProfile: { flat: 'Flat', harsh: 'Harsh', normal: 'Normal' },
@@ -1225,6 +1228,16 @@ export const en = {
       scene: {
         primaryType: 'Scene classified as {{type}}.',
       },
+      photographerStyle: {
+        topStyle: 'Closest photographer-style match: {{style}} ({{confidence}}% confidence).',
+        traits: 'Traits associated with this style: {{traits}}.',
+        moodSummary: 'Overall mood reads {{mood}}, with {{warmth}} warmth and {{contrast}} contrast.',
+        preservationEstimate: {
+          strong: 'The generated preset is estimated to preserve this style well ({{score}}%) -- likely usable as-is.',
+          draft: 'The generated preset is estimated to partially preserve this style ({{score}}%) -- treat as a draft.',
+          rough: 'The generated preset is estimated to preserve this style only loosely ({{score}}%) -- expect manual work.',
+        },
+      },
     },
     recommendations: {
       exposure: {
@@ -1246,6 +1259,10 @@ export const en = {
         avoidStrongDehaze: 'Avoid strong Dehaze on skin.',
         protectFaceHighlights: 'Protect highlights on the face.',
       },
+      photographerStyle: {
+        reviewManually: 'Style-match confidence is limited here -- consider reviewing the closest style match manually.',
+        expectManualWork: 'The generated preset is only a rough starting point for this style -- expect to make manual adjustments.',
+      },
     },
     warnings: {
       exposure: { bothEndsClipping: 'Both highlights and shadows show clipping -- this image has a wide range that may be hard to recover fully.' },
@@ -1256,6 +1273,10 @@ export const en = {
       whiteBalance: { lowNeutralConfidence: 'White-balance confidence is low because insufficient neutral areas were found.' },
       skin: { lowConfidence: 'Skin detection confidence is low for this image.' },
       scene: { fallbackToHistogramCategory: 'Scene type is estimated from brightness/color statistics only -- the dedicated scene classifier did not produce a result this run.' },
+      photographerStyle: {
+        ambiguousClassification: 'The top two style matches are very close ({{topStyle}} {{topConfidence}}% vs {{secondStyle}} {{secondConfidence}}%) -- treat this classification as ambiguous.',
+        lowConfidenceClassification: 'Top style match confidence is low ({{topStyle}}, {{topConfidence}}%) -- this image may not match any trained style profile well.',
+      },
     },
     issues: {
       HIGHLIGHT_CLIPPING: {

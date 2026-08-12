@@ -213,6 +213,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1l-parametric-tone-curve-test.mjs',
   // EPIC 2E-P1M -- Strength-mode UI (Natural/Balanced/Dramatic).
   'qa/epic-2e-p1m-strength-mode-test.mjs',
+  // EPIC 2E-P1N -- Photographer Style Intelligence wired into Report/UI.
+  'qa/epic-2e-p1n-photographer-style-test.mjs',
 ];
 
 let anyFailed = false;

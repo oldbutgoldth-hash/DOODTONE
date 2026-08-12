@@ -314,6 +314,18 @@ export function renderSingleImageReport(container, report, lang) {
       ['report.field.primaryType', report.scene.primaryType],
     ],
   }));
+  // EPIC 2E-P1N: named photographer-style classification. `topStyle`/
+  // `alternates[].style` are internal category names (Wedding, Portrait,
+  // etc.), rendered as raw values -- not translated -- matching this
+  // renderer's existing precedent for report.scene.primaryType above.
+  container.appendChild(_sectionBlock('report.section.photographerStyle', report.photographerStyle, lang, {
+    extraRows: [
+      ['report.field.topStyle', report.photographerStyle.topStyle],
+      ['report.field.topStyleConfidence', report.photographerStyle.topStyleConfidence !== null && report.photographerStyle.topStyleConfidence !== undefined ? `${report.photographerStyle.topStyleConfidence}%` : null],
+      ['report.field.alternateStyles', (report.photographerStyle.alternates || []).length ? report.photographerStyle.alternates.map((a) => `${a.style} (${a.confidence}%)`).join(', ') : null],
+      ['report.field.stylePreservation', report.photographerStyle.preservation?.score !== null && report.photographerStyle.preservation?.score !== undefined ? `${Math.round(report.photographerStyle.preservation.score * 100)}%` : null],
+    ],
+  }));
 
   _renderTechnicalIssues(container, report, lang);
   _renderAdvancedDiagnostics(container, report, lang);

@@ -17,7 +17,8 @@ import { combineConservative } from './confidence-aggregator.js';
 import { assembleLineage } from './report-lineage.js';
 import {
   classifyExposure, classifyDynamicRange, classifyWhiteBalance, classifyTone,
-  classifyColor, classifySkin, classifyScene, buildTechnicalIssues, buildCreativeCharacteristics,
+  classifyColor, classifySkin, classifyScene, classifyPhotographerStyle,
+  buildTechnicalIssues, buildCreativeCharacteristics,
 } from './photographer-interpretation-engine.js';
 import { SESSION_STATUS, MODULE_STATE } from '../single-image-session.js';
 
@@ -34,6 +35,12 @@ const LEGACY_FALLBACK_KEY = {
   // colorCast/scene have no legacy mirror by design (P1A comment in
   // single-image-session.js) -- no fallback key for these; if their
   // evidence entry is missing, the section is genuinely UNAVAILABLE.
+  // EPIC 2E-P1N: these three DO have legacy mirrors (commitEvidence()'s
+  // syncEvidenceKeyToLegacyState() already writes them -- see
+  // single-image-session.js lines 64/67/69's own comments), so they
+  // follow the same documented-fallback pattern as the keys above.
+  styleRecognition: 'lastStyleRecognition', styleFingerprint: 'lastStyleFingerprint',
+  benchmark: 'lastBenchmark',
 };
 
 /**
@@ -109,9 +116,14 @@ export function buildAnalysisReportFromSession(session, { legacyState = null } =
   const hslR = _readEvidence(session, 'hsl', legacyState);
   const colorCastR = _readEvidence(session, 'colorCast', legacyState);
   const sceneR = _readEvidence(session, 'scene', legacyState);
+  // EPIC 2E-P1N
+  const styleRecognitionR = _readEvidence(session, 'styleRecognition', legacyState);
+  const styleFingerprintR = _readEvidence(session, 'styleFingerprint', legacyState);
+  const benchmarkR = _readEvidence(session, 'benchmark', legacyState);
 
   const stats = statsR.value, wb = wbR.value, skin = skinR.value, palette = paletteR.value;
   const harmony = harmonyR.value, hsl = hslR.value, colorCast = colorCastR.value, scene = sceneR.value;
+  const styleRecognition = styleRecognitionR.value, styleFingerprint = styleFingerprintR.value, benchmark = benchmarkR.value;
 
   const sceneCategory = scene?.category ?? stats?.category ?? null;
 
@@ -137,6 +149,18 @@ export function buildAnalysisReportFromSession(session, { legacyState = null } =
 
   const sceneSection = classifyScene({ scene, stats });
 
+  // EPIC 2E-P1N: named photographer-style classification. Required
+  // input is styleRecognition; styleFingerprint/benchmark are optional
+  // supporting context (see classifyPhotographerStyle()'s own doc
+  // comment). Its own internal status logic already accounts for a
+  // missing styleRecognition, an ambiguous top/second margin, and a
+  // low top-style confidence -- _sectionStatusForBuild() below is
+  // still applied for consistency with every other section, so a
+  // SOFT_FAILED/FAILED/TIMED_OUT/ABORTED evidence entry (as opposed to
+  // simply "missing") is handled the same way here as everywhere else.
+  const photographerStyleSection = classifyPhotographerStyle({ styleRecognition, styleFingerprint, benchmark });
+  photographerStyleSection.status = _sectionStatusForBuild(photographerStyleSection.status, styleRecognitionR.evidenceStatus);
+
   report.exposure = exposureSection;
   report.dynamicRange = dynamicRangeSection;
   report.whiteBalance = whiteBalanceSection;
@@ -144,6 +168,7 @@ export function buildAnalysisReportFromSession(session, { legacyState = null } =
   report.color = colorSection;
   report.skin = skinSection;
   report.scene = sceneSection;
+  report.photographerStyle = photographerStyleSection;
 
   // ── Technical issues (only when evidence supports them) ─────────────
   report.technicalIssues = buildTechnicalIssues({ stats, wb, colorCast, skin });
@@ -198,6 +223,13 @@ export function buildAnalysisReportFromSession(session, { legacyState = null } =
     color: { evidenceKeys: ['stats', 'palette', 'harmony', 'hsl', 'colorCast'], sourceModules: ['core/kmeans-engine', 'core/color-harmony-engine', 'core/hsl-analyzer-engine'], fallbackUsed: paletteR.fallbackUsed || harmonyR.fallbackUsed || hslR.fallbackUsed, confidenceInputs: [palette?.confidence, harmony?.confidence, hsl?.confidence] },
     skin: { evidenceKeys: ['skin'], sourceModules: ['core/skintone-engine', 'core/skin-classifier'], fallbackUsed: skinR.fallbackUsed, confidenceInputs: [skin?.confidence] },
     scene: { evidenceKeys: ['scene', 'stats'], sourceModules: ['core/scene-classifier'], fallbackUsed: sceneR.fallbackUsed, confidenceInputs: [scene?.confidence] },
+    // EPIC 2E-P1N
+    photographerStyle: {
+      evidenceKeys: ['styleRecognition', 'styleFingerprint', 'benchmark'],
+      sourceModules: ['core/style-recognition-engine', 'core/style-fingerprint', 'core/style-benchmark-engine'],
+      fallbackUsed: styleRecognitionR.fallbackUsed || styleFingerprintR.fallbackUsed || benchmarkR.fallbackUsed,
+      confidenceInputs: [styleRecognition?.confidence],
+    },
   });
 
   // ── Diagnostics ─────────────────────────────────────────────────────

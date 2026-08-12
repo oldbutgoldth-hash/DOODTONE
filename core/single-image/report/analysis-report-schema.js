@@ -47,12 +47,17 @@ export const ISSUE_SEVERITY = Object.freeze({
  * which has its own, simpler shape, and `image`, which is metadata). */
 export const ANALYSIS_SECTION_IDS = Object.freeze([
   'exposure', 'dynamicRange', 'whiteBalance', 'tone', 'color', 'skin', 'scene',
+  // EPIC 2E-P1N: named photographer-style classification (Wedding/
+  // Portrait/Landscape/etc.) -- see photographer-interpretation-engine.js's
+  // classifyPhotographerStyle(). Additive only; every other section id
+  // above is unchanged.
+  'photographerStyle',
 ]);
 
 const REQUIRED_TOP_KEYS = Object.freeze([
   'reportId', 'sessionId', 'generationId', 'schemaVersion', 'status', 'createdAt',
   'image', 'summary', 'exposure', 'dynamicRange', 'whiteBalance', 'tone', 'color',
-  'skin', 'scene', 'technicalIssues', 'creativeCharacteristics',
+  'skin', 'scene', 'photographerStyle', 'technicalIssues', 'creativeCharacteristics',
   'recommendedCorrections', 'safetyWarnings', 'lineage', 'diagnostics',
   'reportBuildCount',
 ]);
@@ -124,6 +129,14 @@ export function createEmptyReport({ sessionId = null, generationId = null, repor
     }),
     scene: _emptyAnalysisSection({
       primaryType: null, typeHints: [], lightingHints: [], environmentHints: [],
+    }),
+    // EPIC 2E-P1N: named photographer-style classification, sourced from
+    // session.evidence.styleRecognition (+ supporting styleFingerprint/
+    // benchmark evidence, when available). See
+    // photographer-interpretation-engine.js's classifyPhotographerStyle().
+    photographerStyle: _emptyAnalysisSection({
+      topStyle: null, topStyleConfidence: null, alternates: [], traits: [],
+      ambiguous: null, moodSummary: null, preservation: null,
     }),
     technicalIssues: [],
     creativeCharacteristics: [],
