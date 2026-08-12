@@ -251,8 +251,15 @@ check('29. Regression suites (P1B/P1C R1/P1C R3/P1D/P1E R3) verified standalone 
 
   const lufa42 = JSON.parse(readFileSync(path.join(ROOT, 'qa/baselines/lufa42-production-lock-manifest.json'), 'utf8'));
   const lufa42Ok = Object.entries(lufa42.files).every(([rel, hash]) => sha256File(rel) === hash);
-  check('31. 206-file production-lock manifest is byte-identical to the current tree for every locked file (freshly regenerated after this round\'s 9 deliberate edits)',
-    lufa42Ok && Object.keys(lufa42.files).length === 206);
+  // NOTE: file count was 206 as of P1K's own round. P1L legitimately added
+  // 2 new locked files (core/single-image/parametric-tone-intelligence/
+  // parametric-tone-schema.js + parametric-tone-plan-builder.js), which the
+  // manifest generator auto-discovers -- so the authoritative count is now
+  // 208 and will keep growing as future EPICs add new core/ui files. The
+  // safety-critical assertion is byte-identical hashes (lufa42Ok), not a
+  // frozen total.
+  check('31. Production-lock manifest is byte-identical to the current tree for every locked file (206 @ P1K + 2 new P1L engine files = 208)',
+    lufa42Ok && Object.keys(lufa42.files).length === 208);
 
   const EXPECTED_CHANGED_THIS_ROUND = [
     'core/preset-engine/index.js',

@@ -51,6 +51,8 @@ import { buildWhiteBalancePlan } from '../white-balance-intelligence/wb-plan-bui
 import { DEFAULT_STRENGTH_MODE as DEFAULT_WB_STRENGTH_MODE } from '../white-balance-intelligence/white-balance-schema.js';
 import { buildToneCurvePlan } from '../tone-curve-intelligence/tone-curve-plan-builder.js';
 import { DEFAULT_STRENGTH_MODE as DEFAULT_TONE_CURVE_STRENGTH_MODE } from '../tone-curve-intelligence/tone-curve-schema.js';
+import { buildParametricTonePlan } from '../parametric-tone-intelligence/parametric-tone-plan-builder.js';
+import { DEFAULT_STRENGTH_MODE as DEFAULT_PARAMETRIC_TONE_STRENGTH_MODE } from '../parametric-tone-intelligence/parametric-tone-schema.js';
 import { SINGLE_IMAGE_FULL, PROFILE_VERSION } from '../single-image-analysis-profile.js';
 import { SESSION_STATUS, MODULE_STATE } from '../single-image-session.js';
 import { confidenceFromRaw } from '../report/confidence-aggregator.js';
@@ -181,6 +183,34 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
     engaged: toneCurvePlan.diagnostics.engaged, reasons: toneCurvePlan.diagnostics.reasons,
     warnings: toneCurvePlan.diagnostics.warnings, pointsRestrained: toneCurvePlan.diagnostics.pointsRestrained,
     lineage: toneCurvePlan.lineage,
+  };
+
+  // ── EPIC 2E-P1L — Parametric Tone Curve Intelligence ────────────────
+  // Reads the SAME evidence.toneCurves result P1J reads above, deriving
+  // candidate.curves.parametric.{shadows,midtones,highlights} from the
+  // master point-curve's deviation from identity -- see
+  // parametric-tone-schema.js's header comment for the full
+  // reuse-first rationale. OVERWRITES the always-static rawPreset.crv_*
+  // fallback set at the top of the "curves" section above (which, per
+  // P1J_TONE_CURVE_LINEAGE_AUDIT.md, was always sourced from
+  // index.html's hidden-input static defaults of 15/10/5, never a real
+  // per-photo computation) only when this plan actually engages. Never
+  // writes candidate.curves.rgb/red/green/blue -- that remains P1J's
+  // territory exclusively.
+  const parametricTonePlan = buildParametricTonePlan(evidence, { strengthMode: DEFAULT_PARAMETRIC_TONE_STRENGTH_MODE });
+  if (parametricTonePlan.diagnostics.engaged) {
+    candidate.curves.parametric = {
+      shadows: parametricTonePlan.finalValues.shadows,
+      midtones: parametricTonePlan.finalValues.midtones,
+      highlights: parametricTonePlan.finalValues.highlights,
+    };
+  }
+  candidate.diagnostics.parametricToneIntelligence = {
+    schemaVersion: parametricTonePlan.schemaVersion, strengthMode: parametricTonePlan.strengthMode,
+    confidence: parametricTonePlan.confidence, category: parametricTonePlan.category,
+    engaged: parametricTonePlan.diagnostics.engaged, reasons: parametricTonePlan.diagnostics.reasons,
+    warnings: parametricTonePlan.diagnostics.warnings, deviationsRestrained: parametricTonePlan.diagnostics.deviationsRestrained,
+    lineage: parametricTonePlan.lineage,
   };
 
   // ── hsl ─────────────────────────────────────────────────────────

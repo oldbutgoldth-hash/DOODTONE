@@ -4041,7 +4041,22 @@ function renderToneCurveIntelligenceDiagnostics(candidate) {
     }
   }
 
-  if (parametricNoteEl) parametricNoteEl.textContent = t('appShell.toneCurveParametricUnsupported', null, state.lang);
+  // EPIC 2E-P1L -- Parametric Tone Curve Intelligence now provides real
+  // Shadows/Midtones/Highlights values derived from this photo's master
+  // curve; the old "not supported" note is stale and would actively
+  // mislead users once this engine engages, so it now branches on the
+  // real diagnostics written by candidate-builder.js.
+  if (parametricNoteEl) {
+    const paramIntel = candidate?.diagnostics?.parametricToneIntelligence ?? null;
+    if (paramIntel?.engaged) {
+      const vals = candidate?.curves?.parametric ?? { shadows: 0, midtones: 0, highlights: 0 };
+      parametricNoteEl.textContent = t('appShell.toneCurveParametricEngaged', {
+        shadows: vals.shadows ?? 0, midtones: vals.midtones ?? 0, highlights: vals.highlights ?? 0,
+      }, state.lang);
+    } else {
+      parametricNoteEl.textContent = t('appShell.toneCurveParametricNotEngaged', null, state.lang);
+    }
+  }
 }
 
 function renderXmpFidelityStatus(uiStatus, report = null, xmpString = null) {

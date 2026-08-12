@@ -209,6 +209,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1j-tone-curve-intelligence-test.mjs',
   // EPIC 2E-P1K -- Serializer Extension for Post-Crop Vignette + Grain.
   'qa/epic-2e-p1k-serializer-effects-extension-test.mjs',
+  // EPIC 2E-P1L -- Parametric Tone Curve Intelligence.
+  'qa/epic-2e-p1l-parametric-tone-curve-test.mjs',
 ];
 
 let anyFailed = false;

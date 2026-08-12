@@ -231,6 +231,10 @@ export const th = {
     toneCurvePointsRestrained: 'มีจุดโค้ง {count} จุดถูกดึงกลับให้อยู่ในขอบเขตปลอดภัย',
     toneCurveExportSafeAdjustmentNotice: 'จุดโค้งบางจุดถูกปรับให้อยู่ในขอบเขตปลอดภัยก่อนส่งออก',
     toneCurveParametricUnsupported: 'สไลเดอร์ Parametric Curve (เงามืด/โทนกลาง/ไฮไลต์) ไม่ได้รับการควบคุมจากชั้น Intelligence นี้ — มีเพียงฟิลด์ Point Curve (แดง/เขียว/น้ำเงิน/หลัก) ด้านบนเท่านั้นที่สะท้อนหลักฐานเฉพาะภาพ ฟิลด์ Parametric คงค่าเป็น 0 (ไม่ปรับ) ซึ่งเป็นค่าเริ่มต้นที่ปลอดภัย ไม่ใช่ข้อผิดพลาด',
+    // EPIC 2E-P1L -- Parametric Tone Curve Intelligence ตอนนี้คำนวณค่า
+    // เงามืด/โทนกลาง/ไฮไลต์ จริงจาก Master Curve ของภาพนี้แล้ว
+    toneCurveParametricEngaged: 'เอนจิน Parametric Tone Curve (เงามืด/โทนกลาง/ไฮไลต์): เงามืด {shadows}, โทนกลาง {midtones}, ไฮไลต์ {highlights} -- คำนวณจาก Master Tone Curve ของภาพนี้เอง (ค่าเบี่ยงเบนจากเส้นตรงที่จุดอ้างอิงเงามืด/โทนกลาง/ไฮไลต์)',
+    toneCurveParametricNotEngaged: 'เอนจิน Parametric Tone Curve (เงามืด/โทนกลาง/ไฮไลต์) ไม่ได้ปรับภาพนี้ -- ความเชื่อมั่นในการวิเคราะห์ต่ำ หรือ Master Curve ใกล้เคียงเส้นตรง สไลเดอร์คงค่าเริ่มต้นที่ปลอดภัย (0 = ไม่ปรับ)',
     supportDivider: 'สนับสนุนโครงการ',
     supportTitle: 'สนับสนุนโครงการนี้',
     supportIntro: 'LUMIXA AI วิเคราะห์แสง สี โทน และลักษณะการแต่งภาพจากภาพอ้างอิง แล้วสร้าง Lightroom preset (.XMP) ภายในเครื่อง',

@@ -113,6 +113,22 @@ export const HARD_LIMITS = {
     grainSize:         { min: 0,    max: 100 },
     grainFrequency:    { min: 0,    max: 100 },
   },
+  // ── EPIC 2E-P1L -- Parametric Tone Curve Export Safety Clamp ───────────
+  // Real Lightroom Parametric Shadows/Midtones/Highlights slider range
+  // is -100..100. parametric-tone-schema.js's own Layer-A ceiling
+  // (MAX_PARAMETRIC_DEVIATION=45) already keeps this plan-builder's own
+  // output well inside +-60 at every strength mode (BALANCED typical
+  // ~24-36, DRAMATIC occasionally restrained to 45) -- this Layer-B
+  // bound sits comfortably above that legitimate range (same
+  // "comfortably above real output, comfortably below raw UI range"
+  // philosophy as HARD_LIMITS.curve/detail/effects above) while still
+  // catching a corrupted or manually-out-of-range Candidate before
+  // export.
+  parametricCurve: {
+    shadows:    { min: -60, max: 60 },
+    midtones:   { min: -60, max: 60 },
+    highlights: { min: -60, max: 60 },
+  },
 };
 
 const SKIN_CHANNELS = new Set(['red', 'orange', 'yellow']);
@@ -394,6 +410,10 @@ export function quickSafetyClamp(preset) {
   // Never touches p.effects when it is null/absent (most exports today
   // -- no engine populates this group yet).
   _clampEffectsPanel(p, HARD_LIMITS.effects, adjustments);
+  // EPIC 2E-P1L -- Layer-B safety net for Parametric Shadows/Midtones/
+  // Highlights (crv_sh/crv_mid/crv_hi -- ParametricShadows/Midtones/
+  // Highlights in the exported XMP).
+  _clampParametricCurvePanel(p, HARD_LIMITS.parametricCurve, adjustments);
 
   if (p.tint < HARD_LIMITS.wb.tintGreenFloorIntentional) { adjustments.push(`Tint hard-floored (was ${p.tint}).`); p.tint = HARD_LIMITS.wb.tintGreenFloorIntentional; }
   if (p.tint > HARD_LIMITS.wb.tintMagentaCeil)            { adjustments.push(`Tint hard-ceilinged (was ${p.tint}).`); p.tint = HARD_LIMITS.wb.tintMagentaCeil; }
@@ -450,6 +470,35 @@ function _clampBasicPanel(p, limits, adjustments) {
  * operates on p.effects (a nested flat object, like p.grade/p.cal),
  * never on p directly, since the real serializer reads `p.effects.*`.
  */
+/**
+ * EPIC 2E-P1L -- Parametric Tone Curve (crv_sh/crv_mid/crv_hi) Layer-B
+ * safety net. Structurally mirrors _clampDetailPanel()/_clampEffectsPanel()
+ * exactly (same shared HARD_LIMITS convention, same fail-closed-on-
+ * non-finite behaviour) -- operates directly on the flat top-level
+ * `p.crv_sh`/`p.crv_mid`/`p.crv_hi` keys (unlike Effects, these are not
+ * nested under a sub-object -- matches the pre-existing flat legacy
+ * preset shape `core/preset-engine/index.js::serializeXMP` has always
+ * read them from).
+ */
+function _clampParametricCurvePanel(p, limits, adjustments) {
+  const fields = { crv_sh: 'shadows', crv_mid: 'midtones', crv_hi: 'highlights' };
+  for (const [key, name] of Object.entries(fields)) {
+    const { min: lo, max: hi } = limits[name];
+    const raw = p[key];
+    if (raw === undefined) continue; // legitimately absent -- not an error
+    const wasNonFinite = !Number.isFinite(raw);
+    const v = wasNonFinite ? 0 : raw;
+    const clamped = Math.max(lo, Math.min(hi, v));
+    if (wasNonFinite) {
+      adjustments.push(`Parametric Tone Curve "${key}" (${String(raw)}) was not a finite number -- fail-closed to ${clamped}.`);
+      p[key] = clamped;
+    } else if (clamped !== v) {
+      adjustments.push(`Parametric Tone Curve "${key}" (${v}) outside export-safe range [${lo},${hi}] -- clamped to ${clamped}.`);
+      p[key] = clamped;
+    }
+  }
+}
+
 function _clampEffectsPanel(p, limits, adjustments) {
   if (!p.effects || typeof p.effects !== 'object') return;
   const fields = {

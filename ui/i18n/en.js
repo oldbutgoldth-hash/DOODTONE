@@ -230,6 +230,10 @@ export const en = {
     toneCurvePointsRestrained: '{count} curve point(s) restrained to stay within safe bounds',
     toneCurveExportSafeAdjustmentNotice: 'Some curve points were adjusted to export-safe limits',
     toneCurveParametricUnsupported: 'Parametric Shadows/Midtones/Highlights curve sliders are not driven by this Intelligence layer — only the point-curve (master/red/green/blue) fields above reflect per-photo evidence. Parametric fields stay at 0 (no override), which is a safe default, not a bug.',
+    // EPIC 2E-P1L -- Parametric Tone Curve Intelligence now derives real
+    // Shadows/Midtones/Highlights values from this photo's master curve.
+    toneCurveParametricEngaged: 'Parametric Tone Curve (Shadows/Midtones/Highlights) engine: Shadows {shadows}, Midtones {midtones}, Highlights {highlights} -- derived from this photo\'s own master tone curve (deviation from identity at the shadow/midtone/highlight anchor points).',
+    toneCurveParametricNotEngaged: 'Parametric Tone Curve (Shadows/Midtones/Highlights) engine did not adjust this photo -- low analysis confidence or a near-identity master curve. Sliders remain at their safe default (0 = no override).',
     supportDivider: 'Support the project',
     supportTitle: 'Support this project',
     supportIntro: 'LUMIXA AI analyzes light, colour, tone, and editing characteristics from a reference image and creates a Lightroom preset (.XMP) locally.',
