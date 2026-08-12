@@ -134,21 +134,50 @@ function freshSessionWithEvidence({ degraded = false } = {}) {
     `gate@${gateIdx}, build@${buildAndCommitCandidateIdx}`,
   );
 
+  // EPIC 2E-P1M legitimately added a SECOND buildAndCommitCandidate() call
+  // site: setStrengthMode() (Strength-mode UI rebuild-without-reanalysis).
+  // It is not gated by a local `finalSessionStatus === 'COMPLETED' ||
+  // 'PARTIAL'` check because it doesn't run inside runAnalysis() at all --
+  // it fires later, from a user click, and relies on the SAME underlying
+  // orchestrator-level terminal-status + isActiveGeneration guards already
+  // proven in check 3b (SESSION_NOT_TERMINAL is returned, never thrown, for
+  // any non-terminal session). Both call sites are enumerated explicitly
+  // below so a THIRD, undocumented call site still fails this check.
+  const buildAndCommitCandidateCallSites = [...stripped.matchAll(/singleImageOrchestrator\.buildAndCommitCandidate\(/g)].map((m) => m.index);
+  const strengthModeRebuildIdx = stripped.indexOf('function setStrengthMode(mode)');
   check(
-    '(structural) Exactly one buildAndCommitCandidate() call site in ui/app.js',
-    (stripped.match(/singleImageOrchestrator\.buildAndCommitCandidate\(/g) || []).length === 1,
+    '(structural) Exactly two buildAndCommitCandidate() call sites in ui/app.js: the gated runAnalysis() completion path, and the P1M setStrengthMode() rebuild-without-reanalysis path',
+    buildAndCommitCandidateCallSites.length === 2
+      && buildAndCommitCandidateCallSites[0] === buildAndCommitCandidateIdx
+      && strengthModeRebuildIdx > -1
+      && buildAndCommitCandidateCallSites[1] > strengthModeRebuildIdx,
   );
 
-  // 7a. Slider synchronization (renderCandidateToSliders) must be textually
-  // inside the successful-commit branch, after the buildAndCommitCandidate() call.
-  const renderIdx = stripped.indexOf('renderCandidateToSliders(candidateResult.candidate', buildAndCommitCandidateIdx > -1 ? buildAndCommitCandidateIdx : 0);
+  // 7a/7b. Slider synchronization (renderCandidateToSliders) + the
+  // slider-sync guard used to be inline right after the single
+  // buildAndCommitCandidate() call; EPIC 2E-P1M factored that render chain
+  // into a single shared applyCandidateBuildResult(candidate, ...) function
+  // (defined once, called from BOTH commit sites) so the Strength-mode
+  // rebuild path can reuse the exact same render sequence instead of
+  // duplicating it. Prove: (a) the shared function contains the guarded
+  // render, and (b) both call sites invoke it in their successful-commit
+  // branch, textually after their own buildAndCommitCandidate() call.
+  const applyFnIdx = stripped.indexOf('function applyCandidateBuildResult(candidate');
+  const applyFnBody = applyFnIdx > -1 ? stripped.slice(applyFnIdx, applyFnIdx + 1200) : '';
   check(
-    '7a. Slider synchronization (renderCandidateToSliders) is textually inside the successful-commit branch, after buildAndCommitCandidate()',
-    renderIdx > -1 && buildAndCommitCandidateIdx > -1 && renderIdx > buildAndCommitCandidateIdx,
+    '7a. applyCandidateBuildResult() (the single shared post-commit render chain both call sites use) calls renderCandidateToSliders(candidate, ...)',
+    applyFnIdx > -1 && /renderCandidateToSliders\(candidate,/.test(applyFnBody),
   );
   check(
-    '7b. Slider-sync guard is set true before rendering and unset in a finally block (cannot stick true on a thrown error)',
-    /_candidateSliderSyncGuard = true;\s*try\s*\{[\s\S]{0,400}renderCandidateToSliders\(candidateResult\.candidate[\s\S]{0,400}\}\s*finally\s*\{\s*state\._candidateSliderSyncGuard = false;/.test(stripped),
+    '7b. Slider-sync guard is set true before rendering and unset in a finally block inside applyCandidateBuildResult() (cannot stick true on a thrown error)',
+    /_candidateSliderSyncGuard = true;\s*try\s*\{[\s\S]{0,400}renderCandidateToSliders\(candidate,[\s\S]{0,400}\}\s*finally\s*\{\s*state\._candidateSliderSyncGuard = false;/.test(applyFnBody),
+  );
+  check(
+    '7c. Both buildAndCommitCandidate() call sites invoke applyCandidateBuildResult() in their successful-commit branch, after their own commit call',
+    buildAndCommitCandidateCallSites.every((idx) => {
+      const after = stripped.slice(idx, idx + 600);
+      return /if \(candidateResult && candidateResult\.committed && candidateResult\.candidate\)/.test(after) && /applyCandidateBuildResult\(candidateResult\.candidate/.test(after);
+    }),
   );
 
   check(

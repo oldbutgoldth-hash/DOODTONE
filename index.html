@@ -653,6 +653,27 @@
               <input type="text" id="presetName" placeholder="LUMIXA AI Preset — Professional" data-i18n-placeholder-key="appShell.presetNamePlaceholder" style="flex:1;padding:10px 13px;border:1px solid var(--border);border-radius:2px;background:var(--surface-2);color:var(--text);font-size:13px;outline:none;font-family:var(--font-sans)">
             </div>
 
+            <!-- ── Strength-mode control (EPIC 2E-P1M) ──
+                 ONE choice (Natural/Balanced/Dramatic) applied
+                 consistently across every Intelligence layer (Basic
+                 Tone, White Balance, Tone Curve, Parametric Tone,
+                 Color, Detail) via strength-mode-mapper.js. Changing
+                 this rebuilds the already-computed Candidate from
+                 cached evidence (no re-analysis) -- see
+                 ui/app.js's setStrengthMode(). role="group" +
+                 aria-pressed per button (not a native radiogroup)
+                 mirrors this project's existing .tab-btn convention
+                 (index.html's tabs-row above), which is also not
+                 ARIA-radiogroup. -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+              <label style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)"><span data-i18n-key="appShell.strengthModeLabel">Strength</span></label>
+              <div role="group" aria-label="Strength mode" style="display:flex;gap:4px;border:1px solid var(--border);border-radius:3px;overflow:hidden">
+                <button type="button" id="strengthModeBtn_NATURAL" aria-pressed="false" onclick="setStrengthMode('NATURAL')" style="padding:7px 13px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;background:none;border:none;border-right:1px solid var(--border);cursor:pointer;color:var(--text-dim)" data-i18n-key="appShell.strengthModeNatural">Natural</button>
+                <button type="button" id="strengthModeBtn_BALANCED" aria-pressed="true" onclick="setStrengthMode('BALANCED')" style="padding:7px 13px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;background:var(--accent);border:none;border-right:1px solid var(--border);cursor:pointer;color:var(--bg-0,#000)" data-i18n-key="appShell.strengthModeBalanced">Balanced</button>
+                <button type="button" id="strengthModeBtn_DRAMATIC" aria-pressed="false" onclick="setStrengthMode('DRAMATIC')" style="padding:7px 13px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;background:none;border:none;cursor:pointer;color:var(--text-dim)" data-i18n-key="appShell.strengthModeDramatic">Dramatic</button>
+              </div>
+            </div>
+
             <div class="tabs-row" style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px;flex-wrap:wrap">
               <button class="tab-btn" onclick="switchTab(event,'basic')" style="padding:9px 15px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;background:none;border:none;border-bottom:2px solid var(--accent);margin-bottom:-1px;cursor:pointer;color:var(--accent)">Basic</button>
               <button class="tab-btn" onclick="switchTab(event,'curve')" style="padding:9px 15px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:var(--text-dim)" data-i18n-key="appShell.toneCurve">Tone Curve</button>

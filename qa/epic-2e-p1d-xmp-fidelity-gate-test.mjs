@@ -558,7 +558,12 @@ const downloadBody = appJsSource.slice(downloadStart, downloadEnd);
   check('60. P1C R3 User-Edit XMP Export test suite remains passing (35/39+ -- 3 pre-existing hash-staleness items pending final manifest regen)', /(\d+)\/(\d+) PASS/.test(r3.out) && Number(/(\d+)\/(\d+) PASS/.exec(r3.out)[1]) >= 36);
 
   const r2 = runSuite('qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs');
-  check('61. P1C R2 Candidate lifecycle-order test (19/19) remains passing', /19\/19 PASS/.test(r2.out));
+  // EPIC 2E-P1M added one more structural check (7c: both
+  // buildAndCommitCandidate() call sites invoke the shared
+  // applyCandidateBuildResult()) when it updated this suite for the
+  // legitimate second call site P1M's Strength-mode rebuild introduced --
+  // 19/19 (pre-P1M) became 20/20.
+  check('61. P1C R2 Candidate lifecycle-order test (20/20) remains passing', /20\/20 PASS/.test(r2.out));
 
   const p1b = runSuite('qa/epic-2e-p1b-analysis-report-test.mjs');
   check('62. P1B AI Image Analysis Report test suite remains passing', p1b.ok);

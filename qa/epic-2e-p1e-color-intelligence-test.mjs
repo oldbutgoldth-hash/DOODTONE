@@ -443,7 +443,8 @@ function runFullPipeline(candidate) {
   check('65. P1B AI Image Analysis Report test suite remains passing', p1b.ok);
 
   const p1cR2 = runSuite('qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs');
-  check('66. P1C R2 Candidate lifecycle-order test (19/19) remains passing', /19\/19 PASS/.test(p1cR2.out));
+  // EPIC 2E-P1M added check 7c (20/20 -- see that suite's own header comment).
+  check('66. P1C R2 Candidate lifecycle-order test (20/20) remains passing', /20\/20 PASS/.test(p1cR2.out));
 
   const n1 = runSuite('qa/epic-2e-n1-core-color-match-integration-static-test.mjs');
   check('67. Reference Color Match integration suite (6/6) remains passing -- P1E never touches core/color-match', /6\/6 PASS/.test(n1.out));

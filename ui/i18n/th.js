@@ -112,6 +112,11 @@ export const th = {
     tabColour: 'สี',
     tabDetail: 'รายละเอียด',
     presetNameLabel: 'ชื่อพรีเซ็ต',
+    // EPIC 2E-P1M -- Strength-mode UI (เอนจินความเข้ม เบา/สมดุล/เข้ม)
+    strengthModeLabel: 'ความเข้ม',
+    strengthModeNatural: 'เบา',
+    strengthModeBalanced: 'สมดุล',
+    strengthModeDramatic: 'เข้ม',
     scanQr: 'สแกนเพื่อดู QR →',
     updating: '— กำลังอัปเดต…',
     redeem: 'ใช้รหัส',

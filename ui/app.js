@@ -79,6 +79,8 @@ import { renderSingleImageReport, clearSingleImageReportDisplay } from './single
 // store modules. The Candidate Store (not the DOM) is the source of
 // Lightroom values from here on -- see P1C_CANDIDATE_ARCHITECTURE.md.
 import { renderCandidateToSliders, resolveSliderEdit, getSupportedSliderIds } from '../core/single-image/candidate/candidate-slider-adapter.js';
+// EPIC 2E-P1M — Strength-mode UI (Natural/Balanced/Dramatic).
+import { UI_STRENGTH_MODE, DEFAULT_UI_STRENGTH_MODE, isValidUiStrengthMode } from '../core/single-image/strength-mode/strength-mode-schema.js';
 import { candidateToLegacyPreset } from '../core/single-image/candidate/legacy-preset-adapter.js';
 import { computeExportParity } from '../core/single-image/candidate/candidate-export-parity.js';
 import * as candidateStore from '../core/single-image/candidate/candidate-store.js';
@@ -128,6 +130,12 @@ const state = {
   lastSkin:    null,
   lastSingleImageReport: null, // EPIC 2E-P1B: last-built AI Image Analysis Report snapshot (UI mirror of session.report)
   lastCandidateStatus: null, // EPIC 2E-P1C: last-known Candidate status (UI mirror, for locale re-render of the status badge only)
+  // EPIC 2E-P1M: the user's currently-selected Strength mode
+  // (NATURAL/BALANCED/DRAMATIC). Deliberately NOT reset by
+  // handleReset() -- like darkMode/lang, this is a standing user
+  // preference about editing intensity, not photo-specific derived
+  // state, so it carries over to the next uploaded photo.
+  strengthMode: DEFAULT_UI_STRENGTH_MODE,
   _candidateSliderSyncGuard: false, // EPIC 2E-P1C: true while renderCandidateToSliders() is writing sliders, so the slider 'input' listener below can ignore its own writes (no feedback loop)
   lastBasic:   null,
   lastHSL:     null,
@@ -749,6 +757,7 @@ waitForRoot(() => {
   }
 
   window.switchTab = switchTab;
+  _syncStrengthModeButtons(); // EPIC 2E-P1M: reflect the initial/persisted state.strengthMode on load
   setupAnalysisTabs();
   setupAnalysisResizeObserver();
   ensureReviewConsoleController();
@@ -3204,61 +3213,10 @@ async function runAnalysis(callerTicket = null) {
       const candidateResult = singleImageOrchestrator.buildAndCommitCandidate(analysisTicket, {
         legacyState: state,
         engineVersion: singleImageOrchestrator.ENGINE_VERSION,
+        strengthMode: state.strengthMode,
       });
       if (candidateResult && candidateResult.committed && candidateResult.candidate) {
-        // Guard flag so the boot-time slider 'input' listener (wired near
-        // bindSliders(document.body) below) can tell "the Candidate Store
-        // just wrote this slider" apart from "the user just edited this
-        // slider" -- setSlider() itself only assigns el.value (no input
-        // event fires from a JS property assignment), so this guard is a
-        // belt-and-braces measure per the spec's explicit "prevent
-        // feedback loops via a synchronization guard" rule. Wrapped in
-        // try/finally so a thrown error mid-render can never leave the
-        // guard stuck true.
-        state._candidateSliderSyncGuard = true;
-        try {
-          renderCandidateToSliders(candidateResult.candidate, { setSlider });
-          const nameEl = document.getElementById('presetName');
-          if (nameEl) nameEl.value = candidateResult.candidate.profile?.name ?? finalPreset.name;
-        } finally {
-          state._candidateSliderSyncGuard = false;
-        }
-        state.lastCandidateStatus = candidateResult.candidate.status;
-        updateCandidateStatusBadge(candidateResult.candidate.status);
-        // EPIC 2E-P1E R3: render the Export Parity Advanced Diagnostics
-        // panel from candidate.diagnostics.exportParity (already computed,
-        // pure, by buildAndCommitCandidate() -- no re-serialization, no
-        // DOM-as-source-of-truth).
-        renderExportParityDiagnostics(candidateResult.candidate);
-        // EPIC 2E-P1F: render the Basic Tone Intelligence Advanced
-        // Diagnostics panel from candidate.diagnostics.basicToneIntelligence
-        // (already computed, pure, by buildCandidateFromSession() via
-        // buildBasicTonePlan()) -- scene class / confidence / evidence
-        // summary / per-field Candidate-vs-Export-Expected values, never
-        // raw XML.
-        renderBasicToneDiagnostics(candidateResult.candidate);
-        // EPIC 2E-P1H: render the White Balance Intelligence Advanced
-        // Diagnostics panel from candidate.diagnostics.whiteBalanceIntelligence
-        // (already computed, pure, by buildCandidateFromSession() via
-        // buildWhiteBalancePlan()) -- cast classification / confidence /
-        // bounded evidence summary / per-field Candidate-vs-Export-Expected
-        // values, never raw XML.
-        renderWBIntelligenceDiagnostics(candidateResult.candidate);
-        // EPIC 2E-P1G: render the Detail Intelligence Advanced
-        // Diagnostics panel from candidate.diagnostics.detailIntelligence
-        // (already computed, pure, by buildCandidateFromSession() via
-        // buildDetailPlan()) -- scene flags / confidence / bounded
-        // evidence scores / Sharpening + Luminance NR Candidate-vs-
-        // Export-Expected values, never raw XML, never raw pixel data.
-        renderDetailIntelligenceDiagnostics(candidateResult.candidate);
-        // EPIC 2E-P1J: render the Tone Curve Intelligence Advanced
-        // Diagnostics panel from candidate.diagnostics.toneCurveIntelligence
-        // (already computed, pure, by buildCandidateFromSession() via
-        // buildToneCurvePlan()) -- tone category / confidence / per-channel
-        // engagement reasons / points-restrained note / per-channel
-        // Candidate-vs-Export-Expected point-count table, never raw XML,
-        // never raw point arrays dumped to the DOM.
-        renderToneCurveIntelligenceDiagnostics(candidateResult.candidate);
+        applyCandidateBuildResult(candidateResult.candidate, { fallbackPresetName: finalPreset.name });
       } else {
         // Candidate build failed (or this run was superseded) even
         // though the Session reached a terminal status -- do not fall
@@ -4056,6 +4014,90 @@ function renderToneCurveIntelligenceDiagnostics(candidate) {
     } else {
       parametricNoteEl.textContent = t('appShell.toneCurveParametricNotEngaged', null, state.lang);
     }
+  }
+}
+
+// EPIC 2E-P1M — Strength-mode UI (Natural/Balanced/Dramatic).
+//
+// Factored out of the analysis-completion callback (the only call site
+// before P1M) so the SAME render chain can also run from
+// setStrengthMode() below, which rebuilds the Candidate from
+// already-completed evidence (no re-analysis) whenever the user picks
+// a different Strength mode. Every render* call here was already
+// individually documented at its original call site (P1E R3/P1F/P1H/
+// P1G/P1J respectively) -- this function changes nothing about what
+// each one does, only where the sequence is invoked from.
+function applyCandidateBuildResult(candidate, { fallbackPresetName = '' } = {}) {
+  // See the original P1C comment (candidate-slider-adapter.js call
+  // sites) for why this guard exists: setSlider() itself only assigns
+  // el.value (no 'input' event fires from a JS property assignment),
+  // so this guard is a belt-and-braces measure so the boot-time slider
+  // 'input' listener can tell "the Candidate Store just wrote this
+  // slider" apart from "the user just edited this slider." Wrapped in
+  // try/finally so a thrown error mid-render can never leave the guard
+  // stuck true.
+  state._candidateSliderSyncGuard = true;
+  try {
+    renderCandidateToSliders(candidate, { setSlider });
+    const nameEl = document.getElementById('presetName');
+    if (nameEl && !nameEl.value) nameEl.value = candidate.profile?.name ?? fallbackPresetName;
+  } finally {
+    state._candidateSliderSyncGuard = false;
+  }
+  state.lastCandidateStatus = candidate.status;
+  updateCandidateStatusBadge(candidate.status);
+  renderExportParityDiagnostics(candidate);
+  renderBasicToneDiagnostics(candidate);
+  renderWBIntelligenceDiagnostics(candidate);
+  renderDetailIntelligenceDiagnostics(candidate);
+  renderToneCurveIntelligenceDiagnostics(candidate);
+}
+
+/**
+ * EPIC 2E-P1M -- called by the Strength-mode segmented control's
+ * onclick handlers (index.html). Updates the standing user preference
+ * (state.strengthMode) and, if a Candidate already exists for the
+ * current photo, rebuilds it from the SAME already-completed evidence
+ * (buildAndCommitCandidate() is a pure re-invocation -- see its own
+ * doc comment in single-image-orchestrator.js) and re-runs the exact
+ * same render chain a fresh analysis completion uses. No Core analysis
+ * is re-run. If no photo has been analyzed yet, the new mode is simply
+ * remembered for the next analysis.
+ */
+function setStrengthMode(mode) {
+  if (!isValidUiStrengthMode(mode)) return;
+  const changed = state.strengthMode !== mode;
+  state.strengthMode = mode;
+  _syncStrengthModeButtons();
+  if (!changed) return;
+  if (!activeUploadTicket) return; // no analyzed photo yet -- nothing to rebuild
+  const candidateResult = singleImageOrchestrator.buildAndCommitCandidate(activeUploadTicket, {
+    legacyState: state,
+    engineVersion: singleImageOrchestrator.ENGINE_VERSION,
+    strengthMode: mode,
+  });
+  if (candidateResult && candidateResult.committed && candidateResult.candidate) {
+    applyCandidateBuildResult(candidateResult.candidate, {});
+  } else {
+    // Stale generation (a newer upload raced this click) or the
+    // session somehow isn't terminal -- per this project's "never
+    // reintroduce DOM as source of truth" rule, sliders are left
+    // exactly as they were rather than guessed at.
+    console.warn('Strength-mode rebuild did not produce a committed Candidate (', candidateResult?.reason, ') -- sliders left unchanged.');
+  }
+}
+window.setStrengthMode = setStrengthMode;
+
+/** Reflects state.strengthMode onto the 3 segmented-control buttons' active styling. */
+function _syncStrengthModeButtons() {
+  for (const mode of Object.values(UI_STRENGTH_MODE)) {
+    const btn = document.getElementById(`strengthModeBtn_${mode}`);
+    if (!btn) continue;
+    const active = state.strengthMode === mode;
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    btn.style.background = active ? 'var(--accent)' : 'none';
+    btn.style.color = active ? 'var(--bg-0, #000)' : 'var(--text-dim)';
+    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border-color, transparent)';
   }
 }
 

@@ -111,6 +111,11 @@ export const en = {
     tabColour: 'Colour',
     tabDetail: 'Detail',
     presetNameLabel: 'Preset name',
+    // EPIC 2E-P1M -- Strength-mode UI (Natural/Balanced/Dramatic).
+    strengthModeLabel: 'Strength',
+    strengthModeNatural: 'Natural',
+    strengthModeBalanced: 'Balanced',
+    strengthModeDramatic: 'Dramatic',
     scanQr: 'Scan to view QR →',
     updating: '— updating…',
     redeem: 'Redeem',

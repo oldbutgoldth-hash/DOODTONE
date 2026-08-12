@@ -354,10 +354,20 @@ export function commitCandidate(ticket, candidate) {
  * a terminal analysis status yet.
  *
  * @param {{sessionId,generationId}} ticket
- * @param {{legacyState?: object, engineVersion?: string}} [opts]
+ * @param {{legacyState?: object, engineVersion?: string, strengthMode?: string}} [opts]
+ *   EPIC 2E-P1M: `strengthMode` is one of strength-mode-schema.js's
+ *   UI_STRENGTH_MODE (NATURAL/BALANCED/DRAMATIC), threaded straight
+ *   through to buildCandidateFromSession() (which maps it per-module).
+ *   Because buildCandidateFromSession() is a pure function of `session`
+ *   (never mutated by this call before this point), this function may
+ *   safely be called again for the SAME terminal session with a
+ *   DIFFERENT strengthMode to rebuild the Candidate from already-
+ *   completed evidence -- no Core analysis re-run, no new ticket
+ *   required. See ui/app.js's setStrengthMode() for the caller that
+ *   does exactly this.
  * @returns {{committed: boolean, candidate: object|null, validation: object|null, reason: string|null}}
  */
-export function buildAndCommitCandidate(ticket, { legacyState = null, engineVersion = null } = {}) {
+export function buildAndCommitCandidate(ticket, { legacyState = null, engineVersion = null, strengthMode = undefined } = {}) {
   if (!ticket || !isActiveGeneration(ticket.sessionId, ticket.generationId)) {
     return { committed: false, candidate: null, validation: null, reason: 'STALE_GENERATION' };
   }
@@ -368,7 +378,7 @@ export function buildAndCommitCandidate(ticket, { legacyState = null, engineVers
 
   const startedAt = Date.now();
   _trace(session, 'CANDIDATE_BUILD_STARTED');
-  const { candidate } = buildCandidateFromSession(session, { engineVersion });
+  const { candidate } = buildCandidateFromSession(session, { engineVersion, strengthMode });
   _trace(session, 'CANDIDATE_NORMALIZED', { candidateId: candidate.candidateId });
 
   // EPIC 2E-P1E R3 -- Creative Tone Plan trace (bounded, no image data).

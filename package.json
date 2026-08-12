@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.12.0",
-  "description": "LUMIXA AI EPIC 2E-P1K \u2014 Serializer Extension for Post-Crop Vignette & Grain (XMP Export)",
+  "version": "2.13.0",
+  "description": "LUMIXA AI EPIC 2E-P1M \u2014 Strength-mode UI (Natural/Balanced/Dramatic) across Intelligence layers",
   "main": "index.js",
   "directories": {
     "doc": "docs"

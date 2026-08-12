@@ -42,17 +42,13 @@ import {
 } from './candidate-schema.js';
 import { buildParameterLineage, assembleLineageMap } from './candidate-lineage.js';
 import { applyColorIntelligence } from '../color-intelligence/color-intelligence-engine.js';
-import { DEFAULT_STRENGTH_MODE } from '../color-intelligence/color-intelligence-schema.js';
 import { buildBasicTonePlan } from '../basic-tone-intelligence/basic-tone-plan-builder.js';
-import { DEFAULT_STRENGTH_MODE as DEFAULT_BASIC_TONE_STRENGTH_MODE } from '../basic-tone-intelligence/basic-tone-schema.js';
 import { buildDetailPlan } from '../detail-intelligence/detail-plan-builder.js';
-import { DEFAULT_STRENGTH_MODE as DEFAULT_DETAIL_STRENGTH_MODE } from '../detail-intelligence/detail-schema.js';
 import { buildWhiteBalancePlan } from '../white-balance-intelligence/wb-plan-builder.js';
-import { DEFAULT_STRENGTH_MODE as DEFAULT_WB_STRENGTH_MODE } from '../white-balance-intelligence/white-balance-schema.js';
 import { buildToneCurvePlan } from '../tone-curve-intelligence/tone-curve-plan-builder.js';
-import { DEFAULT_STRENGTH_MODE as DEFAULT_TONE_CURVE_STRENGTH_MODE } from '../tone-curve-intelligence/tone-curve-schema.js';
 import { buildParametricTonePlan } from '../parametric-tone-intelligence/parametric-tone-plan-builder.js';
-import { DEFAULT_STRENGTH_MODE as DEFAULT_PARAMETRIC_TONE_STRENGTH_MODE } from '../parametric-tone-intelligence/parametric-tone-schema.js';
+import { DEFAULT_UI_STRENGTH_MODE } from '../strength-mode/strength-mode-schema.js';
+import { mapUiStrengthModeToModule, MODULE_KEY } from '../strength-mode/strength-mode-mapper.js';
 import { SINGLE_IMAGE_FULL, PROFILE_VERSION } from '../single-image-analysis-profile.js';
 import { SESSION_STATUS, MODULE_STATE } from '../single-image-session.js';
 import { confidenceFromRaw } from '../report/confidence-aggregator.js';
@@ -93,9 +89,17 @@ function _evidenceOk(evidence, key) {
  * @param {object} session   The active Session (read-only; not mutated).
  * @param {object} opts
  * @param {string} [opts.engineVersion]  package.json version, for metadata only.
+ * @param {string} [opts.strengthMode]   EPIC 2E-P1M: one of
+ *   strength-mode-schema.js's UI_STRENGTH_MODE (NATURAL/BALANCED/
+ *   DRAMATIC). Mapped per-module via strength-mode-mapper.js before
+ *   being passed to each plan-builder below -- see that module's
+ *   header comment for why a translation layer is required. Defaults
+ *   to DEFAULT_UI_STRENGTH_MODE (BALANCED), matching every module's
+ *   own pre-P1M hardcoded default exactly, so omitting this option is
+ *   a strict no-behavior-change no-op.
  * @returns {{candidate: object, validation: {status,errors,warnings,normalizedCandidate}}}
  */
-export function buildCandidateFromSession(session, { engineVersion = null } = {}) {
+export function buildCandidateFromSession(session, { engineVersion = null, strengthMode = DEFAULT_UI_STRENGTH_MODE } = {}) {
   const rawPreset = session?.candidateRaw ?? null;
   const evidence = session?.evidence ?? {};
 
@@ -170,7 +174,7 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
   // explicitly out of scope (see tone-curve-schema.js's Scope Boundary
   // section). Never writes candidate.basic/hsl/grading/cal/detail/
   // whiteBalance -- P1J's territory is these four fields only.
-  const toneCurvePlan = buildToneCurvePlan(evidence, { strengthMode: DEFAULT_TONE_CURVE_STRENGTH_MODE });
+  const toneCurvePlan = buildToneCurvePlan(evidence, { strengthMode: mapUiStrengthModeToModule(strengthMode, MODULE_KEY.TONE_CURVE) });
   if (toneCurvePlan.diagnostics.engaged) {
     if (toneCurvePlan.finalValues.master != null) candidate.curves.rgb = toneCurvePlan.finalValues.master;
     if (toneCurvePlan.finalValues.red != null) candidate.curves.red = toneCurvePlan.finalValues.red;
@@ -197,7 +201,7 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
   // per-photo computation) only when this plan actually engages. Never
   // writes candidate.curves.rgb/red/green/blue -- that remains P1J's
   // territory exclusively.
-  const parametricTonePlan = buildParametricTonePlan(evidence, { strengthMode: DEFAULT_PARAMETRIC_TONE_STRENGTH_MODE });
+  const parametricTonePlan = buildParametricTonePlan(evidence, { strengthMode: mapUiStrengthModeToModule(strengthMode, MODULE_KEY.PARAMETRIC_TONE) });
   if (parametricTonePlan.diagnostics.engaged) {
     candidate.curves.parametric = {
       shadows: parametricTonePlan.finalValues.shadows,
@@ -264,6 +268,16 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
   const featureGraphConfidence = evidence?.styleFeatureGraph?.result?.overallStyleConfidence;
   candidate.diagnostics.confidence = confidenceFromRaw(featureGraphConfidence);
 
+  // ── EPIC 2E-P1M — Strength-mode UI ───────────────────────────────
+  // Records the ONE canonical UI-facing strength choice this whole
+  // build used (see strength-mode-schema.js) -- every per-layer
+  // diagnostics block below (basicToneIntelligence.strengthMode,
+  // detailIntelligence.strengthMode, etc.) additionally shows that
+  // layer's OWN mapped vocabulary (e.g. 'CRISP' for Detail when this
+  // is 'DRAMATIC') -- this top-level field is the single source of
+  // truth for "what did the user actually select."
+  candidate.diagnostics.strengthMode = strengthMode;
+
   // ── diagnostics: safety clamps / warnings (from the existing
   // pipeline's OWN validation/benchmark output — never recomputed) ──
   const validationReport = rawPreset._validation ?? null;
@@ -297,7 +311,7 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
   // the P1E R3 baseline. P1F never writes `candidate.basic.vibrance`/
   // `saturation` (P1E's territory) or any hsl/grading/cal/whiteBalance
   // field. See P1F_BASIC_TONE_INTELLIGENCE_ARCHITECTURE.md.
-  const basicTonePlan = buildBasicTonePlan(evidence, { strengthMode: DEFAULT_BASIC_TONE_STRENGTH_MODE });
+  const basicTonePlan = buildBasicTonePlan(evidence, { strengthMode: mapUiStrengthModeToModule(strengthMode, MODULE_KEY.BASIC_TONE) });
   candidate.basic.exposure = basicTonePlan.finalValues.exposure;
   candidate.basic.contrast = basicTonePlan.finalValues.contrast;
   candidate.basic.highlights = basicTonePlan.finalValues.highlights;
@@ -334,7 +348,7 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
   // whiteBalance.temperature/.tint and its own diagnostics/lineage; it
   // never touches candidate.hsl/grading/cal/basic (P1E/P1F territory) --
   // see P1H_P1E_WHITE_BALANCE_COLOR_OWNERSHIP.md.
-  const wbPlan = buildWhiteBalancePlan(evidence, { strengthMode: DEFAULT_WB_STRENGTH_MODE });
+  const wbPlan = buildWhiteBalancePlan(evidence, { strengthMode: mapUiStrengthModeToModule(strengthMode, MODULE_KEY.WHITE_BALANCE) });
   candidate.whiteBalance.temperature = wbPlan.finalValues.temperature;
   candidate.whiteBalance.tint = wbPlan.finalValues.tint;
   candidate.diagnostics.whiteBalanceIntelligence = {
@@ -374,7 +388,7 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
   // P1F just wrote above (see P1F_P1E_COMPOSITION_POLICY.md's ownership
   // boundary tests). See P1E_COLOR_INTELLIGENCE_ARCHITECTURE.md.
   const colorIntelligenceResult = applyColorIntelligence(candidate, evidence, {
-    strengthMode: DEFAULT_STRENGTH_MODE,
+    strengthMode: mapUiStrengthModeToModule(strengthMode, MODULE_KEY.COLOR),
   });
   candidate.diagnostics.colorIntelligence = colorIntelligenceResult.diagnostics;
 
@@ -404,7 +418,7 @@ export function buildCandidateFromSession(session, { engineVersion = null } = {}
   // P1G_SUPPORTED_XMP_DETAIL_FIELDS.md) and NEVER touches
   // candidate.basic/.hsl/.grading/.cal (P1F/P1E territory).
   const detailPlan = buildDetailPlan(evidence, {
-    strengthMode: DEFAULT_DETAIL_STRENGTH_MODE,
+    strengthMode: mapUiStrengthModeToModule(strengthMode, MODULE_KEY.DETAIL),
     basicToneDiagnostics: candidate.diagnostics.basicToneIntelligence ?? null,
     p1fTexture: candidate.basic.texture,
     p1fClarity: candidate.basic.clarity,

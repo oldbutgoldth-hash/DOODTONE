@@ -211,6 +211,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1k-serializer-effects-extension-test.mjs',
   // EPIC 2E-P1L -- Parametric Tone Curve Intelligence.
   'qa/epic-2e-p1l-parametric-tone-curve-test.mjs',
+  // EPIC 2E-P1M -- Strength-mode UI (Natural/Balanced/Dramatic).
+  'qa/epic-2e-p1m-strength-mode-test.mjs',
 ];
 
 let anyFailed = false;

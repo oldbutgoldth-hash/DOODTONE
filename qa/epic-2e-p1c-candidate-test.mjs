@@ -423,7 +423,16 @@ function freshTicketWithSession(session) {
   check('66. handleDownload() converts the Candidate via candidateToLegacyPreset() before the existing serializer', stripped.includes('candidateToLegacyPreset(candidate)'));
   check('67. handleDownload() still calls the existing unmodified quickSafetyClamp() (final safety net preserved)', stripped.includes('quickSafetyClamp(preset)'));
   check('68. handleDownload() blocks export with an explicit early return when no valid Candidate exists (never a silent stale-slider fallback)', /if\s*\(!readiness\.ready\)\s*\{[\s\S]{0,600}return;/.test(stripped));
-  check('69. Candidate build/commit happens exactly once per runAnalysis() invocation (buildAndCommitCandidate call count)', (stripped.match(/singleImageOrchestrator\.buildAndCommitCandidate\(/g) || []).length === 1);
+  // EPIC 2E-P1M legitimately added a second buildAndCommitCandidate() call
+  // site (setStrengthMode(), the Strength-mode UI's rebuild-without-
+  // reanalysis path -- see strength-mode-mapper.js / P1M docs). It does
+  // not weaken this invariant: setStrengthMode() only re-invokes the SAME
+  // pure builder against the SAME already-completed evidence when the
+  // user changes Strength mode, still gated by buildAndCommitCandidate()'s
+  // own unchanged terminal-status + isActiveGeneration guards. Per
+  // runAnalysis() invocation there is still exactly one build/commit; the
+  // second call site exists on an entirely separate (user-click) code path.
+  check('69. Candidate build/commit happens exactly once per runAnalysis() invocation (buildAndCommitCandidate call count across the whole file is exactly 2: the runAnalysis() completion path + the P1M setStrengthMode() rebuild path)', (stripped.match(/singleImageOrchestrator\.buildAndCommitCandidate\(/g) || []).length === 2);
   check('70. Slider-edit -> Candidate listener is wired exactly once at boot (not re-wired on language change/panel re-render)', (stripped.match(/candidateStore\.updateCandidateParameter\(/g) || []).length === 1);
   check('71. The slider-edit listener is guarded against feedback loops from Candidate->Slider renders (_candidateSliderSyncGuard)', stripped.includes('_candidateSliderSyncGuard'));
   check('72. New upload (loadFile -> handleReset) clears the Candidate Store before a new Session begins', /function handleReset\(\)[\s\S]{0,4000}candidateStore\.clearActiveCandidate\(/.test(stripped));

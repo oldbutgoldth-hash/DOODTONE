@@ -311,7 +311,7 @@ let ctx = buildReadySession();
     const r = spawnSync(process.execPath, [path.join(ROOT, rel)], { encoding: 'utf8' });
     return r.status === 0;
   }
-  check('26. P1C R2 lifecycle-order test (19/19) remains passing', runSuite('qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs'));
+  check('26. P1C R2 lifecycle-order test (20/20 -- P1M added check 7c for its 2nd buildAndCommitCandidate() call site) remains passing', runSuite('qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs'));
   check('26b. P1C R1 candidate test (86/86) remains passing', runSuite('qa/epic-2e-p1c-candidate-test.mjs'));
   check('27. P1B AI Image Analysis Report test (39/39) remains passing', runSuite('qa/epic-2e-p1b-analysis-report-test.mjs'));
   check('28. P1A Single Image Session (25/25) + Upload Lifecycle (16/16) tests remain passing', runSuite('qa/epic-2e-p1a-single-image-session-test.mjs') && runSuite('qa/epic-2e-p1a-r3-upload-lifecycle-integration-test.mjs'));
