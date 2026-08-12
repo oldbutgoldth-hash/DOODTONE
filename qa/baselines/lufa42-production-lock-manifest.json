@@ -1,6 +1,6 @@
 {
   "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
-  "generatedAt": "2026-08-12T05:43:20.865Z",
+  "generatedAt": "2026-08-12T09:46:38.776Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
@@ -41,7 +41,7 @@
     "core/color-harmony-engine/index.js": "2b468e68f471919114437801d6e6774d09dc031ec33725e51d0e76a6e372b742",
     "core/color-match/batch-processor.js": "4e3dc4934ea28db56367a41794cbcb89c2c43cb645a9cf7d3df40fec12e5129c",
     "core/color-match/candidate-preview-renderer.js": "378265c0cc5ff7fa07cdc64f57e712670393aefe882e62f29cbdd143f93af970",
-    "core/color-match/candidate-xmp-codec.js": "047a473861e48b715363687cc677f9c196033873705743e61ed1b216126ca7cb",
+    "core/color-match/candidate-xmp-codec.js": "915538b60057ba98c24895b220de3507796833fd5be9e2acf5221133a0dcd5e9",
     "core/color-match/color-match-direction-gate.js": "91035bea056d625e99f0d2bac639f80bdf73ddaa3e99ceeae9e7321b95b64651",
     "core/color-match/color-match-intelligence-bridge.js": "f332c53225ae81fafef93b8b4493665c479d4f739b1db25c07aaf76071d76e28",
     "core/color-match/color-transfer-engine.js": "92779008799e811734f3db5b216dfcdd1ef373424ff8e1d68af2a6774f3a3d42",
@@ -214,7 +214,7 @@
     "ui/image-analysis-renderer.js": "4061c83bd316981bc46bde4fad95a16679e1c2d663ad74d298d0089c528dc790",
     "ui/interactive-preview-observation-session-v2.js": "aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9",
     "ui/palette-renderer.js": "d31aab02d6842cbf53733c14c8ebaa1ac7eda2b28508c9df1854ef458a0069d0",
-    "ui/reference-color-match-panel.js": "462a34d9cc53b3e1715210dfaedcde2e1d97a2d68448a671a5155264a37e1cd4",
+    "ui/reference-color-match-panel.js": "27fb2d8d3faf40bcf07d3d30a9e35c68973c18a838876ac00f2865ab456ad20f",
     "ui/review-console-controller.js": "d65aeb334ca1b4513585bc2b0185f16efa4882225c7595fb539e0ea000a80aa1",
     "ui/review-console-renderer.js": "069892dec93b380969c4ecd24531edc65244b8cf9cd2ac3cdae399ec065ef8bb",
     "ui/side-by-side-comparison-renderer.js": "86cf70cb540b800b5e09832db917ba15f9cf5f293da04e68abd3bda7f19201b4",

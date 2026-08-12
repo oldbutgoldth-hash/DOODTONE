@@ -1,6 +1,6 @@
 {
   "suite": "EPIC 2E-J ENV-B1B PART 11 — In-Memory App Harness static/functional self-test",
-  "generatedAt": "2026-08-12T02:09:44.536Z",
+  "generatedAt": "2026-08-12T09:50:47.652Z",
   "summary": {
     "total": 65,
     "pass": 65,
@@ -70,7 +70,7 @@
     {
       "test": "10. the Import Map <script type=\"importmap\"> appears before the first <script type=\"module\"> tag",
       "result": "PASS",
-      "evidence": "importMapIdx=10194, firstModuleScriptIdx=4786640"
+      "evidence": "importMapIdx=10194, firstModuleScriptIdx=4813724"
     },
     {
       "test": "11. no <script type=\"module\" src=\"...​\"> tag remains in the document (the ui/app.js entry was converted to an inline canonical import)",

@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.14.0",
-  "description": "LUMIXA AI EPIC 2E-P1N \u2014 Photographer Style Intelligence wired into Report/UI",
+  "version": "2.15.0",
+  "description": "LUMIXA AI EPIC 2E-Q1 — Reference Color Match: Auto Target White Balance Base",
   "main": "index.js",
   "directories": {
     "doc": "docs"

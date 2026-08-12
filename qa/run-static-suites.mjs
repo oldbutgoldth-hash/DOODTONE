@@ -215,6 +215,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1m-strength-mode-test.mjs',
   // EPIC 2E-P1N -- Photographer Style Intelligence wired into Report/UI.
   'qa/epic-2e-p1n-photographer-style-test.mjs',
+  // EPIC 2E-Q1 -- Auto Target White Balance Base for Reference Color Match.
+  'qa/epic-2e-q1-auto-target-wb-base-test.mjs',
 ];
 
 let anyFailed = false;
