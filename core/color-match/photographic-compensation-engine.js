@@ -150,19 +150,38 @@ function deriveSkinModel(reference, target, delta) {
   const hueRisk = pairedSkin ? clamp(Math.abs(delta.skin.hueDelta) / 24, 0, 1) : 0;
   const saturationRisk = pairedSkin ? clamp(Math.abs(delta.skin.saturationDelta) / 30, 0, 1) : 0;
   const coverage = clamp(target.skin.coveragePct / 55, 0, 1);
-  const protectionStrength = detected
-    ? clamp(0.42 + targetConfidence * 0.28 + coverage * 0.2 + Math.max(hueRisk, saturationRisk) * 0.1, 0.45, 0.9)
+  /* EPIC 2E-Q4 -- Graceful Skin Protection Degradation.
+   * `detected` is a hard boolean cliff from classifySkin() (coveragePct
+   * > 4%). Below that cliff, protectionStrength used to be exactly 0 --
+   * a target with, say, 2-3% skin coverage (a real face just under the
+   * threshold, a small/partial-frame portrait, or a borderline
+   * classifier read) got ZERO skin protection at all, identical to a
+   * target with no skin whatsoever. That is a silent-skip failure mode
+   * of the same shape as EPIC 2E-Q1's missing white-balance base --
+   * protection the system is fully capable of computing simply never
+   * engages because one upstream boolean landed on the wrong side of a
+   * cliff. skinPresence turns that cliff into a ramp: 1.0 (byte-
+   * identical to before) at/above the classifier's own 4% threshold,
+   * a proportionally reduced but never-zero protection between roughly
+   * 1-4%, and genuinely zero only when coveragePct itself is at or near
+   * zero. Every currently-passing "genuinely detected" test is
+   * unaffected -- skinPresence clamps to exactly 1 there.
+   */
+  const skinPresence = clamp((Number(target.skin.coveragePct) || 0) / 4, 0, 1);
+  const protectionStrength = skinPresence > 0
+    ? clamp(0.42 + targetConfidence * 0.28 + coverage * 0.2 + Math.max(hueRisk, saturationRisk) * 0.1, 0.45, 0.9) * skinPresence
     : 0;
   return {
-    active: detected,
+    active: skinPresence > 0,
     pairedSkinEvidence: pairedSkin,
     targetConfidence: round(targetConfidence, 3),
     coverageFactor: round(coverage, 3),
     hueRisk: round(hueRisk, 3),
     saturationRisk: round(saturationRisk, 3),
+    skinPresence: round(skinPresence, 3),
     protectionStrength: round(protectionStrength, 3),
-    skinChannelTransferStrength: round(detected ? 1 - protectionStrength * 0.72 : 1, 3),
-    globalWbTransferStrength: round(detected ? 1 - protectionStrength * 0.2 : 1, 3),
+    skinChannelTransferStrength: round(skinPresence > 0 ? 1 - protectionStrength * 0.72 : 1, 3),
+    globalWbTransferStrength: round(skinPresence > 0 ? 1 - protectionStrength * 0.2 : 1, 3),
   };
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.17.0",
-  "description": "LUMIXA AI EPIC 2E-Q3 — Reference Color Match: Tone Curve Transfer Strength Ceiling",
+  "version": "2.18.0",
+  "description": "LUMIXA AI EPIC 2E-Q4 — Reference Color Match: Graceful Skin Protection Degradation",
   "main": "index.js",
   "directories": {
     "doc": "docs"

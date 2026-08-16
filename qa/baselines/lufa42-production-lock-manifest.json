@@ -1,6 +1,6 @@
 {
   "description": "DEPLOY GEOMETRY R1 — Phase H2 checked-in Production-lock baseline manifest. Portable (repository-relative paths only, never a machine-specific sibling directory). Every core/ and ui/ file EXCEPT this EPIC's explicitly allowed geometry/preview files, plus index.html.",
-  "generatedAt": "2026-08-16T06:38:18.992Z",
+  "generatedAt": "2026-08-16T07:00:54.888Z",
   "allowedGeometryFiles": [
     "core/decision-engine/index.js",
     "core/preview-rendering/visual-preview-render-plan-v2.js",
@@ -57,13 +57,13 @@
     "core/color-match/palette-extractor.js": "82b1e66d9e05e922324f4fd9b9d92f4647f2c81d67b68ea1ae0edb9860fcf8eb",
     "core/color-match/perceptual-color-science.js": "77efc2961c5817371845a8041917cdfd1a61c6f426065f7c6ce7c3d6215e6826",
     "core/color-match/perceptual-pixel-transfer-engine.js": "8c0ad4ad28de6c0f3b0d716fc2cc1c4288e4942a3a45957a0dab84f5f2809fe6",
-    "core/color-match/photographic-compensation-engine.js": "acf5c6cc54351a3349cf7dcf16cbcb0d742a23490a7f5c89712b4913e69b532a",
+    "core/color-match/photographic-compensation-engine.js": "28dea06a54225f40f612b5ea68ea7210064e1a5df3a36beaf150f60aedb70f10",
     "core/color-match/preserve-engine.js": "72a7a7b9232330d256691917de9312b92121937a7606a3b6e08202a9271fc1bb",
     "core/color-match/reference-target-signature-engine.js": "e0ad7b1e9ae951181ab933be332d57a86bcd6c878194c9baddbccf596e84a38d",
     "core/color-match/reference-xmp-generator.js": "88ce0055bfee339da327604518a53bcb8213e33f8079dda0feb0d1d5e9e58e27",
     "core/color-match/signature-delta-engine.js": "4810665c62fddb95cf8ec82e7c6c8fe5925c2679435cadc0abc9c2b9bcc07086",
     "core/color-match/signature-schema.js": "be4e1070808821e05bd2c03a00443e0a1d09108256739a8217fdf1be697a2af1",
-    "core/color-match/target-aware-protection-engine.js": "aefe51bc2a3867f4b72485a9245021c2fc555bb3f737e6dbe36c535876ac1f21",
+    "core/color-match/target-aware-protection-engine.js": "da12c40f2d610a4c3864fdf59b0ae085a132ec4644c4aac36a6e64f5cf5ef090",
     "core/color-match/tone-curve-transfer-engine.js": "9da84d8babcec3dff4d51d7b45daf361eb8f16eb2af91600d408cd57c6d840ae",
     "core/color-match/tone-zone-analyzer.js": "54d3fe5518f6419cf85c3e0e8bbd66787def92d445d52bafd1a1479e63b34f87",
     "core/color-match/unified-core-fusion-orchestrator.js": "68a584c906a0f6c4d676dbb42753f57a37b505f54f48d0403511d00a051aa68d",

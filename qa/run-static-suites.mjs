@@ -221,6 +221,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-q2-minimum-visible-wb-transfer-test.mjs',
   // EPIC 2E-Q3 -- Tone Curve Transfer Strength Ceiling for Reference Color Match.
   'qa/epic-2e-q3-tone-curve-ceiling-test.mjs',
+  // EPIC 2E-Q4 -- Graceful Skin Protection Degradation for Reference Color Match.
+  'qa/epic-2e-q4-graceful-skin-protection-test.mjs',
 ];
 
 let anyFailed = false;
