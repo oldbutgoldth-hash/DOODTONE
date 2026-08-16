@@ -170,7 +170,43 @@ function buildSemanticIntents(delta, illuminant, dynamicRange, skin, targetProte
   const amount = clamp(intensity, 0, 100) / 100;
   const largeShiftDampen = delta.matchNeedScore >= 55 ? 0.78 : delta.matchNeedScore >= 28 ? 0.9 : 1;
   const toneStrength = dynamicRange.globalToneStrength * amount * largeShiftDampen;
-  const wbStrength = illuminant.transferStrength * skin.globalWbTransferStrength * amount * largeShiftDampen;
+
+  /* EPIC 2E-Q2 -- Minimum Visible White Balance Transfer.
+   *
+   * Before this round, wbStrength multiplied illuminant.transferStrength
+   * (itself already dampened by zone-consistency/object-bias uncertainty)
+   * together with skin.globalWbTransferStrength, amount and
+   * largeShiftDampen -- up to 4 independently-reasonable confidence-side
+   * factors compounding before target-aware protection (neutral.
+   * whiteBalanceScale / targetSkin.globalWarmthScale, applied below,
+   * UNCHANGED by this fix) even got a turn. For a real illuminant
+   * difference with decent-but-not-pristine evidence (zoneConsistency and
+   * illuminantConfidence both around 0.5-0.7), that compounding alone
+   * could crush wbStrength under ~0.1 -- a white balance "transfer"
+   * indistinguishable from doing nothing, even before any legitimate
+   * target-specific protection had a say.
+   *
+   * illuminantEvidenceStrength replaces the old binary consistentIlluminant
+   * cliff (zoneConsistency>=.72 AND illuminantConfidence>=.55, all-or-
+   * nothing -- see the removed warmthFloor) with a continuous 0-1 scalar.
+   * confidenceSideFloor guarantees the CONFIDENCE-SIDE factors alone
+   * (transferStrength * skin.globalWbTransferStrength) never fall below
+   * what that evidence quality justifies. It does NOT touch amount,
+   * largeShiftDampen, or either target-aware protection scale (neutral.
+   * whiteBalanceScale / targetSkin.globalWarmthScale, both still fully
+   * applied below) -- those stay exactly as able to suppress the final
+   * value as before, for a target that genuinely cannot safely take the
+   * move (high-key, already-warm skin, etc. -- verified against EPIC O's
+   * target-aware-roundtrip regression test, which this floor does not
+   * break). Applies uniformly to both warmth and tint below, since tint
+   * previously had no floor mechanism at all despite sharing the exact
+   * same wbStrength dampening chain.
+   */
+  const illuminantEvidenceStrength = clamp(illuminant.zoneConsistency * 0.5 + illuminant.illuminantConfidence * 0.5, 0, 1);
+  const confidenceSideRaw = illuminant.transferStrength * skin.globalWbTransferStrength;
+  const confidenceSideFloor = illuminantEvidenceStrength * 0.65;
+  const confidenceSideEffective = Math.max(confidenceSideRaw, confidenceSideFloor);
+  const wbStrength = confidenceSideEffective * amount * largeShiftDampen;
   const neutral = targetProtection.neutralWhite;
   const targetSkin = targetProtection.skin;
   const channels = {};
@@ -201,22 +237,17 @@ function buildSemanticIntents(delta, illuminant, dynamicRange, skin, targetProte
   const highlightScale = rawHighlights > 0 ? neutral.positiveHighlightScale : 1;
   const whitesScale = rawWhites > 0 ? neutral.positiveWhitesScale : 1;
 
-  const rawWarmthIntent = delta.whiteBalance.warmth * wbStrength * neutral.whiteBalanceScale * targetSkin.globalWarmthScale;
-  const consistentIlluminant = illuminant.zoneConsistency >= 0.72 && illuminant.illuminantConfidence >= 0.55;
-  const warmthFloorScale = targetSkin.targetAlreadyWarm ? 0.18 : 0.30;
-  const warmthFloor = consistentIlluminant && Math.abs(delta.whiteBalance.warmth) >= 8
-    ? delta.whiteBalance.warmth * amount * warmthFloorScale
-    : 0;
-  const finalWarmthIntent = Math.abs(rawWarmthIntent) < Math.abs(warmthFloor) && Math.sign(rawWarmthIntent || warmthFloor) === Math.sign(warmthFloor)
-    ? warmthFloor
-    : rawWarmthIntent;
+  // EPIC 2E-Q2: the floor is now baked into wbStrength itself (see above),
+  // so both warmth and tint benefit symmetrically -- no separate post-hoc
+  // floor/sign-matching branch needed here any more.
+  const finalWarmthIntent = delta.whiteBalance.warmth * wbStrength * neutral.whiteBalanceScale * targetSkin.globalWarmthScale;
   const rawTintIntent = delta.whiteBalance.tint * wbStrength * neutral.tintScale * targetSkin.globalTintScale;
 
   return {
     whiteBalance: {
       warmth: round(clamp(finalWarmthIntent, -45, 45), 3),
       tint: round(clamp(rawTintIntent, -30, 30), 3),
-      transferFloorApplied: Math.abs(finalWarmthIntent) > Math.abs(rawWarmthIntent) + 0.001,
+      transferFloorApplied: confidenceSideFloor > confidenceSideRaw + 0.001,
     },
     tone: {
       exposureEv: round(clamp(rawExposure * exposureScale, -1.35, 1.35), 4),

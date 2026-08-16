@@ -217,6 +217,10 @@ const STATIC_SUITES = [
   'qa/epic-2e-p1n-photographer-style-test.mjs',
   // EPIC 2E-Q1 -- Auto Target White Balance Base for Reference Color Match.
   'qa/epic-2e-q1-auto-target-wb-base-test.mjs',
+  // EPIC 2E-Q2 -- Minimum Visible White Balance Transfer for Reference Color Match.
+  'qa/epic-2e-q2-minimum-visible-wb-transfer-test.mjs',
+  // EPIC 2E-Q3 -- Tone Curve Transfer Strength Ceiling for Reference Color Match.
+  'qa/epic-2e-q3-tone-curve-ceiling-test.mjs',
 ];
 
 let anyFailed = false;
