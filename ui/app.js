@@ -11,7 +11,6 @@ import { analyzeImage }                        from '../core/histogram-engine/in
 import { buildPreset, serializeXMP, downloadXMP } from '../core/preset-engine/index.js';
 import { extractPalette }                      from '../core/kmeans-engine/index.js';
 import { analyzeWhiteBalance }                 from '../core/whitebalance-engine/index.js';
-import { runWhiteBalanceEstimators }           from '../core/single-image/white-balance-estimators/estimator-ensemble.js';
 import {
   setSlider, bindSliders, switchTab,
   renderHSLPanel, renderGradingPanel, renderCalibrationPanel,
@@ -65,32 +64,6 @@ import { createInteractivePreviewObservationSessionV2 } from './interactive-prev
 import { buildReferenceTransferReport } from '../core/reference-transfer-engine/index.js';
 import { classifyScene }        from '../core/scene-classifier/index.js';
 import { detectColorCast }      from '../core/color-cast-detector/index.js';
-// EPIC 2E-P1A — Single Image Analysis Session Foundation: canonical
-// Session lifecycle for the single-image workflow (see
-// core/single-image/*.js). Wraps calls this file already makes into
-// the engines above — no Core formula imported here is duplicated or
-// altered, only the ownership of their outputs changes.
-import * as singleImageOrchestrator from '../core/single-image/single-image-orchestrator.js';
-// EPIC 2E-P1B — AI Image Analysis Report: pure renderer, reads only
-// session.report (built by the orchestrator from already-committed
-// evidence) -- never re-runs analysis, never reads DOM/slider state.
-import { renderSingleImageReport, clearSingleImageReportDisplay } from './single-image-report-renderer.js';
-// EPIC 2E-P1C — Canonical Lightroom Auto-Tune Candidate: pure mapping/
-// store modules. The Candidate Store (not the DOM) is the source of
-// Lightroom values from here on -- see P1C_CANDIDATE_ARCHITECTURE.md.
-import { renderCandidateToSliders, resolveSliderEdit, getSupportedSliderIds } from '../core/single-image/candidate/candidate-slider-adapter.js';
-// EPIC 2E-P1M — Strength-mode UI (Natural/Balanced/Dramatic).
-import { UI_STRENGTH_MODE, DEFAULT_UI_STRENGTH_MODE, isValidUiStrengthMode } from '../core/single-image/strength-mode/strength-mode-schema.js';
-import { candidateToLegacyPreset } from '../core/single-image/candidate/legacy-preset-adapter.js';
-import { computeExportParity } from '../core/single-image/candidate/candidate-export-parity.js';
-import * as candidateStore from '../core/single-image/candidate/candidate-store.js';
-import { CANDIDATE_STATUS } from '../core/single-image/candidate/candidate-schema.js';
-// EPIC 2E-P1D — XMP Serialize + Readback Fidelity Gate: only the
-// status-enum import is needed here -- all parsing/comparison/gate
-// logic lives in core/single-image/xmp-fidelity/ and is invoked
-// through singleImageOrchestrator.runXmpFidelityCheck(), never
-// duplicated in the UI layer.
-import { FIDELITY_STATUS } from '../core/single-image/xmp-fidelity/xmp-fidelity-report.js';
 
 // ─── Theme tokens (LUMIXA visual system) ───────────────────────────────────────
 const THEME = {
@@ -128,15 +101,6 @@ const state = {
   lastPalette: null,
   lastWB:      null,
   lastSkin:    null,
-  lastSingleImageReport: null, // EPIC 2E-P1B: last-built AI Image Analysis Report snapshot (UI mirror of session.report)
-  lastCandidateStatus: null, // EPIC 2E-P1C: last-known Candidate status (UI mirror, for locale re-render of the status badge only)
-  // EPIC 2E-P1M: the user's currently-selected Strength mode
-  // (NATURAL/BALANCED/DRAMATIC). Deliberately NOT reset by
-  // handleReset() -- like darkMode/lang, this is a standing user
-  // preference about editing intensity, not photo-specific derived
-  // state, so it carries over to the next uploaded photo.
-  strengthMode: DEFAULT_UI_STRENGTH_MODE,
-  _candidateSliderSyncGuard: false, // EPIC 2E-P1C: true while renderCandidateToSliders() is writing sliders, so the slider 'input' listener below can ignore its own writes (no feedback loop)
   lastBasic:   null,
   lastHSL:     null,
   lastGrading: null,
@@ -706,58 +670,7 @@ waitForRoot(() => {
   if (calCard)  renderCalibrationPanel(calCard, state.lang);
 
   bindSliders(document.body);
-
-  // EPIC 2E-P1C — Candidate-owned slider synchronization (Slider -> Candidate).
-  // Wired exactly once at boot, over exactly the supported slider-ID set
-  // (getSupportedSliderIds()) -- confirmed via source audit that
-  // renderHSLPanel/renderGradingPanel/renderCalibrationPanel above are
-  // themselves called exactly once at boot and never again on language
-  // change, so this listener never needs to be re-attached. Each edit:
-  // updates ONE Candidate parameter (never rebuilds/reruns analysis),
-  // sets status USER_EDITED, bumps revision. Guarded by
-  // state._candidateSliderSyncGuard so a Candidate -> Slider render
-  // (runAnalysis()'s commit block, resetAllToAuto, etc.) can never loop
-  // back into a spurious "user edit."
-  for (const sliderId of getSupportedSliderIds()) {
-    const el = document.getElementById(sliderId);
-    if (!el) continue;
-    el.addEventListener('input', function () {
-      if (state._candidateSliderSyncGuard) return;
-      const session = singleImageOrchestrator.getActiveSessionSnapshot();
-      const resolved = resolveSliderEdit(sliderId, this.value);
-      // EPIC 2E-P1C R3: bounded development diagnostic -- logs only
-      // IDs/numbers/status strings, never image data.
-      console.debug('[P1C User Edit Input]', {
-        sliderId,
-        rawValue: this.value,
-        resolved,
-        sessionId: session?.sessionId,
-        generationId: session?.generationId,
-        candidateStatusBefore: candidateStore.getActiveCandidate()?.status ?? null,
-      });
-      if (!resolved) return;
-      if (!session) return;
-      const updateResult = candidateStore.updateCandidateParameter(session.sessionId, session.generationId, resolved.parameterPath, resolved.clampedValue);
-      console.debug('[P1C User Edit Commit]', {
-        committed: updateResult?.committed,
-        reason: updateResult?.reason,
-        parameterPath: resolved?.parameterPath,
-        value: resolved?.clampedValue,
-        candidateStatusAfter: updateResult?.candidate?.status ?? null,
-        revision: updateResult?.candidate?.revision ?? null,
-      });
-      // A rejected (transactional) edit leaves the previously-valid
-      // Candidate in place -- re-read the ACTIVE Candidate (not
-      // updateResult.candidate, which is null on rejection) so the
-      // badge always reflects the true current exportable state, and
-      // never shows a phantom status for an edit that never committed.
-      const c = candidateStore.getActiveCandidate();
-      if (c) { state.lastCandidateStatus = c.status; updateCandidateStatusBadge(c.status); }
-    });
-  }
-
   window.switchTab = switchTab;
-  _syncStrengthModeButtons(); // EPIC 2E-P1M: reflect the initial/persisted state.strengthMode on load
   setupAnalysisTabs();
   setupAnalysisResizeObserver();
   ensureReviewConsoleController();
@@ -1013,16 +926,6 @@ function rerenderCurrentUiForLocale() {
   try { _rerenderPersistentAnnouncementsForLocale(); } catch (err) { console.warn('Locale re-render: live announcements failed:', err); }
   try { const panel = document.getElementById('analysisInner'); if (panel?.__lumixaAnalysisStats) renderAnalysisPanel(panel, panel.__lumixaAnalysisStats, state.lang); } catch (err) { console.warn('Locale re-render: Analysis panel labels failed:', err); }
   try { const success = document.getElementById('successMsg'); if (success && success.style.display !== 'none') success.textContent = t('appShell.downloadSuccess', null, state.lang); } catch (err) { console.warn('Locale re-render: download status failed:', err); }
-  // EPIC 2E-P1D: re-render the XMP Fidelity status line's text in the
-  // new locale if it is currently visible. Pure text re-render from
-  // state.lastXmpFidelity* -- never rebuilds the Candidate, never
-  // reruns analysis, never serializes again.
-  try {
-    const fidWrap = document.getElementById('xmpFidelityStatus');
-    if (fidWrap && fidWrap.style.display !== 'none' && state.lastXmpFidelityUiStatus) {
-      renderXmpFidelityStatus(state.lastXmpFidelityUiStatus, state.lastXmpFidelityReport, state.lastXmpFidelityXml);
-    }
-  } catch (err) { console.warn('Locale re-render: XMP fidelity status failed:', err); }
 
   // R4 Phase C: the persistent "AI Box" analysis-complete summary is
   // innerHTML-injected (not a data-i18n-key element), so it falls
@@ -1031,21 +934,6 @@ function rerenderCurrentUiForLocale() {
   try {
     if (state.lastAnalysisBoxSummaryData) setAnalysisBox('ok', _buildAnalysisBoxOkHtml(state.lastAnalysisBoxSummaryData, state.lang));
   } catch (err) { console.warn('Locale re-render: Analysis status box failed (other sections unaffected):', err); }
-
-  // EPIC 2E-P1B: AI Image Analysis Report -- re-renders from the
-  // already-built report snapshot only; never rebuilds the report,
-  // never touches session.evidence.
-  try {
-    const reportInner = document.getElementById('singleImageReportInner');
-    if (reportInner && reportInner.dataset.reportLayoutBuilt === '1' && state.lastSingleImageReport) {
-      renderSingleImageReport(reportInner, state.lastSingleImageReport, state.lang);
-    }
-  } catch (err) { console.warn('Locale re-render: AI Image Analysis Report failed (other sections unaffected):', err); }
-
-  // EPIC 2E-P1C: Candidate status badge -- text-only re-render from the
-  // last-known status mirror. Never rebuilds the Candidate, never
-  // re-renders sliders, never touches the Candidate Store.
-  try { updateCandidateStatusBadge(state.lastCandidateStatus); } catch (err) { console.warn('Locale re-render: Candidate status badge failed (other sections unaffected):', err); }
 
   // Review Console (+ its own Build Controlled V2 Preview button
   // label/hint) -- already a pure function of state.lastPreviewSandbox
@@ -1277,44 +1165,23 @@ function setupFileHandlers() {
   document.getElementById('btnBuildControlledV2')?.addEventListener('click', handleBuildControlledV2Preview);
 }
 
-async function loadFile(file) {
+function loadFile(file) {
   if (!file?.type.startsWith('image/')) return;
 
-  // EPIC 2E-P1A R3 FIX: handleReset() MUST run BEFORE beginUpload().
-  // R2's ordering (beginUpload() then handleReset()) created the new
-  // Session first, but handleReset() unconditionally calls
-  // singleImageOrchestrator.resetActiveSession(state) — which ABORTS
-  // and CLEARS whatever Session is currently active, including the one
-  // beginUpload() had just created one line earlier, and also nulls
-  // activeUploadTicket. Every subsequent img.onload -> runAnalysis()
-  // call then found no active ticket and returned immediately,
-  // stranding the UI on "loading" permanently. See
-  // P1A_UPLOAD_LIFECYCLE_FIX.md for the full root-cause writeup.
-  //
-  // The correct order: reset/abort whatever was previously active
-  // FIRST, THEN create the new Session. beginUpload() itself also
-  // calls abortActiveSession() internally as a defensive first step,
-  // so a prior in-flight analysis is aborted exactly once either way
-  // — handleReset() here additionally clears the DOM/legacy state that
-  // beginUpload() intentionally does not touch (it owns Session
-  // lifecycle only, not UI).
+  // Fix (requested): clear all previous analysis state BEFORE starting a
+  // new one, every time a file is selected — not just on the very first
+  // upload. Without this, selecting a second/third image while the
+  // previous image's state.last* values (WB, HSL, basic panel, style
+  // fingerprint, etc.) are still populated can let stale results flash
+  // or mix with the new analysis while each pipeline stage resolves
+  // asynchronously, causing visible display glitches. handleReset()
+  // already clears every state.last* field and hides all analysis
+  // panels — safe to call unconditionally here since the code below
+  // immediately re-shows the correct "loading" UI afterward. It also
+  // clears the PREVIOUS image's retained File/canonical-decode
+  // resources (DEPLOY GEOMETRY R1 — Phase B1/B4); this line then
+  // retains the NEW file, exactly once.
   handleReset();
-
-  // Create the new upload Session and capture its ticket into a LOCAL
-  // constant that this call's own reader/img closures reference
-  // directly — never the shared, reassignable `activeUploadTicket`
-  // module variable — so a slow-resolving PRIOR image's img.onload
-  // (fired after a newer upload has already reassigned
-  // activeUploadTicket) can never be misattributed to the newer
-  // Session. `activeUploadTicket` is still updated for
-  // handleReanalyze()/runAnalysis()'s own no-arg call sites, which
-  // intentionally want "whatever Session is current right now".
-  const uploadTicket = await singleImageOrchestrator.beginUpload(file);
-  activeUploadTicket = uploadTicket;
-
-  // Clears the PREVIOUS image's retained File/canonical-decode
-  // resources (DEPLOY GEOMETRY R1 — Phase B1/B4) via handleReset()
-  // above; this line then retains the NEW file, exactly once.
   state.currentRetainedFile = file;
 
   const reader = new FileReader();
@@ -1331,33 +1198,9 @@ async function loadFile(file) {
     // Wait for image to fully decode before reading pixels
     img.onload = () => {
       state.imageLoaded = true;
-      // EPIC 2E-P1A: record decode completion on the Session BEFORE
-      // analysis starts, using THIS call's captured uploadTicket (not
-      // the current activeUploadTicket — see the note above). If a
-      // newer upload has since superseded uploadTicket, both
-      // markImageDecoded() and startAnalysisTicket() (inside
-      // runAnalysis()) independently no-op via the same generation-
-      // ownership check in single-image-session-store.js — this stale
-      // callback can never mutate or start analysis for the newer
-      // Session. analysisProxy stays null in this round: the real
-      // pipeline has no distinct downscaled-proxy object today, each
-      // engine downsamples internally (documented in
-      // P1A_SINGLE_IMAGE_SESSION_ARCHITECTURE.md "Known limitations").
-      if (uploadTicket) {
-        singleImageOrchestrator.markImageDecoded(uploadTicket, {
-          width: img.naturalWidth,
-          height: img.naturalHeight,
-          decodedSource: img,
-          displaySource: img,
-          analysisProxy: null,
-        });
-      }
-      runAnalysis(uploadTicket);
+      runAnalysis();
     };
-    img.onerror = () => {
-      setAnalysisBox('error', t('analysisBox.imageLoadFailed', null, state.lang));
-      if (uploadTicket) singleImageOrchestrator.markImageDecodeFailed(uploadTicket, new Error('Image decode failed'));
-    };
+    img.onerror = () => setAnalysisBox('error', t('analysisBox.imageLoadFailed', null, state.lang));
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
@@ -1393,15 +1236,6 @@ function safeGetVisualPreviewProperty(object, key, fallback = undefined) {
 }
 
 let analysisRenderGeneration = 0;
-// EPIC 2E-P1A: the current Single Image Analysis Session's
-// {sessionId, generationId} ticket — the single-image workflow's
-// counterpart to `analysisRenderGeneration` above, but for STATE
-// WRITES (state.last*) and Candidate/XMP-adjacent commits rather than
-// DOM/canvas render callbacks (which `analysisRenderGeneration`
-// already protects — see P1A_SOURCE_LINEAGE_AUDIT.md §9/§13). Set by
-// loadFile() -> singleImageOrchestrator.beginUpload(), read by
-// runAnalysis()/handleReanalyze()/handleReset().
-let activeUploadTicket = null;
 // R4 Phase G: tracks the in-flight, fire-and-forget Visual Preview
 // Comparison render() promise for the CURRENT generation, so callers
 // outside runAnalysis() (e.g. handleBuildControlledV2Preview) can
@@ -2198,38 +2032,12 @@ function _syncInteractivePreviewObservation(ibaState, generationId) {
   }
 }
 
-async function runAnalysis(callerTicket = null) {
+async function runAnalysis() {
   const img = document.getElementById('previewImg');
   if (!img || !img.naturalWidth || !img.naturalHeight) {
     setAnalysisBox('error', t('analysisBox.imageNotReady', null, state.lang));
     return;
   }
-
-  // EPIC 2E-P1A R3: prefer the ticket the CALLER explicitly captured
-  // (loadFile()'s img.onload passes its own upload-local `uploadTicket`
-  // so a slow/stale image decode can never be attributed to a newer
-  // Session — see loadFile()'s comments). Callers that don't have a
-  // specific ticket of their own (handleReanalyze(), the legacy
-  // `state.imageLoaded && ...` guard) fall back to whatever Session is
-  // CURRENTLY active, which is the correct behavior for "re-run
-  // analysis on the image that's on screen right now".
-  const ticket = callerTicket || activeUploadTicket;
-
-  // EPIC 2E-P1A: acquire this run's analysis ticket. Returns null (and
-  // this function returns immediately, doing nothing further) if:
-  //  - there is no active Session (shouldn't happen in the normal
-  //    upload flow, but defensive),
-  //  - this ticket is stale (a newer upload has superseded it) — this
-  //    is also how a stale, superseded image's img.onload callback is
-  //    prevented from starting analysis for a newer upload, or
-  //  - analysis is ALREADY in progress for this exact Session — this
-  //    is the real fix for "clicking Re-analyze twice quickly starts
-  //    two concurrent runAnalysis() invocations" confirmed in
-  //    P1A_SOURCE_LINEAGE_AUDIT.md §13.
-  const analysisTicket = ticket
-    ? singleImageOrchestrator.startAnalysisTicket(ticket.sessionId, ticket.generationId)
-    : null;
-  if (!analysisTicket) return;
 
   // COMBINED CLOSEOUT R1 — Phase B FIX B1: capture the Observation
   // Controller's PRIOR state and prior Generation ID BEFORE incrementing
@@ -2346,26 +2154,6 @@ async function runAnalysis(callerTicket = null) {
 
   setAnalysisBox('loading', t('analysisBox.analyzingHistogram', null, state.lang));
 
-  // EPIC 2E-P1B: show the Report section immediately with a
-  // "building" placeholder and clear whatever report (if any) was
-  // showing for a PREVIOUS image/generation -- never leaves a stale
-  // report visible while a new analysis is in flight.
-  {
-    const reportSec = document.getElementById('singleImageReportSection');
-    const reportInner = document.getElementById('singleImageReportInner');
-    if (reportSec) reportSec.style.display = 'block';
-    if (reportInner) clearSingleImageReportDisplay(reportInner, state.lang);
-    state.lastSingleImageReport = null;
-  }
-
-  // EPIC 2E-P1C: no stale Candidate status may be visible while a new
-  // analysis is in flight -- clear the badge immediately (the sliders
-  // themselves keep showing their last values until the new Candidate
-  // is committed, matching the Report section's own "keep old UI,
-  // replace only the status" pattern above).
-  updateCandidateStatusBadge(null);
-  state.lastCandidateStatus = null;
-
   try {
     setAnalysisBox('loading', t('analysisBox.analyzingHistogram', null, state.lang));
 
@@ -2377,12 +2165,7 @@ async function runAnalysis(callerTicket = null) {
     const logS1 = processingLog.startStage('HistogramEngine');
 
     const stats = await analyzeImage(img);
-    // EPIC 2E-P1A: histogram is the first REQUIRED module — commit
-    // through the orchestrator (which also mirrors into state.lastStats
-    // via the legacy adapter, replacing the old direct assignment) and
-    // stop this run immediately if a newer Session has already
-    // superseded it, rather than continuing to do wasted/stale work.
-    if (!singleImageOrchestrator.commitEvidence(analysisTicket, 'histogram', { status: 'COMPLETED', result: stats, startedAt: Date.now(), completedAt: Date.now() }, state).committed) return;
+    state.lastStats = stats;
 
     logS1.output({
       avgLum: stats.avgLum, median: stats.median,
@@ -2395,13 +2178,7 @@ async function runAnalysis(callerTicket = null) {
     logS1.end('ok');
 
     const imageAnalysisCorePromise = analyzeImageCore(img).then(coreResult => {
-      // EPIC 2E-P1A: this .then() may resolve well after a NEWER
-      // upload has superseded `analysisTicket` (it's fire-and-forget,
-      // Worker-backed, up to WORKER_TIMEOUT_MS=20s) — commitEvidence()
-      // silently no-ops the state.lastImageAnalysis write in that case
-      // instead of letting a stale image's Core result land on a
-      // different image's state (P1A_SOURCE_LINEAGE_AUDIT.md §13).
-      singleImageOrchestrator.commitEvidence(analysisTicket, 'imageAnalysisCore', { status: 'COMPLETED', result: coreResult, completedAt: Date.now() }, state);
+      state.lastImageAnalysis = coreResult;
       const iaSec = document.getElementById('imageAnalysisSection');
       const iac = document.getElementById('imageAnalysisCanvas');
       if (iaSec && iac) {
@@ -2420,8 +2197,7 @@ async function runAnalysis(callerTicket = null) {
     }).catch(err => { console.warn('ImageAnalysisCore:', err); return null; });
 
     const paletteHarmonyPromise = extractPalette(img).then(palette => {
-      // EPIC 2E-P1A: same staleness protection as imageAnalysisCore above.
-      singleImageOrchestrator.commitEvidence(analysisTicket, 'palette', { status: 'COMPLETED', result: palette, completedAt: Date.now() }, state);
+      state.lastPalette = palette;
       const palSec = document.getElementById('paletteSection');
       const pc = document.getElementById('paletteCanvas');
       if (palSec && pc) {
@@ -2436,7 +2212,7 @@ async function runAnalysis(callerTicket = null) {
       let harmony = null;
       try {
         harmony = generateHarmonies(palette);
-        singleImageOrchestrator.commitEvidence(analysisTicket, 'harmony', { status: 'COMPLETED', result: harmony, completedAt: Date.now() }, state);
+        state.lastHarmony = harmony;
         const harSec = document.getElementById('harmonySection');
         const hc = document.getElementById('harmonyCanvas');
         if (harSec && hc) {
@@ -2475,19 +2251,6 @@ async function runAnalysis(callerTicket = null) {
     if (!castRes)      logS3a.warn('CastDetector failed — BG attenuation skipped');
     logS3a.end('ok');
 
-    // EPIC 2E-P1H: castRes was already computed for real above (and fed
-    // into analyzeWhiteBalance()/buildFinalPreset() downstream) but was
-    // never itself committed as its own session.evidence entry, even
-    // though the analysis-profile table already reserves a 'colorCast'
-    // slot (moduleId:'colorCast', evidenceKey:'colorCast' — see
-    // single-image-analysis-profile.js). This wires that pre-existing,
-    // unused slot to the real result so White Balance Intelligence (and
-    // any future module) can read per-zone cast evidence from
-    // session.evidence.colorCast without re-running Canvas analysis.
-    // Additive only — does not change castRes's existing usage anywhere
-    // else in this function.
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'colorCast', { status: castRes ? 'COMPLETED' : 'SOFT_FAILED', result: castRes, completedAt: Date.now() }, state);
-
     const logS3b = processingLog.startStage('SceneClassifier');
     const sceneRes = classifyScene(stats, skinClassRes);
     logS3b.output({
@@ -2518,53 +2281,15 @@ async function runAnalysis(callerTicket = null) {
     const skinMerged = skinToneRes
       ? { ...skinToneRes, coveragePct: skinPctAccurate, isFaceCandidate: skinClassRes?.isFaceCandidate ?? true, confidence: skinClassRes?.confidence ?? 0.5 }
       : skinClassRes;
-    // EPIC 2E-P1A: every state.lastX assignment below now goes through
-    // commitEvidence() (Session evidence first, legacy `state` mirror
-    // second, both gated on this run's ticket still being current) —
-    // local `const`s below always get the freshly-computed value
-    // regardless of staleness, so downstream logic in THIS function
-    // invocation (fusionCtx, buildFinalPreset, etc.) is unaffected;
-    // only the SHARED `state.lastX` fields (which a different,
-    // superseding Session's own commits might already be about to
-    // overwrite) are protected from a stale write.
-    const skin       = skinMerged;
-    const wb         = wbRes;
+    const skin       = state.lastSkin         = skinMerged;
+    const wb         = state.lastWB           = wbRes;
     const cast       = castRes;
-    const hsl        = hslRes;
-    const grading    = gradingRes;
-    const toneCurves = tcRes;
-    const calibration= calRes;
-    const basic      = generateBasicPanel(stats);
-    const styleRecognition = styleRecRes;
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'skinTone', { status: 'COMPLETED', result: skin, completedAt: Date.now() }, state);
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'whiteBalance', { status: wb ? 'COMPLETED' : 'SOFT_FAILED', result: wb, completedAt: Date.now() }, state);
-    // EPIC 2E-P1I: run the pixel-level multi-estimator White Balance
-    // pipeline once for this generation, immediately after the legacy
-    // WB engine result is available. Synchronous (canvas draw +
-    // estimator math are all synchronous), wrapped fail-closed so a
-    // pixel-sampling error never blocks the rest of analysis --
-    // P1H's wb-evidence-extractor.js treats this evidence as OPTIONAL
-    // and falls back to R1 (whiteBalance-engine-only) behaviour
-    // byte-for-byte when it is absent or UNAVAILABLE. P1I never
-    // writes session.candidate directly -- see
-    // P1I_P1H_INTEGRATION_POLICY.md.
-    let wbEstimatorBundle = null;
-    try {
-      wbEstimatorBundle = runWhiteBalanceEstimators(img, { generationId: analysisTicket?.generationId ?? null });
-    } catch (error) {
-      console.warn('[LUMIXA][P1I] White Balance estimator pipeline failed -- falling back to R1 WB evidence.', error?.message || error);
-    }
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'wbEstimators', { status: wbEstimatorBundle && wbEstimatorBundle.status !== 'UNAVAILABLE' ? 'COMPLETED' : 'SOFT_FAILED', result: wbEstimatorBundle, completedAt: Date.now() }, state);
-    singleImageOrchestrator.traceWbEstimatorPipeline(analysisTicket, wbEstimatorBundle);
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'hsl', { status: hsl ? 'COMPLETED' : 'SOFT_FAILED', result: hsl, completedAt: Date.now() }, state);
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'colorGrading', { status: grading ? 'COMPLETED' : 'SOFT_FAILED', result: grading, completedAt: Date.now() }, state);
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'toneCurves', { status: toneCurves ? 'COMPLETED' : 'SOFT_FAILED', result: toneCurves, completedAt: Date.now() }, state);
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'calibration', { status: calibration ? 'COMPLETED' : 'SOFT_FAILED', result: calibration, completedAt: Date.now() }, state);
-    // basicPanel is REQUIRED (buildFinalPreset() below reads `basic`
-    // unconditionally) — stop this run here if a newer Session has
-    // already superseded it.
-    if (!singleImageOrchestrator.commitEvidence(analysisTicket, 'basicPanel', { status: 'COMPLETED', result: basic, completedAt: Date.now() }, state).committed) return;
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'styleRecognition', { status: styleRecognition ? 'COMPLETED' : 'SOFT_FAILED', result: styleRecognition, completedAt: Date.now() }, state);
+    const hsl        = state.lastHSL          = hslRes;
+    const grading    = state.lastGrading      = gradingRes;
+    const toneCurves = state.lastToneCurves   = tcRes;
+    const calibration= state.lastCalibration  = calRes;
+    const basic      = state.lastBasic        = generateBasicPanel(stats);
+    const styleRecognition = state.lastStyleRecognition = styleRecRes;
 
     logS3c.output({
       wb_temp: wb?.consensus?.temperature, wb_tint: wb?.consensus?.tint,
@@ -2601,7 +2326,7 @@ async function runAnalysis(callerTicket = null) {
     };
     const logFusion = processingLog.startStage('FeatureFusionEngine');
     const styleFeatureGraph = buildStyleFeatureGraph(fusionCtx);
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'styleFeatureGraph', { status: 'COMPLETED', result: styleFeatureGraph, completedAt: Date.now() }, state);
+    state.lastStyleFeatureGraph = styleFeatureGraph;
     logFusion.output({
       featureCount: styleFeatureGraph.features.length,
       conflictCount: styleFeatureGraph.conflicts.length,
@@ -2614,7 +2339,7 @@ async function runAnalysis(callerTicket = null) {
 
     const logFp = processingLog.startStage('StyleFingerprint');
     const styleFingerprint = buildStyleFingerprint({ ...fusionCtx, featureGraph: styleFeatureGraph });
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'styleFingerprint', { status: 'COMPLETED', result: styleFingerprint, completedAt: Date.now() }, state);
+    state.lastStyleFingerprint = styleFingerprint;
     logFp.output({
       mood: styleFingerprint.mood, warmth: styleFingerprint.warmth,
       colorCast: styleFingerprint.colorCast, contrastLevel: styleFingerprint.contrastLevel,
@@ -2652,9 +2377,7 @@ async function runAnalysis(callerTicket = null) {
     const { preset: validatedPreset, report: validationReport } = validateFinalPreset(rawPreset, styleFingerprint);
     validatedPreset._decision   = rawPreset._decision;
     validatedPreset._validation = validationReport;
-    // validationReport is REQUIRED (Candidate cannot be considered
-    // trustworthy without it) — stop this run here if superseded.
-    if (!singleImageOrchestrator.commitEvidence(analysisTicket, 'validation', { status: 'COMPLETED', result: validationReport, completedAt: Date.now() }, state).committed) return;
+    state.lastValidationReport = validationReport;
 
     const logBench = processingLog.startStage('StyleBenchmark');
     const benchmark = benchmarkStylePreservation({
@@ -2664,7 +2387,7 @@ async function runAnalysis(callerTicket = null) {
       finalPreset: validatedPreset,
       preXmpValidation: validationReport,
     });
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'benchmark', { status: 'COMPLETED', result: benchmark, completedAt: Date.now() }, state);
+    state.lastBenchmark = benchmark;
     logBench.output({
       overallStyleSimilarity: benchmark.overallStyleSimilarity,
       safetyScore: benchmark.safetyScore,
@@ -2677,10 +2400,6 @@ async function runAnalysis(callerTicket = null) {
     if (benchmark.details.extremelyUnsafe) {
       const reclamp = quickSafetyClamp(validatedPreset);
       finalPreset = { ...reclamp.preset, _decision: validatedPreset._decision, _validation: validationReport, _benchmark: benchmark };
-      // EPIC 2E-P1C: preserve the reclamp adjustments on the preset so
-      // candidate-builder.js can attribute them in diagnostics.safetyClamps
-      // (does not change finalPreset's Lightroom values themselves).
-      finalPreset._reclampAdjustments = reclamp.adjustments;
       logBench.decide('reclamp', null, `safetyScore ${benchmark.safetyScore} < threshold — quickSafetyClamp re-applied (${reclamp.adjustments.length} adjustment(s)).`);
       reclamp.adjustments.forEach(a => logBench.decide('reclamp_detail', null, a));
     } else {
@@ -2688,25 +2407,7 @@ async function runAnalysis(callerTicket = null) {
     }
     logBench.end('ok');
 
-    // EPIC 2E-P1A: commit the Candidate to the Session, then only push
-    // it to the sliders if this run is still the current one. This is
-    // the direct fix for the spec's named "old callbacks overwriting a
-    // new image ... mismatched Report, sliders, Candidate and XMP"
-    // failure mode — a stale image A's finalPreset can no longer land
-    // on image B's sliders.
-    if (!singleImageOrchestrator.commitCandidate(analysisTicket, finalPreset).committed) return;
-
-    // EPIC 2E-P1C R2: the canonical Candidate build/validate/store-commit/
-    // slider-sync step used to happen right here -- while the Session was
-    // still ANALYZING. buildAndCommitCandidate() correctly refuses to run
-    // until the Session is terminal (COMPLETED/PARTIAL), so it always
-    // returned reason: SESSION_NOT_TERMINAL at this call site, and the UI
-    // showed the "Auto-Tune Candidate build failed" message on every real
-    // analysis run. That block now lives after completeAnalysis() below,
-    // gated on the real finalSessionStatus it returns -- see
-    // P1C_R2_RUNTIME_LIFECYCLE_FIX.md. commitCandidate() above still runs
-    // here so session.candidateRaw is available before Session
-    // finalization, per that fix's requirement #1.
+    applyPresetToSliders(finalPreset);
 
     const logVal = processingLog.startStage('PreXMPValidation', {
       mood: styleFingerprint.mood, colorCast: styleFingerprint.colorCast,
@@ -2751,7 +2452,7 @@ async function runAnalysis(callerTicket = null) {
       styleBenchmark: finalPreset._benchmark,
     });
     finalPreset._report = decisionReport;
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'decisionReport', { status: 'COMPLETED', result: decisionReport, completedAt: Date.now() }, state);
+    state.lastDecisionReport = decisionReport;
     logReport.output({
       summary: decisionReport.summary,
       topContributorCount: decisionReport.topContributors.length,
@@ -2771,7 +2472,7 @@ async function runAnalysis(callerTicket = null) {
       wb, cast: castRes, imageAnalysisCore: state.lastImageAnalysis,
     });
     finalPreset._transfer = referenceTransferReport;
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'referenceTransfer', { status: 'COMPLETED', result: referenceTransferReport, completedAt: Date.now() }, state);
+    state.lastReferenceTransfer = referenceTransferReport;
     logTransfer.output({
       referenceConfidence: referenceTransferReport.referenceConfidence.score,
       transferConfidence: referenceTransferReport.transferConfidence.score,
@@ -2784,7 +2485,7 @@ async function runAnalysis(callerTicket = null) {
     console.debug('[ReferenceTransfer]', referenceTransferReport);
 
     processingLog.setFinalPreset(finalPreset);
-    singleImageOrchestrator.commitEvidence(analysisTicket, 'processingLog', { status: 'COMPLETED', result: processingLog.snapshot(), completedAt: Date.now() }, state);
+    state.lastProcessingLog = processingLog.snapshot();
     console.debug('[ProcessingLog]', state.lastProcessingLog);
 
     if (state.curveEditor) {
@@ -3187,151 +2888,12 @@ async function runAnalysis(callerTicket = null) {
       console.warn('VisualPreviewComparison boundary failed (analysis unaffected):', vprErr);
     }
 
-    // EPIC 2E-P1A: always resolve the Session to a terminal status —
-    // COMPLETED if every required module succeeded and no optional
-    // module degraded, PARTIAL if an optional module soft-failed. A
-    // no-op if this ticket is already stale (a newer Session already
-    // owns "active"). This guarantees the Session lifecycle never gets
-    // stuck in ANALYZING, per the spec's explicit requirement.
-    const finalSessionStatus = singleImageOrchestrator.completeAnalysis(analysisTicket);
-
-    // EPIC 2E-P1C R2: build the canonical nested Candidate ONLY now that
-    // the Session has reached a terminal status. This mirrors the
-    // buildAndCommitReport() gate immediately below -- both read only
-    // from session.evidence (never from Report text, DOM slider values,
-    // stale legacy state, or synthetic defaults) and are independent
-    // sibling outputs of the same evidence, per
-    // P1C_CANDIDATE_ARCHITECTURE.md. buildAndCommitCandidate() itself
-    // still carries its own terminal-status + isActiveGeneration guards
-    // (unchanged, not weakened) -- this call-site gate is an additional,
-    // not a replacement, safeguard. A stale ticket (Image A superseded
-    // by Image B) makes completeAnalysis() return null, which satisfies
-    // neither branch's equality check below, so a stale callback can
-    // never build or synchronize a Candidate after a newer image becomes
-    // active.
-    if (finalSessionStatus === 'COMPLETED' || finalSessionStatus === 'PARTIAL') {
-      const candidateResult = singleImageOrchestrator.buildAndCommitCandidate(analysisTicket, {
-        legacyState: state,
-        engineVersion: singleImageOrchestrator.ENGINE_VERSION,
-        strengthMode: state.strengthMode,
-      });
-      if (candidateResult && candidateResult.committed && candidateResult.candidate) {
-        applyCandidateBuildResult(candidateResult.candidate, { fallbackPresetName: finalPreset.name });
-      } else {
-        // Candidate build failed (or this run was superseded) even
-        // though the Session reached a terminal status -- do not fall
-        // back to applyPresetToSliders(finalPreset) (that would
-        // reintroduce exactly the "DOM as hidden source of truth"
-        // problem P1C removes). Leave sliders at their last known state,
-        // clear the Candidate Store so XMP export stays blocked, and
-        // surface a FAILED badge with full (non-image) diagnostics.
-        console.error('[P1C Candidate Build Failed]', {
-          reason: candidateResult?.reason,
-          sessionStatus: singleImageOrchestrator.getActiveSessionSnapshot()?.status,
-          sessionId: analysisTicket?.sessionId,
-          generationId: analysisTicket?.generationId,
-          candidateRawAvailable: !!singleImageOrchestrator.getActiveSessionSnapshot()?.candidateRaw,
-          validationErrors: candidateResult?.validation?.errors ?? [],
-          validationWarnings: candidateResult?.validation?.warnings ?? [],
-        });
-        candidateStore.clearActiveCandidate(analysisTicket.sessionId, analysisTicket.generationId);
-        state.lastCandidateStatus = CANDIDATE_STATUS.FAILED;
-        updateCandidateStatusBadge(CANDIDATE_STATUS.FAILED);
-      }
-    } else {
-      // finalSessionStatus is FAILED, ABORTED, or null (stale ticket --
-      // a newer image already became active). Never build a Candidate
-      // from a non-terminal or failed Session: clear the Candidate
-      // Store, clear the badge, and leave sliders exactly as they were
-      // so no stale/partial values are shown. XMP export stays blocked
-      // because candidateStore.getValidatedCandidate() now returns null.
-      candidateStore.clearActiveCandidate();
-      state.lastCandidateStatus = null;
-      updateCandidateStatusBadge(null);
-    }
-
-    // EPIC 2E-P1B: build the canonical AI Image Analysis Report from
-    // the Session's now-final evidence and render it -- ONLY on
-    // COMPLETED/PARTIAL (never on FAILED/ABORTED), and only if this
-    // ticket is still the active generation (buildAndCommitReport()
-    // itself no-ops on a stale ticket, same guarantee every other
-    // commit* call in this function already relies on). This never
-    // re-runs any Core module -- it reads session.evidence, already
-    // fully populated by the commitEvidence() calls above.
-    if (finalSessionStatus === 'COMPLETED' || finalSessionStatus === 'PARTIAL') {
-      const built = singleImageOrchestrator.buildAndCommitReport(analysisTicket, { legacyState: state });
-      if (built.committed) {
-        state.lastSingleImageReport = built.report;
-        const reportInner = document.getElementById('singleImageReportInner');
-        if (reportInner) renderSingleImageReport(reportInner, built.report, state.lang);
-      }
-    }
-
   } catch (err) {
     setAnalysisBox('error', `<strong>⚠ ${t('analysisBox.failed', null, state.lang)}:</strong> ${err.message}`);
     console.error('runAnalysis error:', err);
-    // EPIC 2E-P1A: an unexpected error must still leave the Session in
-    // a terminal FAILED state, not stuck in ANALYZING — same
-    // no-op-if-stale guarantee as completeAnalysis() above.
-    if (analysisTicket) singleImageOrchestrator.failAnalysis(analysisTicket, err);
-    // EPIC 2E-P1B: a failed analysis must never show a report (old or
-    // partially built) -- hide the section entirely.
-    {
-      const reportSec = document.getElementById('singleImageReportSection');
-      if (reportSec) reportSec.style.display = 'none';
-      state.lastSingleImageReport = null;
-    }
-    // EPIC 2E-P1C: a failed analysis must never leave a stale Candidate
-    // status badge visible either -- the FAILED status the orchestrator
-    // set on the Session (see buildAndCommitCandidate()/failAnalysis())
-    // is mirrored here for the UI badge only; no Candidate is rebuilt.
-    state.lastCandidateStatus = CANDIDATE_STATUS.FAILED;
-    updateCandidateStatusBadge(CANDIDATE_STATUS.FAILED);
   }
 }
 
-// EPIC 2E-P1C — minimal Candidate status badge. Text/color-only; never
-// rebuilds the Candidate, never touches the Candidate Store, never
-// re-renders sliders. `status` is one of CANDIDATE_STATUS or null/
-// undefined (hides the badge). See P1C_CANDIDATE_ARCHITECTURE.md and
-// index.html's #candidateStatusBadge element.
-const CANDIDATE_BADGE_I18N_KEY = Object.freeze({
-  BUILDING: 'candidateStatus.building',
-  AUTO_GENERATED: 'candidateStatus.ready',
-  VALID: 'candidateStatus.valid',
-  VALID_WITH_WARNINGS: 'candidateStatus.validWithWarnings',
-  INVALID: 'candidateStatus.invalid',
-  USER_EDITED: 'candidateStatus.userEdited',
-  FAILED: 'candidateStatus.failed',
-});
-const CANDIDATE_BADGE_COLOR = Object.freeze({
-  BUILDING: 'var(--text-dim)',
-  AUTO_GENERATED: 'var(--success)',
-  VALID: 'var(--success)',
-  VALID_WITH_WARNINGS: 'var(--warn)',
-  INVALID: 'var(--danger)',
-  USER_EDITED: 'var(--accent)',
-  FAILED: 'var(--danger)',
-});
-function updateCandidateStatusBadge(status) {
-  const el = document.getElementById('candidateStatusBadge');
-  if (!el) return;
-  // EMPTY / STALE / null / undefined -- nothing worth surfacing to the
-  // user (EMPTY = no analysis run yet; STALE never reaches the UI mirror
-  // since a superseded build simply never commits).
-  const key = status ? CANDIDATE_BADGE_I18N_KEY[status] : null;
-  if (!key) { el.style.display = 'none'; el.textContent = ''; return; }
-  el.textContent = t(key, null, state.lang);
-  el.style.color = CANDIDATE_BADGE_COLOR[status] || 'var(--text-dim)';
-  el.style.borderColor = CANDIDATE_BADGE_COLOR[status] || 'var(--border)';
-  el.style.display = 'block';
-}
-
-// EPIC 2E-P1C — DEPRECATED COMPATIBILITY FUNCTION. Superseded by
-// renderCandidateToSliders(candidate, { setSlider }) at this file's one
-// call site (runAnalysis()'s Candidate-commit block). Confirmed via
-// project-wide grep to have zero remaining callers as of P1C; retained
-// only as a documented fallback, not deleted outright.
 function applyPresetToSliders(preset) {
   setSlider('exp', preset.exp); setSlider('con', preset.con);
   setSlider('hi',  preset.hi);  setSlider('sh',  preset.sh);
@@ -3365,923 +2927,24 @@ function buildAnalysisDisplay(stats, preset) {
 }
 
 // ─── Action handlers ──────────────────────────────────────────────────────────
-// EPIC 2E-P1C: XMP export source migrated from readSlidersAsPreset()
-// (DOM reconstruction) to the canonical Candidate Store. The existing
-// serializer/downloader (serializeXMP, downloadXMP) and the existing
-// final safety net (quickSafetyClamp) are unchanged and still run --
-// only the *input* to that unchanged pipeline changed, from a
-// DOM-reconstructed preset to legacyPresetAdapter(validated Candidate).
-// See P1C_LEGACY_PRESET_MIGRATION_MAP.md.
-// EPIC 2E-P1C R3: sanitize only the characters that are actually
-// illegal in a Windows/macOS/Linux filename (< > : " / \ | ? *).
-// Previously downloadXMP() used a strict word-character allowlist
-// (`[^\w\u0E00-\u0E7F\s\-_]`) that silently mangled perfectly legal
-// preset names (parentheses, apostrophes, etc.) into underscores --
-// never a hard failure, but not what "sanitize only illegal
-// characters" asks for. This narrower sanitizer runs before the name
-// reaches downloadXMP(); downloadXMP()'s own sanitize call remains as
-// an unchanged second safety net (a no-op on an already-safe string).
-function sanitizePresetFilename(name) {
-  const raw = (name ?? '').toString().trim();
-  const safe = raw.replace(/[<>:"/\\|?*]/g, '_');
-  return safe || 'AI Preset';
-}
-
-// EPIC 2E-P1D — XMP Fidelity status UI. Small status line next to the
-// Download button (never a redesign): icon + one-line TH/EN message,
-// with an "Advanced Diagnostics" disclosure (collapsed by default,
-// never the primary UI) listing the first few mismatched parameters
-// plus the raw generated XMP for a FAIL/PASS_WITH_WARNINGS result.
-const XMP_FIDELITY_UI_COLORS = {
-  CHECKING:            { border: 'var(--border)' },
-  [FIDELITY_STATUS.PASS]:                { border: 'var(--success)' },
-  [FIDELITY_STATUS.PASS_WITH_WARNINGS]:  { border: 'var(--warn, #b8860b)' },
-  [FIDELITY_STATUS.FAIL]:                { border: 'var(--danger, #c0392b)' },
-  [FIDELITY_STATUS.PARSE_FAILED]:        { border: 'var(--danger, #c0392b)' },
-};
-
-function _hideXmpFidelityStatus() {
-  const el = document.getElementById('xmpFidelityStatus');
-  if (el) el.style.display = 'none';
-  const diag = document.getElementById('xmpFidelityDiagnostics');
-  if (diag) diag.style.display = 'none';
-}
-
-/**
- * @param {'CHECKING'|'PASS'|'PASS_WITH_WARNINGS'|'FAIL'|'PARSE_FAILED'} uiStatus
- * @param {object|null} report  the Fidelity Report (null while CHECKING)
- * @param {string|null} xmpString  the exact string that was validated (for Advanced Diagnostics only)
- */
-/**
- * EPIC 2E-P1E R3 -- Export Parity Advanced Diagnostics.
- *
- * Renders, for the CURRENT Candidate, whether every P1D-supported
- * color-plus-tone parameter's on-screen value already matches what
- * quickSafetyClamp() will actually write at export time -- computed
- * PURELY (computeExportParity(), no serialization, no DOM read) from
- * candidate.diagnostics.exportParity (already populated by
- * buildAndCommitCandidate()). Shown only under the existing Advanced
- * Diagnostics disclosure (never as the main UI); the safe-adjustment
- * notice only appears when at least one field would actually change.
- */
-function renderExportParityDiagnostics(candidate) {
-  const section = document.getElementById('exportParityDiagnostics');
-  const notice = document.getElementById('exportParityNotice');
-  const tableBody = document.getElementById('exportParityTableBody');
-  if (!section) return;
-
-  const exportParity = candidate?.diagnostics?.exportParity ?? null;
-  if (!exportParity) { section.style.display = 'none'; return; }
-
-  section.style.display = 'block';
-
-  if (notice) {
-    if (exportParity.mismatches.length > 0) {
-      notice.style.display = 'block';
-      notice.textContent = t('appShell.exportParitySafeAdjustmentNotice', { count: exportParity.mismatches.length }, state.lang);
-    } else {
-      notice.style.display = 'none';
-    }
-  }
-
-  if (tableBody) {
-    tableBody.innerHTML = '';
-    // Only render rows for fields that actually differ -- a full 58-row
-    // table of MATCH/MATCH would defeat the "keep the main UI clean,
-    // only show something when there's something to show" requirement.
-    for (const m of exportParity.mismatches) {
-      const tr = document.createElement('tr');
-      const cells = [m.parameterPath, String(m.candidateValue), String(m.exportExpectedValue), t('appShell.exportParityMatchNo', null, state.lang)];
-      for (const c of cells) {
-        const td = document.createElement('td');
-        td.textContent = c;
-        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
-        tr.appendChild(td);
-      }
-      tableBody.appendChild(tr);
-    }
-  }
-}
-
-// EPIC 2E-P1F basic field ownership, in display order -- matches
-// candidate.basic.{field} / candidatePath 'basic.<field>' in PROPERTY_MAP.
-const BASIC_TONE_FIELDS = ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks', 'texture', 'clarity', 'dehaze'];
-
-/**
- * EPIC 2E-P1F -- Basic Tone Intelligence Advanced Diagnostics.
- *
- * Renders, for the CURRENT Candidate, the Basic Tone Plan's scene
- * classification, confidence, plain-language evidence summary, and a
- * per-field table (Basic Candidate value / Export Expected value /
- * match status) for the 9 Basic Panel fields P1F now computes from
- * evidence -- reusing the SAME computeExportParity() utility P1E R3's
- * panel already uses (never a second parity mechanism). Shown only
- * under the existing Advanced Diagnostics disclosure convention; never
- * exposes raw XML.
- */
-function renderBasicToneDiagnostics(candidate) {
-  const section = document.getElementById('basicToneDiagnostics');
-  const summaryEl = document.getElementById('basicToneSummary');
-  const tableBody = document.getElementById('basicToneTableBody');
-  if (!section) return;
-
-  const basicTone = candidate?.diagnostics?.basicToneIntelligence ?? null;
-  if (!basicTone) { section.style.display = 'none'; return; }
-
-  section.style.display = 'block';
-
-  if (summaryEl) {
-    const parts = [
-      t('appShell.basicToneSceneClass', { sceneClass: basicTone.sceneClass }, state.lang),
-      t('appShell.basicToneConfidence', { confidence: (basicTone.confidence ?? 0).toFixed(2) }, state.lang),
-      basicTone.engaged
-        ? t('appShell.basicToneFieldsAdjusted', { count: basicTone.fieldsAdjusted.length, fields: basicTone.fieldsAdjusted.join(', ') }, state.lang)
-        : t('appShell.basicToneNoAdjustment', null, state.lang),
-    ];
-    summaryEl.textContent = parts.join(' · ');
-  }
-
-  if (tableBody) {
-    tableBody.innerHTML = '';
-    let parityEntries = [];
-    try { parityEntries = computeExportParity(candidate).entries; } catch { parityEntries = []; }
-    const byPath = new Map(parityEntries.map((e) => [e.parameterPath, e]));
-
-    for (const field of BASIC_TONE_FIELDS) {
-      const path = `basic.${field}`;
-      const entry = byPath.get(path);
-      const candidateValue = entry ? entry.candidateCurrentValue : candidate?.basic?.[field];
-      const exportExpected = entry ? entry.exportExpectedValue : candidateValue;
-      const matches = entry ? entry.candidateVsExportMatch : true;
-      const tr = document.createElement('tr');
-      const cells = [
-        field, String(candidateValue), String(exportExpected),
-        matches ? t('appShell.exportParityMatchYes', null, state.lang) : t('appShell.exportParityMatchNo', null, state.lang),
-      ];
-      for (const cellText of cells) {
-        const td = document.createElement('td');
-        td.textContent = cellText;
-        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
-        tr.appendChild(td);
-      }
-      tableBody.appendChild(tr);
-    }
-  }
-}
-
-/**
- * EPIC 2E-P1G -- Detail Intelligence Advanced Diagnostics.
- *
- * Renders, for the CURRENT Candidate, the Detail Plan's scene flags,
- * confidence, plain-language evidence summary, bounded evidence scores
- * (edge/detail, luminance noise, chroma noise -- all 0-1 scalars, never
- * raw pixel arrays), and a per-field table (Sharpening/Luminance NR
- * Candidate value / Export Expected value / match status) -- reusing
- * the SAME computeExportParity() utility P1E R3's and P1F's panels
- * already use (never a second parity mechanism). Also renders an
- * explicit note that Color Noise Reduction is NOT Candidate-driven
- * (hardcoded XMP literal) -- never implies a working control for an
- * unsupported field. Shown only under the existing Advanced
- * Diagnostics disclosure convention; never exposes raw XML.
- */
-const DETAIL_INTEL_FIELDS = [
-  { field: 'sharpening', path: 'detail.sharpening' },
-  { field: 'noiseReduction', path: 'detail.noiseReduction' },
-];
-function renderDetailIntelligenceDiagnostics(candidate) {
-  const section = document.getElementById('detailIntelDiagnostics');
-  const summaryEl = document.getElementById('detailIntelSummary');
-  const evidenceEl = document.getElementById('detailIntelEvidence');
-  const tableBody = document.getElementById('detailIntelTableBody');
-  const colorNrNoteEl = document.getElementById('detailIntelColorNrNote');
-  const safeAdjustmentNoticeEl = document.getElementById('detailIntelSafeAdjustmentNotice');
-  if (!section) return;
-
-  const detailIntel = candidate?.diagnostics?.detailIntelligence ?? null;
-  if (!detailIntel) { section.style.display = 'none'; return; }
-
-  section.style.display = 'block';
-
-  if (summaryEl) {
-    const flags = Array.isArray(detailIntel.sceneClass) ? detailIntel.sceneClass.join(', ') : String(detailIntel.sceneClass ?? '');
-    const parts = [
-      t('appShell.detailSceneFlags', { flags }, state.lang),
-      t('appShell.detailConfidence', { confidence: (detailIntel.confidence ?? 0).toFixed(2) }, state.lang),
-      detailIntel.engaged
-        ? t('appShell.detailEngaged', null, state.lang)
-        : t('appShell.detailNoAdjustment', null, state.lang),
-    ];
-    if (detailIntel.protections?.focusLimited) parts.push(t('appShell.detailFocusLimited', null, state.lang));
-    summaryEl.textContent = parts.join(' \u00b7 ');
-  }
-
-  if (evidenceEl) {
-    const ev = detailIntel.evidence;
-    if (ev) {
-      const fmt = (v) => (typeof v === 'number' ? v.toFixed(2) : '\u2014');
-      const skinCoverage = typeof ev.skinCoverage === 'number' ? `${Math.round(ev.skinCoverage * 100)}%` : '\u2014';
-      evidenceEl.textContent = [
-        t('appShell.detailEdgeDensity', { score: fmt(ev.edgeDensity) }, state.lang),
-        t('appShell.detailLuminanceNoise', { score: fmt(ev.luminanceNoise) }, state.lang),
-        t('appShell.detailChromaNoise', { score: fmt(ev.chromaNoise) }, state.lang),
-        t('appShell.detailSkinCoverage', { coverage: skinCoverage }, state.lang),
-      ].join(' \u00b7 ');
-    } else {
-      evidenceEl.textContent = '';
-    }
-  }
-
-  let parityEntries = [];
-  try { parityEntries = computeExportParity(candidate).entries; } catch { parityEntries = []; }
-  const byPath = new Map(parityEntries.map((e) => [e.parameterPath, e]));
-
-  // EPIC 2E-P1G R2 -- Detail-specific export-safety notice. Reuses the
-  // SAME computeExportParity() call above (no second parity mechanism);
-  // only filters down to the two Detail paths. Shown only when at least
-  // one of them was actually adjusted by quickSafetyClamp() (e.g. a
-  // corrupted/manually out-of-range Candidate) -- an auto-generated P1G
-  // Candidate never triggers this, since the planner's own ceiling (35)
-  // stays comfortably under the Layer-B export ceiling (40).
-  if (safeAdjustmentNoticeEl) {
-    const detailAdjusted = DETAIL_INTEL_FIELDS.some(({ path }) => {
-      const entry = byPath.get(path);
-      return entry ? !entry.candidateVsExportMatch : false;
-    });
-    if (detailAdjusted) {
-      safeAdjustmentNoticeEl.style.display = 'block';
-      safeAdjustmentNoticeEl.textContent = t('appShell.detailExportSafeAdjustmentNotice', null, state.lang);
-    } else {
-      safeAdjustmentNoticeEl.style.display = 'none';
-    }
-  }
-
-  if (tableBody) {
-    tableBody.innerHTML = '';
-    for (const { field, path } of DETAIL_INTEL_FIELDS) {
-      const entry = byPath.get(path);
-      const candidateValue = entry ? entry.candidateCurrentValue : candidate?.detail?.[field];
-      const exportExpected = entry ? entry.exportExpectedValue : candidateValue;
-      const matches = entry ? entry.candidateVsExportMatch : true;
-      const tr = document.createElement('tr');
-      const cells = [
-        field, String(candidateValue), String(exportExpected),
-        matches ? t('appShell.exportParityMatchYes', null, state.lang) : t('appShell.exportParityMatchNo', null, state.lang),
-      ];
-      for (const cellText of cells) {
-        const td = document.createElement('td');
-        td.textContent = cellText;
-        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
-        tr.appendChild(td);
-      }
-      tableBody.appendChild(tr);
-    }
-  }
-
-  if (colorNrNoteEl) colorNrNoteEl.textContent = t('appShell.detailColorNrUnsupported', null, state.lang);
-}
-
-/**
- * EPIC 2E-P1H -- White Balance Intelligence Advanced Diagnostics.
- *
- * Renders, for the CURRENT Candidate, the White Balance Plan's primary
- * cast classification + flags, confidence tier, plain-language evidence
- * summary (raw reading, neutral-reference confidence, skin-validation
- * status, object-color-bias score -- all bounded scalars/labels, never
- * raw pixel data), a mixed-lighting notice (exact bilingual string from
- * the module) when that protection engaged, and a per-field
- * Candidate-vs-Export-Expected table for Temperature/Tint -- reusing
- * the SAME computeExportParity() utility every other Advanced
- * Diagnostics panel in this file already uses (never a second parity
- * mechanism). Shown only under the existing Advanced Diagnostics
- * disclosure convention; never exposes raw XML.
- */
-const WB_INTEL_FIELDS = [
-  { field: 'temperature', path: 'whiteBalance.temperature' },
-  { field: 'tint', path: 'whiteBalance.tint' },
-];
-function renderWBIntelligenceDiagnostics(candidate) {
-  const section = document.getElementById('wbIntelDiagnostics');
-  const summaryEl = document.getElementById('wbIntelSummary');
-  const evidenceEl = document.getElementById('wbIntelEvidence');
-  const tableBody = document.getElementById('wbIntelTableBody');
-  const mixedLightNoticeEl = document.getElementById('wbIntelMixedLightNotice');
-  const safeAdjustmentNoticeEl = document.getElementById('wbIntelSafeAdjustmentNotice');
-  if (!section) return;
-
-  const wbIntel = candidate?.diagnostics?.whiteBalanceIntelligence ?? null;
-  if (!wbIntel) { section.style.display = 'none'; return; }
-
-  section.style.display = 'block';
-
-  if (summaryEl) {
-    const flags = Array.isArray(wbIntel.classification?.flags) ? wbIntel.classification.flags.join(', ') : String(wbIntel.classification?.primaryCast ?? '');
-    const parts = [
-      t('appShell.wbPrimaryCast', { cast: wbIntel.classification?.primaryCast ?? '—' }, state.lang),
-      t('appShell.wbFlags', { flags }, state.lang),
-      t('appShell.wbConfidence', { confidence: (wbIntel.confidence ?? 0).toFixed(2), tier: wbIntel.confidenceTier ?? '—' }, state.lang),
-      t('appShell.wbStrengthMode', { mode: wbIntel.strengthMode ?? '—' }, state.lang),
-      wbIntel.engaged
-        ? t('appShell.wbEngaged', null, state.lang)
-        : t('appShell.wbNoAdjustment', null, state.lang),
-    ];
-    if (wbIntel.protections?.objectColorBiasGuard) parts.push(t('appShell.wbObjectColorBiasGuard', null, state.lang));
-    if (wbIntel.protections?.intentionalLightPreserved) parts.push(t('appShell.wbIntentionalLightPreserved', null, state.lang));
-    summaryEl.textContent = parts.join(' \u00b7 ');
-  }
-
-  if (evidenceEl) {
-    const ev = wbIntel.evidence;
-    if (ev) {
-      const fmt = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
-      evidenceEl.textContent = [
-        t('appShell.wbRawReading', { temp: ev.rawTemperature ?? '—', tint: ev.rawTint ?? '—' }, state.lang),
-        t('appShell.wbNeutralConfidence', { score: fmt(ev.neutralReferenceConfidence) }, state.lang),
-        wbIntel.protections?.skinValidationApplied
-          ? t('appShell.wbSkinValidationUsed', null, state.lang)
-          : t('appShell.wbSkinValidationNotUsed', { reason: '' }, state.lang),
-        t('appShell.wbObjectColorBias', { score: (wbIntel.classification?.objectColorBiasScore ?? 0).toFixed(2) }, state.lang),
-      ].join(' \u00b7 ');
-    } else {
-      evidenceEl.textContent = '';
-    }
-  }
-
-  if (mixedLightNoticeEl) {
-    const msg = wbIntel.mixedLightMessage;
-    if (msg && wbIntel.protections?.mixedLightGuard) {
-      mixedLightNoticeEl.style.display = 'block';
-      mixedLightNoticeEl.textContent = state.lang === 'th' ? msg.th : msg.en;
-    } else {
-      mixedLightNoticeEl.style.display = 'none';
-    }
-  }
-
-  let parityEntries = [];
-  try { parityEntries = computeExportParity(candidate).entries; } catch { parityEntries = []; }
-  const byPath = new Map(parityEntries.map((e) => [e.parameterPath, e]));
-
-  // EPIC 2E-P1H -- WB-specific export-safety notice. Reuses the SAME
-  // computeExportParity() call above; only filters down to the two WB
-  // paths. Shown only when quickSafetyClamp() actually adjusted
-  // Temperature or Tint (e.g. a corrupted/manually out-of-range
-  // Candidate) -- an auto-generated P1H Candidate never triggers this,
-  // since the planner's own ceilings (38 temp / -11..29 tint) stay
-  // comfortably under the existing HARD_LIMITS.wb export ceiling
-  // (40 / -12..30).
-  if (safeAdjustmentNoticeEl) {
-    const wbAdjusted = WB_INTEL_FIELDS.some(({ path }) => {
-      const entry = byPath.get(path);
-      return entry ? !entry.candidateVsExportMatch : false;
-    });
-    if (wbAdjusted) {
-      safeAdjustmentNoticeEl.style.display = 'block';
-      safeAdjustmentNoticeEl.textContent = t('appShell.wbExportSafeAdjustmentNotice', null, state.lang);
-    } else {
-      safeAdjustmentNoticeEl.style.display = 'none';
-    }
-  }
-
-  if (tableBody) {
-    tableBody.innerHTML = '';
-    for (const { field, path } of WB_INTEL_FIELDS) {
-      const entry = byPath.get(path);
-      const candidateValue = entry ? entry.candidateCurrentValue : candidate?.whiteBalance?.[field];
-      const exportExpected = entry ? entry.exportExpectedValue : candidateValue;
-      const matches = entry ? entry.candidateVsExportMatch : true;
-      const tr = document.createElement('tr');
-      const cells = [
-        field, String(candidateValue), String(exportExpected),
-        matches ? t('appShell.exportParityMatchYes', null, state.lang) : t('appShell.exportParityMatchNo', null, state.lang),
-      ];
-      for (const cellText of cells) {
-        const td = document.createElement('td');
-        td.textContent = cellText;
-        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
-        tr.appendChild(td);
-      }
-      tableBody.appendChild(tr);
-    }
-  }
-
-  renderWBEstimatorDiagnostics();
-}
-
-// EPIC 2E-P1I -- estimator status label lookup, bilingual.
-const WB_ESTIMATOR_STATUS_KEY = {
-  OK: 'appShell.wbEstimatorStatusOK',
-  DEGRADED: 'appShell.wbEstimatorStatusDegraded',
-  REJECTED: 'appShell.wbEstimatorStatusRejected',
-  UNAVAILABLE: 'appShell.wbEstimatorStatusUnavailable',
-};
-const WB_ESTIMATOR_DISPLAY_ORDER = ['grayWorld', 'whitePatch', 'shadesOfGray', 'neutralRegion', 'highlightIlluminant', 'shadowIlluminant'];
-
-/**
- * EPIC 2E-P1I -- renders the nested "Pixel-level estimators" sub-panel
- * inside the existing WB Advanced Diagnostics disclosure. Reads the
- * LIVE session's own wbEstimators evidence (not just the compact
- * summary carried on the Candidate's diagnostics) via
- * getActiveSessionSnapshot(), so every individual estimator's
- * estimate/confidence/rejection-reason is visible -- never raw pixel
- * data, scalars and reason codes only. No-ops (hides the sub-panel)
- * when no usable bundle exists for the active session, matching the
- * fail-open-to-nothing convention every other Advanced Diagnostics
- * sub-section in this file already uses.
- */
-function renderWBEstimatorDiagnostics() {
-  const details = document.getElementById('wbIntelEstimatorDetails');
-  const agreementEl = document.getElementById('wbIntelAgreement');
-  const tbody = document.getElementById('wbIntelEstimatorTableBody');
-  const objectBiasEl = document.getElementById('wbIntelObjectBiasReason');
-  const mixedLightEl = document.getElementById('wbIntelMixedLightReason');
-  const skinValidationEl = document.getElementById('wbIntelSkinValidationReason'); // EPIC 2E-P1I R2
-  if (!details) return;
-
-  let bundle = null;
-  try {
-    const snap = singleImageOrchestrator.getActiveSessionSnapshot();
-    const entry = snap?.evidence?.wbEstimators;
-    if (entry && (entry.status === 'COMPLETED' || entry.status === 'CACHE_HIT')) bundle = entry.result ?? null;
-  } catch { bundle = null; }
-
-  if (!bundle || bundle.status === 'UNAVAILABLE' || !bundle.ensemble || !Array.isArray(bundle.ensemble.usableEstimatorIds) || bundle.ensemble.usableEstimatorIds.length === 0) {
-    details.style.display = 'none';
-    return;
-  }
-  details.style.display = 'block';
-
-  if (agreementEl) {
-    agreementEl.textContent = t('appShell.wbEstimatorAgreementLine', {
-      agreement: (bundle.ensemble.agreement ?? 0).toFixed(2),
-      usable: bundle.ensemble.usableEstimatorIds.length,
-      outliers: bundle.ensemble.outlierEstimatorIds?.length ?? 0,
-      rejected: bundle.ensemble.rejectedEstimatorIds?.length ?? 0,
-    }, state.lang);
-  }
-
-  if (tbody) {
-    tbody.innerHTML = '';
-    for (const id of WB_ESTIMATOR_DISPLAY_ORDER) {
-      const result = bundle.estimators?.[id];
-      if (!result) continue;
-      const tr = document.createElement('tr');
-      const statusLabel = t(WB_ESTIMATOR_STATUS_KEY[result.status] ?? 'appShell.wbEstimatorStatusUnavailable', null, state.lang);
-      const tempTint = result.estimate ? `${result.estimate.temperatureIntent} / ${result.estimate.tintIntent}` : '—';
-      const confidence = typeof result.confidence === 'number' ? result.confidence.toFixed(2) : '—';
-      const reason = result.diagnostics?.rejectionReason ?? (result.diagnostics?.warnings?.[0] ?? '—');
-      const cells = [id, statusLabel, tempTint, confidence, reason];
-      for (const cellText of cells) {
-        const td = document.createElement('td');
-        td.textContent = String(cellText);
-        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    }
-  }
-
-  if (objectBiasEl && bundle.objectBias) {
-    objectBiasEl.textContent = t('appShell.wbObjectBiasReasonLine', {
-      probability: (bundle.objectBias.objectBiasProbability ?? 0).toFixed(2),
-      reasons: bundle.objectBias.reasonCodes?.length ? bundle.objectBias.reasonCodes.join(', ') : t('appShell.wbObjectBiasReasonNone', null, state.lang),
-      hue: bundle.objectBias.dominantHueFamily ?? 'none',
-    }, state.lang);
-  }
-
-  if (mixedLightEl && bundle.mixedLight) {
-    mixedLightEl.textContent = t('appShell.wbMixedLightReasonLine', {
-      status: bundle.mixedLight.isMixedLight ? t('appShell.wbMixedLightStatusDetected', null, state.lang) : t('appShell.wbMixedLightStatusNotDetected', null, state.lang),
-      score: (bundle.mixedLight.score ?? 0).toFixed(2),
-      reason: bundle.mixedLight.reason ?? '',
-    }, state.lang);
-  }
-
-  // EPIC 2E-P1I R2 -- Pixel Skin Validation and WB Correction
-  // Plausibility. Informational only (no controls); hidden entirely
-  // when no usable skin-validation result exists for this session,
-  // matching the same fail-open-to-nothing convention as every other
-  // line in this panel.
-  if (skinValidationEl) {
-    const sv = bundle.skinValidation;
-    const svUsable = !!(sv && sv.status !== 'UNAVAILABLE' && Number.isFinite(sv.confidence));
-    if (svUsable) {
-      skinValidationEl.style.display = 'block';
-      skinValidationEl.textContent = t('appShell.wbSkinValidationReasonLine', {
-        status: t(WB_ESTIMATOR_STATUS_KEY[sv.status] ?? 'appShell.wbEstimatorStatusUnavailable', null, state.lang),
-        confidence: sv.confidence.toFixed(2),
-        acceptedPixels: sv.sampleSummary?.acceptedSkinPixels ?? 0,
-        coverage: (sv.sampleSummary?.spatialCoverage ?? 0).toFixed(3),
-        supported: sv.plausibility?.correctionSupported
-          ? t('appShell.wbSkinValidationSupported', null, state.lang)
-          : t('appShell.wbSkinValidationNotSupported', null, state.lang),
-        conflict: sv.plausibility?.conflictWithNeutral
-          ? t('appShell.wbSkinValidationConflict', null, state.lang)
-          : t('appShell.wbSkinValidationNoConflict', null, state.lang),
-      }, state.lang);
-    } else {
-      skinValidationEl.style.display = 'none';
-      skinValidationEl.textContent = '';
-    }
-  }
-}
-
-/**
- * EPIC 2E-P1J -- Tone Curve Intelligence Advanced Diagnostics.
- *
- * Renders, for the CURRENT Candidate, the Tone Curve Plan's tone
- * category, confidence, plain-language per-channel engagement reasons
- * (from generateToneCurves(), unchanged -- reuse-first), a
- * points-restrained note when the Layer-A restraint engaged, and a
- * per-channel Candidate-vs-Export-Expected POINT-COUNT/match table for
- * master/red/green/blue -- reusing the SAME computeExportParity()
- * utility every other Advanced Diagnostics panel in this file already
- * uses (its exportExpectedPreset return value, added in P1E R3, is
- * read here for the curves branch rather than duplicating
- * candidateToLegacyPreset()/quickSafetyClamp() calls). Never dumps raw
- * point arrays to the DOM -- only counts and a match/adjusted status,
- * consistent with every other panel's "never raw XML, never raw pixel
- * data" convention. Also renders an explicit note that the Parametric
- * Shadows/Midtones/Highlights curve sliders are NOT driven by this
- * Intelligence layer (see tone-curve-schema.js's documented scope
- * boundary) -- never implies a working control for an unwired field.
- */
-const TONE_CURVE_INTEL_CHANNELS = [
-  { channel: 'master', candidateField: 'rgb', exportKey: 'master' },
-  { channel: 'red', candidateField: 'red', exportKey: 'red' },
-  { channel: 'green', candidateField: 'green', exportKey: 'green' },
-  { channel: 'blue', candidateField: 'blue', exportKey: 'blue' },
-];
-function _pointArraysEqual(a, b) {
-  if (a === b) return true;
-  if (a == null || b == null) return a == null && b == null;
-  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i]?.x !== b[i]?.x || a[i]?.y !== b[i]?.y) return false;
-  }
-  return true;
-}
-function renderToneCurveIntelligenceDiagnostics(candidate) {
-  const section = document.getElementById('toneCurveIntelDiagnostics');
-  const summaryEl = document.getElementById('toneCurveIntelSummary');
-  const evidenceEl = document.getElementById('toneCurveIntelEvidence');
-  const tableBody = document.getElementById('toneCurveIntelTableBody');
-  const safeAdjustmentNoticeEl = document.getElementById('toneCurveIntelSafeAdjustmentNotice');
-  const parametricNoteEl = document.getElementById('toneCurveIntelParametricNote');
-  if (!section) return;
-
-  const curveIntel = candidate?.diagnostics?.toneCurveIntelligence ?? null;
-  if (!curveIntel) { section.style.display = 'none'; return; }
-
-  section.style.display = 'block';
-
-  if (summaryEl) {
-    const parts = [
-      t('appShell.toneCurveCategory', { category: curveIntel.category ?? '—' }, state.lang),
-      t('appShell.toneCurveConfidence', { confidence: (curveIntel.confidence ?? 0).toFixed(2) }, state.lang),
-      curveIntel.engaged
-        ? t('appShell.toneCurveEngaged', null, state.lang)
-        : t('appShell.toneCurveNoAdjustment', null, state.lang),
-    ];
-    if ((curveIntel.pointsRestrained ?? 0) > 0) {
-      parts.push(t('appShell.toneCurvePointsRestrained', { count: curveIntel.pointsRestrained }, state.lang));
-    }
-    summaryEl.textContent = parts.join(' · ');
-  }
-
-  if (evidenceEl) {
-    const lines = [
-      ...(Array.isArray(curveIntel.reasons) ? curveIntel.reasons : []),
-      ...(Array.isArray(curveIntel.warnings) ? curveIntel.warnings : []),
-    ];
-    evidenceEl.textContent = lines.join('\n');
-  }
-
-  let exportExpectedPreset = null;
-  try { exportExpectedPreset = computeExportParity(candidate).exportExpectedPreset ?? null; } catch { exportExpectedPreset = null; }
-
-  let anyChannelAdjusted = false;
-
-  if (tableBody) {
-    tableBody.innerHTML = '';
-    for (const { channel, candidateField, exportKey } of TONE_CURVE_INTEL_CHANNELS) {
-      const candidatePoints = candidate?.curves?.[candidateField] ?? null;
-      const exportPoints = exportExpectedPreset?.curves?.[exportKey] ?? null;
-      const matches = _pointArraysEqual(candidatePoints, exportPoints);
-      if (!matches) anyChannelAdjusted = true;
-      const candidateCount = Array.isArray(candidatePoints) ? String(candidatePoints.length) : '—';
-      const exportCount = Array.isArray(exportPoints) ? String(exportPoints.length) : '—';
-      const tr = document.createElement('tr');
-      const cells = [
-        channel, candidateCount, exportCount,
-        matches ? t('appShell.exportParityMatchYes', null, state.lang) : t('appShell.exportParityMatchNo', null, state.lang),
-      ];
-      for (const cellText of cells) {
-        const td = document.createElement('td');
-        td.textContent = cellText;
-        td.style.cssText = 'padding:2px 8px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)';
-        tr.appendChild(td);
-      }
-      tableBody.appendChild(tr);
-    }
-  }
-
-  // EPIC 2E-P1J -- export-safety notice, shown only when
-  // quickSafetyClamp()'s _clampToneCurvePanel() actually changed a
-  // channel's points (candidate vs. export-expected point arrays
-  // differ) -- an auto-generated P1J Candidate never triggers this,
-  // per the calibration documented on HARD_LIMITS.curve in
-  // xmp-validator/index.js.
-  if (safeAdjustmentNoticeEl) {
-    if (anyChannelAdjusted) {
-      safeAdjustmentNoticeEl.style.display = 'block';
-      safeAdjustmentNoticeEl.textContent = t('appShell.toneCurveExportSafeAdjustmentNotice', null, state.lang);
-    } else {
-      safeAdjustmentNoticeEl.style.display = 'none';
-    }
-  }
-
-  // EPIC 2E-P1L -- Parametric Tone Curve Intelligence now provides real
-  // Shadows/Midtones/Highlights values derived from this photo's master
-  // curve; the old "not supported" note is stale and would actively
-  // mislead users once this engine engages, so it now branches on the
-  // real diagnostics written by candidate-builder.js.
-  if (parametricNoteEl) {
-    const paramIntel = candidate?.diagnostics?.parametricToneIntelligence ?? null;
-    if (paramIntel?.engaged) {
-      const vals = candidate?.curves?.parametric ?? { shadows: 0, midtones: 0, highlights: 0 };
-      parametricNoteEl.textContent = t('appShell.toneCurveParametricEngaged', {
-        shadows: vals.shadows ?? 0, midtones: vals.midtones ?? 0, highlights: vals.highlights ?? 0,
-      }, state.lang);
-    } else {
-      parametricNoteEl.textContent = t('appShell.toneCurveParametricNotEngaged', null, state.lang);
-    }
-  }
-}
-
-// EPIC 2E-P1M — Strength-mode UI (Natural/Balanced/Dramatic).
-//
-// Factored out of the analysis-completion callback (the only call site
-// before P1M) so the SAME render chain can also run from
-// setStrengthMode() below, which rebuilds the Candidate from
-// already-completed evidence (no re-analysis) whenever the user picks
-// a different Strength mode. Every render* call here was already
-// individually documented at its original call site (P1E R3/P1F/P1H/
-// P1G/P1J respectively) -- this function changes nothing about what
-// each one does, only where the sequence is invoked from.
-function applyCandidateBuildResult(candidate, { fallbackPresetName = '' } = {}) {
-  // See the original P1C comment (candidate-slider-adapter.js call
-  // sites) for why this guard exists: setSlider() itself only assigns
-  // el.value (no 'input' event fires from a JS property assignment),
-  // so this guard is a belt-and-braces measure so the boot-time slider
-  // 'input' listener can tell "the Candidate Store just wrote this
-  // slider" apart from "the user just edited this slider." Wrapped in
-  // try/finally so a thrown error mid-render can never leave the guard
-  // stuck true.
-  state._candidateSliderSyncGuard = true;
-  try {
-    renderCandidateToSliders(candidate, { setSlider });
-    const nameEl = document.getElementById('presetName');
-    if (nameEl && !nameEl.value) nameEl.value = candidate.profile?.name ?? fallbackPresetName;
-  } finally {
-    state._candidateSliderSyncGuard = false;
-  }
-  state.lastCandidateStatus = candidate.status;
-  updateCandidateStatusBadge(candidate.status);
-  renderExportParityDiagnostics(candidate);
-  renderBasicToneDiagnostics(candidate);
-  renderWBIntelligenceDiagnostics(candidate);
-  renderDetailIntelligenceDiagnostics(candidate);
-  renderToneCurveIntelligenceDiagnostics(candidate);
-}
-
-/**
- * EPIC 2E-P1M -- called by the Strength-mode segmented control's
- * onclick handlers (index.html). Updates the standing user preference
- * (state.strengthMode) and, if a Candidate already exists for the
- * current photo, rebuilds it from the SAME already-completed evidence
- * (buildAndCommitCandidate() is a pure re-invocation -- see its own
- * doc comment in single-image-orchestrator.js) and re-runs the exact
- * same render chain a fresh analysis completion uses. No Core analysis
- * is re-run. If no photo has been analyzed yet, the new mode is simply
- * remembered for the next analysis.
- */
-function setStrengthMode(mode) {
-  if (!isValidUiStrengthMode(mode)) return;
-  const changed = state.strengthMode !== mode;
-  state.strengthMode = mode;
-  _syncStrengthModeButtons();
-  if (!changed) return;
-  if (!activeUploadTicket) return; // no analyzed photo yet -- nothing to rebuild
-  const candidateResult = singleImageOrchestrator.buildAndCommitCandidate(activeUploadTicket, {
-    legacyState: state,
-    engineVersion: singleImageOrchestrator.ENGINE_VERSION,
-    strengthMode: mode,
-  });
-  if (candidateResult && candidateResult.committed && candidateResult.candidate) {
-    applyCandidateBuildResult(candidateResult.candidate, {});
-  } else {
-    // Stale generation (a newer upload raced this click) or the
-    // session somehow isn't terminal -- per this project's "never
-    // reintroduce DOM as source of truth" rule, sliders are left
-    // exactly as they were rather than guessed at.
-    console.warn('Strength-mode rebuild did not produce a committed Candidate (', candidateResult?.reason, ') -- sliders left unchanged.');
-  }
-}
-window.setStrengthMode = setStrengthMode;
-
-/** Reflects state.strengthMode onto the 3 segmented-control buttons' active styling. */
-function _syncStrengthModeButtons() {
-  for (const mode of Object.values(UI_STRENGTH_MODE)) {
-    const btn = document.getElementById(`strengthModeBtn_${mode}`);
-    if (!btn) continue;
-    const active = state.strengthMode === mode;
-    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-    btn.style.background = active ? 'var(--accent)' : 'none';
-    btn.style.color = active ? 'var(--bg-0, #000)' : 'var(--text-dim)';
-    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border-color, transparent)';
-  }
-}
-
-function renderXmpFidelityStatus(uiStatus, report = null, xmpString = null) {
-  const wrap = document.getElementById('xmpFidelityStatus');
-  const icon = document.getElementById('xmpFidelityStatusIcon');
-  const text = document.getElementById('xmpFidelityStatusText');
-  const diag = document.getElementById('xmpFidelityDiagnostics');
-  const list = document.getElementById('xmpFidelityMismatchList');
-  const raw  = document.getElementById('xmpFidelityRawXmp');
-  if (!wrap || !icon || !text) return;
-
-  wrap.style.display = 'flex';
-  wrap.style.borderColor = (XMP_FIDELITY_UI_COLORS[uiStatus] || {}).border || 'var(--border)';
-
-  // EPIC 2E-P1D: remember the last-rendered state so a language switch
-  // can re-render this line's TEXT in the new locale (see
-  // rerenderCurrentUiForLocale() below) WITHOUT rerunning analysis,
-  // rebuilding the Candidate, or serializing again -- purely a text
-  // re-render from already-computed data, exactly like the existing
-  // successMsg / Analysis-panel locale re-render pattern above.
-  state.lastXmpFidelityUiStatus = uiStatus;
-  state.lastXmpFidelityReport = report;
-  state.lastXmpFidelityXml = xmpString;
-
-  const mismatchCount = (report?.mismatches?.length ?? 0) + (report?.missingRequired?.length ?? 0);
-
-  if (uiStatus === 'CHECKING') {
-    icon.textContent = 'hourglass_top';
-    text.textContent = t('appShell.xmpFidelityChecking', null, state.lang);
-    if (diag) diag.style.display = 'none';
-    return;
-  }
-  if (uiStatus === FIDELITY_STATUS.PASS) {
-    icon.textContent = 'verified';
-    text.textContent = t('appShell.xmpFidelityVerified', null, state.lang);
-    if (diag) diag.style.display = 'none';
-  } else if (uiStatus === FIDELITY_STATUS.PASS_WITH_WARNINGS) {
-    icon.textContent = 'warning';
-    text.textContent = t('appShell.xmpFidelityVerifiedWithWarnings', { count: report?.summary?.warnings ?? 0 }, state.lang);
-  } else if (uiStatus === FIDELITY_STATUS.PARSE_FAILED) {
-    icon.textContent = 'error';
-    text.textContent = t('appShell.xmpFidelityParseFailed', null, state.lang);
-  } else {
-    // FAIL
-    icon.textContent = 'error';
-    text.textContent = t('appShell.xmpFidelityMismatch', { count: mismatchCount }, state.lang);
-  }
-
-  // Advanced Diagnostics: only populate/expose it when there is
-  // something beyond a clean PASS to show.
-  if (diag && (uiStatus === FIDELITY_STATUS.FAIL || uiStatus === FIDELITY_STATUS.PARSE_FAILED || uiStatus === FIDELITY_STATUS.PASS_WITH_WARNINGS)) {
-    diag.style.display = 'block';
-    if (list) {
-      list.innerHTML = '';
-      const problems = [...(report?.missingRequired ?? []), ...(report?.mismatches ?? [])].slice(0, 10);
-      for (const p of problems) {
-        const li = document.createElement('li');
-        li.textContent = `${p.xmpProperty ?? p.candidatePath}: ${p.message ?? p.result}`;
-        list.appendChild(li);
-      }
-    }
-    if (raw) raw.textContent = xmpString ?? '';
-  } else if (diag) {
-    diag.style.display = 'none';
-  }
-}
-
 function handleDownload() {
-  const activeSession = singleImageOrchestrator.getActiveSessionSnapshot();
-  const activeCandidateForLog = candidateStore.getActiveCandidate();
-  // EPIC 2E-P1C R3: bounded development diagnostic -- IDs/status/
-  // revision/parameter-path strings only, never image data.
-  console.debug('[P1C XMP Download Attempt]', {
-    sessionId: activeSession?.sessionId ?? null,
-    generationId: activeSession?.generationId ?? null,
-    candidateId: activeCandidateForLog?.candidateId ?? null,
-    candidateStatus: activeCandidateForLog?.status ?? null,
-    revision: activeCandidateForLog?.revision ?? null,
-    changedParameters: activeCandidateForLog?.diagnostics?.manualEdits?.changedParameters ?? [],
-  });
+  let preset = readSlidersAsPreset();
 
-  const readiness = candidateStore.getCandidateExportReadiness();
-  if (!readiness.ready) {
-    // No valid Candidate exists (EMPTY/BUILDING/INVALID/STALE/FAILED),
-    // or it no longer belongs to the active Session/generation --
-    // block export outright. Never fall back to reading stale slider
-    // DOM values; that would silently reintroduce the exact
-    // DOM-as-hidden-source-of-truth problem P1C removes.
-    singleImageOrchestrator.traceXmpExportBlocked({ reason: readiness.reason });
-    console.error('[P1C XMP Export Blocked]', {
-      reason: readiness.reason,
-      sessionId: activeSession?.sessionId ?? null,
-      generationId: activeSession?.generationId ?? null,
-      validationErrors: readiness.validationErrors,
-    });
+  const safety = quickSafetyClamp(preset);
+  preset = safety.preset;
+  if (safety.adjustments.length) {
+    console.debug('[Pre-XMP Validation · Export]', safety.adjustments);
     const msgEl = document.getElementById('successMsg');
-    if (msgEl) msgEl.textContent = t('appShell.downloadBlockedNoCandidate', null, state.lang);
-    _hideXmpFidelityStatus();
-    return;
+    if (msgEl) msgEl.textContent = t('appShell.downloadSafetyAdjustments', { count: safety.adjustments.length }, state.lang);
+  } else {
+    const msgEl = document.getElementById('successMsg');
+    if (msgEl) msgEl.textContent = t('appShell.downloadSuccess', null, state.lang);
   }
 
-  const candidate = readiness.candidate;
-  renderXmpFidelityStatus('CHECKING');
-
-  // EPIC 2E-P1C R3: the whole export pipeline below is wrapped in
-  // try/catch (unchanged from R3 -- still the fix for "Clicking
-  // Download XMP does nothing" on an uncaught exception).
-  //
-  // EPIC 2E-P1D — Single Serialization Rule: `serializeXMP()` is
-  // called EXACTLY ONCE per download attempt, right here. The XMP
-  // Fidelity Gate below parses and validates THIS SAME STRING (`xmp`)
-  // -- it never re-serializes -- and `downloadXMP()` at the bottom is
-  // handed this SAME STRING again. There is no second serialize call
-  // anywhere in this function.
-  try {
-    let preset = candidateToLegacyPreset(candidate);
-
-    // The existing final safety net (unchanged) still runs, exactly as
-    // it did before P1C -- it now clamps the Candidate-derived preset
-    // instead of a DOM-derived one, but the clamp logic itself is
-    // untouched. Its OUTPUT (`preset`, post-clamp) is the exact object
-    // handed to serializeXMP() below, and is also the "export expected
-    // value" ground truth the Fidelity Gate compares readback against
-    // -- never the pre-clamp Candidate value (see
-    // P1D_XMP_COMPARISON_RULES.md, "Expected Value Source").
-    const safety = quickSafetyClamp(preset);
-    preset = safety.preset;
-
-    singleImageOrchestrator.traceXmpSerializationStarted({ candidateId: candidate.candidateId, revision: candidate.revision });
-    const xmp = serializeXMP(preset); // <-- the ONE serialize call for this attempt
-    singleImageOrchestrator.traceXmpSerializationCompleted({ candidateId: candidate.candidateId, revision: candidate.revision, xmpLength: xmp.length });
-    singleImageOrchestrator.traceXmpExportUsingCandidate({ candidateId: candidate.candidateId, revision: candidate.revision });
-
-    const ticket = { sessionId: activeSession?.sessionId, generationId: activeSession?.generationId };
-    const fidelity = singleImageOrchestrator.runXmpFidelityCheck(ticket, { candidate, exportExpectedPreset: preset, xmpString: xmp });
-
-    renderXmpFidelityStatus(fidelity.status, fidelity.report, xmp);
-
-    const allowed = fidelity.status === FIDELITY_STATUS.PASS || fidelity.status === FIDELITY_STATUS.PASS_WITH_WARNINGS;
-
-    if (allowed) {
-      singleImageOrchestrator.traceXmpDownloadAllowed({ candidateId: candidate.candidateId, fidelityReportId: fidelity.report?.fidelityReportId ?? null, status: fidelity.status });
-
-      const msgEl = document.getElementById('successMsg');
-      if (safety.adjustments.length) {
-        console.debug('[Pre-XMP Validation · Export]', safety.adjustments);
-        if (msgEl) msgEl.textContent = t('appShell.downloadSafetyAdjustments', { count: safety.adjustments.length }, state.lang);
-      } else if (msgEl) {
-        msgEl.textContent = t('appShell.downloadSuccess', null, state.lang);
-      }
-
-      // Same string (`xmp`) validated above -- never re-serialized.
-      const name = sanitizePresetFilename(document.getElementById('presetName')?.value);
-      downloadXMP(xmp, name);
-      flashSuccess();
-    } else {
-      // FAIL or PARSE_FAILED -- block download outright. The Candidate
-      // is never mutated by anything above, so it is preserved
-      // automatically; no rollback logic is needed.
-      console.error('[P1D XMP Download Blocked]', {
-        status: fidelity.status,
-        errorCode: fidelity.report?.diagnostics?.errorCode ?? null,
-        mismatchCount: (fidelity.report?.mismatches?.length ?? 0) + (fidelity.report?.missingRequired?.length ?? 0),
-        candidateId: candidate.candidateId, revision: candidate.revision,
-      });
-      singleImageOrchestrator.traceXmpDownloadBlocked({
-        candidateId: candidate.candidateId, fidelityReportId: fidelity.report?.fidelityReportId ?? null,
-        status: fidelity.status, errorCode: fidelity.report?.diagnostics?.errorCode ?? null,
-        errorMessage: fidelity.report?.diagnostics?.errorMessage ?? null,
-      });
-    }
-  } catch (error) {
-    console.error('[P1C XMP Export Failed]', {
-      name: error?.name,
-      message: error?.message,
-      candidateId: candidate?.candidateId,
-      revision: candidate?.revision,
-    });
-    singleImageOrchestrator.traceXmpSerializationFailed({ candidateId: candidate?.candidateId ?? null, revision: candidate?.revision ?? null, errorMessage: String(error?.message ?? error) });
-    const msgEl = document.getElementById('successMsg');
-    if (msgEl) msgEl.textContent = t('appShell.downloadExportFailed', null, state.lang);
-    renderXmpFidelityStatus(FIDELITY_STATUS.PARSE_FAILED, { summary: {}, mismatches: [], missingRequired: [], diagnostics: { errorCode: 'UNKNOWN_FIDELITY_ERROR', errorMessage: String(error?.message ?? error) } }, null);
-  }
+  const xmp    = serializeXMP(preset);
+  const name   = document.getElementById('presetName')?.value || 'AI Preset';
+  downloadXMP(xmp, name);
+  flashSuccess();
 }
 
 function handleReanalyze() {
@@ -4305,47 +2968,6 @@ function handleReset() {
   // runAnalysis() directly), so an ordinary same-image Re-analyze
   // never clears this.
   if (reviewConsoleController) reviewConsoleController.resetTransientUiState();
-
-  // EPIC 2E-P1A: abort whatever Session is active, clear its data, and
-  // clear its legacy `state.last*` mirrors through the SAME adapter
-  // every analysis commit uses — additive to (not a replacement for)
-  // the explicit state.lastX = null lines below, which remain for the
-  // fields this adapter doesn't cover (lastPreviewSandbox, curveEditor,
-  // etc. — see P1A_LEGACY_COMPATIBILITY_MAP.md for the full split).
-  singleImageOrchestrator.resetActiveSession(state);
-  activeUploadTicket = null;
-
-  // EPIC 2E-P1B: clear the Report UI immediately -- session.report
-  // itself was already nulled by resetSessionData() inside
-  // singleImageOrchestrator.resetActiveSession() just above.
-  {
-    const reportSec = document.getElementById('singleImageReportSection');
-    const reportInner = document.getElementById('singleImageReportInner');
-    if (reportSec) reportSec.style.display = 'none';
-    if (reportInner) clearSingleImageReportDisplay(reportInner, state.lang);
-  }
-  state.lastSingleImageReport = null;
-
-  // EPIC 2E-P1C: session.candidate was already nulled by
-  // resetSessionData() inside resetActiveSession() above; also clear the
-  // Candidate Store's pub/sub mirror, the status badge, and any manual
-  // edit history so a Reset can never leave a stale Candidate reachable
-  // by XMP export.
-  // clearActiveCandidate(sessionId, generationId) is generation-gated;
-  // session.candidate was already nulled by resetSessionData() inside
-  // resetActiveSession() above, so this call is invoked with no
-  // sessionId purely to notify the pub/sub channel (candidate-store.js
-  // treats a falsy sessionId as "already cleared, just notify").
-  candidateStore.clearActiveCandidate();
-  updateCandidateStatusBadge(null);
-  state.lastCandidateStatus = null;
-
-  // EPIC 2E-P1D: a Fidelity Report/badge from the PREVIOUS image (or a
-  // pre-edit revision of the same image) must never remain visible --
-  // session.xmpFidelity was already nulled by resetSessionData() inside
-  // resetActiveSession() above; this clears the mirrored UI the same
-  // way the Candidate status badge is cleared just above.
-  _hideXmpFidelityStatus();
 
   state.imageLoaded = false; state.lastStats = null; state.lastPalette = null; state.lastWB = null;
   state.lastCurveSet = null;
@@ -4447,15 +3069,6 @@ function handleReset() {
 // ─── Read sliders ─────────────────────────────────────────────────────────────
 const gv = id => parseInt(document.getElementById(id)?.value ?? 0, 10);
 
-// EPIC 2E-P1C — DEPRECATED COMPATIBILITY FUNCTION. The main single-image
-// XMP export path (handleDownload()) no longer calls this -- it now
-// reads from candidateStore.getValidatedCandidate() ->
-// candidateToLegacyPreset() instead, per P1C's "Candidate Store, not the
-// DOM, is the source of Lightroom values" rule. Confirmed via
-// project-wide grep to have zero remaining callers in this codebase as
-// of P1C; retained only as a documented compatibility fallback rather
-// than deleted outright, per the spec's legacy-compatibility guidance.
-// See P1C_LEGACY_PRESET_MIGRATION_MAP.md.
 function readSlidersAsPreset() {
   const HSL_CHANNELS = ['red','orange','yellow','green','aqua','blue','purple','magenta'];
   const hsl = {};

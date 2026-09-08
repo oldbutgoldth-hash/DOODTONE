@@ -17,20 +17,6 @@ const esc = value => String(value ?? '').replace(/&/g,'&amp;').replace(/"/g,'&qu
 function validKelvin(value){ const n=Number(value); return Number.isFinite(n) && n>=2000 && n<=50000; }
 function validTint(value){ const n=Number(value); return Number.isFinite(n) && n>=-150 && n<=150; }
 
-/**
- * EPIC 2E-Q1 — shared RAW-target detection, factored out of
- * buildCandidateWhiteBalanceContext() so ui/reference-color-match-panel.js
- * can reuse the EXACT same rule (never re-derive a second regex) when
- * deciding whether it is safe to auto-supply a pixel-analysis base value.
- * Behavior is byte-identical to the inline check this replaces.
- */
-export function isRawTargetMedia({ mediaType, fileName } = {}) {
-  const type = String(mediaType || '').toUpperCase();
-  const name = String(fileName || '');
-  const rawByName = /\.(cr2|cr3|nef|arw|orf|rw2|raf|dng|pef)$/i.test(name);
-  return type === 'RAW' || rawByName;
-}
-
 /** Convert LUMIXA semantic warmth units into a conservative Kelvin delta. */
 export function semanticWarmthToKelvinDelta(warmth, { kelvinPerUnit = 42, maxAbsKelvin = 1800 } = {}) {
   return round(clamp((Number(warmth)||0) * kelvinPerUnit, -maxAbsKelvin, maxAbsKelvin));
@@ -38,8 +24,10 @@ export function semanticWarmthToKelvinDelta(warmth, { kelvinPerUnit = 42, maxAbs
 
 export function buildCandidateWhiteBalanceContext({ preset, targetMediaContext = {} } = {}) {
   targetMediaContext = targetMediaContext || {};
+  const mediaType = String(targetMediaContext.mediaType || '').toUpperCase();
   const fileName = String(targetMediaContext.fileName || '');
-  const isRaw = isRawTargetMedia({ mediaType: targetMediaContext.mediaType, fileName });
+  const rawByName = /\.(cr2|cr3|nef|arw|orf|rw2|raf|dng|pef)$/i.test(fileName);
+  const isRaw = mediaType === 'RAW' || rawByName;
   const baseTemperatureK = Number(targetMediaContext.baseTemperatureK);
   const baseTint = Number(targetMediaContext.baseTint);
   const deltaTemperatureK = semanticWarmthToKelvinDelta(preset?.temp);

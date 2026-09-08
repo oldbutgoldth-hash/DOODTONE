@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { Archiver, ZipArchive } from 'archiver';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const EXCLUDE = new Set(['node_modules', '.git', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R2.zip', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R3.zip', 'qa/_probe-evidence-path.mjs']);
+const DEPLOY_ZIP_NAME = 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY.zip';
+const EXCLUDE = new Set(['node_modules', '.git', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R2.zip', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R3.zip', DEPLOY_ZIP_NAME, 'qa/_probe-evidence-path.mjs']);
 
 async function walk(dir) {
   const entries = [];
@@ -20,7 +21,7 @@ async function walk(dir) {
 }
 
 const files = await walk(ROOT);
-const outPath = path.join(ROOT, 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R3.zip');
+const outPath = path.join(ROOT, DEPLOY_ZIP_NAME);
 const out = createWriteStream(outPath);
 const archive = new ZipArchive({ zlib: { level: 6 } });
 archive.pipe(out);

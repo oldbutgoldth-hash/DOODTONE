@@ -177,28 +177,6 @@ if (rerenderFnSrc) {
     // a premature render, never re-runs analysis).
     'setAnalysisBox', '_buildAnalysisBoxOkHtml', 'renderAnalysisPanel',
     '_rerenderPersistentAnnouncementsForLocale', 't',
-    // EPIC 2E-P1B: the AI Image Analysis Report re-renders from the
-    // already-built report snapshot (state.lastSingleImageReport)
-    // only -- verified pure by its own dedicated P1B test suite
-    // (qa/epic-2e-p1b-analysis-report-test.mjs, cases 21-23).
-    'renderSingleImageReport',
-    // EPIC 2E-P1C: the Candidate status badge re-renders text/color
-    // only from the already-known status mirror
-    // (state.lastCandidateStatus) -- never rebuilds the Candidate,
-    // never re-renders sliders, never touches the Candidate Store.
-    // See P1C_CANDIDATE_ARCHITECTURE.md and the dedicated P1C test
-    // suite (qa/epic-2e-p1c-candidate-test.mjs).
-    'updateCandidateStatusBadge',
-    // EPIC 2E-P1D: the XMP Fidelity status line re-renders its TEXT
-    // (and icon/border color) purely from the already-stored
-    // state.lastXmpFidelityUiStatus/Report/Xml -- it does not call
-    // serializeXMP(), runXmpFidelityCheck(), downloadXMP(),
-    // runAnalysis(), or buildAndCommitCandidate(), and performs no
-    // network/file I/O. Verified by direct source inspection (only
-    // document.getElementById/createElement/appendChild and the
-    // centralized t() lookup are called) and by the dedicated P1D
-    // test suite (qa/epic-2e-p1d-xmp-fidelity-gate-test.mjs).
-    'renderXmpFidelityStatus',
   ]);
   const unexpectedCalls = [...new Set(calledFunctionNames)].filter((n) => !allowedFunctionNames.has(n) && n !== 'warn');
   record('Every function called inside rerenderCurrentUiForLocale() is one of the known pure re-render/lookup functions (no unexpected new call introduced)', unexpectedCalls.length === 0, { unexpectedCalls });

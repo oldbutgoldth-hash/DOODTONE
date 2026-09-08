@@ -75,27 +75,7 @@ function protectPixelTransferCurves(curves, compensation) {
   // CDF matching is powerful; scale it by actual pairwise need and target
   // protection so a high-key wedding target cannot be crushed to mimic a
   // low-key Reference distribution.
-  //
-  // EPIC 2E-Q3 -- the ceiling here used to be a flat 0.78 no matter how
-  // large or well-evidenced matchNeed was: derive-Tone-Curves already
-  // dampens its own output per-point (mode-based shadow/highlight
-  // rolloff, graduated endpoint dampening down to 0.2x, curve smoothing,
-  // intensity), and perceptual-pixel-transfer-engine.js's monotonic()
-  // already hard-caps every point's shift (+-22 master / +-4 endpoints).
-  // Multiplying a THIRD, independently-derived scale on top of an
-  // already carefully-shaped curve -- capped at 0.78 even for an
-  // unmistakably large, safe-to-transfer difference -- is the same
-  // "many individually-reasonable factors compound to near-nothing"
-  // pattern EPIC 2E-Q2 fixed for white balance, here applied to the tone
-  // curve. The floor (0.32, for a genuinely modest difference) and the
-  // matchNeed-proportional ramp are legitimate and kept exactly as
-  // before; only the ceiling is raised, so a real, large, well-evidenced
-  // difference can actually be expressed instead of being capped at
-  // roughly three-quarters strength regardless of evidence. Per-channel
-  // R/G/B curves (channelScale below, unchanged) stay more conservative
-  // on purpose -- color-cast risk is a separate, legitimate concern from
-  // overall tonal shape.
-  let baseScale = clamp(matchNeed / 24, 0.32, 0.95);
+  let baseScale = clamp(matchNeed / 24, 0.32, 0.78);
   if (neutral?.active) baseScale *= clamp(1 - neutral.strength * 0.42, 0.48, 1);
   const master = curves.master.map(p => {
     const highWeight = clamp((p.x - 150) / 105, 0, 1);

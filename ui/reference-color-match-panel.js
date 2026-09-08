@@ -21,8 +21,7 @@ import { createColorMatchEvaluationStore } from '../core/color-match/evaluation-
 import { downloadXMP } from '../core/preset-engine/index.js';
 import { evaluateLightroomRoundTrip } from '../core/color-match/lightroom-roundtrip-fidelity-engine.js';
 import { buildPerceptualPixelTransfer } from '../core/color-match/perceptual-pixel-transfer-engine.js';
-import { analyzeWhiteBalance, sliderToKelvin } from '../core/whitebalance-engine/index.js';
-import { isRawTargetMedia } from '../core/color-match/candidate-xmp-codec.js';
+import { analyzeWhiteBalance } from '../core/whitebalance-engine/index.js';
 import { generateBasicPanel } from '../core/basic-panel-engine/index.js';
 import { generateToneCurves } from '../core/tone-curve-ai-engine/index.js';
 import { analyzeHSL } from '../core/hsl-analyzer-engine/index.js';
@@ -74,11 +73,6 @@ const rcm = {
   targetBaseTemperatureK: null,
   targetBaseTint: null,
   targetProfileName: '',
-  /* EPIC 2E-Q1 -- last computed result of _effectiveTargetBase(); manual
-   * vs auto-pixel-analysis vs none, kept for UI/QA visibility only, never
-   * read as an input by any pipeline call (those all call
-   * _effectiveTargetBase()/_buildTargetMediaContext() fresh). */
-  targetBaseAuto: null,
   lightroomResultImg: null,
   referenceEvidence: null,
   targetEvidence: null,
@@ -352,75 +346,6 @@ async function _runCoreAnalysisStep({ phase, label, task, runId, required = true
  * does not need the same precision as the refined candidate. */
 const FAST_PROFILES = new Set(['EVALUATION_MINIMAL', 'PAIRWISE_FAST']);
 
-/**
- * EPIC 2E-Q1 — Auto Target White Balance Base.
- *
- * RCM's own White Balance Pro analysis already runs on the Target image
- * inside _analyzeEvidence() (phase:'TARGET') -- see coreOutputs.
- * whiteBalancePro below -- but until this round its result was never
- * plumbed into targetMediaContext.baseTemperatureK/.baseTint, so any
- * Target without a manually-typed base fell back to
- * PRESERVE_TARGET_AS_SHOT (white balance transfer silently skipped),
- * even for a plain JPEG/PNG with no real RAW as-shot metadata to
- * preserve in the first place. Reuses the exact same
- * whitebalance-engine.analyzeWhiteBalance() + sliderToKelvin() pathway
- * the main single-image pipeline already relies on for the same job
- * (core/preset-engine/index.js's serializeXMP) -- no new analysis, no
- * new algorithm, purely wiring already-computed evidence into a field
- * that was reading only manual UI input before.
- *
- * RAW targets deliberately get NO auto value here: EPIC O8's "Target
- * RAW Temperature/Tint base requirement" is a documented, intentional
- * safety principle (a downsampled proxy pixel read is not a RAW file's
- * real as-shot metadata) and is left completely untouched -- RAW still
- * requires a real manual base, or is blocked via
- * TARGET_RAW_WB_BASE_REQUIRED exactly as before this round.
- *
- * A manually-typed base always wins, for both RAW and non-RAW targets
- * -- this is additive on top of the manual field, never a replacement
- * for it.
- */
-function _effectiveTargetBase() {
-  const manualTemp = rcm.targetBaseTemperatureK;
-  const manualTint = rcm.targetBaseTint;
-  if (Number.isFinite(manualTemp) && Number.isFinite(manualTint)) {
-    return { baseTemperatureK: manualTemp, baseTint: manualTint, source: 'manual', confidence: null };
-  }
-  const isRaw = isRawTargetMedia({
-    mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride,
-    fileName: rcm.targetFile?.name || '',
-  });
-  if (isRaw) {
-    return { baseTemperatureK: null, baseTint: null, source: 'none-raw-requires-manual', confidence: null };
-  }
-  const wbPro = rcm.targetEvidence?.coreOutputs?.whiteBalancePro;
-  const adj = wbPro?.recommendedAdjustments;
-  if (!adj || !Number.isFinite(adj.temperature) || !Number.isFinite(adj.tint)) {
-    return { baseTemperatureK: null, baseTint: null, source: 'none-no-evidence', confidence: null };
-  }
-  return {
-    baseTemperatureK: sliderToKelvin(adj.temperature),
-    baseTint: adj.tint,
-    source: 'auto-pixel-analysis',
-    confidence: Number.isFinite(wbPro?.confidence) ? wbPro.confidence : null,
-  };
-}
-
-/** Single source of truth for targetMediaContext -- replaces 3 previously
- * byte-identical inline object literals (see EPIC 2E-Q1 docs). */
-function _buildTargetMediaContext() {
-  const base = _effectiveTargetBase();
-  rcm.targetBaseAuto = base;
-  return {
-    fileName: rcm.targetFile?.name || '',
-    mimeType: rcm.targetFile?.type || '',
-    mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride,
-    baseTemperatureK: base.baseTemperatureK,
-    baseTint: base.baseTint,
-    profileName: rcm.targetProfileName,
-  };
-}
-
 async function _analyzeEvidence(img, { phase = 'ANALYSIS', profile = 'PAIRWISE_FULL', runId = rcm.runtime.activeRunId } = {}) {
   _assertActiveRun(runId);
   /* EPIC 2E-P0.7 R5/R6 — count real Core analysis runs only, split by
@@ -660,8 +585,7 @@ function _ensureEvaluationHarness() {
       <select id="rcmTargetMediaType" style="width:100%;padding:8px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);margin-bottom:8px"><option value="AUTO">ตรวจอัตโนมัติ</option><option value="RAW">RAW เช่น CR2/CR3/NEF/ARW</option><option value="RENDERED">JPEG/TIFF/PNG</option></select>
       <div style="padding:10px;border:1px solid var(--border);border-radius:3px;background:var(--surface-2);margin-bottom:9px">
         <div style="font-family:var(--font-mono);font-size:9.5px;font-weight:700;color:var(--accent);margin-bottom:7px">TARGET LIGHTROOM BASE VALUES</div>
-        <div style="font-size:10.5px;line-height:1.5;color:var(--text-dim);margin-bottom:7px">JPEG/PNG: ระบบคำนวณค่าฐานให้อัตโนมัติจากการวิเคราะห์ภาพ (White Balance Pro) — แก้ไขเองได้หากทราบค่าจริง · RAW: กรุณาใส่ค่า Temp/Tint เดิมที่ Lightroom แสดงก่อนใช้ XMP ระบบจะไม่เดาค่าให้ RAW เอง</div>
-        <div id="rcmTargetBaseAutoNote" style="font-size:9.5px;line-height:1.5;color:var(--text-faint);margin-bottom:7px"></div>
+        <div style="font-size:10.5px;line-height:1.5;color:var(--text-dim);margin-bottom:7px">สำหรับ RAW ให้ใส่ค่า Temp/Tint เดิมที่ Lightroom แสดงก่อนใช้ XMP ระบบจะคำนวณ Delta จากฐานนี้ และจะไม่เดาค่า 5500K เอง</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px">
           <label style="font-size:10px;color:var(--text-dim)">Temperature (K)<input id="rcmTargetBaseTemp" type="number" min="2000" max="50000" step="50" placeholder="เช่น 5200" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px;background:var(--surface-1);color:var(--text);border:1px solid var(--border)"></label>
           <label style="font-size:10px;color:var(--text-dim)">Tint<input id="rcmTargetBaseTint" type="number" min="-150" max="150" step="1" placeholder="เช่น +3" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px;background:var(--surface-1);color:var(--text);border:1px solid var(--border)"></label>
@@ -678,7 +602,7 @@ function _ensureEvaluationHarness() {
   card.insertBefore(el, status);
   $('rcmSaveEvaluationBtn')?.addEventListener('click', _saveEvaluation);
   $('rcmExportEvaluationBtn')?.addEventListener('click', _exportEvaluations);
-  $('rcmTargetMediaType')?.addEventListener('change', async event => { rcm.targetMediaOverride = event.target.value; _renderTargetBaseAutoNote(); await _rebuildAndPreview(); });
+  $('rcmTargetMediaType')?.addEventListener('change', async event => { rcm.targetMediaOverride = event.target.value; await _rebuildAndPreview(); });
   const updateTargetBase = async () => {
     const temp = Number($('rcmTargetBaseTemp')?.value); const tint = Number($('rcmTargetBaseTint')?.value);
     rcm.targetBaseTemperatureK = Number.isFinite(temp) && temp >= 2000 ? temp : null;
@@ -690,32 +614,7 @@ function _ensureEvaluationHarness() {
   $('rcmTargetBaseTint')?.addEventListener('change', updateTargetBase);
   $('rcmTargetProfileName')?.addEventListener('change', updateTargetBase);
   $('rcmLightroomResultFileIn')?.addEventListener('change', _handleLightroomResultFile);
-  _renderTargetBaseAutoNote();
   return el;
-}
-
-/**
- * EPIC 2E-Q1 — shows the user exactly what base value (if any) will
- * actually be used and why, so the manual fields being blank never
- * silently and invisibly means "white balance transfer skipped" the
- * way it used to. Read-only; never writes rcm state itself (that stays
- * updateTargetBase()'s job for manual entry, and _effectiveTargetBase()
- * is the single source of truth read at build time).
- */
-function _renderTargetBaseAutoNote() {
-  const el = $('rcmTargetBaseAutoNote');
-  if (!el) return;
-  const base = _effectiveTargetBase();
-  if (base.source === 'manual') {
-    el.textContent = `กำลังใช้ค่าที่กรอกเอง: ${Math.round(base.baseTemperatureK)}K / ${base.baseTint}`;
-  } else if (base.source === 'auto-pixel-analysis') {
-    const conf = Number.isFinite(base.confidence) ? ` · ความมั่นใจ ${Math.round(base.confidence * 100)}%` : '';
-    el.textContent = `ค่าอัตโนมัติจากการวิเคราะห์ภาพ: ~${Math.round(base.baseTemperatureK)}K / ${base.baseTint}${conf} (ยังกรอกเองได้หากทราบค่าจริง)`;
-  } else if (base.source === 'none-raw-requires-manual') {
-    el.textContent = 'เป็นไฟล์ RAW — จำเป็นต้องกรอกค่า Temp/Tint เดิมเอง ระบบจะไม่เดาค่าให้';
-  } else {
-    el.textContent = 'ยังไม่มีข้อมูลวิเคราะห์ Target ให้คำนวณค่าฐานอัตโนมัติ';
-  }
 }
 
 function _renderRoundTripSummary() {
@@ -755,7 +654,7 @@ async function _handleLightroomResultFile(event) {
         candidate: rcm.corePipeline.candidate,
         compatibilityProfile: rcm.corePipeline.candidate.compatibilityProfile,
       });
-      _renderRoundTripSummary(); _renderCoreMatchInspector(); _renderReasons(); _renderTargetBaseAutoNote();
+      _renderRoundTripSummary(); _renderCoreMatchInspector(); _renderReasons();
       _setStatus(`✓ ตรวจ Lightroom Round-trip แล้ว · Fidelity ${rcm.roundTripFidelity.fidelityScore.toFixed(1)}/100 · Production ยังเป็น Legacy`);
     } catch (error) {
       rcm.roundTripFidelity = null; _renderRoundTripSummary();
@@ -979,7 +878,7 @@ async function _rebuildIntensityFromCache() {
       candidateName: 'LUMIXA-Core-Color-Match-Candidate',
       protectionOptions: { ...rcm.toggles },
       pixelTransfer: rcm.pixelTransfer,
-      targetMediaContext: _buildTargetMediaContext(),
+      targetMediaContext: { fileName: rcm.targetFile?.name || '', mimeType: rcm.targetFile?.type || '', mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride, baseTemperatureK: rcm.targetBaseTemperatureK, baseTint: rcm.targetBaseTint, profileName: rcm.targetProfileName },
     });
     if (!pipeline?.candidate?.safePreset) throw Object.assign(new Error('Cached Intensity rebuild did not produce a preview preset.'), { code: 'MATCH_CANDIDATE_UNAVAILABLE' });
     if (runId !== rcm.runtime.activeRunId || guard?.().stale) return;
@@ -1171,7 +1070,7 @@ async function _rebuildAndPreview({ reason = 'DIRECT' } = {}) {
       candidateName: 'LUMIXA-Core-Color-Match-Candidate',
       protectionOptions: { ...rcm.toggles },
       pixelTransfer: rcm.pixelTransfer,
-      targetMediaContext: _buildTargetMediaContext(),
+      targetMediaContext: { fileName: rcm.targetFile?.name || '', mimeType: rcm.targetFile?.type || '', mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride, baseTemperatureK: rcm.targetBaseTemperatureK, baseTint: rcm.targetBaseTint, profileName: rcm.targetProfileName },
     });
     if (guard().stale) throw Object.assign(new Error('Pipeline generation was superseded by a newer request.'), { code: 'STALE_GENERATION_ABORTED' });
     rcm.corePipeline = pipeline;
@@ -1331,7 +1230,7 @@ async function _runDeepAnalysis({ runId, generationId, guard }) {
       candidateName: 'LUMIXA-Core-Color-Match-Candidate',
       protectionOptions: { ...rcm.toggles },
       pixelTransfer: rcm.pixelTransfer,
-      targetMediaContext: _buildTargetMediaContext(),
+      targetMediaContext: { fileName: rcm.targetFile?.name || '', mimeType: rcm.targetFile?.type || '', mediaType: rcm.targetMediaOverride === 'AUTO' ? null : rcm.targetMediaOverride, baseTemperatureK: rcm.targetBaseTemperatureK, baseTint: rcm.targetBaseTint, profileName: rcm.targetProfileName },
     });
     if (isObsolete() || !pipeline?.candidate?.safePreset) return;
     rcm.corePipeline = pipeline;
@@ -1412,7 +1311,6 @@ async function _runLayer2({ runId, generationId, guard }) {
     _renderCoreMatchInspector();
     _renderReasons();
     _renderEvaluationHarness();
-    _renderTargetBaseAutoNote();
     _setMatchedPreviewState('READY');
     $('rcmSaveAfterBtn')?.removeAttribute('disabled');
     _trace('PIPELINE', 'COMPLETE', { fidelity: rcm.evaluation?.improvement?.fidelityScore });

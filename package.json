@@ -1,7 +1,7 @@
 {
   "name": "lumixa-epic-2e-p0-7-pipeline-runtime",
-  "version": "2.18.0",
-  "description": "LUMIXA AI EPIC 2E-Q4 — Reference Color Match: Graceful Skin Protection Degradation",
+  "version": "2.0.7.3",
+  "description": "LUMIXA AI P0.7 R3 — Pipeline Runtime Architecture: generation control, cache, heartbeat, PSM, ledger, tracer, core runner, two-layer pipeline with deferred Layer 2.",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -53,9 +53,7 @@
     "test:p0-7-r6:static": "node qa/epic-2e-p0-7-r6-fast-refined-critical-path-static-test.mjs",
     "test:p0-7-r6:browser": "node qa/epic-2e-p0-7-r6-real-image-runtime-browser-test.mjs",
     "test:p0-8a:static": "node qa/epic-2e-p0-8a-preview-artifact-repair-static-test.mjs",
-    "test:p0-8a:browser": "node qa/epic-2e-p0-8a-real-image-artifact-browser-test.mjs",
-    "test:p1b:static": "node qa/epic-2e-p1b-analysis-report-test.mjs",
-    "test:p1b:browser": "node qa/epic-2e-p1b-analysis-report-browser-test.mjs"
+    "test:p0-8a:browser": "node qa/epic-2e-p0-8a-real-image-artifact-browser-test.mjs"
   },
   "keywords": [],
   "author": "",

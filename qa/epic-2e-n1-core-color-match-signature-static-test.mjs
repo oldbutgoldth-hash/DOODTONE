@@ -96,6 +96,50 @@ test('Circular hue delta handles the 359°/1° boundary correctly', () => {
   assert.equal(circularHueDifference(359, 1), -2);
 });
 
+test('Signature shares colour population continuously across the green/aqua boundary', () => {
+  const boundaryPalette = hue => ({
+    confidence: 0.9,
+    colors: [{ weight: 1, hsl: { h: hue, s: 70, l: 48 } }],
+  });
+  const before = signature('REFERENCE', { palette: boundaryPalette(157) });
+  const after = signature('REFERENCE', { palette: boundaryPalette(158) });
+  const beforeGreen = before.color.channels.green.weight;
+  const beforeAqua = before.color.channels.aqua.weight;
+  const afterGreen = after.color.channels.green.weight;
+  const afterAqua = after.color.channels.aqua.weight;
+
+  // Both channels must participate on both sides of the old 157.5° hard
+  // cutoff, and a 1° hue movement must make a small, continuous change.
+  assert.ok(beforeGreen > 0.1 && beforeAqua > 0.1, { beforeGreen, beforeAqua });
+  assert.ok(afterGreen > 0.1 && afterAqua > 0.1, { afterGreen, afterAqua });
+  assert.ok(Math.abs(afterGreen - beforeGreen) < 0.04, { beforeGreen, afterGreen });
+  assert.ok(Math.abs(afterAqua - beforeAqua) < 0.04, { beforeAqua, afterAqua });
+  assert.ok(afterAqua > beforeAqua && afterGreen < beforeGreen, { beforeGreen, beforeAqua, afterGreen, afterAqua });
+  assert.ok(Math.abs(Object.values(after.color.channels).reduce((sum, channel) => sum + channel.weight, 0) - 1) < 0.001);
+});
+
+test('Neutral palette population does not become false Red-channel evidence', () => {
+  const neutral = signature('REFERENCE', {
+    palette: { confidence: 0.9, colors: [{ weight: 1, hsl: { h: 0, s: 0, l: 72 } }] },
+  });
+  assert.equal(neutral.color.neutralShare, 1);
+  assert.equal(neutral.color.channels.red.weight, 0);
+  assert.equal(neutral.color.channels.orange.weight, 0);
+  assert.equal(neutral.color.channels.blue.weight, 0);
+});
+
+test('Signature tone uses perceived BT.709 luminance, not an RGB average', () => {
+  const blueMidtone = tone();
+  blueMidtone.midtone.avgColor = { r: 0, g: 0, b: 255 };
+  const greenMidtone = tone();
+  greenMidtone.midtone.avgColor = { r: 0, g: 255, b: 0 };
+  const blue = signature('REFERENCE', { toneZones: blueMidtone });
+  const green = signature('REFERENCE', { toneZones: greenMidtone });
+  assert.ok(blue.tone.midtoneLuma < 20, blue.tone.midtoneLuma);
+  assert.ok(green.tone.midtoneLuma > 180, green.tone.midtoneLuma);
+  assert.ok(green.tone.midtoneLuma > blue.tone.midtoneLuma * 9);
+});
+
 test('Low evidence fails closed as INSUFFICIENT_EVIDENCE', () => {
   const ref = buildColorMatchSignature({ role: 'REFERENCE', palette: { confidence: 0.1, colors: palette().colors }, toneZones: tone() });
   const tgt = buildColorMatchSignature({ role: 'TARGET', palette: { confidence: 0.1, colors: palette().colors }, toneZones: tone() });
@@ -122,5 +166,5 @@ test('Invalid role or missing core evidence is rejected', () => {
   assert.throws(() => buildColorMatchSignature({ role: 'REFERENCE', palette: palette() }));
 });
 
-console.log(`\n${pass}/9 PASS, ${process.exitCode ? 1 : 0} FAIL`);
+console.log(`\n${pass}/12 PASS, ${process.exitCode ? 1 : 0} FAIL`);
 if (process.exitCode) process.exit(process.exitCode);

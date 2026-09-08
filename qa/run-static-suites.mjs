@@ -175,54 +175,6 @@ const STATIC_SUITES = [
   'qa/epic-2e-p0-7-r6-fast-refined-critical-path-static-test.mjs',
   // EPIC 2E-P0.8A — Preview Rendering Artifact Repair + Posterization Removal + Candidate-to-Preview Fidelity.
   'qa/epic-2e-p0-8a-preview-artifact-repair-static-test.mjs',
-  // EPIC 2E-P1A — Single Image Analysis Session Foundation + Central Analysis Orchestrator.
-  'qa/epic-2e-p1a-single-image-session-test.mjs',
-  // EPIC 2E-P1A R3 — Upload lifecycle ordering regression (real loadFile()/handleReset()/beginUpload() sequencing).
-  'qa/epic-2e-p1a-r3-upload-lifecycle-integration-test.mjs',
-  // EPIC 2E-P1B — AI Image Analysis Report (normalized report contract, photographer interpretation, confidence model).
-  'qa/epic-2e-p1b-analysis-report-test.mjs',
-  // EPIC 2E-P1C — Canonical Lightroom Auto-Tune Candidate + Candidate Store + Slider Synchronization + Candidate-Owned XMP Source.
-  'qa/epic-2e-p1c-candidate-test.mjs',
-  // EPIC 2E-P1C R2 — Candidate Runtime Lifecycle Order fix (build only after completeAnalysis() reaches COMPLETED/PARTIAL).
-  'qa/epic-2e-p1c-r2-candidate-lifecycle-order-test.mjs',
-  // EPIC 2E-P1C R3 — User-Edit XMP Export fix (transactional manual edits, export-readiness diagnostics, real edited-value XMP export).
-  'qa/epic-2e-p1c-r3-user-edit-xmp-export-test.mjs',
-  // EPIC 2E-P1D -- XMP Serialize + Readback Fidelity Gate
-  'qa/epic-2e-p1d-xmp-fidelity-gate-test.mjs',
-  // EPIC 2E-P1E — Color Intelligence & Creative Tone Candidate.
-  'qa/epic-2e-p1e-color-intelligence-test.mjs',
-  // EPIC 2E-P1E R3 — XMP Color Parity Repair + Stronger Creative Tone Engine.
-  'qa/epic-2e-p1e-r3-parity-creative-tone-test.mjs',
-  // EPIC 2E-P1F — Basic Tone Intelligence & Adaptive Dynamic Range.
-  'qa/epic-2e-p1f-basic-tone-intelligence-test.mjs',
-  // EPIC 2E-P1G — Detail Intelligence, Sharpening and Noise Reduction.
-  'qa/epic-2e-p1g-detail-intelligence-test.mjs',
-  // EPIC 2E-P1G R2 — Detail Export Safety Clamp (Layer-B quickSafetyClamp() hard limits).
-  'qa/epic-2e-p1g-r2-detail-export-safety-clamp-test.mjs',
-  // EPIC 2E-P1H — White Balance Intelligence & Illuminant Separation.
-  'qa/epic-2e-p1h-white-balance-intelligence-test.mjs',
-  // EPIC 2E-P1I — Pixel-Level Multi-Estimator White Balance V2.
-  'qa/epic-2e-p1i-pixel-multi-estimator-wb-test.mjs',
-  // EPIC 2E-P1I R2 -- Pixel Skin Validation and WB Correction Plausibility.
-  'qa/epic-2e-p1i-r2-pixel-skin-validation-test.mjs',
-  // EPIC 2E-P1J -- Tone Curve Intelligence & Point-Curve Export Wiring.
-  'qa/epic-2e-p1j-tone-curve-intelligence-test.mjs',
-  // EPIC 2E-P1K -- Serializer Extension for Post-Crop Vignette + Grain.
-  'qa/epic-2e-p1k-serializer-effects-extension-test.mjs',
-  // EPIC 2E-P1L -- Parametric Tone Curve Intelligence.
-  'qa/epic-2e-p1l-parametric-tone-curve-test.mjs',
-  // EPIC 2E-P1M -- Strength-mode UI (Natural/Balanced/Dramatic).
-  'qa/epic-2e-p1m-strength-mode-test.mjs',
-  // EPIC 2E-P1N -- Photographer Style Intelligence wired into Report/UI.
-  'qa/epic-2e-p1n-photographer-style-test.mjs',
-  // EPIC 2E-Q1 -- Auto Target White Balance Base for Reference Color Match.
-  'qa/epic-2e-q1-auto-target-wb-base-test.mjs',
-  // EPIC 2E-Q2 -- Minimum Visible White Balance Transfer for Reference Color Match.
-  'qa/epic-2e-q2-minimum-visible-wb-transfer-test.mjs',
-  // EPIC 2E-Q3 -- Tone Curve Transfer Strength Ceiling for Reference Color Match.
-  'qa/epic-2e-q3-tone-curve-ceiling-test.mjs',
-  // EPIC 2E-Q4 -- Graceful Skin Protection Degradation for Reference Color Match.
-  'qa/epic-2e-q4-graceful-skin-protection-test.mjs',
 ];
 
 let anyFailed = false;

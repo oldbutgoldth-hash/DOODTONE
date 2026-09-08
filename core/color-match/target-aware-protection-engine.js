@@ -99,16 +99,9 @@ function hueDistanceFromSkinCentre(hue) {
   return Math.abs((((Number(hue) || 0) - centre + 540) % 360) - 180);
 }
 
-/* EPIC 2E-Q4 -- Graceful Skin Protection Degradation (see the matching
- * comment in photographic-compensation-engine.js's deriveSkinModel() for
- * the full rationale). `detected` used to be a hard boolean cliff on
- * classifySkin()'s own 4% threshold -- a target with real but
- * just-under-threshold skin coverage got zero protection here, not
- * reduced protection. skinPresence below turns that into a ramp that is
- * byte-identical to before for every case at/above 4% coverage. */
 function deriveTargetSkinProtection(reference, target, delta, options) {
-  const skinPresence = clamp((Number(target.skin.coveragePct) || 0) / 4, 0, 1);
-  if (skinPresence <= 0 || options.preserveSkinTone === false) {
+  const detected = Boolean(target.skin.detected);
+  if (!detected || options.preserveSkinTone === false) {
     return {
       active: false,
       targetAlreadyWarm: false,
@@ -139,10 +132,9 @@ function deriveTargetSkinProtection(reference, target, delta, options) {
     0,
     1,
   );
-  const strength = clamp(0.36 + confidence * 0.28 + coverage * 0.16 + naturalityRisk * 0.24, 0.42, 0.94) * skinPresence;
+  const strength = clamp(0.36 + confidence * 0.28 + coverage * 0.16 + naturalityRisk * 0.24, 0.42, 0.94);
   return {
     active: true,
-    skinPresence: round(skinPresence, 3),
     confidence: round(confidence),
     coverageFactor: round(coverage),
     targetHue: round(target.skin.meanHue, 2),

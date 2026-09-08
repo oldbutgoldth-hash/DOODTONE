@@ -12,6 +12,9 @@ import {
   COLOR_MATCH_SIGNATURE_SCHEMA_VERSION,
   assertSignatureRole,
 } from './signature-schema.js';
+import { gaussianHueWeight } from './perceptual-color-science.js';
+import { LIGHTROOM_HSL_CENTERS } from './gaussian-hsl-transfer-engine.js';
+import { luminance } from '../color-engine/index.js';
 
 const round = (value, digits = 3) => {
   const n = Number(value);
@@ -21,7 +24,12 @@ const round = (value, digits = 3) => {
 };
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 const zoneLuma = zone => zone?.avgColor
-  ? (Number(zone.avgColor.r || 0) + Number(zone.avgColor.g || 0) + Number(zone.avgColor.b || 0)) / 3
+  // Keep Signature tone measurements in the same BT.709 perceived-luma
+  // space used by tone-zone-analyzer and histogram decisions. An RGB average
+  // makes pure blue appear as bright as pure green although their perceived
+  // brightness is radically different, which can steer exposure/curve intent
+  // in the wrong direction.
+  ? luminance(Number(zone.avgColor.r || 0), Number(zone.avgColor.g || 0), Number(zone.avgColor.b || 0))
   : 128;
 
 function weightedZoneAverage(toneZones, field) {
@@ -38,16 +46,26 @@ function weightedZoneAverage(toneZones, field) {
   return total > 0 ? weighted / total : 0;
 }
 
-function channelForHue(hue) {
-  const h = ((Number(hue) % 360) + 360) % 360;
-  if (h >= 337.5 || h < 22.5) return 'red';
-  if (h < 52.5) return 'orange';
-  if (h < 82.5) return 'yellow';
-  if (h < 157.5) return 'green';
-  if (h < 202.5) return 'aqua';
-  if (h < 247.5) return 'blue';
-  if (h < 292.5) return 'purple';
-  return 'magenta';
+// The Signature is evidence for the actual candidate mapper, so it must not
+// use a different, hard-edged hue model than the Gaussian HSL transfer and
+// Preview renderer.  A colour near a Lightroom channel boundary belongs to
+// both neighbouring channels in practice; assigning it to only one produces
+// a discontinuous match requirement as the source hue moves by one degree.
+//
+// We normalize weights per palette colour.  This preserves the palette's
+// total population weight (and therefore the existing coverage contract),
+// while distributing that population smoothly between all Lightroom HSL
+// centres. Sigma is shared with the production Gaussian transfer engine.
+const SIGNATURE_HUE_SIGMA = 25;
+const SIGNATURE_CHANNELS = Object.freeze(Object.entries(LIGHTROOM_HSL_CENTERS));
+
+function normalizedChannelWeights(hue) {
+  const raw = SIGNATURE_CHANNELS.map(([channel, center]) => ({
+    channel,
+    weight: gaussianHueWeight(hue, center, SIGNATURE_HUE_SIGMA),
+  }));
+  const total = raw.reduce((sum, item) => sum + item.weight, 0) || 1;
+  return raw.map(item => ({ ...item, weight: item.weight / total }));
 }
 
 function buildPaletteChannels(palette) {
@@ -64,15 +82,25 @@ function buildPaletteChannels(palette) {
     const luminance = clamp(color?.hsl?.l, 0, 100);
     totalWeight += weight;
     if (saturation < 10) neutralShare += weight;
-    const channel = channelForHue(hue);
-    const bucket = acc[channel];
-    bucket.weight += weight;
-    bucket.saturationWeighted += saturation * weight;
-    bucket.luminanceWeighted += luminance * weight;
+    // Hue in a near-neutral pixel is arbitrary (many decoders report 0°),
+    // so it must not turn a grey wall/white dress into false Red-channel
+    // evidence. Neutral population remains represented by neutralShare and
+    // global luminance/saturation; only reliable chroma informs HSL channels.
+    const chromaReliability = clamp((saturation - 4) / 22, 0, 1);
+    if (chromaReliability <= 0) continue;
     const radians = hue * Math.PI / 180;
-    bucket.hueSin += Math.sin(radians) * weight;
-    bucket.hueCos += Math.cos(radians) * weight;
-    bucket.sampleCount += 1;
+    for (const contribution of normalizedChannelWeights(hue)) {
+      const contributionWeight = weight * chromaReliability * contribution.weight;
+      const bucket = acc[contribution.channel];
+      bucket.weight += contributionWeight;
+      bucket.saturationWeighted += saturation * contributionWeight;
+      bucket.luminanceWeighted += luminance * contributionWeight;
+      bucket.hueSin += Math.sin(radians) * contributionWeight;
+      bucket.hueCos += Math.cos(radians) * contributionWeight;
+      // A very small Gaussian tail is useful mathematically, but is not a
+      // meaningful observed population for the human-readable sample count.
+      if (contribution.weight >= 0.01) bucket.sampleCount += 1;
+    }
   }
 
   const channels = {};
