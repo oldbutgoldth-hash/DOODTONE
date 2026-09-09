@@ -124,6 +124,24 @@ const rcm = {
 function $(id) { return document.getElementById(id); }
 function signed(value, digits = 1) { const n = Number(value) || 0; return `${n > 0 ? '+' : ''}${n.toFixed(digits)}`; }
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[c])); }
+
+/**
+ * Preserve the distinction between an explicit zero tint and an empty field.
+ * `Number('')` is 0 in JavaScript, which previously let a RAW Candidate use
+ * an invented Tint=0 when the photographer supplied Temperature only.
+ */
+export function parseTargetWhiteBalanceBaseFields(temperatureValue, tintValue) {
+  const parse = (value, min, max) => {
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) && numeric >= min && numeric <= max ? numeric : null;
+  };
+  return {
+    baseTemperatureK: parse(temperatureValue, 2000, 50000),
+    baseTint: parse(tintValue, -150, 150),
+  };
+}
 function _setStatus(text) { const el = $('rcmStatus'); if (el) el.textContent = text; }
 
 function _setMatchedPreviewState(state, message = '', errorCode = '') {
@@ -604,9 +622,9 @@ function _ensureEvaluationHarness() {
   $('rcmExportEvaluationBtn')?.addEventListener('click', _exportEvaluations);
   $('rcmTargetMediaType')?.addEventListener('change', async event => { rcm.targetMediaOverride = event.target.value; await _rebuildAndPreview(); });
   const updateTargetBase = async () => {
-    const temp = Number($('rcmTargetBaseTemp')?.value); const tint = Number($('rcmTargetBaseTint')?.value);
-    rcm.targetBaseTemperatureK = Number.isFinite(temp) && temp >= 2000 ? temp : null;
-    rcm.targetBaseTint = Number.isFinite(tint) ? tint : null;
+    const parsed = parseTargetWhiteBalanceBaseFields($('rcmTargetBaseTemp')?.value, $('rcmTargetBaseTint')?.value);
+    rcm.targetBaseTemperatureK = parsed.baseTemperatureK;
+    rcm.targetBaseTint = parsed.baseTint;
     rcm.targetProfileName = $('rcmTargetProfileName')?.value?.trim() || '';
     await _rebuildAndPreview();
   };

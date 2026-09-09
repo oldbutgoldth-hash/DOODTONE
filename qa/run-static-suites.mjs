@@ -155,6 +155,8 @@ const STATIC_SUITES = [
   'qa/epic-2e-n1-core-color-match-integration-static-test.mjs',
   // Tone zones must stay non-overlapping even for intentionally narrow-range reference images.
   'qa/tone-zone-boundary-static-test.mjs',
+  // RAW base WB must never turn an unfilled Tint input into invented zero.
+  'qa/target-wb-input-static-test.mjs',
   // EPIC 2E-N2..N5 — photographic compensation, Lightroom candidate, preview fidelity and evaluation harness.
   'qa/epic-2e-n2-photographic-compensation-static-test.mjs',
   'qa/epic-2e-n3-lightroom-candidate-static-test.mjs',

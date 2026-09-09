@@ -137,7 +137,7 @@
     "ui/image-analysis-renderer.js": "4061c83bd316981bc46bde4fad95a16679e1c2d663ad74d298d0089c528dc790",
     "ui/interactive-preview-observation-session-v2.js": "aa6589bceab1ee7b8506a474decf421ac9818a0dfe47ca0a087451c48d06b4a9",
     "ui/palette-renderer.js": "d31aab02d6842cbf53733c14c8ebaa1ac7eda2b28508c9df1854ef458a0069d0",
-    "ui/reference-color-match-panel.js": "462a34d9cc53b3e1715210dfaedcde2e1d97a2d68448a671a5155264a37e1cd4",
+    "ui/reference-color-match-panel.js": "381f2f3ebf912c908c28788880d611370ca24187ea9b743ad01444a3ce081f14",
     "ui/review-console-controller.js": "d65aeb334ca1b4513585bc2b0185f16efa4882225c7595fb539e0ea000a80aa1",
     "ui/review-console-renderer.js": "069892dec93b380969c4ecd24531edc65244b8cf9cd2ac3cdae399ec065ef8bb",
     "ui/side-by-side-comparison-renderer.js": "86cf70cb540b800b5e09832db917ba15f9cf5f293da04e68abd3bda7f19201b4",
