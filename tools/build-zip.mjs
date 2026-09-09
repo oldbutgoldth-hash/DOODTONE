@@ -6,14 +6,18 @@ import { fileURLToPath } from 'node:url';
 import { Archiver, ZipArchive } from 'archiver';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DEPLOY_ZIP_NAME = 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY.zip';
-const DEPLOY_EXTRACTED_FOLDER = 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY';
-const EXCLUDE = new Set(['node_modules', '.git', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R2.zip', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R3.zip', DEPLOY_ZIP_NAME, DEPLOY_EXTRACTED_FOLDER, 'qa/_probe-evidence-path.mjs']);
+const DEPLOY_ZIP_PREFIX = 'LUMIXA_REFERENCE_TONE_MATCH_DEPLOY_';
+// Milliseconds make every build name unique, even multiple packages created
+// in the same minute. The timestamp is filesystem-safe on Windows/macOS/Linux.
+const BUILD_STAMP = new Date().toISOString().replace(/[-:.TZ]/g, '');
+const DEPLOY_ZIP_NAME = `${DEPLOY_ZIP_PREFIX}${BUILD_STAMP}.zip`;
+const EXCLUDE = new Set(['node_modules', '.git', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R2.zip', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R3.zip', 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY.zip', 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY', 'qa/_probe-evidence-path.mjs']);
+const shouldExclude = name => EXCLUDE.has(name) || name.startsWith(DEPLOY_ZIP_PREFIX);
 
 async function walk(dir) {
   const entries = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (EXCLUDE.has(entry.name)) continue;
+    if (shouldExclude(entry.name)) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) entries.push(...await walk(full));
     else entries.push(full);

@@ -5,12 +5,14 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const DEPLOY_ZIP_PREFIX = 'LUMIXA_REFERENCE_TONE_MATCH_DEPLOY_';
 const EXCLUDE = new Set(['node_modules', '.git', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R2.zip', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R3.zip', 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY.zip', 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY']);
+const shouldExclude = name => EXCLUDE.has(name) || name.startsWith(DEPLOY_ZIP_PREFIX);
 
 async function walk(dir) {
   const entries = [];
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-    if (EXCLUDE.has(entry.name)) continue;
+    if (shouldExclude(entry.name)) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) entries.push(...await walk(full));
     else entries.push(full);
