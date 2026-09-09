@@ -19,6 +19,30 @@ import { rgbToHsl, luminance } from '../color-engine/index.js';
 const MAX_DIM = 200;      // matches histogram-engine/kmeans-engine's own sampling scale
 const SAMPLE_STRIDE = 2;  // every 2nd pixel — enough signal for a 3-zone average, stays fast
 
+/**
+ * Derive three non-overlapping perceptual tone zones from the Histogram
+ * Engine's black/white points. The previous fixed ±40 margin works well for
+ * a broad 0–255 range, but overlaps when a deliberately soft/high-key image
+ * has a narrow measured range. Once overlapping, the shadow branch wins and
+ * can silently leave the highlight zone empty. Scale the margin down only
+ * when necessary so normal-range behaviour remains unchanged.
+ */
+export function resolveToneZoneBoundaries(blackPoint, whitePoint) {
+  const black = Math.max(0, Math.min(255, Number(blackPoint) || 0));
+  const white = Math.max(black, Math.min(255, Number(whitePoint) || 255));
+  const rawSpan = white - black;
+  // Corrupt/reversed points can collapse to a single valid endpoint after
+  // clamping. In that case there is no meaningful middle range, but the
+  // thresholds must still remain ordered and bounded.
+  if (rawSpan < 1) return { shadowMax: black, highlightMin: white };
+  const span = rawSpan;
+  const margin = Math.min(40, span * 0.32);
+  return {
+    shadowMax: black + margin,
+    highlightMin: white - margin,
+  };
+}
+
 function _sampleForZones(img) {
   const scale = Math.min(1, MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight));
   const w = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -44,6 +68,7 @@ export async function analyzeToneZones(img) {
 
   const data = _sampleForZones(img);
   const zones = { shadow: [], midtone: [], highlight: [] };
+  const boundaries = resolveToneZoneBoundaries(hist.blackPoint, hist.whitePoint);
 
   for (let i = 0; i < data.length; i += 4 * SAMPLE_STRIDE) {
     const r = data[i], g = data[i + 1], b = data[i + 2];
@@ -53,7 +78,7 @@ export async function analyzeToneZones(img) {
     // shadow/highlight boundary, so this module's zone definition stays
     // consistent with the rest of the pipeline's tonal analysis rather
     // than inventing an unrelated fixed 85/170 split.
-    const zone = lum <= hist.blackPoint + 40 ? 'shadow' : lum >= hist.whitePoint - 40 ? 'highlight' : 'midtone';
+    const zone = lum <= boundaries.shadowMax ? 'shadow' : lum >= boundaries.highlightMin ? 'highlight' : 'midtone';
     zones[zone].push([r, g, b]);
   }
 

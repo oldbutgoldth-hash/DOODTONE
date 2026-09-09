@@ -65,7 +65,7 @@
     "core/color-match/signature-schema.js": "be4e1070808821e05bd2c03a00443e0a1d09108256739a8217fdf1be697a2af1",
     "core/color-match/target-aware-protection-engine.js": "aefe51bc2a3867f4b72485a9245021c2fc555bb3f737e6dbe36c535876ac1f21",
     "core/color-match/tone-curve-transfer-engine.js": "9da84d8babcec3dff4d51d7b45daf361eb8f16eb2af91600d408cd57c6d840ae",
-    "core/color-match/tone-zone-analyzer.js": "54d3fe5518f6419cf85c3e0e8bbd66787def92d445d52bafd1a1479e63b34f87",
+    "core/color-match/tone-zone-analyzer.js": "8b12a6c8b2f9ecba7a895a6b4c78361a853f7ee67ce27a925c4ff626769ab05b",
     "core/color-match/unified-core-fusion-orchestrator.js": "68a584c906a0f6c4d676dbb42753f57a37b505f54f48d0403511d00a051aa68d",
     "core/color-match/unified-core-output-contract.js": "267e57ce2893af782437eb73547c3c37728feea1a5f52d8b8839ba5c06370833",
     "core/color-match/xmp-data-lineage.js": "4470a37268bad7109057393685542dd01a689c6c6852523e92f247537e594ad4",

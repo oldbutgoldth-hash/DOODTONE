@@ -7,7 +7,8 @@ import { Archiver, ZipArchive } from 'archiver';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEPLOY_ZIP_NAME = 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY.zip';
-const EXCLUDE = new Set(['node_modules', '.git', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R2.zip', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R3.zip', DEPLOY_ZIP_NAME, 'qa/_probe-evidence-path.mjs']);
+const DEPLOY_EXTRACTED_FOLDER = 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY';
+const EXCLUDE = new Set(['node_modules', '.git', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R2.zip', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R3.zip', DEPLOY_ZIP_NAME, DEPLOY_EXTRACTED_FOLDER, 'qa/_probe-evidence-path.mjs']);
 
 async function walk(dir) {
   const entries = [];

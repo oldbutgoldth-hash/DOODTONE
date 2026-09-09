@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const EXCLUDE = new Set(['node_modules', '.git', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R2.zip', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R3.zip', 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY.zip']);
+const EXCLUDE = new Set(['node_modules', '.git', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R2.zip', 'LUMIXA_EPIC_2E_P0_7_COMPLETE_PROJECT_R3.zip', 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY.zip', 'LUMIXA_REFERENCE_TONE_MATCH_R1_DEPLOY']);
 
 async function walk(dir) {
   const entries = [];
